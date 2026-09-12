@@ -14,3 +14,11 @@ data/
 *.duckdb.wal
 *.parquet
 _delta_log/
+
+# Python y herramientas
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
