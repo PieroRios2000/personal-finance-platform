@@ -68,12 +68,15 @@ cp .env.example .env && chmod 600 .env   # rellena los valores; .env nunca se su
 Los PDFs reales viven **fuera del repo**, solo con permisos para tu usuario:
 
 ```bash
-mkdir -p ~/finance-data/raw/<usuario>      # una carpeta por usuario, p. ej. raw/piero
+mkdir -p ~/finance-data/inbox/<usuario>    # bandeja por usuario, p. ej. inbox/piero
 chmod 700 ~/finance-data
-# copia ahí los PDFs de ese usuario, de cualquier banco y con cualquier nombre
-# (mejor uno neutro: el nombre original puede incluir números de cuenta), y luego:
-chmod 600 ~/finance-data/raw/*/*.pdf
+# deja ahí los PDFs de ese usuario, de cualquier banco y con cualquier nombre, y luego:
+chmod 600 ~/finance-data/inbox/*/*.pdf
 ```
+
+Al procesarlos (`pfp ingest`, desde T12b y T14), cada PDF se archiva en
+`~/finance-data/raw/<usuario>/<banco>/<cuenta>/<periodo>.pdf`; los repetidos van a `_duplicados/` y los
+que no se reconocen, a `_por_clasificar/`. Nunca se borra un archivo.
 
 ### Librerías de Python
 

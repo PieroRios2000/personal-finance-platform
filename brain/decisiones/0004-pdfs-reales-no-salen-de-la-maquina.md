@@ -16,8 +16,8 @@ máquinas de GitHub.
 
 ## Decisión
 
-- Los PDFs viven en `~/finance-data/raw/<usuario>/` (carpeta por usuario desde el ADR 0009), fuera del
-  repo y con permisos solo para su dueño;
+- Los PDFs viven en `~/finance-data/` (bandeja `inbox/<usuario>/` y archivo `raw/<usuario>/`, desde el
+  ADR 0009), fuera del repo y con permisos solo para su dueño;
   la contraseña, en `.env`.
 - Git no puede recibirlos: `.gitignore` y el hook `forbid-data-files`.
 - El CI usa PDFs sintéticos generados en los tests (T10), nunca PDFs reales.

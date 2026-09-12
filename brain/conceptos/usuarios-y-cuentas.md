@@ -11,8 +11,12 @@ una puede tener varias cuentas, incluso en el mismo banco.
 ## Cómo se aplica aquí
 
 - **Usuario (`user_id`)**: viene del contexto de la ingesta (`pfp ingest --user`, por defecto
-  `PFP_USER`), no del PDF. Los PDFs de cada persona están en `~/finance-data/raw/<usuario>/` y el lake
-  se particiona por `user_id`, así que borrar los datos de alguien es borrar su partición.
+  `PFP_USER`), no del PDF. El lake se particiona por `user_id`, así que borrar los datos de alguien es
+  borrar su partición.
+- **Bandeja y archivo (T12b)**: los PDFs se dejan con cualquier nombre en `~/finance-data/inbox/<usuario>/`
+  y se archivan en `raw/<usuario>/<banco>/<últimos4>-<id6>/<inicio>_<fin>.pdf`. Tres `EECC.pdf` de
+  cuentas distintas terminan en tres carpetas; uno repetido, en `_duplicados/`; uno ilegible, en
+  `_por_clasificar/`, con un reporte. Nunca se borra un archivo.
 - **Cuenta (`account_id`)**: HMAC-SHA256 del banco y el número completo, con la clave
   `PFP_ACCOUNT_KEY` de `.env`. Es único por cuenta y no revela el número; para mostrar se guardan los
   últimos 4 dígitos. Un hash sin clave no serviría: los números de cuenta posibles son pocos y se

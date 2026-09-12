@@ -12,6 +12,7 @@ Reconocer un PDF ya ingerido por su contenido, no por su nombre.
 - `file_sha256(path)` calcula el SHA-256 del contenido con `hashlib.file_digest` (T7).
 - `bronze/ingested_files` registra cada par (usuario, hash) ingerido, y `pfp ingest` salta un archivo
   que ese usuario ya ingirió (T14). El nombre del archivo no se guarda: puede contener números de cuenta.
+- En la bandeja de entrada (T12b), un archivo repetido se mueve a `_duplicados/` en vez de archivarse otra vez.
 - El mismo PDF con otro nombre tiene el mismo hash, así que también se salta.
 
 ## Límite
