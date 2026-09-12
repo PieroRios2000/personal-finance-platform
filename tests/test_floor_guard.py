@@ -14,7 +14,14 @@ BASE_FILES = {
         '[dependency-groups]\ndev = [\n    "bandit>=1.9.4",\n]\n\n'
         "[tool.mypy]\nstrict = true\n"
     ),
-    "Makefile": "cov:\n\tuv run diff-cover coverage.xml --fail-under=80\n",
+    "Makefile": (
+        "check:\n\tuv run mypy .\n\tuv run python scripts/floor_guard.py\n"
+        "\tuv run diff-cover coverage.xml --fail-under=80\n"
+    ),
+    ".pre-commit-config.yaml": (
+        "repos:\n  - repo: https://github.com/gitleaks/gitleaks\n"
+        "    hooks:\n      - id: gitleaks\n"
+    ),
 }
 
 
@@ -151,18 +158,28 @@ def test_rewritten_assertion_passes(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 @pytest.mark.parametrize(
-    ("path", "text"),
+    ("path", "old", "new"),
     [
-        ("Makefile", "cov:\n\tuv run diff-cover coverage.xml --fail-under=70\n"),
-        ("pyproject.toml", "[tool.mypy]\nstrict = false\n"),
-        ("pyproject.toml", "[tool.mypy]\n"),
-        ("pyproject.toml", "[tool.mypy]\nstrict = true\nignore_errors = true\n"),
+        ("Makefile", "--fail-under=80", "--fail-under=70"),
+        ("pyproject.toml", "strict = true", "strict = false"),
+        ("pyproject.toml", "strict = true\n", ""),
+        ("pyproject.toml", "strict = true", "strict = true\nignore_errors = true"),
+        ("pyproject.toml", "strict = true", "strict = true\ndisallow_any_expr = false"),
+        (
+            "pyproject.toml",
+            "[tool.mypy]",
+            "[tool.ruff.lint.per-file-ignores]\n[tool.mypy]",
+        ),
+        ("Makefile", "\tuv run mypy .", "\t-uv run mypy ."),
+        ("Makefile", "\tuv run mypy .", "\tuv run mypy . || true"),
+        ("Makefile", "\tuv run python scripts/floor_guard.py\n", ""),
+        (".pre-commit-config.yaml", "      - id: gitleaks\n", ""),
     ],
 )
 def test_weakened_config_fails(
-    path: str, text: str, capsys: pytest.CaptureFixture[str]
+    path: str, old: str, new: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    write(path, text)
+    replace(path, old, new)
 
     code, out = run(capsys)
 
@@ -175,6 +192,8 @@ def test_weakened_config_fails(
     [
         ("Makefile", "--fail-under=80", "--fail-under=90"),
         ("pyproject.toml", "bandit>=1.9.4", "bandit>=1.10.0"),
+        ("pyproject.toml", "strict = true", "strict=true"),
+        ("pyproject.toml", "strict = true", "strict = true\nxfail_strict = false"),
     ],
 )
 def test_harmless_config_change_passes(
@@ -183,6 +202,21 @@ def test_harmless_config_change_passes(
     replace(path, old, new)
 
     assert run(capsys) == (0, "floor-guard: limpio\n")
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["mypy.ini", ".mypy.ini", "setup.cfg", "tox.ini", "tests/pytest.ini", "ruff.toml"],
+)
+def test_config_outside_pyproject_fails(
+    name: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write(name, "[tool]\nkey = 1\n")
+
+    code, out = run(capsys)
+
+    assert code == 1
+    assert name in out
 
 
 @pytest.mark.parametrize(("days", "expected"), [(30, 0), (-1, 1)])
