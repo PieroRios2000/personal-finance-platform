@@ -6,7 +6,7 @@
 ## Prerrequisitos del entorno (no generan PR)
 
 - [x] Instalar `uv` a nivel usuario (sin sudo) y Python 3.12 gestionado por uv.
-- [ ] Docker accesible sin sudo desde WSL (reiniciar WSL tras entrar al grupo `docker`).
+- [x] Docker accesible sin sudo desde WSL (reiniciar WSL tras entrar al grupo `docker`).
 - [x] PDFs reales en `~/finance-data/raw/{bcp,scotiabank}/`, fuera del repo.
 - [ ] Tesseract OCR (`sudo apt install tesseract-ocr tesseract-ocr-spa`) antes de T11b.
 
@@ -19,14 +19,14 @@
 **Descripción:** Antes de cualquier código, impedir que datos o secretos lleguen a Git.
 
 **Criterios de aceptación:**
-- [ ] `*.pdf`, `.env`, `*.duckdb`, `data/` y el lake local están ignorados.
-- [ ] pre-commit con gitleaks (+ detect-private-key, check-added-large-files) instalado.
-- [ ] `.env.example` documenta las variables sin valores reales.
+- [x] `*.pdf`, `.env`, `*.duckdb`, `data/` y el lake local están ignorados.
+- [x] pre-commit con gitleaks (+ detect-private-key, check-added-large-files) instalado.
+- [x] `.env.example` documenta las variables sin valores reales.
 
 **Verificación:**
-- [ ] `git check-ignore -v x.pdf .env` confirma las reglas.
-- [ ] Un secreto falso de prueba es bloqueado por el hook (y se descarta).
-- [ ] `pre-commit run --all-files` en verde.
+- [x] `git check-ignore -v x.pdf .env` confirma las reglas.
+- [x] Un secreto falso de prueba es bloqueado por el hook (y se descarta).
+- [x] `pre-commit run --all-files` en verde.
 
 **Dependencias:** ninguna · **Archivos:** `.gitignore`, `.env.example`, `.pre-commit-config.yaml` · **Tamaño:** S · **Skill:** security-and-hardening
 
