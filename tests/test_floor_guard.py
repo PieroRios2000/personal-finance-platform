@@ -255,3 +255,17 @@ def test_exception_applies_while_its_row_exists(
 
 def test_guard_cannot_run_without_base(capsys: pytest.CaptureFixture[str]) -> None:
     assert floor_guard.main(["--base", "no-existe"]) == 2
+    assert "git fetch" in capsys.readouterr().err
+
+
+def test_no_common_history_explains_how_to_fix(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Como en un clon superficial: merge-base falla sin decir nada."""
+    git("switch", "-q", "--orphan", "other")
+    git("commit", "-q", "--allow-empty", "-m", "x", "--no-gpg-sign")
+
+    assert floor_guard.main(["--base", "main"]) == 2
+    err = capsys.readouterr().err
+    assert "no hay historia común" in err
+    assert "fetch-depth: 0" in err
