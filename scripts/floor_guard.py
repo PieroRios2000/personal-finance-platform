@@ -31,6 +31,7 @@ RELAXED = re.compile(
 )
 STRICT = re.compile(r"strict\s*=\s*true")
 NUMBER = re.compile(r"\d+(?:\.\d+)?")
+VERSION_SPEC = re.compile(r"[<>=~!]=")  # "bandit>=1.9.4" es una versión, no un umbral
 HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)")
 # Diff con el mismo formato sin importar la config de git de quien lo corre
 # (prefijos, rutas no ASCII, renames, diff externo).
@@ -100,6 +101,7 @@ def findings(added: list[Line], removed: list[Line]) -> list[Finding]:
             found.append(("config-relajada", path, f"{path}:{n} (quitada)"))
         for new_text in same_file:
             same_shape = NUMBER.sub("#", new_text) == NUMBER.sub("#", text)
+            same_shape = same_shape and not VERSION_SPEC.search(text)
             if same_shape and nums(new_text) < nums(text):
                 found.append(("umbral-rebajado", path, f"{path}:{n}"))
 
