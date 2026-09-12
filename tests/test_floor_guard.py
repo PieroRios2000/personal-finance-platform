@@ -9,6 +9,7 @@ BASE_FILES = {
     "tests/test_a.py": "def test_a() -> None:\n    assert 1 + 1 == 2\n",
     "tests/test_señal.py": "def test_s() -> None:\n    assert True\n",
     "app.py": "x = 1\n",
+    "legacy.py": "y = f()  # type: ignore\n",
     "pyproject.toml": (
         '[dependency-groups]\ndev = [\n    "bandit>=1.9.4",\n]\n\n'
         "[tool.mypy]\nstrict = true\n"
@@ -76,6 +77,15 @@ def test_clean_change_passes(capsys: pytest.CaptureFixture[str]) -> None:
         "@pytest.mark.skip",
         "@pytest.mark.xfail(reason='x')",
         "pytest.skip('luego')",
+        "import os  # NOQA",
+        "# mypy: ignore-errors",
+        "# mypy: disable-error-code=attr-defined",
+        "# fmt: off",
+        "x = [1,2]  # fmt: skip",
+        "@pytest.mark.skipif(True, reason='x')",
+        "@unittest.skip('x')",
+        "self.skipTest('x')",
+        "pytest.importorskip('pdfplumber')",
     ],
 )
 def test_new_suppression_or_skip_fails(
@@ -87,6 +97,12 @@ def test_new_suppression_or_skip_fails(
 
     assert code == 1
     assert "app.py" in out
+
+
+def test_removing_a_suppression_passes(capsys: pytest.CaptureFixture[str]) -> None:
+    write("legacy.py", "y = f()\n")
+
+    assert run(capsys) == (0, "floor-guard: limpio\n")
 
 
 def test_untracked_file_is_checked(capsys: pytest.CaptureFixture[str]) -> None:
