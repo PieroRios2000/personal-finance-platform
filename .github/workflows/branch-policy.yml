@@ -4,6 +4,10 @@
 # pull_request_target runs the workflow version already in the repo, not the
 # PR's copy, so a PR cannot edit this file to pass its own check. It never
 # checks out PR code and gets no token permissions.
+#
+# Keep `edited` (it catches a PR retargeted to main) and never skip this job
+# with `if`: a skipped required job reports Success, so skipping on edits
+# would let a failing PR pass just by editing its description.
 name: branch-policy
 
 on:
