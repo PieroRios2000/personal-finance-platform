@@ -101,6 +101,7 @@ Cada decisión se registra como ADR en `brain/decisiones/` en la tarea donde se 
 - [ ] Los tests nuevos fallan sin el cambio y pasan con él.
 - [ ] Sin datos reales ni secretos en el diff.
 - [ ] Nota del cerebro actualizada (y ADR si hubo una decisión).
+- [ ] `SETUP.md` al día si la tarea añade librerías, programas, versiones o variables de entorno.
 - [ ] `ponytail-review` y `review` sin hallazgos pendientes.
 - [ ] PR revisado y mergeado por Piero.
 
