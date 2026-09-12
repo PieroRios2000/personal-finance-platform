@@ -32,6 +32,12 @@ RELAXED = re.compile(
 STRICT = re.compile(r"strict\s*=\s*true")
 NUMBER = re.compile(r"\d+(?:\.\d+)?")
 HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)")
+# Diff con el mismo formato sin importar la config de git de quien lo corre
+# (prefijos, rutas no ASCII, renames, diff externo).
+DIFF = (
+    *("-c", "core.quotePath=false", "diff", "--no-color", "--no-ext-diff"),
+    *("--no-renames", "--src-prefix=a/", "--dst-prefix=b/", "--unified=0"),
+)
 EXCEPTION_ROW = re.compile(
     r"^\|\s*([\w-]+)\s*\|\s*`?([^|`]+?)`?\s*\|.*\|\s*(\d{4}-\d{2}-\d{2})\s*\|$"
 )
@@ -54,7 +60,7 @@ def changes(base: str) -> tuple[list[Line], list[Line]]:
     added: list[Line] = []
     removed: list[Line] = []
     path, header, old, new = "", False, 0, 0
-    for line in git("diff", "--no-color", "--unified=0", merge_base).splitlines():
+    for line in git(*DIFF, merge_base).splitlines():
         if line.startswith("diff --git"):
             header = True
         elif header and line.startswith(("--- a/", "+++ b/")):
