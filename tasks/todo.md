@@ -225,14 +225,17 @@
 
 ### T13: S3 local — `infra/s3-local`
 
-**Descripción:** Levantar el almacenamiento S3 compatible con un solo comando.
+**Descripción:** Levantar el almacenamiento S3 compatible con un solo comando, en entornos aislados que se crean y se destruyen (ADR 0007).
 
 **Criterios de aceptación:**
 - [ ] `docker-compose.yml` con SeaweedFS (tag fijado), healthcheck y bucket `lakehouse` creado al iniciar.
-- [ ] Credenciales solo desde `.env`; ADR 0003 actualizado con la configuración final.
+- [ ] Sin `container_name` fijo y con el puerto del host configurable por variable, para que varios proyectos (`-p <nombre>`) convivan.
+- [ ] Credenciales solo desde `.env`; ADR 0003 actualizado con la configuración final y ADR 0007 creado.
+- [ ] `make poc-up` / `make poc-down` (`up -d --wait` y `down -v` con nombre de proyecto).
 
 **Verificación:**
 - [ ] `docker compose up -d` → servicio `healthy`; escribir y leer un objeto de prueba.
+- [ ] Dos proyectos levantados a la vez no chocan; tras `make poc-down` no quedan contenedores ni volúmenes del proyecto.
 
 **Dependencias:** T5 · **Archivos:** `docker-compose.yml`, `.env.example`, `Makefile` · **Tamaño:** S
 
@@ -285,21 +288,39 @@
 
 **Dependencias:** T14 · **Archivos:** `dbt/**`, `pyproject.toml` · **Tamaño:** M · **Skill:** source-driven-development
 
-### T17: CI de dbt e integración — `ci/dbt-integration`
+### T17: Entorno efímero de integración — `ci/ephemeral-integration`
 
-**Descripción:** En CI, levantar S3 local, ingerir el PDF sintético y correr dbt.
+**Descripción:** En cada PR, crear la plataforma temporal, ingerir datos sintéticos, correr dbt y destruirla (ADR 0007). Lo mismo en local con tus PDFs reales.
 
 **Criterios de aceptación:**
-- [ ] Job que inicia SeaweedFS, ejecuta `pfp ingest` con el fixture, `dbt build` y `sqlfluff lint`.
-- [ ] Tests `integration` corren en este job.
+- [ ] Job de CI: `docker compose -p pfp-pr-<n> up -d --wait` → `pfp ingest` del fixture sintético dos veces (la segunda agrega 0 filas) → `dbt build` → `sqlfluff lint` → `down -v` con `if: always()`.
+- [ ] Tests `integration` corren en este job; sin secretos y con `timeout-minutes`.
+- [ ] `make poc`: el mismo flujo en local con tus PDFs reales; imprime solo pass/fail y diferencias de reconciliación, y destruye el entorno al terminar.
 
 **Verificación:**
 - [ ] Job en verde; romper un test dbt a propósito lo pone en rojo (y se descarta).
+- [ ] Al terminar el job, en verde o en rojo, no quedan contenedores ni volúmenes del proyecto.
+- [ ] `make poc` en verde en tu máquina y sin restos.
 
-**Dependencias:** T15, T16 · **Archivos:** `.github/workflows/ci.yml` · **Tamaño:** S · **Skill:** ci-cd-and-automation
+**Dependencias:** T15, T16 · **Archivos:** `.github/workflows/ci.yml`, `Makefile` · **Tamaño:** M · **Skill:** ci-cd-and-automation
+
+### T17b: Comparación base vs PR — `ci/pr-data-diff`
+
+**Descripción:** Mostrar en cada PR qué cambia en los datos: la misma corrida efímera con la rama base y con la del PR, comparadas.
+
+**Criterios de aceptación:**
+- [ ] El job corre el flujo de T17 para el commit base y para el del PR, con los mismos datos sintéticos y en ubicaciones separadas (prefijo del lake y archivo DuckDB por corrida).
+- [ ] `scripts/data_diff.py` compara con DuckDB: filas por modelo, columnas y tipos, y filas distintas (`EXCEPT` en ambos sentidos, con muestra limitada).
+- [ ] Resultado en Markdown en el resumen del job (`$GITHUB_STEP_SUMMARY`); modo aviso, no bloquea.
+
+**Verificación:**
+- [ ] Tests TDD del script con dos bases DuckDB pequeñas.
+- [ ] Un PR que cambia un modelo silver muestra la diferencia; uno sin cambios en los modelos muestra "sin cambios".
+
+**Dependencias:** T17 · **Archivos:** `scripts/data_diff.py`, `tests/test_data_diff.py`, `.github/workflows/ci.yml` · **Tamaño:** M · **Skill:** test-driven-development
 
 ### ✅ Checkpoint D
-- [ ] `dbt build` en verde en local y en CI · [ ] revisión con Piero
+- [ ] `dbt build` en verde en local y en CI · [ ] el entorno efímero se destruye siempre · [ ] un PR muestra su diff de datos · [ ] revisión con Piero
 
 ---
 
@@ -330,7 +351,7 @@
 **Verificación:**
 - [ ] Clonar el repo en una carpeta limpia y seguir el README hasta `dbt build` sin pasos faltantes.
 
-**Dependencias:** T17, T18 · **Archivos:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Tamaño:** S
+**Dependencias:** T17b, T18 · **Archivos:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Tamaño:** S
 
 ### ✅ Checkpoint final
 - [ ] Todos los criterios cumplidos · [ ] PR de release `develop → main` "Fase 1 — Fundación" · [ ] merge por Piero
