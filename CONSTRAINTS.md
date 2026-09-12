@@ -40,11 +40,24 @@ commitear y archivos nuevos) y sale con código 1 si encuentra alguna de estas r
   bajo (por ejemplo `--fail-under=80` → `--fail-under=70`). Las versiones de dependencias
   (`bandit>=1.9.4` → `bandit>=1.10.0`) no cuentan como umbral.
 
-No revisa Markdown (la documentación puede nombrar estos marcadores) ni sus propios archivos
-(sus patrones y tests los contienen). Sale con código 2 si no puede correr (por ejemplo, sin
-`origin/develop`) e informa solo regla y ubicación, nunca el texto de la línea. Lo que no
-detecta (subir el 20 % de rendimiento, mover la fecha de bloqueo o agregar un `ignore_imports`
-a los contratos) cambia este archivo o `pyproject.toml`, y Piero lo revisa en el PR.
+Sale con código 2 si no puede correr (por ejemplo, sin `origin/develop` o en un clon
+superficial) e informa solo regla y ubicación, nunca el texto de la línea.
+
+**Límites conocidos.** Es un chequeo de texto sobre el diff: no entiende el código. Esto no lo
+detecta, y Piero lo revisa en el PR:
+
+- Reducir el `select` de ruff, quitar `fail_under` o `--fail-under`, o cambiar el formato de
+  la opción junto con el número (`--fail-under=80` → `--fail-under 50`).
+- `addopts` con `--deselect` o `-k`, un `testpaths` más corto, un `omit` en la cobertura o
+  `from pytest import skip`.
+- Un assert debilitado (`assert True`), o un test borrado y otro trivial agregado en el mismo
+  archivo. Al revés, mover tests de un archivo a otro sí se marca (falso positivo).
+- Un `-` o `|| true` en las reglas numéricas (ya están en modo aviso hasta el 2026-09-26),
+  subir el 20 % de rendimiento, mover la fecha de bloqueo o agregar un `ignore_imports` a los
+  contratos.
+- Marca los marcadores que aparecen dentro de strings o docstrings de un `.py` (falso
+  positivo). No revisa Markdown, porque la documentación puede nombrarlos, ni sus propios
+  archivos, porque sus patrones y tests los contienen.
 
 ## Reglas numéricas
 
