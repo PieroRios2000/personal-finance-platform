@@ -88,11 +88,11 @@ Por qué tienen esta forma (probado con import-linter 2.15):
 
 | Métrica | Hoy | Nota |
 |---|---|---|
-| Cobertura del proyecto (`ingestion`, `lakehouse`, `scripts`) | 99 % (105 sentencias, 1 sin cubrir) | La línea sin cubrir es el `sys.exit(main())` de floor-guard |
+| Cobertura del proyecto (`ingestion`, `lakehouse`, `scripts`) | 98 % (167 sentencias, 3 sin cubrir) | Sin cubrir: los `sys.exit(main())` de los scripts y una rama del inspector de T9 |
 | Cobertura de las líneas cambiadas (diff-cover) | 99 % | Sobre el diff de T4 |
-| Duración de `make check-fast` | 0,6 s con la caché de mypy; 6,7 s la primera vez | La primera corrida (sin caché) pasa de 5 s |
-| Duración de `make check-task` | 4,9 s | |
-| Duración de `make check-full` | 6,3 s | Incluye la consulta de pip-audit por red |
+| Duración de `make check-fast` | 0,6 s con la caché de mypy; 12,2 s la primera vez | La primera corrida (sin caché, mypy revisa también pdfplumber y pikepdf) pasa de 5 s |
+| Duración de `make check-task` | 9,4 s | 34 tests |
+| Duración de `make check-full` | 11,2 s | Incluye la consulta de pip-audit por red |
 | pip-audit / bandit | 0 vulnerabilidades / 0 hallazgos altos | |
 | Rendimiento de parsing y escritura | Pendiente de medir (T15) | |
 
