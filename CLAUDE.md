@@ -40,7 +40,7 @@ Empieza por tu tarea en `tasks/todo.md` y lee solo lo que necesites:
 ## Datos y privacidad
 
 - **Los datos reales nunca van a Git ni al CI.** Los PDFs viven en
-  `~/finance-data/raw/{bcp,scotiabank}/` y los secretos en `.env` (plantilla: `.env.example`).
+  `~/finance-data/raw/<usuario>/` y los secretos en `.env` (plantilla: `.env.example`).
   El CI usa PDFs sintéticos generados en los tests.
 - **No leas, abras ni imprimas PDFs reales sin enmascarar ni el `.env`.** Para diseñar
   parsers usa solo el volcado enmascarado del inspector de T9, y solo después de que Piero

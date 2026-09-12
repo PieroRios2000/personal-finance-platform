@@ -68,9 +68,10 @@ cp .env.example .env && chmod 600 .env   # rellena los valores; .env nunca se su
 Los PDFs reales viven **fuera del repo**, solo con permisos para tu usuario:
 
 ```bash
-mkdir -p ~/finance-data/raw/{bcp,scotiabank}
+mkdir -p ~/finance-data/raw/<usuario>      # una carpeta por usuario, p. ej. raw/piero
 chmod 700 ~/finance-data
-# copia cada PDF en su carpeta y luego:
+# copia ahí los PDFs de ese usuario, de cualquier banco y con cualquier nombre
+# (mejor uno neutro: el nombre original puede incluir números de cuenta), y luego:
 chmod 600 ~/finance-data/raw/*/*.pdf
 ```
 
