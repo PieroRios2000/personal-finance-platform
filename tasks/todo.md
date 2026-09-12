@@ -156,9 +156,9 @@
 **Descripción:** Script local que describe la estructura de un PDF sin exponer datos personales, para diseñar parsers y fixtures.
 
 **Criterios de aceptación:**
-- [ ] Abre PDFs con bytes antes de `%PDF-` (el de BCP empieza con `$BOP$`) y los desbloquea con la contraseña de `.env`; imprime por página líneas y columnas con posiciones.
-- [ ] Dígitos → `9`; textos fuera de una lista de encabezados conocidos → enmascarados.
-- [ ] Reporta si el PDF está cifrado y qué páginas no tienen capa de texto (escaneadas).
+- [x] Abre PDFs con bytes antes de `%PDF-` (el de BCP empieza con `$BOP$`) y los desbloquea con la contraseña de `.env`; imprime por página líneas y columnas con posiciones.
+- [x] Dígitos → `9`; textos fuera de una lista de encabezados conocidos → enmascarados.
+- [x] Reporta si el PDF está cifrado y qué páginas no tienen capa de texto (escaneadas).
 
 **Verificación:**
 - [ ] Piero lo corre sobre un PDF real y confirma que la salida no contiene datos personales antes de compartirla.
