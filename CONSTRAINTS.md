@@ -73,6 +73,14 @@ Por qué tienen esta forma (probado con import-linter 2.15):
 - Comprobado en una copia con el layout futuro: `ingestion.parsers.bcp → lakehouse.bronze` y
   `lakehouse.bronze → ingestion.parsers.bcp` rompen los contratos; `ingestion.cli →
   lakehouse.bronze` y `lakehouse.bronze → ingestion.schema` los cumplen.
+- Cada excepción lista el paquete y sus submódulos (`ingestion.cli -> lakehouse` e
+  `ingestion.cli -> lakehouse.**`), porque `**` no incluye al paquete mismo. Así también se
+  permite `import lakehouse` o `import ingestion.schema` desde `lakehouse/__init__.py`.
+- **Hueco conocido, a cerrar en T14:** al ignorar `lakehouse → ingestion.schema`,
+  import-linter deja de seguir lo que importa el esquema. Si `ingestion.schema` importara un
+  parser, `lakehouse` dependería de él sin que falle ningún contrato (comprobado en la copia
+  de prueba). En T14 se agrega un contrato que prohíba a `ingestion.schema` importar el resto
+  de `ingestion`.
 
 ## Checks
 

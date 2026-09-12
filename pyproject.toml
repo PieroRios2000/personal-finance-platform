@@ -45,7 +45,7 @@ name = "El parsing no importa lakehouse (solo ingestion.cli orquesta ambos)"
 type = "forbidden"
 source_modules = ["ingestion"]
 forbidden_modules = ["lakehouse"]
-ignore_imports = ["ingestion.cli -> lakehouse.**"]
+ignore_imports = ["ingestion.cli -> lakehouse", "ingestion.cli -> lakehouse.**"]
 unmatched_ignore_imports_alerting = "warn"
 
 [[tool.importlinter.contracts]]
@@ -53,5 +53,5 @@ name = "lakehouse solo depende del esquema (ingestion.schema), nunca de los pars
 type = "forbidden"
 source_modules = ["lakehouse"]
 forbidden_modules = ["ingestion"]
-ignore_imports = ["lakehouse.** -> ingestion.schema"]
+ignore_imports = ["lakehouse -> ingestion.schema", "lakehouse.** -> ingestion.schema"]
 unmatched_ignore_imports_alerting = "warn"
