@@ -8,23 +8,23 @@ Proyecto personal de portafolio para demostrar competencias de **Data Lead / Dat
 
 ## Objetivo
 
-Ingerir estados de cuenta bancarios en PDF, procesarlos y validarlos, modelarlos bajo arquitectura medallón, orquestar el flujo, correr modelos de ML encima y servirlos en un dashboard — replicando en open source lo que en entornos corporativos se hace con Azure Data Factory + ADLS + Synapse/Databricks.
+Ingerir estados de cuenta bancarios en PDF (BCP y Scotiabank), procesarlos y validarlos, modelarlos bajo arquitectura medallón, orquestar el flujo, correr modelos de ML encima y servirlos en un dashboard — replicando en open source lo que en entornos corporativos se hace con Azure Data Factory + ADLS + Synapse/Databricks.
 
 **Equivalencia que demuestra el proyecto (para entrevistas):**
 
 | Mundo Azure (trabajo) | Equivalente open source (este proyecto) |
 |---|---|
 | Azure Data Factory (orquestación) | Dagster |
-| ADLS Gen2 / Blob (storage) | MinIO (S3-compatible) |
-| Delta/Parquet en el lake | Delta Lake sobre MinIO |
-| Synapse / Databricks (procesamiento) | Apache Spark (PySpark) / DuckDB |
+| ADLS Gen2 / Blob (storage) | SeaweedFS (S3-compatible) |
+| Delta/Parquet en el lake | Delta Lake sobre SeaweedFS |
+| Synapse / Databricks (procesamiento) | DuckDB + delta-rs; Apache Spark (PySpark) cuando haya un motivo medible |
 | Power BI | Streamlit + Power BI |
 
 ---
 
 ## Principios de diseño
 
-1. **Los datos nunca tocan Git.** El repositorio contiene solo código. Los PDFs crudos y las tablas procesadas viven en MinIO (local). Cualquiera puede clonar el repo, levantar el stack y correrlo con *sus propios* PDFs.
+1. **Los datos nunca tocan Git.** El repositorio contiene solo código. Los PDFs crudos y las tablas procesadas viven en SeaweedFS (S3 local). Cualquiera puede clonar el repo, levantar el stack y correrlo con *sus propios* PDFs.
 2. **Todo open source y reproducible.** Un `docker compose up` levanta la plataforma completa.
 3. **Idempotencia.** Subir el mismo reporte dos veces no duplica datos. Deduplicación en dos niveles (archivo y transacción).
 4. **Reconciliación.** Cada PDF parseado se valida contra el saldo/total que el propio estado de cuenta declara.
@@ -36,10 +36,10 @@ Ingerir estados de cuenta bancarios en PDF, procesarlos y validarlos, modelarlos
 
 | Capa | Herramienta | Notas |
 |---|---|---|
-| Ingesta / parsing PDF | `pdfplumber`, `pikepdf`, `PyMuPDF` | `pikepdf` desbloquea PDFs con contraseña; OCR (`pytesseract`) solo si hay escaneos |
+| Ingesta / parsing PDF | `pdfplumber`, `pikepdf`, `pytesseract` | `pikepdf` desbloquea PDFs con contraseña; `pytesseract` lee las páginas escaneadas (pdfplumber las renderiza a imagen, así que no hace falta PyMuPDF) |
 | Validación de esquema | `pydantic` | Esquema `Transaction` común a todos los bancos |
-| Storage / lakehouse | MinIO + Delta Lake | Parquet + transacciones ACID + MERGE + time-travel |
-| Procesamiento | PySpark / DuckDB / Polars | Spark para demostrar big data; DuckDB/Polars para desarrollo liviano |
+| Storage / lakehouse | SeaweedFS + Delta Lake | Parquet + transacciones ACID + MERGE + time-travel. SeaweedFS reemplaza a MinIO, cuya edición Community quedó sin mantenimiento en 2025 |
+| Procesamiento | DuckDB (embebido) + delta-rs | Fase 1 sin JVM ni cluster ni Postgres; Spark (PySpark) entra cuando el volumen o la demo den un motivo medible |
 | Transformación | dbt | Medallón bronze/silver/gold; materialización `incremental` con estrategia `merge` |
 | Orquestación | Dagster | (Alternativa: Airflow si se prioriza reconocimiento por ATS) |
 | Calidad de datos | dbt tests + Great Expectations / Elementary | Tests de calidad y expectativas |
@@ -47,7 +47,7 @@ Ingerir estados de cuenta bancarios en PDF, procesarlos y validarlos, modelarlos
 | ML / MLOps | scikit-learn, MLflow, FastAPI, Evidently | Tracking, serving y monitoreo de drift |
 | Serving | Streamlit (+ Power BI) | Dashboard y uploader de PDFs |
 | Infra | Docker Compose, Terraform | IaC; cloud en free tier (Fase 4) |
-| CI/CD | GitHub Actions | `dbt build`, tests y linters (`sqlfluff`, `ruff`) en cada PR |
+| CI/CD | GitHub Actions | `dbt build`, tests y linters (`sqlfluff`, `ruff`) en cada PR; entorno efímero por PR y CI por impacto (solo corre lo caro si el cambio lo afecta) |
 | Seguridad | `.gitignore` + `gitleaks` (pre-commit) | Red de seguridad para que datos/secretos nunca lleguen a Git |
 
 ---
@@ -62,7 +62,7 @@ PDF (estado de cuenta)
    │          + reconciliación (suma transacciones == total declarado en el PDF)
    │          + hash de archivo (SHA-256) para dedup a nivel archivo
    ▼
-[ Bronze ]  Delta Lake sobre MinIO — datos crudos parseados, append-only
+[ Bronze ]  Delta Lake sobre SeaweedFS — datos crudos parseados, append-only
    │
    ▼
 [ Silver ]  dbt incremental + MERGE por business key (dedup a nivel transacción)
@@ -104,10 +104,10 @@ Cada parser valida que la suma de las transacciones extraídas cuadre con el sal
 
 ### Fase 1 — Fundación
 **Objetivo:** demostrar orden y buenas prácticas desde el primer commit.
-- Estructura del repo, `docker-compose` (MinIO + Postgres/DuckDB), `.gitignore` + `gitleaks`.
-- Esquema `Transaction` (pydantic) y primer parser de banco con `pdfplumber` + `pikepdf`.
+- Estructura del repo, `docker-compose` (SeaweedFS como S3 local; DuckDB embebido, sin Postgres), `.gitignore` + `gitleaks`.
+- Esquema `Transaction` (pydantic) y parsers de BCP y Scotiabank con `pdfplumber` + `pikepdf`; OCR con `pytesseract` para páginas escaneadas.
 - Hash de archivo (dedup nivel archivo) + reconciliación básica.
-- Capa bronze en Delta sobre MinIO.
+- Capa bronze en Delta (delta-rs) sobre SeaweedFS.
 - Proyecto dbt inicial (bronze → silver) con tests.
 - GitHub Actions: `dbt build`, tests, `ruff`, `sqlfluff` en cada PR.
 
@@ -142,7 +142,7 @@ Cada parser valida que la suma de las transacciones extraídas cuadre con el sal
 ### Fase 5 — Serving + Uploader
 **Objetivo:** hacer el repo demostrable y operable.
 - Dashboard en Streamlit sobre las tablas gold.
-- Uploader mínimo (`st.file_uploader`) → guarda en MinIO → dispara el pipeline.
+- Uploader mínimo (`st.file_uploader`) → guarda en SeaweedFS → dispara el pipeline.
 - (Opcional) Conexión Power BI.
 
 **Cierra:** entrega end-to-end, vitrina para reclutadores.
@@ -166,12 +166,12 @@ Cada parser valida que la suma de las transacciones extraídas cuadre con el sal
 │   ├── dispatcher.py              # detecta banco → rutea al parser
 │   ├── reconciliation.py
 │   ├── dedup.py                   # hash de archivo + business key
+│   ├── ocr.py                     # pytesseract para páginas escaneadas
 │   └── parsers/
 │       ├── base.py
 │       ├── bcp.py
-│       ├── bbva.py
-│       └── interbank.py
-├── lakehouse/                     # utilidades Delta / MinIO
+│       └── scotiabank.py
+├── lakehouse/                     # utilidades Delta / S3
 ├── dbt/
 │   ├── models/
 │   │   ├── bronze/
@@ -194,5 +194,5 @@ Cada parser valida que la suma de las transacciones extraídas cuadre con el sal
 ## Cómo demostrarlo (para el CV / entrevista)
 
 - Repo público con README claro, diagrama de arquitectura y GIF/screenshots del dashboard corriendo.
-- Frase de entrevista: *"En el trabajo uso ADF + ADLS + Synapse; en mi proyecto repliqué esa arquitectura con Dagster + MinIO + Delta + Spark, con cargas incrementales idempotentes y deduplicación por business key vía MERGE en Delta."*
+- Frase de entrevista: *"En el trabajo uso ADF + ADLS + Synapse; en mi proyecto repliqué esa arquitectura con Dagster + SeaweedFS (S3) + Delta + DuckDB, con cargas incrementales idempotentes y deduplicación por business key vía MERGE en Delta."*
 - Cada fase = un hito con su propio PR y descripción, mostrando historia de commits limpia.
