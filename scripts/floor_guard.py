@@ -19,9 +19,11 @@ from pathlib import Path
 
 # Comentarios que apagan un check del nivel: ruff, mypy, bandit, cobertura, gitleaks.
 SUPPRESSION = re.compile(
-    r"#.*\b(noqa|type:\s*ignore|nosec|pragma:\s*no\s*cover)\b|gitleaks:allow"
+    r"#.*\b(noqa|type:\s*ignore|nosec|pragma:\s*no\s*cover|fmt:\s*(off|skip)"
+    r"|mypy:\s*(ignore-errors|disable-error-code))\b|gitleaks:allow",
+    re.IGNORECASE,
 )
-SKIP = re.compile(r"\b(pytest|mark|unittest)\.(skip|xfail)")
+SKIP = re.compile(r"\b(pytest|mark|unittest)\.(skip|xfail)|\b(skipTest|importorskip)\b")
 TEST_OR_ASSERT = re.compile(r"\bdef test_|\bassert\b|pytest\.raises")
 CONFIG = ("pyproject.toml", "Makefile", ".pre-commit-config.yaml")
 # Archivos que pueden pisar la config de mypy, ruff, pytest o la cobertura.

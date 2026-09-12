@@ -19,9 +19,11 @@ si el Makefile y este archivo difieren, manda este archivo.
 [floor-guard](scripts/floor_guard.py) revisa el diff contra la rama base (commits, cambios sin
 commitear y archivos nuevos) y sale con código 1 si encuentra alguna de estas reglas:
 
-- `supresion`: un comentario nuevo que apaga un check: `# noqa`, `# type: ignore`, `# nosec`,
-  `# pragma: no cover` o `gitleaks:allow`.
-- `test-desactivado`: `pytest.mark.skip`, `skipif` o `xfail`, `pytest.skip()` o `unittest.skip`.
+- `supresion`: un comentario nuevo que apaga un check, en mayúsculas o minúsculas: `# noqa`,
+  `# type: ignore`, `# mypy: ignore-errors`, `# mypy: disable-error-code`, `# fmt: off`,
+  `# fmt: skip`, `# nosec`, `# pragma: no cover` o `gitleaks:allow`.
+- `test-desactivado`: `pytest.mark.skip`, `skipif` o `xfail`, `pytest.skip()`, `pytest.xfail()`,
+  `pytest.importorskip()`, `unittest.skip` o `self.skipTest()`.
 - `tests-quitados`: un `test_*.py` con menos tests o asserts que antes (borrarlo cuenta).
 - `config-relajada`: en `pyproject.toml`, el `Makefile` o `.pre-commit-config.yaml`, cualquiera
   de estos cambios:
