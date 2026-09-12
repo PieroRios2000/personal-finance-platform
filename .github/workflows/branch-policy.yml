@@ -1,0 +1,33 @@
+# Branch flow: only `develop` from this repo may open PRs into `main`;
+# any branch (forks included) may target `develop`.
+#
+# pull_request_target runs the workflow version already in the repo, not the
+# PR's copy, so a PR cannot edit this file to pass its own check. It never
+# checks out PR code and gets no token permissions.
+name: branch-policy
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited]
+    branches: [main, develop]
+
+permissions: {}
+
+jobs:
+  check-source-branch:
+    name: check-source-branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate PR source branch
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+          HEAD: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$BASE" = "main" ] && { [ "$HEAD" != "develop" ] || [ "$HEAD_REPO" != "$REPO" ]; }; then
+            echo "::error::PRs into main must come from $REPO:develop, got $HEAD_REPO:$HEAD"
+            exit 1
+          fi
+          echo "OK: $HEAD_REPO:$HEAD -> $BASE"
