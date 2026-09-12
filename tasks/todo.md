@@ -78,13 +78,13 @@
 **Descripción:** CONSTRAINTS.md con reglas, números y razones, y los comandos que las verifican.
 
 **Criterios de aceptación:**
-- [ ] `CONSTRAINTS.md` con piso, tabla de reglas numéricas (comando + dónde corre), métricas medidas y excepciones.
-- [ ] `Makefile` con `check-fast` (< 5 s), `check-task` (< 90 s) y `check-full` (CI).
-- [ ] floor-guard adaptado y contratos de import-linter para `ingestion` / `lakehouse`.
+- [x] `CONSTRAINTS.md` con piso, tabla de reglas numéricas (comando + dónde corre), métricas medidas y excepciones.
+- [x] `Makefile` con `check-fast` (< 5 s), `check-task` (< 90 s) y `check-full` (CI).
+- [x] floor-guard adaptado y contratos de import-linter para `ingestion` / `lakehouse`.
 
 **Verificación:**
-- [ ] `make check-full` en verde sobre el código actual.
-- [ ] floor-guard detecta un `# type: ignore` inyectado en un diff de prueba.
+- [x] `make check-full` en verde sobre el código actual.
+- [x] floor-guard detecta un `# type: ignore` inyectado en un diff de prueba.
 
 **Dependencias:** T2 · **Archivos:** `CONSTRAINTS.md`, `Makefile`, `scripts/floor_guard*`, `pyproject.toml` · **Tamaño:** M · **Skill:** constraint-driven-development
 
