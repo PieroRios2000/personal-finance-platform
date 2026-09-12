@@ -1,0 +1,154 @@
+"""floor-guard: falla si el diff contra la rama base baja el nivel de calidad.
+
+Revisa las líneas agregadas y quitadas entre el merge-base con la rama base y el
+árbol de trabajo (incluye archivos sin seguimiento). Se corre desde la raíz del repo:
+
+    uv run python scripts/floor_guard.py [--base origin/develop]
+
+Salida: 0 limpio, 1 el nivel bajó, 2 no se pudo correr. Las excepciones aprobadas
+se leen de la tabla de excepciones de CONSTRAINTS.md. Nunca imprime el texto de la
+línea (podría contener un secreto), solo la regla y la ubicación.
+"""
+
+import argparse
+import re
+import subprocess
+import sys
+from datetime import date
+from fnmatch import fnmatch
+from pathlib import Path
+
+# Comentarios que apagan un check del nivel: ruff, mypy, bandit, cobertura, gitleaks.
+SUPPRESSION = re.compile(
+    r"#.*\b(noqa|type:\s*ignore|nosec|pragma:\s*no\s*cover)\b|gitleaks:allow"
+)
+SKIP = re.compile(r"\b(pytest|mark|unittest)\.(skip|xfail)")
+TEST_OR_ASSERT = re.compile(r"\bdef test_|\bassert\b|pytest\.raises")
+CONFIG = ("pyproject.toml", "Makefile")
+RELAXED = re.compile(
+    r"^\s*(ignore|extend-ignore|per-file-ignores|ignore_errors|"
+    r"ignore_missing_imports|disable_error_code)\s*=|strict\s*=\s*false"
+)
+STRICT = re.compile(r"strict\s*=\s*true")
+NUMBER = re.compile(r"\d+(?:\.\d+)?")
+HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)")
+EXCEPTION_ROW = re.compile(
+    r"^\|\s*([\w-]+)\s*\|\s*`?([^|`]+?)`?\s*\|.*\|\s*(\d{4}-\d{2}-\d{2})\s*\|$"
+)
+# Sus propios patrones y fixtures contienen los marcadores que busca.
+SELF = ("scripts/floor_guard.py", "tests/test_floor_guard.py")
+
+Line = tuple[str, int, str]  # (archivo, número de línea, texto)
+Finding = tuple[str, str, str]  # (regla, archivo, ubicación)
+
+
+def git(*args: str) -> str:
+    return subprocess.run(
+        ["git", *args], capture_output=True, text=True, check=True
+    ).stdout
+
+
+def changes(base: str) -> tuple[list[Line], list[Line]]:
+    """Líneas agregadas y quitadas desde el merge-base con `base`."""
+    merge_base = git("merge-base", base, "HEAD").strip()
+    added: list[Line] = []
+    removed: list[Line] = []
+    path, header, old, new = "", False, 0, 0
+    for line in git("diff", "--no-color", "--unified=0", merge_base).splitlines():
+        if line.startswith("diff --git"):
+            header = True
+        elif header and line.startswith(("--- a/", "+++ b/")):
+            path = line[6:]
+        elif hunk := HUNK.match(line):
+            header, old, new = False, int(hunk[1]), int(hunk[2])
+        elif not header and line.startswith("+"):
+            added.append((path, new, line[1:]))
+            new += 1
+        elif not header and line.startswith("-"):
+            removed.append((path, old, line[1:]))
+            old += 1
+    untracked = git("ls-files", "-z", "--others", "--exclude-standard")
+    for name in filter(None, untracked.split("\0")):
+        text = Path(name).read_text(encoding="utf-8", errors="ignore")
+        added += [(name, n, t) for n, t in enumerate(text.splitlines(), 1)]
+    return added, removed
+
+
+def findings(added: list[Line], removed: list[Line]) -> list[Finding]:
+    found: list[Finding] = []
+    for path, n, text in added:
+        if path.endswith(".md") or path in SELF:
+            continue
+        if SUPPRESSION.search(text):
+            found.append(("supresion", path, f"{path}:{n}"))
+        if SKIP.search(text):
+            found.append(("test-desactivado", path, f"{path}:{n}"))
+        if path in CONFIG and RELAXED.search(text):
+            found.append(("config-relajada", path, f"{path}:{n}"))
+
+    for path, n, text in removed:
+        if path not in CONFIG:
+            continue
+        same_file = [t for p, _, t in added if p == path]
+        if STRICT.search(text) and text not in same_file:
+            found.append(("config-relajada", path, f"{path}:{n} (quitada)"))
+        for new_text in same_file:
+            same_shape = NUMBER.sub("#", new_text) == NUMBER.sub("#", text)
+            if same_shape and nums(new_text) < nums(text):
+                found.append(("umbral-rebajado", path, f"{path}:{n}"))
+
+    balance: dict[str, int] = {}
+    for sign, lines in ((1, added), (-1, removed)):
+        for path, _, text in lines:
+            if Path(path).name.startswith("test_") and TEST_OR_ASSERT.search(text):
+                balance[path] = balance.get(path, 0) + sign
+    found += [
+        ("tests-quitados", path, f"{path}: {-count} tests o asserts menos")
+        for path, count in balance.items()
+        if count < 0
+    ]
+    return found
+
+
+def nums(text: str) -> list[float]:
+    return [float(n) for n in NUMBER.findall(text)]
+
+
+def exceptions() -> list[tuple[str, str]]:
+    """(regla, glob de archivo) de las excepciones de CONSTRAINTS.md aún vigentes."""
+    path = Path("CONSTRAINTS.md")
+    if not path.exists():
+        return []
+    rows = (EXCEPTION_ROW.match(line.strip()) for line in path.read_text().splitlines())
+    today = date.today()
+    return [(m[1], m[2]) for m in rows if m and date.fromisoformat(m[3]) >= today]
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base", default="origin/develop")
+    base = parser.parse_args(argv).base
+    try:
+        added, removed = changes(base)
+    except subprocess.CalledProcessError as error:
+        print(f"floor-guard: no se pudo correr: {error.stderr}", file=sys.stderr)
+        return 2
+
+    allowed = exceptions()
+    blocking = []
+    for rule, path, where in findings(added, removed):
+        if any(rule == r and fnmatch(path, glob) for r, glob in allowed):
+            print(f"floor-guard: excepción aprobada [{rule}] {where}")
+        else:
+            blocking.append(f"  [{rule}] {where}")
+    if not blocking:
+        print("floor-guard: limpio")
+        return 0
+    print(f"floor-guard: el nivel bajó ({len(blocking)}):", file=sys.stderr)
+    print("\n".join(blocking), file=sys.stderr)
+    print("Corrige el código o pide una excepción en CONSTRAINTS.md.", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
