@@ -25,3 +25,6 @@ __pycache__/
 
 # Configuración local de Obsidian (el vault es brain/)
 .obsidian/
+
+# Copias de trabajo (git worktrees) de los agentes de Claude Code
+.claude/worktrees/
