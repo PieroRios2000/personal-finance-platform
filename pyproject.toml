@@ -28,6 +28,9 @@ strict = true
 testpaths = ["tests"]
 pythonpath = ["."]
 
+[tool.coverage.run]
+source = ["ingestion", "lakehouse", "scripts"]
+
 # Arquitectura (razones en CONSTRAINTS.md). Cada contrato prohíbe el paquete entero y
 # `ignore_imports` declara la única dependencia permitida. Mientras esa importación no
 # exista (llega en T14), import-linter solo avisa "No matches" en vez de fallar.
