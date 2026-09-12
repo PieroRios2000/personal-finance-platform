@@ -22,7 +22,7 @@ de tu máquina.
 ## Cómo se usa y cómo se verifica
 
 ```bash
-uv run --env-file .env scripts/inspect_pdf_layout.py ~/finance-data/raw/bcp/<archivo>.pdf \
+uv run --env-file .env scripts/inspect_pdf_layout.py ~/finance-data/raw/<usuario>/<archivo>.pdf \
     --password-env BCP_PDF_PASSWORD
 ```
 

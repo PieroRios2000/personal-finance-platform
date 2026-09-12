@@ -10,7 +10,10 @@ reconocer el mismo movimiento aunque llegue en otro PDF.
 
 ## Cómo se aplica aquí
 
-`fecha + monto + descripción normalizada + cuenta`.
+`fecha + monto + descripción normalizada + account_id` (la cuenta, ver [Usuarios y cuentas](usuarios-y-cuentas.md)).
+
+Una transferencia entre dos cuentas propias son dos movimientos con claves distintas, uno por cuenta:
+emparejarlos es trabajo de la [conciliación entre cuentas](reconciliacion.md) (T18b), no de la deduplicación.
 
 La descripción se normaliza (sin espacios sobrantes, en mayúsculas, sin códigos de relleno) con
 `normalize_description()` (T6), para que la clave sea estable entre reportes. En la Fase 2, silver usa
