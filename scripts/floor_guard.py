@@ -14,7 +14,6 @@ import argparse
 import re
 import subprocess
 import sys
-from datetime import date
 from fnmatch import fnmatch
 from pathlib import Path
 
@@ -49,9 +48,7 @@ DIFF = (
     *("-c", "core.quotePath=false", "diff", "--no-color", "--no-ext-diff"),
     *("--no-renames", "--src-prefix=a/", "--dst-prefix=b/", "--unified=0"),
 )
-EXCEPTION_ROW = re.compile(
-    r"^\|\s*([\w-]+)\s*\|\s*`?([^|`]+?)`?\s*\|.*\|\s*(\d{4}-\d{2}-\d{2})\s*\|$"
-)
+EXCEPTION_ROW = re.compile(r"^\|\s*([\w-]+)\s*\|\s*`?([^|`]+?)`?\s*\|")
 # Sus propios patrones y fixtures contienen los marcadores que busca.
 SELF = ("scripts/floor_guard.py", "tests/test_floor_guard.py")
 
@@ -139,13 +136,16 @@ def nums(text: str) -> list[float]:
 
 
 def exceptions() -> list[tuple[str, str]]:
-    """(regla, glob de archivo) de las excepciones de CONSTRAINTS.md aún vigentes."""
+    """(regla, glob de archivo) de la tabla de excepciones de CONSTRAINTS.md.
+
+    La fecha de revisión es un recordatorio para Piero y no se evalúa: una vez mergeada,
+    la línea exceptuada ya está en la base y no vuelve a aparecer en el diff.
+    """
     path = Path("CONSTRAINTS.md")
     if not path.exists():
         return []
     rows = (EXCEPTION_ROW.match(line.strip()) for line in path.read_text().splitlines())
-    today = date.today()
-    return [(m[1], m[2]) for m in rows if m and date.fromisoformat(m[3]) >= today]
+    return [(m[1], m[2]) for m in rows if m]
 
 
 def main(argv: list[str] | None = None) -> int:

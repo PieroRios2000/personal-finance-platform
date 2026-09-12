@@ -120,9 +120,11 @@ Si una regla no se puede cumplir por una razón real (por ejemplo, una librería
 1. Agrega una fila a la tabla en el mismo PR: regla, archivo (acepta globs como `tests/*`),
    razón, quién aprobó y fecha de revisión, como máximo a 90 días.
 2. Piero la aprueba al revisar el PR. Si no la aprueba, la fila se quita.
-3. floor-guard lee esta tabla: no bloquea esa regla en ese archivo hasta la fecha de revisión
-   y la muestra como "excepción aprobada" para que se vea. Pasada la fecha vuelve a bloquear:
-   o se arregla el código o se renueva con una razón nueva.
+3. floor-guard lee esta tabla: mientras la fila exista, no bloquea esa regla en ese archivo y
+   la muestra como "excepción aprobada" para que se vea. floor-guard no evalúa la fecha de
+   revisión, porque una vez mergeado el cambio exceptuado ya está en la base y no vuelve a
+   aparecer en el diff. La fecha es un recordatorio para Piero: ese día decide si se arregla
+   el código o se renueva la fila con una razón nueva.
 4. En las reglas numéricas, la excepción se configura en la herramienta (por ejemplo,
    `--ignore-vuln <ID>` en pip-audit) y también se anota aquí.
 

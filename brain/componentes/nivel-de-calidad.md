@@ -27,7 +27,8 @@ comprueba, para que ni una persona ni un agente bajen el nivel sin que se note.
 - Las reglas numéricas llevan `-` en el Makefile: muestran el fallo sin cortar la receta hasta
   el 2026-09-26; ese día se quita el `-` y pasan a bloquear.
 - Si una regla no se puede cumplir, se pide una excepción en `CONSTRAINTS.md` (regla, archivo,
-  razón, quién aprobó, fecha de revisión); floor-guard la respeta hasta esa fecha.
+  razón, quién aprobó, fecha de revisión). floor-guard la respeta mientras la fila exista; la
+  fecha es un recordatorio para revisarla.
 - Verificación: las tres recetas en verde sobre el código actual, y un `# type: ignore`
   inyectado a propósito hace que floor-guard falle con código 1.
 
