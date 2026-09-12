@@ -8,6 +8,7 @@ from scripts import floor_guard
 
 BASE_FILES = {
     "tests/test_a.py": "def test_a() -> None:\n    assert 1 + 1 == 2\n",
+    "tests/test_señal.py": "def test_s() -> None:\n    assert True\n",
     "app.py": "x = 1\n",
     "pyproject.toml": "[tool.mypy]\nstrict = true\n",
     "Makefile": "cov:\n\tuv run diff-cover coverage.xml --fail-under=80\n",
@@ -95,6 +96,37 @@ def test_deleted_test_file_fails(capsys: pytest.CaptureFixture[str]) -> None:
 
     assert code == 1
     assert "tests/test_a.py" in out
+
+
+@pytest.mark.parametrize("option", ["diff.mnemonicPrefix", "diff.noprefix"])
+def test_diff_does_not_depend_on_git_config(
+    option: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    git("config", option, "true")
+    git("rm", "-q", "tests/test_a.py")
+
+    code, out = run(capsys)
+
+    assert code == 1
+    assert "tests/test_a.py" in out
+
+
+def test_non_ascii_path_is_reported(capsys: pytest.CaptureFixture[str]) -> None:
+    git("rm", "-q", "tests/test_señal.py")
+
+    code, out = run(capsys)
+
+    assert code == 1
+    assert "tests/test_señal.py" in out
+
+
+def test_renamed_test_file_counts_as_removed(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    git("mv", "tests/test_a.py", "tests/a_checks.py")
+    git("commit", "-qm", "rename", "--no-gpg-sign")
+
+    assert run(capsys)[0] == 1
 
 
 def test_removed_assertion_fails(capsys: pytest.CaptureFixture[str]) -> None:
