@@ -3,6 +3,8 @@ name = "personal-finance-platform"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "pdfplumber>=0.11.10",
+    "pikepdf>=10.13.0.post1",
     "pydantic>=2.13.5",
 ]
 
@@ -10,6 +12,7 @@ dependencies = [
 dev = [
     "bandit>=1.9.4",
     "diff-cover>=10.5.1",
+    "fpdf2>=2.8.8",
     "import-linter>=2.15",
     "mypy>=2.3.1",
     "pip-audit>=2.10.1",

@@ -49,13 +49,13 @@
 **Descripción:** Vault Markdown enlazado que explica el contexto y cómo se relacionan conceptos, componentes, decisiones y fases.
 
 **Criterios de aceptación:**
-- [ ] `brain/README.md` con mapa Mermaid, índice y convención de notas (frontmatter `tipo`, `fase`, `relacionado` + links relativos).
-- [ ] Plantillas en `brain/_plantillas/`; conceptos base (medallón, idempotencia, business key, reconciliación, dedup por archivo).
-- [ ] ADR 0001–0004 en `brain/decisiones/` y `brain/fases/fase-1.md` enlazando este plan.
+- [x] `brain/README.md` con mapa Mermaid, índice y convención de notas (frontmatter `tipo` y `fase`; relaciones como links relativos en la sección "Relacionado").
+- [x] Plantillas en `brain/_plantillas/`; conceptos base (medallón, idempotencia, business key, reconciliación, dedup por archivo).
+- [x] ADR 0001–0004 en `brain/decisiones/` y `brain/fases/fase-1.md` enlazando este plan.
 
 **Verificación:**
-- [ ] Los links navegan en la vista de GitHub del PR y el Mermaid se renderiza.
-- [ ] Ningún link roto (comprobación con script o lychee en local).
+- [x] Los links navegan en la vista de GitHub del PR y el Mermaid se renderiza.
+- [x] Ningún link roto (comprobación con script o lychee en local).
 
 **Dependencias:** T2 · **Archivos:** `brain/**` · **Tamaño:** M (solo Markdown) · **Skill:** documentation-and-adrs
 
@@ -64,9 +64,9 @@
 **Descripción:** CLAUDE.md que apunta al cerebro y a las reglas; template de PR; PROJECT.md al día con las decisiones.
 
 **Criterios de aceptación:**
-- [ ] `CLAUDE.md`: flujo de ramas, "solo Piero mergea", datos nunca en Git, leer `brain/` y `CONSTRAINTS.md`.
-- [ ] `.github/pull_request_template.md` con checklist (DoD + nota del cerebro).
-- [ ] `PROJECT.md` refleja bancos BCP/Scotiabank, almacenamiento S3 y stack de Fase 1.
+- [x] `CLAUDE.md`: flujo de ramas, "solo Piero mergea", datos nunca en Git, leer `brain/` y `CONSTRAINTS.md`.
+- [x] `.github/pull_request_template.md` con checklist (DoD + nota del cerebro).
+- [x] `PROJECT.md` refleja bancos BCP/Scotiabank, almacenamiento S3 y stack de Fase 1.
 
 **Verificación:**
 - [ ] Un PR de prueba (el propio) muestra el template; CLAUDE.md se carga en una sesión nueva.
@@ -156,9 +156,9 @@
 **Descripción:** Script local que describe la estructura de un PDF sin exponer datos personales, para diseñar parsers y fixtures.
 
 **Criterios de aceptación:**
-- [ ] Abre PDFs con bytes antes de `%PDF-` (el de BCP empieza con `$BOP$`) y los desbloquea con la contraseña de `.env`; imprime por página líneas y columnas con posiciones.
-- [ ] Dígitos → `9`; textos fuera de una lista de encabezados conocidos → enmascarados.
-- [ ] Reporta si el PDF está cifrado y qué páginas no tienen capa de texto (escaneadas).
+- [x] Abre PDFs con bytes antes de `%PDF-` (el de BCP empieza con `$BOP$`) y los desbloquea con la contraseña de `.env`; imprime por página líneas y columnas con posiciones.
+- [x] Dígitos → `9`; textos fuera de una lista de encabezados conocidos → enmascarados.
+- [x] Reporta si el PDF está cifrado y qué páginas no tienen capa de texto (escaneadas).
 
 **Verificación:**
 - [ ] Piero lo corre sobre un PDF real y confirma que la salida no contiene datos personales antes de compartirla.
@@ -263,7 +263,7 @@
 - [ ] Benchmarks de parsing (PDF sintético de N páginas) y append a bronze.
 - [ ] Job de CI que compara base vs PR en el mismo runner (`--benchmark-compare-fail=mean:20%`), en modo aviso.
 - [ ] Job `changes` (ADR 0008): áreas afectadas según `git diff` contra la base y el mapa de impacto; los benchmarks corren solo si cambian `ingestion/`, `lakehouse/` o las dependencias. En push a `develop` y una vez por semana corre todo.
-- [ ] Valores actuales anotados en CONSTRAINTS.md ("Medido").
+- [ ] Valores actuales anotados en CONSTRAINTS.md ("Medido") y ADR 0008 creado en `brain/decisiones/`.
 
 **Verificación:**
 - [ ] Un PR con un `sleep` artificial dispara el aviso (y se descarta).

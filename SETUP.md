@@ -85,6 +85,9 @@ Están consolidadas en un solo lugar y se instalan todas con `uv sync --locked`:
 | Librería | Versión fijada | Tipo | Para qué |
 |---|---|---|---|
 | pydantic | 2.13.5 | runtime | Modelos y validación de transacciones |
+| pikepdf | 10.13.0.post1 | runtime | Abrir y descifrar los PDFs con contraseña |
+| pdfplumber | 0.11.10 | runtime | Leer el texto de los PDFs con sus posiciones |
+| fpdf2 | 2.8.8 | dev | Generar PDFs sintéticos dentro de los tests |
 | pytest | 9.1.1 | dev | Tests |
 | pytest-cov | 7.1.0 | dev | Cobertura |
 | ruff | 0.16.7 | dev | Lint y formato |
