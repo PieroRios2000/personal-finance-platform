@@ -1,0 +1,16 @@
+# Secretos: nunca a Git (la plantilla es .env.example)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Datos financieros reales: viven fuera del repo (~/finance-data) y en el lake
+*.[pP][dD][fF]
+data/
+
+# Lake local y bases embebidas
+*.duckdb
+*.duckdb.wal
+*.parquet
+_delta_log/
