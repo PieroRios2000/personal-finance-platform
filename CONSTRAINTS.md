@@ -23,11 +23,20 @@ commitear y archivos nuevos) y sale con código 1 si encuentra alguna de estas r
   `# pragma: no cover` o `gitleaks:allow`.
 - `test-desactivado`: `pytest.mark.skip`, `skipif` o `xfail`, `pytest.skip()` o `unittest.skip`.
 - `tests-quitados`: un `test_*.py` con menos tests o asserts que antes (borrarlo cuenta).
-- `config-relajada`: en `pyproject.toml` o el `Makefile`, `strict = true` quitado o
-  `strict = false`, o una clave nueva `ignore`, `extend-ignore`, `per-file-ignores`,
-  `ignore_errors`, `ignore_missing_imports` o `disable_error_code`.
+- `config-relajada`: en `pyproject.toml`, el `Makefile` o `.pre-commit-config.yaml`, cualquiera
+  de estos cambios:
+  - `strict = true` quitado o `strict = false`.
+  - Una clave nueva `ignore`, `extend-ignore`, `ignore_errors`, `ignore_missing_imports` o
+    `disable_error_code`, o un `disallow_*` o `warn_*` en `false`.
+  - `per-file-ignores`, como clave o como tabla.
+  - Un check del piso (ruff, mypy, pytest, floor-guard, gitleaks) que desaparece del archivo
+    o que pasa a correr con `-` o `|| true`.
+  - Un archivo de config fuera de `pyproject.toml` (`mypy.ini`, `.mypy.ini`, `setup.cfg`,
+    `tox.ini`, `pytest.ini`, `ruff.toml`, `.ruff.toml`, `.coveragerc`), que podría pisar la
+    configuración.
 - `umbral-rebajado`: en esos mismos archivos, una línea igual a otra salvo por un número más
-  bajo (por ejemplo `--fail-under=80` → `--fail-under=70`).
+  bajo (por ejemplo `--fail-under=80` → `--fail-under=70`). Las versiones de dependencias
+  (`bandit>=1.9.4` → `bandit>=1.10.0`) no cuentan como umbral.
 
 No revisa Markdown (la documentación puede nombrar estos marcadores) ni sus propios archivos
 (sus patrones y tests los contienen). Sale con código 2 si no puede correr (por ejemplo, sin

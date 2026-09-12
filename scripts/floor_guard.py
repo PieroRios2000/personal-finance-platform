@@ -24,12 +24,22 @@ SUPPRESSION = re.compile(
 )
 SKIP = re.compile(r"\b(pytest|mark|unittest)\.(skip|xfail)")
 TEST_OR_ASSERT = re.compile(r"\bdef test_|\bassert\b|pytest\.raises")
-CONFIG = ("pyproject.toml", "Makefile")
-RELAXED = re.compile(
-    r"^\s*(ignore|extend-ignore|per-file-ignores|ignore_errors|"
-    r"ignore_missing_imports|disable_error_code)\s*=|strict\s*=\s*false"
+CONFIG = ("pyproject.toml", "Makefile", ".pre-commit-config.yaml")
+# Archivos que pueden pisar la config de mypy, ruff, pytest o la cobertura.
+OTHER_CONFIG = (
+    *("mypy.ini", ".mypy.ini", "setup.cfg", "tox.ini", "pytest.ini"),
+    *("ruff.toml", ".ruff.toml", ".coveragerc"),
 )
-STRICT = re.compile(r"strict\s*=\s*true")
+RELAXED = re.compile(
+    r"^\s*(ignore|extend-ignore|ignore_errors|ignore_missing_imports|"
+    r"disable_error_code)\s*=|per-file-ignores|\bstrict\s*=\s*false|"
+    r"^\s*(disallow|warn)_\w+\s*=\s*false",
+    re.IGNORECASE,
+)
+STRICT = re.compile(r"\bstrict\s*=\s*true", re.IGNORECASE)
+# Checks del piso: no pueden desaparecer ni correr sin cortar ("-" o "|| true").
+FLOOR_TOOL = re.compile(r"\b(ruff|mypy|pytest|floor_guard|gitleaks)\b")
+IGNORED_FAILURE = re.compile(r"^\t-|\|\|\s*true")
 NUMBER = re.compile(r"\d+(?:\.\d+)?")
 VERSION_SPEC = re.compile(r"[<>=~!]=")  # "bandit>=1.9.4" es una versión, no un umbral
 HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)")
@@ -90,15 +100,21 @@ def findings(added: list[Line], removed: list[Line]) -> list[Finding]:
             found.append(("supresion", path, f"{path}:{n}"))
         if SKIP.search(text):
             found.append(("test-desactivado", path, f"{path}:{n}"))
-        if path in CONFIG and RELAXED.search(text):
+        floor_ignored = FLOOR_TOOL.search(text) and IGNORED_FAILURE.search(text)
+        if path in CONFIG and (RELAXED.search(text) or floor_ignored):
             found.append(("config-relajada", path, f"{path}:{n}"))
+    for path in sorted({p for p, _, _ in added if Path(p).name in OTHER_CONFIG}):
+        found.append(("config-relajada", path, f"{path}: config fuera de pyproject"))
 
     for path, n, text in removed:
         if path not in CONFIG:
             continue
         same_file = [t for p, _, t in added if p == path]
-        if STRICT.search(text) and text not in same_file:
+        if STRICT.search(text) and not any(STRICT.search(t) for t in same_file):
             found.append(("config-relajada", path, f"{path}:{n} (quitada)"))
+        for tool in FLOOR_TOOL.findall(text):
+            if not any(tool in t for t in same_file):
+                found.append(("config-relajada", path, f"{path}:{n} ({tool} quitado)"))
         for new_text in same_file:
             same_shape = NUMBER.sub("#", new_text) == NUMBER.sub("#", text)
             same_shape = same_shape and not VERSION_SPEC.search(text)
