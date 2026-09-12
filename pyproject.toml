@@ -27,3 +27,25 @@ strict = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+# Arquitectura (razones en CONSTRAINTS.md). Cada contrato prohíbe el paquete entero y
+# `ignore_imports` declara la única dependencia permitida. Mientras esa importación no
+# exista (llega en T14), import-linter solo avisa "No matches" en vez de fallar.
+[tool.importlinter]
+root_packages = ["ingestion", "lakehouse"]
+
+[[tool.importlinter.contracts]]
+name = "El parsing no importa lakehouse (solo ingestion.cli orquesta ambos)"
+type = "forbidden"
+source_modules = ["ingestion"]
+forbidden_modules = ["lakehouse"]
+ignore_imports = ["ingestion.cli -> lakehouse.**"]
+unmatched_ignore_imports_alerting = "warn"
+
+[[tool.importlinter.contracts]]
+name = "lakehouse solo depende del esquema (ingestion.schema), nunca de los parsers"
+type = "forbidden"
+source_modules = ["lakehouse"]
+forbidden_modules = ["ingestion"]
+ignore_imports = ["lakehouse.** -> ingestion.schema"]
+unmatched_ignore_imports_alerting = "warn"
