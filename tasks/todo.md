@@ -35,12 +35,12 @@
 **Descripción:** Proyecto con uv y Python 3.12, herramientas de calidad configuradas y un smoke test.
 
 **Criterios de aceptación:**
-- [ ] `pyproject.toml` (requires-python 3.12, pydantic; dev: pytest, pytest-cov, ruff, mypy), `.python-version`, `uv.lock`.
-- [ ] Paquetes `ingestion/` y `lakehouse/` importables; ruff en pre-commit.
-- [ ] Config de ruff, mypy (strict) y pytest en `pyproject.toml`.
+- [x] `pyproject.toml` (requires-python 3.12, pydantic; dev: pytest, pytest-cov, ruff, mypy), `.python-version`, `uv.lock`.
+- [x] Paquetes `ingestion/` y `lakehouse/` importables; ruff en pre-commit.
+- [x] Config de ruff, mypy (strict) y pytest en `pyproject.toml`.
 
 **Verificación:**
-- [ ] `uv sync` limpio; `uv run ruff check .`, `uv run mypy .`, `uv run pytest` en verde.
+- [x] `uv sync` limpio; `uv run ruff check .`, `uv run mypy .`, `uv run pytest` en verde.
 
 **Dependencias:** T1 · **Archivos:** `pyproject.toml`, `uv.lock`, `.python-version`, `ingestion/__init__.py`, `lakehouse/__init__.py`, `tests/test_smoke.py` · **Tamaño:** S
 
