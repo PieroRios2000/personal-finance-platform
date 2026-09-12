@@ -8,6 +8,7 @@
 - [ ] Instalar `uv` a nivel usuario (sin sudo).
 - [ ] Docker accesible sin sudo desde WSL (reiniciar WSL tras entrar al grupo `docker`).
 - [ ] PDFs reales en `~/finance-data/raw/{bcp,scotiabank}/`, fuera del repo.
+- [ ] Tesseract OCR (`sudo apt install tesseract-ocr tesseract-ocr-spa`) antes de T11b.
 
 ---
 
@@ -155,6 +156,7 @@
 **Criterios de aceptación:**
 - [ ] Desbloquea con contraseña desde `.env`; imprime por página líneas y columnas con posiciones.
 - [ ] Dígitos → `9`; textos fuera de una lista de encabezados conocidos → enmascarados.
+- [ ] Reporta si el PDF está cifrado y qué páginas no tienen capa de texto (escaneadas).
 
 **Verificación:**
 - [ ] Piero lo corre sobre un PDF real y confirma que la salida no contiene datos personales antes de compartirla.
@@ -186,6 +188,20 @@
 - [ ] `uv run pytest` en verde; `uv run pytest -m real_pdf` en verde en tu máquina.
 
 **Dependencias:** T6, T8, T10 · **Archivos:** `ingestion/parsers/{__init__,base,bcp}.py`, `tests/parsers/test_bcp.py` · **Tamaño:** M · **Skill:** test-driven-development
+
+### T11b: OCR para páginas escaneadas — `feat/ocr-fallback`
+
+**Descripción:** Algunos PDFs son escaneados; cuando una página no tiene capa de texto, obtenerlo con OCR.
+
+**Criterios de aceptación:**
+- [ ] `ingestion/ocr.py`: si `extract_text()` de una página viene vacío, se renderiza a 300 dpi (pdfplumber) y se lee con Tesseract en español.
+- [ ] Los parsers reciben el texto sin saber si vino de OCR; la reconciliación detecta errores de lectura.
+- [ ] El CI instala Tesseract y prueba con un PDF sintético rasterizado.
+
+**Verificación:**
+- [ ] `uv run pytest -m real_pdf` reconcilia el PDF escaneado real en tu máquina.
+
+**Dependencias:** T9, T11 · **Archivos:** `ingestion/ocr.py`, `tests/test_ocr.py`, `.github/workflows/ci.yml` · **Tamaño:** M · **Skill:** source-driven-development
 
 ### T12: Dispatcher y CLI — `feat/dispatcher-cli`
 
@@ -300,7 +316,7 @@
 **Verificación:**
 - [ ] `uv run pfp ingest <pdf real Scotiabank>` escribe en bronze y `dbt build` lo incluye en silver.
 
-**Dependencias:** T12, T14 · **Archivos:** `ingestion/parsers/scotiabank.py`, `tests/fixtures/…`, `tests/parsers/test_scotiabank.py` · **Tamaño:** M · **Skill:** test-driven-development
+**Dependencias:** T11b, T12, T14 · **Archivos:** `ingestion/parsers/scotiabank.py`, `tests/fixtures/…`, `tests/parsers/test_scotiabank.py` · **Tamaño:** M · **Skill:** test-driven-development
 
 ### T19: Cierre de fase — `docs/phase-1-close`
 

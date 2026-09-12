@@ -27,10 +27,10 @@ uv run dbt build --project-dir dbt    # → silver + tests en verde
 | PROJECT.md | Este plan | Motivo |
 |---|---|---|
 | Bancos BCP, BBVA, Interbank | **BCP y Scotiabank** | Decisión de Piero (2026-09-12) |
-| MinIO | **SeaweedFS** *(pendiente de aprobación)* | MinIO Community dejó de publicar imágenes (oct-2025), entró en mantenimiento (dic-2025) y su repo está archivado (2026): sin parches de seguridad |
+| MinIO | **SeaweedFS** (aprobado 2026-09-12) | MinIO Community dejó de publicar imágenes (oct-2025), entró en mantenimiento (dic-2025) y su repo está archivado (2026): sin parches de seguridad |
 | Postgres / DuckDB | Solo **DuckDB** embebido | Un servicio menos; DuckDB cubre la Fase 1 |
 | PySpark / DuckDB / Polars | **DuckDB + delta-rs** en Fase 1; Spark cuando haya un motivo medible | 7 GB de RAM en WSL; evitar tres motores para el mismo trabajo |
-| PyMuPDF, pytesseract | Solo si un PDF real lo exige | `pdfplumber` + `pikepdf` cubren PDFs de texto con contraseña |
+| PyMuPDF, pytesseract | **pytesseract** para páginas escaneadas (T11b); sin PyMuPDF | Hay PDFs escaneados; pdfplumber ya renderiza páginas a imagen para el OCR |
 
 `PROJECT.md` se actualiza con estos cambios en la tarea T3b.
 
@@ -124,6 +124,7 @@ Detalle, criterios y verificación de cada una en [`todo.md`](todo.md).
 - T9 `chore/pdf-layout-inspector` — volcado enmascarado del layout de un PDF
 - T10 `test/bcp-synthetic-fixture` — generador de PDF sintético estilo BCP
 - T11 `feat/parser-bcp` — parser BCP + desbloqueo con contraseña
+- T11b `feat/ocr-fallback` — OCR con Tesseract para páginas escaneadas
 - T12 `feat/dispatcher-cli` — detección de banco + CLI `pfp parse`
 - ✅ **Checkpoint B** — un PDF real de BCP se parsea y reconcilia en local
 
@@ -152,15 +153,19 @@ Detalle, criterios y verificación de cada una en [`todo.md`](todo.md).
 | MinIO sin mantenimiento | Alto | SeaweedFS (ADR 0003); API S3 estándar, cambio de servidor = cambio de endpoint |
 | DuckDB leyendo Delta en S3 local (endpoint, path-style, SSL) | Medio | Prueba mínima al inicio de T16 antes de modelar |
 | delta-rs sobre S3 sin locking | Bajo en Fase 1 (un solo escritor) | Documentado en ADR 0006; se revisa en Fase 2 con Dagster |
-| PDFs con contraseña o escaneados | Medio | pikepdf + contraseña en `.env`; OCR solo si aparece un escaneo |
+| PDFs con contraseña y al menos uno escaneado (confirmado) | Alto | pikepdf + contraseña en `.env`; T9 detecta páginas sin texto; OCR con Tesseract (T11b); la reconciliación detecta errores de lectura del OCR |
 | Benchmarks ruidosos en CI | Medio | Base y PR en el mismo runner, margen 20 %, 2 semanas en modo aviso |
 | 7 GB de RAM para Fase 2 (Spark + catálogo) | Medio | Se evalúa al planificar Fase 2 (`.wslconfig`, alternativas livianas) |
 | `gh` 2.46 falla en `gh pr edit` | Bajo | Usar la API REST (`gh api`) |
 
+## Decisiones confirmadas (2026-09-12)
+
+1. **Almacenamiento S3:** SeaweedFS.
+2. **Privacidad:** los parsers se diseñan con el volcado enmascarado de T9; Claude no lee PDFs reales sin enmascarar.
+3. **PDFs:** tienen contraseña y al menos uno es escaneado → OCR entra en la Fase 1 (T11b).
+4. **Ubicación:** `~/finance-data/raw/{bcp,scotiabank}/`, fuera del repo y con permisos solo para tu usuario.
+
 ## Preguntas abiertas
 
-1. **Almacenamiento S3:** ¿apruebas SeaweedFS? Alternativas: RustFS (reemplazo directo de MinIO, más nuevo) o fijar la última imagen de MinIO (sin parches).
-2. **Privacidad:** ¿de acuerdo con diseñar los parsers a partir de un volcado enmascarado (T9) en lugar de que yo lea tus PDFs reales?
-3. **PDFs:** ¿tienen contraseña? ¿Alguno es escaneado (imagen) en vez de texto?
-4. **Ubicación de los PDFs reales:** propuesta `~/finance-data/raw/{bcp,scotiabank}/`, fuera del repo.
-5. **Fecha para pasar de aviso a bloqueo:** propuesta 2026-09-26.
+1. **Fecha para pasar de aviso a bloqueo:** propuesta 2026-09-26.
+2. **Qué PDFs o páginas son escaneados:** lo responde el inspector de T9.
