@@ -17,6 +17,7 @@ flowchart LR
         GS["Guardas de seguridad"]
         PY["Proyecto Python"]
         CI["CI"]
+        INS["Inspector de layout"]
     end
 
     subgraph planificado["Planificado · Fase 1"]
@@ -29,6 +30,7 @@ flowchart LR
     PY --> ING
     CI -. valida .-> PY
     GS -. protege .-> PDF
+    INS -. diseña .-> ING
 
     ING -. usa .-> REC(["Reconciliación"])
     ING -. usa .-> DED(["Dedup por archivo"])
@@ -43,6 +45,7 @@ flowchart LR
     A3{{"ADR 0003 · SeaweedFS"}} --> LAKE
     A4{{"ADR 0004 · PDFs reales no salen"}} --> GS
     A4 --> ING
+    A4 --> INS
 ```
 
 Rectángulo = componente · óvalo = concepto · hexágono = decisión (ADR) · línea punteada = relación de uso.
@@ -52,7 +55,7 @@ Rectángulo = componente · óvalo = concepto · hexágono = decisión (ADR) · 
 | Tipo | Notas |
 |---|---|
 | Fases | [Fase 1 — Fundación](fases/fase-1.md) |
-| Componentes | [Guardas de seguridad](componentes/guardas-de-seguridad.md) · [Proyecto Python](componentes/proyecto-python.md) · [CI](componentes/ci.md) |
+| Componentes | [Guardas de seguridad](componentes/guardas-de-seguridad.md) · [Proyecto Python](componentes/proyecto-python.md) · [CI](componentes/ci.md) · [Inspector de layout](componentes/inspector-de-layout.md) |
 | Conceptos | [Medallón](conceptos/medallon.md) · [Idempotencia](conceptos/idempotencia.md) · [Business key](conceptos/business-key.md) · [Reconciliación](conceptos/reconciliacion.md) · [Dedup por archivo](conceptos/dedup-por-archivo.md) |
 | Decisiones | [0001 Python 3.12 con uv](decisiones/0001-python-312-con-uv.md) · [0002 DuckDB + delta-rs](decisiones/0002-duckdb-y-delta-rs-antes-que-spark.md) · [0003 SeaweedFS](decisiones/0003-s3-local-con-seaweedfs.md) · [0004 PDFs reales](decisiones/0004-pdfs-reales-no-salen-de-la-maquina.md) |
 
