@@ -5,9 +5,9 @@
 
 ## Prerrequisitos del entorno (no generan PR)
 
-- [ ] Instalar `uv` a nivel usuario (sin sudo).
+- [x] Instalar `uv` a nivel usuario (sin sudo) y Python 3.12 gestionado por uv.
 - [ ] Docker accesible sin sudo desde WSL (reiniciar WSL tras entrar al grupo `docker`).
-- [ ] PDFs reales en `~/finance-data/raw/{bcp,scotiabank}/`, fuera del repo.
+- [x] PDFs reales en `~/finance-data/raw/{bcp,scotiabank}/`, fuera del repo.
 - [ ] Tesseract OCR (`sudo apt install tesseract-ocr tesseract-ocr-spa`) antes de T11b.
 
 ---
@@ -154,7 +154,7 @@
 **Descripción:** Script local que describe la estructura de un PDF sin exponer datos personales, para diseñar parsers y fixtures.
 
 **Criterios de aceptación:**
-- [ ] Desbloquea con contraseña desde `.env`; imprime por página líneas y columnas con posiciones.
+- [ ] Abre PDFs con bytes antes de `%PDF-` (el de BCP empieza con `$BOP$`) y los desbloquea con la contraseña de `.env`; imprime por página líneas y columnas con posiciones.
 - [ ] Dígitos → `9`; textos fuera de una lista de encabezados conocidos → enmascarados.
 - [ ] Reporta si el PDF está cifrado y qué páginas no tienen capa de texto (escaneadas).
 
