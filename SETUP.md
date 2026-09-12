@@ -113,3 +113,4 @@ Todo en verde = el entorno está listo.
 | Docker Desktop: `wsl-bootstrap … exit status 1` al arrancar | En PowerShell `wsl --shutdown` y vuelve a abrir Docker Desktop; si persiste, `wsl --update` |
 | `permission denied` en `/var/run/docker.sock` | Falta el grupo `docker` o no se reinició WSL (sección 2, punto 3) |
 | `gh pr edit` falla con un error de *Projects classic* (gh 2.46) | Usa `gh api --method PATCH repos/<owner>/<repo>/pulls/<n>` o actualiza gh desde cli.github.com |
+| `gh run view --log` o `--log-failed` no muestran nada (gh 2.46) | Pide el log del job a la API: `gh api repos/<owner>/<repo>/actions/jobs/<job_id>/logs` (el `job_id` aparece en `gh run view <run_id>`) |
