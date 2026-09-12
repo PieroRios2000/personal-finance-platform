@@ -7,7 +7,7 @@
 
 - [x] Instalar `uv` a nivel usuario (sin sudo) y Python 3.12 gestionado por uv.
 - [x] Docker accesible sin sudo desde WSL (reiniciar WSL tras entrar al grupo `docker`).
-- [x] PDFs reales en `~/finance-data/raw/{bcp,scotiabank}/`, fuera del repo.
+- [ ] PDFs reales en `~/finance-data/raw/<usuario>/` (ADR 0009), fuera del repo y con nombres neutros (antes estaban en `raw/{bcp,scotiabank}/`).
 - [ ] Tesseract OCR (`sudo apt install tesseract-ocr tesseract-ocr-spa`) antes de T11b.
 
 ---
@@ -113,17 +113,19 @@
 
 ### T6: Esquema de transacciones — `feat/transaction-schema`
 
-**Descripción:** Modelos pydantic comunes a todos los bancos.
+**Descripción:** Modelos pydantic comunes a todos los bancos, por usuario y por cuenta (ADR 0005 y 0009).
 
 **Criterios de aceptación:**
-- [ ] `Transaction` (banco, cuenta últimos 4, fecha, descripción, monto `Decimal` a 2 decimales, moneda PEN/USD, sha del archivo).
-- [ ] `Statement` (periodo, saldos inicial/final, totales declarados, transacciones).
+- [ ] `Transaction` (`user_id`, banco, `account_id`, últimos 4 de la cuenta, fecha, descripción, monto `Decimal` a 2 decimales, moneda PEN/USD, sha del archivo).
+- [ ] `Statement` (`user_id`, banco, `account_id`, últimos 4, periodo, saldos inicial/final, totales declarados, transacciones).
+- [ ] `hash_account(bank, number)`: HMAC-SHA256 con la clave `PFP_ACCOUNT_KEY`; error claro si falta la clave. `PFP_ACCOUNT_KEY` y `PFP_USER` en `.env.example` y SETUP.md, con cómo generar y respaldar la clave.
 - [ ] `normalize_description()` estable (trim, mayúsculas, sin códigos de relleno).
+- [ ] ADR 0005 y ADR 0009 creados en `brain/decisiones/`.
 
 **Verificación:**
-- [ ] Tests TDD: montos inválidos, moneda desconocida y cuenta completa son rechazados.
+- [ ] Tests TDD: montos inválidos, moneda desconocida y cuenta completa son rechazados; mismo banco y número → mismo `account_id`; otro banco u otra clave → distinto.
 
-**Dependencias:** T5 · **Archivos:** `ingestion/schema.py`, `tests/test_schema.py` · **Tamaño:** S · **Skill:** test-driven-development
+**Dependencias:** T5 · **Archivos:** `ingestion/schema.py`, `tests/test_schema.py`, `.env.example`, `SETUP.md` · **Tamaño:** M · **Skill:** test-driven-development
 
 ### T7: Hash de archivo — `feat/file-hash`
 
@@ -184,6 +186,7 @@
 
 **Criterios de aceptación:**
 - [ ] `parsers/base.py` (protocolo `detect` + `parse`) y `parsers/bcp.py` con pdfplumber; desbloqueo con pikepdf.
+- [ ] Banco, número de cuenta y periodo salen del contenido del PDF, nunca del nombre del archivo; el número completo solo vive en memoria para calcular `account_id`.
 - [ ] El parser sintético reconcilia; tests `real_pdf` (deseleccionados por defecto) reconcilian con tus PDFs.
 
 **Verificación:**
@@ -207,14 +210,15 @@
 
 ### T12: Dispatcher y CLI — `feat/dispatcher-cli`
 
-**Descripción:** Detectar el banco de un PDF y exponer `pfp parse <pdf>`.
+**Descripción:** Detectar el banco de un PDF por su contenido y exponer `pfp parse <pdf>`.
 
 **Criterios de aceptación:**
-- [ ] `dispatcher.py` elige el parser por `detect`; error claro si ningún parser lo reconoce.
-- [ ] CLI con argparse (`[project.scripts] pfp`): imprime resumen y resultado de reconciliación.
+- [ ] `dispatcher.py` elige el parser por `detect` (contenido, no nombre del archivo); error claro si ningún parser lo reconoce.
+- [ ] CLI con argparse (`[project.scripts] pfp`): `--user` (por defecto `PFP_USER`); imprime resumen (banco, últimos 4, periodo) y resultado de reconciliación.
 
 **Verificación:**
 - [ ] `uv run pfp parse <pdf real BCP>` muestra el resumen y "reconciliación OK".
+- [ ] El mismo PDF sintético con un nombre arbitrario da el mismo resultado.
 
 **Dependencias:** T7, T11 · **Archivos:** `ingestion/dispatcher.py`, `ingestion/cli.py`, tests · **Tamaño:** S
 
@@ -246,12 +250,13 @@
 **Descripción:** Guardar transacciones en Delta (append-only) y registrar archivos ingeridos; `pfp ingest`.
 
 **Criterios de aceptación:**
-- [ ] `lakehouse/` escribe `bronze/transactions` y `bronze/ingested_files` con `deltalake`, ubicación por `LAKEHOUSE_URI`.
-- [ ] `pfp ingest <pdf>`: parsea → reconcilia → si el hash existe, lo salta → escribe bronze.
+- [ ] `lakehouse/` escribe `bronze/transactions`, `bronze/statements` (periodo, saldos y totales de cada estado de cuenta) y `bronze/ingested_files` con `deltalake`, particionados por `user_id`, ubicación por `LAKEHOUSE_URI`.
+- [ ] `pfp ingest --user <u> <pdf>`: parsea → reconcilia → si (usuario, hash) ya existe, lo salta → escribe bronze. El nombre del archivo no se guarda.
 - [ ] Ingerir dos veces el mismo PDF no agrega filas.
 
 **Verificación:**
 - [ ] Tests con lake en `tmp_path`; test de integración (marker `integration`) contra el S3 local.
+- [ ] Dos usuarios con PDFs sintéticos quedan en particiones separadas; borrar una no afecta a la otra.
 
 **Dependencias:** T12, T13 · **Archivos:** `lakehouse/{storage,bronze}.py`, `ingestion/cli.py`, tests · **Tamaño:** M · **Skill:** source-driven-development
 
@@ -284,11 +289,12 @@
 
 **Criterios de aceptación:**
 - [ ] Prueba mínima de lectura `delta_scan` sobre el S3 local antes de modelar.
-- [ ] Fuente `bronze.transactions`, modelo `silver/transactions` (tipos, descripción normalizada, moneda, cuenta).
-- [ ] Tests dbt (not_null, accepted_values de moneda) y config de sqlfluff.
+- [ ] Fuentes `bronze.transactions` y `bronze.statements`, modelo `silver/transactions` (tipos, descripción normalizada, moneda, usuario, cuenta).
+- [ ] Tests dbt (not_null, accepted_values de moneda), test de continuidad (saldo final de un periodo = saldo inicial del siguiente, por usuario y cuenta) y config de sqlfluff.
 
 **Verificación:**
 - [ ] `uv run dbt build` y `uv run sqlfluff lint dbt/models` en verde en local.
+- [ ] Un estado de cuenta sintético faltante entre dos periodos hace fallar el test de continuidad.
 
 **Dependencias:** T14 · **Archivos:** `dbt/**`, `pyproject.toml` · **Tamaño:** M · **Skill:** source-driven-development
 
@@ -339,12 +345,28 @@
 
 **Criterios de aceptación:**
 - [ ] Layout enmascarado (T9), fixture sintético y `parsers/scotiabank.py` registrado en el dispatcher.
+- [ ] Como en T11: banco, cuenta y periodo salen del contenido del PDF.
 - [ ] Tests sintéticos en CI y `real_pdf` en local reconcilian.
 
 **Verificación:**
 - [ ] `uv run pfp ingest <pdf real Scotiabank>` escribe en bronze y `dbt build` lo incluye en silver.
 
 **Dependencias:** T11b, T12, T14 · **Archivos:** `ingestion/parsers/scotiabank.py`, `tests/fixtures/…`, `tests/parsers/test_scotiabank.py` · **Tamaño:** M · **Skill:** test-driven-development
+
+### T18b: Conciliación entre cuentas — `feat/inter-account-reconciliation`
+
+**Descripción:** Emparejar las transferencias entre cuentas del mismo usuario, para que no cuenten como gasto ni ingreso y para detectar las que no tienen contraparte (ADR 0009).
+
+**Criterios de aceptación:**
+- [ ] Modelo dbt `silver/internal_transfers`: empareja una salida y una entrada del mismo usuario, en cuentas distintas, con la misma moneda, el mismo monto (tolerancia configurable, por defecto 0) y a N días o menos (por defecto 3). Cada movimiento está en una pareja como máximo.
+- [ ] `silver/transactions` marca `is_internal_transfer`; las candidatas sin pareja quedan en `silver/unmatched_transfers` para revisión, nunca se descartan.
+- [ ] Las transferencias entre monedas distintas quedan fuera de esta tarea y aparecen como sin pareja.
+
+**Verificación:**
+- [ ] Con datos sintéticos de BCP y Scotiabank y una transferencia entre ambos, queda emparejada; si se quita la entrada, aparece en `unmatched_transfers`.
+- [ ] `make poc` con tus PDFs reales muestra solo cuántas se emparejaron y cuántas no, sin montos.
+
+**Dependencias:** T16, T18 · **Archivos:** `dbt/models/silver/**`, tests · **Tamaño:** M · **Skill:** test-driven-development
 
 ### T19: Cierre de fase — `docs/phase-1-close`
 
@@ -358,7 +380,7 @@
 **Verificación:**
 - [ ] Clonar el repo en una carpeta limpia y seguir el README hasta `dbt build` sin pasos faltantes.
 
-**Dependencias:** T17b, T18 · **Archivos:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Tamaño:** S
+**Dependencias:** T17b, T18b · **Archivos:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Tamaño:** S
 
 ### ✅ Checkpoint final
-- [ ] Todos los criterios cumplidos · [ ] PR de release `develop → main` "Fase 1 — Fundación" · [ ] merge por Piero
+- [ ] Todos los criterios cumplidos · [ ] conciliación integral en verde (estado, continuidad y entre cuentas) · [ ] PR de release `develop → main` "Fase 1 — Fundación" · [ ] merge por Piero

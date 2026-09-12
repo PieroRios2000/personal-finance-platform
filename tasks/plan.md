@@ -11,14 +11,16 @@ se reconcilia contra los totales que declara el propio PDF, se descarta si ya fu
 ingerido (hash SHA-256) y se escribe en la capa **bronze** (Delta Lake sobre S3 local).
 dbt transforma bronze → **silver** con tests. El CI valida calidad, seguridad,
 rendimiento y arquitectura en cada PR, y el **cerebro** (`brain/`) documenta
-el contexto y cómo se relaciona cada pieza.
+el contexto y cómo se relaciona cada pieza. Los datos son **por usuario y por cuenta**, y la
+conciliación es integral: cada estado de cuenta, la continuidad entre periodos y las
+transferencias entre cuentas.
 
 **Resultado verificable al cerrar la fase:**
 
 ```bash
 docker compose up -d                  # S3 local
-uv run pfp ingest ~/finance-data/raw/bcp/2026-08.pdf   # → bronze
-uv run pfp ingest ~/finance-data/raw/bcp/2026-08.pdf   # → "ya ingerido", 0 filas nuevas
+uv run pfp ingest --user piero ~/finance-data/raw/piero/bcp-2026-08.pdf   # → bronze
+uv run pfp ingest --user piero ~/finance-data/raw/piero/bcp-2026-08.pdf   # → "ya ingerido", 0 filas nuevas
 uv run dbt build --project-dir dbt    # → silver + tests en verde
 ```
 
@@ -44,10 +46,11 @@ Cada decisión se registra como ADR en `brain/decisiones/` en la tarea donde se 
 | 0002 | **DuckDB + delta-rs** (`deltalake`) antes que Spark | Mismo formato Delta, sin JVM ni cluster; Spark entra cuando el volumen o la demo lo justifiquen |
 | 0003 | S3 local con **SeaweedFS** en vez de MinIO | Mantenido, Apache 2.0, API S3 estándar: cambiar de servidor es cambiar un endpoint |
 | 0004 | **Los PDFs reales nunca salen de tu máquina** | El CI usa PDFs sintéticos generados en los tests; los parsers se diseñan con un volcado de layout enmascarado |
-| 0005 | `Transaction` con `Decimal` y cuenta enmascarada (últimos 4 dígitos) | Sin errores de coma flotante en montos; mínimo dato personal almacenado |
+| 0005 | `Transaction` con `Decimal`, `user_id` y cuenta identificada por `account_id` = HMAC-SHA256 del banco y el número completo (clave `PFP_ACCOUNT_KEY` en `.env`) + últimos 4 dígitos; el número completo y el nombre del archivo nunca se guardan | Sin errores de coma flotante; varias cuentas por banco y por usuario sin guardar el número (un hash sin clave se revierte probando todos los números posibles) |
 | 0006 | Ubicación del lake por URI (`LAKEHOUSE_URI`) | `s3://…` en local/CI de integración, ruta de disco en tests unitarios |
 | 0007 | **Entornos efímeros por PR**: el mismo `docker-compose.yml` en local y en CI, con nombre de proyecto único, datos sintéticos y destrucción siempre al final | Probar cada mejora sobre la plataforma real sin servidores fijos ni costo, y ver su efecto en los datos (base vs PR), no solo si los tests pasan |
 | 0008 | **CI por impacto**: los checks baratos (lint, tipos, tests unitarios, seguridad) corren siempre completos; los caros (entorno efímero, dbt, benchmarks) solo si el cambio los afecta, según un mapa de dependencias; todo completo en `develop` y una vez por semana | Evaluar lo que cambia y lo que depende de ello, no el proyecto entero, sin perder efectos indirectos: los checks baratos tardan segundos y son los que detectan roturas entre módulos (mypy), y la corrida completa atrapa lo que el mapa no vea |
+| 0009 | **Varios usuarios y varias cuentas en una instalación**: banco, cuenta y periodo se leen del contenido del PDF, nunca del nombre del archivo; `user_id` en todos los datos; PDFs en `~/finance-data/raw/<usuario>/`; lake particionado por `user_id` | Más de una persona y varias cuentas por banco; borrar los datos de alguien es borrar su partición; el nombre del archivo puede contener números de cuenta |
 
 ## Estructura al cerrar la Fase 1
 
@@ -121,30 +124,31 @@ Detalle, criterios y verificación de cada una en [`todo.md`](todo.md).
 - ✅ **Checkpoint A** — CI en verde en `develop`, cerebro navegable en GitHub
 
 **Bloque B — Ingesta**
-- T6 `feat/transaction-schema` — modelos `Transaction` / `Statement` + normalización
+- T6 `feat/transaction-schema` — modelos `Transaction` / `Statement` por usuario y cuenta (`account_id` HMAC) + normalización
 - T7 `feat/file-hash` — SHA-256 del archivo (dedup nivel archivo)
 - T8 `feat/reconciliation` — cuadre contra saldos y totales declarados
 - T9 `chore/pdf-layout-inspector` — volcado enmascarado del layout de un PDF
 - T10 `test/bcp-synthetic-fixture` — generador de PDF sintético estilo BCP
 - T11 `feat/parser-bcp` — parser BCP + desbloqueo con contraseña
 - T11b `feat/ocr-fallback` — OCR con Tesseract para páginas escaneadas
-- T12 `feat/dispatcher-cli` — detección de banco + CLI `pfp parse`
+- T12 `feat/dispatcher-cli` — detección de banco por contenido + CLI `pfp parse --user`
 - ✅ **Checkpoint B** — un PDF real de BCP se parsea y reconcilia en local
 
 **Bloque C — Lakehouse**
 - T13 `infra/s3-local` — docker-compose con SeaweedFS + bucket, aislable por proyecto (`make poc-up` / `poc-down`)
-- T14 `feat/bronze-writer` — bronze en Delta + registro de archivos + `pfp ingest`
+- T14 `feat/bronze-writer` — bronze en Delta particionado por usuario (transacciones, estados de cuenta, archivos) + `pfp ingest`
 - T15 `perf/benchmarks` — benchmarks de parsing y escritura + job de CI
 - ✅ **Checkpoint C** — `pfp ingest` de punta a punta; reingestar no duplica
 
 **Bloque D — Transformación**
-- T16 `feat/dbt-silver` — proyecto dbt-duckdb, fuente bronze, modelo silver + tests
+- T16 `feat/dbt-silver` — proyecto dbt-duckdb, fuente bronze, modelo silver + tests (incluida la continuidad de saldos)
 - T17 `ci/ephemeral-integration` — entorno efímero en CI por impacto: compose por PR + ingesta sintética + `dbt build --select @state:modified` + sqlfluff + destrucción; `make poc` en local
 - T17b `ci/pr-data-diff` — comparación base vs PR de los datos, publicada en el resumen del job
 - ✅ **Checkpoint D** — `dbt build` en verde en local y en CI; cada PR muestra su efecto en los datos
 
 **Bloque E — Segundo banco y cierre**
 - T18 `feat/parser-scotiabank` — fixture + parser Scotiabank
+- T18b `feat/inter-account-reconciliation` — emparejar transferencias entre cuentas del mismo usuario
 - T19 `docs/phase-1-close` — README, cerebro al día, activar bloqueo de reglas numéricas
 - ✅ **Checkpoint final** → PR de release `develop → main`
 
@@ -195,6 +199,27 @@ Cada PR se evalúa por lo que toca y lo que depende de eso, no el proyecto enter
   obligatorios en "Pending" y bloquea el merge. Y como un job saltado cuenta como exitoso, solo se
   salta lo que el cambio no afecta; nunca un control como `branch-policy`.
 
+## Usuarios, cuentas y conciliación integral (ADR 0005 y 0009)
+
+Una instalación sirve a varios usuarios, y cada uno puede tener varias cuentas, incluso en el mismo banco.
+
+- **El contenido manda, no el nombre del archivo.** El parser lee del PDF el banco, la cuenta y el
+  periodo; el archivo se reconoce por su hash y su nombre nunca se guarda (puede contener números de cuenta).
+- **Usuario (`user_id`)** en todos los datos: viene del contexto de la ingesta (`pfp ingest --user`,
+  por defecto `PFP_USER`), no del PDF. Los PDFs viven en `~/finance-data/raw/<usuario>/` y el lake se
+  particiona por `user_id`: borrar los datos de una persona es borrar su partición.
+- **Cuenta (`account_id`)**: HMAC-SHA256 del banco y el número completo con la clave `PFP_ACCOUNT_KEY`
+  de `.env`, más los últimos 4 dígitos para mostrar. El número completo solo existe en memoria durante
+  el parseo.
+
+**Conciliación integral**, en tres niveles:
+
+| Nivel | Qué comprueba | Dónde |
+|---|---|---|
+| Estado de cuenta | Saldo inicial + movimientos = saldo final, y los totales declarados | T8 |
+| Continuidad | El saldo final de un periodo es el saldo inicial del siguiente, por cuenta; detecta estados de cuenta faltantes | T16 |
+| Entre cuentas | Cada transferencia entre cuentas del mismo usuario tiene su contraparte y no cuenta como gasto ni ingreso | T18b |
+
 ## Riesgos y mitigaciones
 
 | Riesgo | Impacto | Mitigación |
@@ -208,6 +233,9 @@ Cada PR se evalúa por lo que toca y lo que depende de eso, no el proyecto enter
 | Benchmarks ruidosos en CI | Medio | Base y PR en el mismo runner, margen 20 %, 2 semanas en modo aviso |
 | Un entorno efímero queda vivo (contenedores, volúmenes) o alarga demasiado el CI | Bajo | Nombre de proyecto por PR, `down -v` con `if: always()` y `timeout-minutes` en el job; la verificación de T17 comprueba que no queda nada |
 | El mapa de impacto no ve una relación indirecta y salta un job que debía correr | Medio | Checks baratos siempre completos; corrida completa en push a `develop` y semanal; cambios en dependencias, compose o CI corren todo |
+| Se pierde `PFP_ACCOUNT_KEY` y cambian todos los `account_id` | Medio | Respaldo fuera del repo (gestor de contraseñas), documentado en SETUP.md en T6; cambiar la clave exige reprocesar desde los PDFs |
+| Transferencias entre bancos con comisión, días de desfase o distinta moneda | Medio | Ventana de días y tolerancia configurables; lo que no empareja se marca para revisión, nunca se descarta; entre monedas queda fuera de T18b |
+| Cuenta mancomunada (dos usuarios, la misma cuenta) | Bajo | Pregunta abierta: hoy cada usuario tendría su copia; se decide si aparece el caso |
 | 7 GB de RAM para Fase 2 (Spark + catálogo) | Medio | Se evalúa al planificar Fase 2 (`.wslconfig`, alternativas livianas) |
 | `gh` 2.46 falla en `gh pr edit` | Bajo | Usar la API REST (`gh api`) |
 
@@ -216,7 +244,8 @@ Cada PR se evalúa por lo que toca y lo que depende de eso, no el proyecto enter
 1. **Almacenamiento S3:** SeaweedFS.
 2. **Privacidad:** los parsers se diseñan con el volcado enmascarado de T9; Claude no lee PDFs reales sin enmascarar.
 3. **PDFs:** tienen contraseña y al menos uno es escaneado → OCR entra en la Fase 1 (T11b).
-4. **Ubicación:** `~/finance-data/raw/{bcp,scotiabank}/`, fuera del repo y con permisos solo para tu usuario.
+4. **Ubicación:** `~/finance-data/raw/<usuario>/` (antes `raw/{bcp,scotiabank}/`), fuera del repo y con permisos solo para su dueño; los archivos pueden tener cualquier nombre.
+5. **Usuarios y cuentas:** varios usuarios en una instalación; cuenta identificada por HMAC con clave + últimos 4 dígitos; conciliación entre cuentas en la Fase 1 (T18b).
 
 ## Preguntas abiertas
 
