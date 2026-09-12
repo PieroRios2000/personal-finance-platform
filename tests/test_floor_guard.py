@@ -10,7 +10,10 @@ BASE_FILES = {
     "tests/test_a.py": "def test_a() -> None:\n    assert 1 + 1 == 2\n",
     "tests/test_señal.py": "def test_s() -> None:\n    assert True\n",
     "app.py": "x = 1\n",
-    "pyproject.toml": "[tool.mypy]\nstrict = true\n",
+    "pyproject.toml": (
+        '[dependency-groups]\ndev = [\n    "bandit>=1.9.4",\n]\n\n'
+        "[tool.mypy]\nstrict = true\n"
+    ),
     "Makefile": "cov:\n\tuv run diff-cover coverage.xml --fail-under=80\n",
 }
 
@@ -22,6 +25,12 @@ def git(*args: str) -> None:
 def write(path: str, text: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(text)
+
+
+def replace(path: str, old: str, new: str) -> None:
+    text = Path(path).read_text()
+    assert old in text
+    Path(path).write_text(text.replace(old, new))
 
 
 @pytest.fixture(autouse=True)
@@ -161,10 +170,19 @@ def test_weakened_config_fails(
     assert path in out
 
 
-def test_raised_threshold_passes(capsys: pytest.CaptureFixture[str]) -> None:
-    write("Makefile", "cov:\n\tuv run diff-cover coverage.xml --fail-under=90\n")
+@pytest.mark.parametrize(
+    ("path", "old", "new"),
+    [
+        ("Makefile", "--fail-under=80", "--fail-under=90"),
+        ("pyproject.toml", "bandit>=1.9.4", "bandit>=1.10.0"),
+    ],
+)
+def test_harmless_config_change_passes(
+    path: str, old: str, new: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    replace(path, old, new)
 
-    assert run(capsys)[0] == 0
+    assert run(capsys) == (0, "floor-guard: limpio\n")
 
 
 @pytest.mark.parametrize(("days", "expected"), [(30, 0), (-1, 1)])
