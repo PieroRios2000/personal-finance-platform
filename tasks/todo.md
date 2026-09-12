@@ -49,13 +49,13 @@
 **Descripción:** Vault Markdown enlazado que explica el contexto y cómo se relacionan conceptos, componentes, decisiones y fases.
 
 **Criterios de aceptación:**
-- [ ] `brain/README.md` con mapa Mermaid, índice y convención de notas (frontmatter `tipo`, `fase`, `relacionado` + links relativos).
-- [ ] Plantillas en `brain/_plantillas/`; conceptos base (medallón, idempotencia, business key, reconciliación, dedup por archivo).
-- [ ] ADR 0001–0004 en `brain/decisiones/` y `brain/fases/fase-1.md` enlazando este plan.
+- [x] `brain/README.md` con mapa Mermaid, índice y convención de notas (frontmatter `tipo` y `fase`; relaciones como links relativos en la sección "Relacionado").
+- [x] Plantillas en `brain/_plantillas/`; conceptos base (medallón, idempotencia, business key, reconciliación, dedup por archivo).
+- [x] ADR 0001–0004 en `brain/decisiones/` y `brain/fases/fase-1.md` enlazando este plan.
 
 **Verificación:**
-- [ ] Los links navegan en la vista de GitHub del PR y el Mermaid se renderiza.
-- [ ] Ningún link roto (comprobación con script o lychee en local).
+- [x] Los links navegan en la vista de GitHub del PR y el Mermaid se renderiza.
+- [x] Ningún link roto (comprobación con script o lychee en local).
 
 **Dependencias:** T2 · **Archivos:** `brain/**` · **Tamaño:** M (solo Markdown) · **Skill:** documentation-and-adrs
 
@@ -263,7 +263,7 @@
 - [ ] Benchmarks de parsing (PDF sintético de N páginas) y append a bronze.
 - [ ] Job de CI que compara base vs PR en el mismo runner (`--benchmark-compare-fail=mean:20%`), en modo aviso.
 - [ ] Job `changes` (ADR 0008): áreas afectadas según `git diff` contra la base y el mapa de impacto; los benchmarks corren solo si cambian `ingestion/`, `lakehouse/` o las dependencias. En push a `develop` y una vez por semana corre todo.
-- [ ] Valores actuales anotados en CONSTRAINTS.md ("Medido").
+- [ ] Valores actuales anotados en CONSTRAINTS.md ("Medido") y ADR 0008 creado en `brain/decisiones/`.
 
 **Verificación:**
 - [ ] Un PR con un `sleep` artificial dispara el aviso (y se descarta).
