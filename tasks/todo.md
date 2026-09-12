@@ -7,7 +7,7 @@
 
 - [x] Instalar `uv` a nivel usuario (sin sudo) y Python 3.12 gestionado por uv.
 - [x] Docker accesible sin sudo desde WSL (reiniciar WSL tras entrar al grupo `docker`).
-- [ ] PDFs reales en `~/finance-data/raw/<usuario>/` (ADR 0009), fuera del repo y con nombres neutros (antes estaban en `raw/{bcp,scotiabank}/`).
+- [ ] PDFs reales en la bandeja `~/finance-data/inbox/<usuario>/`, con cualquier nombre (ADR 0009; antes estaban en `raw/{bcp,scotiabank}/`); T12b los archiva.
 - [ ] Tesseract OCR (`sudo apt install tesseract-ocr tesseract-ocr-spa`) antes de T11b.
 
 ---
@@ -222,8 +222,24 @@
 
 **Dependencias:** T7, T11 · **Archivos:** `ingestion/dispatcher.py`, `ingestion/cli.py`, tests · **Tamaño:** S
 
+### T12b: Bandeja de entrada y archivo — `feat/inbox-organizer`
+
+**Descripción:** Procesar una carpeta de PDFs con cualquier nombre: detectar duplicados por contenido y guardar cada archivo en su lugar estándar por usuario, banco, cuenta y periodo (ADR 0009).
+
+**Criterios de aceptación:**
+- [ ] `pfp organize --user <u>` recorre `~/finance-data/inbox/<u>/` (ruta configurable). Por cada PDF: hash (T7); si el usuario ya lo tiene, lo mueve a `_duplicados/`; si no, lee banco, cuenta y periodo del contenido (T12) y lo mueve a `raw/<u>/<banco>/<últimos4>-<id6>/<inicio>_<fin>.pdf`.
+- [ ] Lo que no se puede leer (banco desconocido, sin cuenta o sin periodo, contraseña incorrecta) va a `_por_clasificar/`, y el reporte dice por qué y qué hacer.
+- [ ] Misma cuenta y periodo con otro contenido (PDF regenerado) → se guarda como `_v2` y se avisa. Un PDF con varias cuentas → `<banco>/_varias-cuentas/`.
+- [ ] Nunca borra un archivo. El reporte muestra, por cuenta (banco y últimos 4), los periodos archivados y los meses que faltan.
+
+**Verificación:**
+- [ ] Tres PDFs sintéticos con el mismo nombre (`EECC.pdf`, `EECC (1).pdf`, `EECC (2).pdf`) de tres cuentas distintas quedan en tres carpetas distintas; uno repetido termina en `_duplicados/` y uno ilegible, en `_por_clasificar/`.
+- [ ] En tu máquina, con tus PDFs reales en la bandeja, el reporte los clasifica todos sin mostrar números completos ni montos.
+
+**Dependencias:** T6, T7, T12 · **Archivos:** `ingestion/organizer.py`, `ingestion/cli.py`, tests · **Tamaño:** M · **Skill:** test-driven-development
+
 ### ✅ Checkpoint B
-- [ ] Un PDF real de BCP se parsea y reconcilia en local · [ ] CI en verde · [ ] revisión con Piero
+- [ ] Un PDF real de BCP se parsea y reconcilia en local · [ ] la bandeja archiva tus PDFs por banco y cuenta · [ ] CI en verde · [ ] revisión con Piero
 
 ---
 
@@ -251,14 +267,14 @@
 
 **Criterios de aceptación:**
 - [ ] `lakehouse/` escribe `bronze/transactions`, `bronze/statements` (periodo, saldos y totales de cada estado de cuenta) y `bronze/ingested_files` con `deltalake`, particionados por `user_id`, ubicación por `LAKEHOUSE_URI`.
-- [ ] `pfp ingest --user <u> <pdf>`: parsea → reconcilia → si (usuario, hash) ya existe, lo salta → escribe bronze. El nombre del archivo no se guarda.
+- [ ] `pfp ingest --user <u>`: organiza la bandeja (T12b) y, por cada archivo nuevo, parsea → reconcilia → escribe bronze; si (usuario, hash) ya existe, lo salta. El nombre original del archivo no se guarda.
 - [ ] Ingerir dos veces el mismo PDF no agrega filas.
 
 **Verificación:**
 - [ ] Tests con lake en `tmp_path`; test de integración (marker `integration`) contra el S3 local.
 - [ ] Dos usuarios con PDFs sintéticos quedan en particiones separadas; borrar una no afecta a la otra.
 
-**Dependencias:** T12, T13 · **Archivos:** `lakehouse/{storage,bronze}.py`, `ingestion/cli.py`, tests · **Tamaño:** M · **Skill:** source-driven-development
+**Dependencias:** T12b, T13 · **Archivos:** `lakehouse/{storage,bronze}.py`, `ingestion/cli.py`, tests · **Tamaño:** M · **Skill:** source-driven-development
 
 ### T15: Benchmarks — `perf/benchmarks`
 
@@ -345,7 +361,7 @@
 
 **Criterios de aceptación:**
 - [ ] Layout enmascarado (T9), fixture sintético y `parsers/scotiabank.py` registrado en el dispatcher.
-- [ ] Como en T11: banco, cuenta y periodo salen del contenido del PDF.
+- [ ] Como en T11: banco, cuenta y periodo salen del contenido del PDF, y la bandeja (T12b) archiva sus PDFs.
 - [ ] Tests sintéticos en CI y `real_pdf` en local reconcilian.
 
 **Verificación:**

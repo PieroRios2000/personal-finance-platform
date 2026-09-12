@@ -19,8 +19,10 @@ transferencias entre cuentas.
 
 ```bash
 docker compose up -d                  # S3 local
-uv run pfp ingest --user piero ~/finance-data/raw/piero/bcp-2026-08.pdf   # → bronze
-uv run pfp ingest --user piero ~/finance-data/raw/piero/bcp-2026-08.pdf   # → "ya ingerido", 0 filas nuevas
+cp /mnt/c/Users/<tú>/Downloads/EECC*.pdf ~/finance-data/inbox/piero/   # con cualquier nombre
+uv run pfp ingest --user piero        # → archiva en raw/piero/<banco>/<cuenta>/ y escribe bronze
+cp /mnt/c/Users/<tú>/Downloads/EECC*.pdf ~/finance-data/inbox/piero/   # los mismos otra vez
+uv run pfp ingest --user piero        # → "duplicado", 0 filas nuevas
 uv run dbt build --project-dir dbt    # → silver + tests en verde
 ```
 
@@ -50,7 +52,7 @@ Cada decisión se registra como ADR en `brain/decisiones/` en la tarea donde se 
 | 0006 | Ubicación del lake por URI (`LAKEHOUSE_URI`) | `s3://…` en local/CI de integración, ruta de disco en tests unitarios |
 | 0007 | **Entornos efímeros por PR**: el mismo `docker-compose.yml` en local y en CI, con nombre de proyecto único, datos sintéticos y destrucción siempre al final | Probar cada mejora sobre la plataforma real sin servidores fijos ni costo, y ver su efecto en los datos (base vs PR), no solo si los tests pasan |
 | 0008 | **CI por impacto**: los checks baratos (lint, tipos, tests unitarios, seguridad) corren siempre completos; los caros (entorno efímero, dbt, benchmarks) solo si el cambio los afecta, según un mapa de dependencias; todo completo en `develop` y una vez por semana | Evaluar lo que cambia y lo que depende de ello, no el proyecto entero, sin perder efectos indirectos: los checks baratos tardan segundos y son los que detectan roturas entre módulos (mypy), y la corrida completa atrapa lo que el mapa no vea |
-| 0009 | **Varios usuarios y varias cuentas en una instalación**: banco, cuenta y periodo se leen del contenido del PDF, nunca del nombre del archivo; `user_id` en todos los datos; PDFs en `~/finance-data/raw/<usuario>/`; lake particionado por `user_id` | Más de una persona y varias cuentas por banco; borrar los datos de alguien es borrar su partición; el nombre del archivo puede contener números de cuenta |
+| 0009 | **Varios usuarios y varias cuentas en una instalación**: banco, cuenta y periodo se leen del contenido del PDF, nunca del nombre del archivo; `user_id` en todos los datos; PDFs en una bandeja por usuario que se archivan en `raw/<usuario>/<banco>/<cuenta>/`; lake particionado por `user_id` | Más de una persona y varias cuentas por banco; borrar los datos de alguien es borrar su partición; el nombre del archivo puede contener números de cuenta |
 
 ## Estructura al cerrar la Fase 1
 
@@ -132,6 +134,7 @@ Detalle, criterios y verificación de cada una en [`todo.md`](todo.md).
 - T11 `feat/parser-bcp` — parser BCP + desbloqueo con contraseña
 - T11b `feat/ocr-fallback` — OCR con Tesseract para páginas escaneadas
 - T12 `feat/dispatcher-cli` — detección de banco por contenido + CLI `pfp parse --user`
+- T12b `feat/inbox-organizer` — bandeja de entrada: duplicados por contenido y archivo por usuario, banco, cuenta y periodo
 - ✅ **Checkpoint B** — un PDF real de BCP se parsea y reconcilia en local
 
 **Bloque C — Lakehouse**
@@ -206,8 +209,14 @@ Una instalación sirve a varios usuarios, y cada uno puede tener varias cuentas,
 - **El contenido manda, no el nombre del archivo.** El parser lee del PDF el banco, la cuenta y el
   periodo; el archivo se reconoce por su hash y su nombre nunca se guarda (puede contener números de cuenta).
 - **Usuario (`user_id`)** en todos los datos: viene del contexto de la ingesta (`pfp ingest --user`,
-  por defecto `PFP_USER`), no del PDF. Los PDFs viven en `~/finance-data/raw/<usuario>/` y el lake se
-  particiona por `user_id`: borrar los datos de una persona es borrar su partición.
+  por defecto `PFP_USER`), no del PDF. El lake se particiona por `user_id`: borrar los datos de una
+  persona es borrar su partición.
+- **Bandeja y archivo estandarizado (T12b).** Los PDFs se dejan con cualquier nombre en
+  `~/finance-data/inbox/<usuario>/`. Al procesarlos, cada uno se reconoce por su hash y su contenido y
+  se mueve a `~/finance-data/raw/<usuario>/<banco>/<últimos4>-<id6>/<inicio>_<fin>.pdf` (id6 = primeros
+  6 caracteres de `account_id`, para que dos cuentas con los mismos 4 dígitos no se mezclen). Un
+  duplicado va a `_duplicados/` y lo que no se reconoce, a `_por_clasificar/`, con un reporte que dice
+  qué hacer. Nunca se borra un archivo.
 - **Cuenta (`account_id`)**: HMAC-SHA256 del banco y el número completo con la clave `PFP_ACCOUNT_KEY`
   de `.env`, más los últimos 4 dígitos para mostrar. El número completo solo existe en memoria durante
   el parseo.
@@ -236,6 +245,8 @@ Una instalación sirve a varios usuarios, y cada uno puede tener varias cuentas,
 | Se pierde `PFP_ACCOUNT_KEY` y cambian todos los `account_id` | Medio | Respaldo fuera del repo (gestor de contraseñas), documentado en SETUP.md en T6; cambiar la clave exige reprocesar desde los PDFs |
 | Transferencias entre bancos con comisión, días de desfase o distinta moneda | Medio | Ventana de días y tolerancia configurables; lo que no empareja se marca para revisión, nunca se descarta; entre monedas queda fuera de T18b |
 | Cuenta mancomunada (dos usuarios, la misma cuenta) | Bajo | Pregunta abierta: hoy cada usuario tendría su copia; se decide si aparece el caso |
+| Un PDF trae varias cuentas | Medio | El parser devuelve un `Statement` por cuenta; el archivo se guarda una vez en `<banco>/_varias-cuentas/`; el volcado de T9 confirma si pasa |
+| El banco regenera el PDF de un periodo (bytes distintos) | Bajo | Se archiva como segunda versión (`_v2`) y se avisa; la business key evita duplicar movimientos |
 | 7 GB de RAM para Fase 2 (Spark + catálogo) | Medio | Se evalúa al planificar Fase 2 (`.wslconfig`, alternativas livianas) |
 | `gh` 2.46 falla en `gh pr edit` | Bajo | Usar la API REST (`gh api`) |
 
@@ -244,7 +255,7 @@ Una instalación sirve a varios usuarios, y cada uno puede tener varias cuentas,
 1. **Almacenamiento S3:** SeaweedFS.
 2. **Privacidad:** los parsers se diseñan con el volcado enmascarado de T9; Claude no lee PDFs reales sin enmascarar.
 3. **PDFs:** tienen contraseña y al menos uno es escaneado → OCR entra en la Fase 1 (T11b).
-4. **Ubicación:** `~/finance-data/raw/<usuario>/` (antes `raw/{bcp,scotiabank}/`), fuera del repo y con permisos solo para su dueño; los archivos pueden tener cualquier nombre.
+4. **Ubicación:** bandeja `~/finance-data/inbox/<usuario>/` con cualquier nombre, y archivo estandarizado `~/finance-data/raw/<usuario>/<banco>/<cuenta>/` (antes `raw/{bcp,scotiabank}/`), fuera del repo y con permisos solo para su dueño.
 5. **Usuarios y cuentas:** varios usuarios en una instalación; cuenta identificada por HMAC con clave + últimos 4 dígitos; conciliación entre cuentas en la Fase 1 (T18b).
 
 ## Preguntas abiertas
