@@ -97,7 +97,7 @@ Por qué tienen esta forma (probado con import-linter 2.15):
 |---|---|---|---|
 | `make check-fast` | ruff check, ruff format --check, mypy | < 5 s | Se corre tras cada cambio; si tarda más, se deja de correr |
 | `make check-task` | check-fast + pytest con cobertura + floor-guard + import-linter | < 90 s | Al terminar una tarea (Definition of Done) |
-| `make check-full` | check-task + pip-audit + bandit + diff-cover contra `origin/develop` | Sin límite | Lo que corre el CI; pip-audit necesita red |
+| `make check-full` | check-task + pip-audit + bandit + diff-cover contra `origin/develop` | Sin límite | Lo que corre el CI, salvo gitleaks, que corre en pre-commit (y en el CI desde T5); pip-audit necesita red |
 
 `BASE` cambia la rama de comparación: `make check-full BASE=origin/main`.
 

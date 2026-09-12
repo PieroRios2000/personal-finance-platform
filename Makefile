@@ -19,7 +19,8 @@ check-task: check-fast
 	uv run python scripts/floor_guard.py --base $(BASE)
 	-uv run lint-imports --no-logo
 
-# Lo que corre el CI: lo anterior + seguridad y cobertura de las líneas cambiadas.
+# Antes del PR: lo anterior + seguridad y cobertura de las líneas cambiadas. Es lo que corre
+# el CI salvo gitleaks, que corre en pre-commit en cada commit (y en el CI desde T5).
 check-full: check-task
 	-uv run pip-audit
 	-uv run bandit -q -r . -x ./.venv --severity-level high

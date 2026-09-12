@@ -15,7 +15,7 @@ comprueba, para que ni una persona ni un agente bajen el nivel sin que se note.
 | Pieza | Qué hace |
 |---|---|
 | [`CONSTRAINTS.md`](../../CONSTRAINTS.md) | El contrato: piso, reglas numéricas (umbral, comando, dónde corre, aviso o bloqueo), métricas medidas y excepciones |
-| [`Makefile`](../../Makefile) | `check-fast` (< 5 s), `check-task` (< 90 s) y `check-full` (lo que corre el CI), todo con `uv run` |
+| [`Makefile`](../../Makefile) | `check-fast` (< 5 s), `check-task` (< 90 s) y `check-full` (lo que corre el CI salvo gitleaks, que va en pre-commit), todo con `uv run` |
 | [`scripts/floor_guard.py`](../../scripts/floor_guard.py) | Revisa el diff contra la rama base y falla si el nivel bajó: supresiones nuevas, tests desactivados o borrados, config relajada, umbrales rebajados |
 | [`tests/test_floor_guard.py`](../../tests/test_floor_guard.py) | Prueba cada movimiento que floor-guard debe detectar, en un repo de git temporal |
 | [`pyproject.toml`](../../pyproject.toml) | Contratos de import-linter entre `ingestion` y `lakehouse` y la fuente de la cobertura |
