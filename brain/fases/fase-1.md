@@ -36,10 +36,11 @@ entornos efímeros y CI por impacto (#12).
 | 0002 | DuckDB + delta-rs antes que Spark | [ADR 0002](../decisiones/0002-duckdb-y-delta-rs-antes-que-spark.md) |
 | 0003 | S3 local con SeaweedFS | [ADR 0003](../decisiones/0003-s3-local-con-seaweedfs.md) |
 | 0004 | Los PDFs reales nunca salen de tu máquina | [ADR 0004](../decisiones/0004-pdfs-reales-no-salen-de-la-maquina.md) |
-| 0005 | `Transaction` con `Decimal` y cuenta enmascarada | Se escribe en T6 |
+| 0005 | `Transaction` con `Decimal`, usuario y cuenta por HMAC + últimos 4 | Se escribe en T6 |
 | 0006 | Ubicación del lake por URI | Se escribe en T14 |
 | 0007 | Entornos efímeros por PR | Se escribe en T13 |
 | 0008 | CI por impacto | Se escribe en T15 |
+| 0009 | Varios usuarios y cuentas; el contenido del PDF manda sobre el nombre | Se escribe en T6 |
 
 ## Conceptos
 
@@ -48,3 +49,4 @@ entornos efímeros y CI por impacto (#12).
 - [Business key](../conceptos/business-key.md)
 - [Reconciliación](../conceptos/reconciliacion.md)
 - [Dedup por archivo](../conceptos/dedup-por-archivo.md)
+- [Usuarios y cuentas](../conceptos/usuarios-y-cuentas.md)
