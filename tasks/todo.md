@@ -262,10 +262,12 @@
 **Criterios de aceptación:**
 - [ ] Benchmarks de parsing (PDF sintético de N páginas) y append a bronze.
 - [ ] Job de CI que compara base vs PR en el mismo runner (`--benchmark-compare-fail=mean:20%`), en modo aviso.
+- [ ] Job `changes` (ADR 0008): áreas afectadas según `git diff` contra la base y el mapa de impacto; los benchmarks corren solo si cambian `ingestion/`, `lakehouse/` o las dependencias. En push a `develop` y una vez por semana corre todo.
 - [ ] Valores actuales anotados en CONSTRAINTS.md ("Medido").
 
 **Verificación:**
 - [ ] Un PR con un `sleep` artificial dispara el aviso (y se descarta).
+- [ ] Un PR que solo toca documentación salta los benchmarks y queda mergeable; uno que toca `ingestion/` los corre.
 
 **Dependencias:** T14 · **Archivos:** `tests/benchmarks/*`, `.github/workflows/ci.yml`, `CONSTRAINTS.md` · **Tamaño:** S · **Skill:** performance-optimization
 
@@ -296,6 +298,7 @@
 
 **Criterios de aceptación:**
 - [ ] Job de CI: `docker compose -p pfp-pr-<n> up -d --wait` → `pfp ingest` del fixture sintético dos veces (la segunda agrega 0 filas) → `dbt build` → `sqlfluff lint` → `down -v` con `if: always()`.
+- [ ] Por impacto (ADR 0008): el entorno solo se levanta si cambian `ingestion/`, `lakehouse/`, `dbt/` o las dependencias; `dbt parse` sobre el commit base genera el manifest y el PR construye `@state:modified`; si cambian `ingestion/` o `lakehouse/`, `dbt build` completo.
 - [ ] Tests `integration` corren en este job; sin secretos y con `timeout-minutes`.
 - [ ] Antes de destruir el entorno se guardan `docker compose logs` y los artefactos de dbt (`target/run_results.json`, `logs/dbt.log`) como artifact del job (`if: always()`, retención corta), para revisar un fallo cuando el entorno ya no existe.
 - [ ] `make poc`: el mismo flujo en local con tus PDFs reales; imprime solo pass/fail y diferencias de reconciliación, y destruye el entorno al terminar.
@@ -304,6 +307,7 @@
 - [ ] Job en verde; romper un test dbt a propósito lo pone en rojo (y se descarta).
 - [ ] Al terminar el job, en verde o en rojo, no quedan contenedores ni volúmenes del proyecto.
 - [ ] `make poc` en verde en tu máquina y sin restos.
+- [ ] Un PR que cambia un modelo silver construye solo ese modelo, sus descendientes y los ancestros necesarios (visible en el log de dbt).
 
 **Dependencias:** T15, T16 · **Archivos:** `.github/workflows/ci.yml`, `Makefile` · **Tamaño:** M · **Skill:** ci-cd-and-automation
 
@@ -313,7 +317,7 @@
 
 **Criterios de aceptación:**
 - [ ] El job corre el flujo de T17 para el commit base y para el del PR, con los mismos datos sintéticos y en ubicaciones separadas (prefijo del lake y archivo DuckDB por corrida).
-- [ ] `scripts/data_diff.py` compara con DuckDB: filas por modelo, columnas y tipos, y filas distintas (`EXCEPT` en ambos sentidos, con muestra limitada).
+- [ ] `scripts/data_diff.py` compara con DuckDB los modelos construidos en la corrida: filas por modelo, columnas y tipos, y filas distintas (`EXCEPT` en ambos sentidos, con muestra limitada).
 - [ ] Resultado en Markdown en el resumen del job (`$GITHUB_STEP_SUMMARY`); modo aviso, no bloquea.
 
 **Verificación:**
@@ -323,7 +327,7 @@
 **Dependencias:** T17 · **Archivos:** `scripts/data_diff.py`, `tests/test_data_diff.py`, `.github/workflows/ci.yml` · **Tamaño:** M · **Skill:** test-driven-development
 
 ### ✅ Checkpoint D
-- [ ] `dbt build` en verde en local y en CI · [ ] el entorno efímero se destruye siempre · [ ] un PR muestra su diff de datos · [ ] revisión con Piero
+- [ ] `dbt build` en verde en local y en CI · [ ] el entorno efímero se destruye siempre · [ ] un PR muestra su diff de datos · [ ] un PR solo de documentación no levanta el entorno · [ ] revisión con Piero
 
 ---
 

@@ -47,6 +47,7 @@ Cada decisión se registra como ADR en `brain/decisiones/` en la tarea donde se 
 | 0005 | `Transaction` con `Decimal` y cuenta enmascarada (últimos 4 dígitos) | Sin errores de coma flotante en montos; mínimo dato personal almacenado |
 | 0006 | Ubicación del lake por URI (`LAKEHOUSE_URI`) | `s3://…` en local/CI de integración, ruta de disco en tests unitarios |
 | 0007 | **Entornos efímeros por PR**: el mismo `docker-compose.yml` en local y en CI, con nombre de proyecto único, datos sintéticos y destrucción siempre al final | Probar cada mejora sobre la plataforma real sin servidores fijos ni costo, y ver su efecto en los datos (base vs PR), no solo si los tests pasan |
+| 0008 | **CI por impacto**: los checks baratos (lint, tipos, tests unitarios, seguridad) corren siempre completos; los caros (entorno efímero, dbt, benchmarks) solo si el cambio los afecta, según un mapa de dependencias; todo completo en `develop` y una vez por semana | Evaluar lo que cambia y lo que depende de ello, no el proyecto entero, sin perder efectos indirectos: los checks baratos tardan segundos y son los que detectan roturas entre módulos (mypy), y la corrida completa atrapa lo que el mapa no vea |
 
 ## Estructura al cerrar la Fase 1
 
@@ -138,7 +139,7 @@ Detalle, criterios y verificación de cada una en [`todo.md`](todo.md).
 
 **Bloque D — Transformación**
 - T16 `feat/dbt-silver` — proyecto dbt-duckdb, fuente bronze, modelo silver + tests
-- T17 `ci/ephemeral-integration` — entorno efímero en CI: compose por PR + ingesta sintética + `dbt build` + sqlfluff + destrucción; `make poc` en local
+- T17 `ci/ephemeral-integration` — entorno efímero en CI por impacto: compose por PR + ingesta sintética + `dbt build --select @state:modified` + sqlfluff + destrucción; `make poc` en local
 - T17b `ci/pr-data-diff` — comparación base vs PR de los datos, publicada en el resumen del job
 - ✅ **Checkpoint D** — `dbt build` en verde en local y en CI; cada PR muestra su efecto en los datos
 
@@ -151,7 +152,7 @@ Detalle, criterios y verificación de cada una en [`todo.md`](todo.md).
 
 Cada PR que toque datos se prueba en una plataforma temporal que se crea, se usa y se destruye:
 
-1. **Levantar** — `docker compose -p pfp-pr-<n> up -d --wait` (en local: `make poc-up`).
+1. **Levantar**, solo si el cambio afecta a datos (ADR 0008) — `docker compose -p pfp-pr-<n> up -d --wait` (en local: `make poc-up`).
    El nombre de proyecto aísla contenedores, redes y volúmenes.
 2. **Ejecutar** — ingesta y transformación con datos **sintéticos** en CI; con tus PDFs
    **reales solo en local** (`make poc`), mostrando únicamente pass/fail y diferencias de reconciliación.
@@ -172,6 +173,28 @@ la nube (Fase 4) solo corren en ramas del propio repo, se destruyen siempre y ll
 | 3 y 5 | FastAPI y Streamlit en contenedores + pruebas de humo | Planes de las Fases 3 y 5 |
 | 4 | `terraform plan` en cada PR; crear y destruir infraestructura real solo a pedido | Plan de la Fase 4 |
 
+## CI por impacto (ADR 0008)
+
+Cada PR se evalúa por lo que toca y lo que depende de eso, no el proyecto entero:
+
+| Qué cambia | Qué se evalúa, además de los checks baratos |
+|---|---|
+| Solo documentación (`*.md`, `brain/`) | Nada más |
+| `ingestion/` o `lakehouse/` | Benchmarks + entorno efímero con `dbt build` completo (cambia lo que llega a bronze) |
+| `dbt/` | Entorno efímero con `dbt build --select @state:modified` |
+| `pyproject.toml`, `uv.lock`, `docker-compose.yml`, `.github/` | Todo |
+
+- **Checks baratos siempre completos** (ruff, mypy, pytest unitario, gitleaks, pip-audit, bandit):
+  tardan segundos, y mypy necesita el proyecto entero para ver cuándo un cambio rompe a quien lo importa.
+- **dbt:** `dbt parse` sobre el commit base genera el manifest de comparación sin conectarse a una base
+  de datos; el PR construye `@state:modified`: lo modificado, todo lo que depende de ello y los
+  ancestros necesarios para construirlo en el entorno vacío.
+- **Red de seguridad:** en cada push a `develop` y una vez por semana corre todo, por si el mapa no ve una relación.
+- **Cómo se salta un job:** un job `changes` calcula las áreas con `git diff` contra la base y cada job
+  caro tiene su `if`. Nunca con filtros `paths` del workflow: un workflow filtrado deja los checks
+  obligatorios en "Pending" y bloquea el merge. Y como un job saltado cuenta como exitoso, solo se
+  salta lo que el cambio no afecta; nunca un control como `branch-policy`.
+
 ## Riesgos y mitigaciones
 
 | Riesgo | Impacto | Mitigación |
@@ -184,6 +207,7 @@ la nube (Fase 4) solo corren en ramas del propio repo, se destruyen siempre y ll
 | PDFs con contraseña y al menos uno escaneado (confirmado) | Alto | pikepdf + contraseña en `.env`; T9 detecta páginas sin texto; OCR con Tesseract (T11b); la reconciliación detecta errores de lectura del OCR |
 | Benchmarks ruidosos en CI | Medio | Base y PR en el mismo runner, margen 20 %, 2 semanas en modo aviso |
 | Un entorno efímero queda vivo (contenedores, volúmenes) o alarga demasiado el CI | Bajo | Nombre de proyecto por PR, `down -v` con `if: always()` y `timeout-minutes` en el job; la verificación de T17 comprueba que no queda nada |
+| El mapa de impacto no ve una relación indirecta y salta un job que debía correr | Medio | Checks baratos siempre completos; corrida completa en push a `develop` y semanal; cambios en dependencias, compose o CI corren todo |
 | 7 GB de RAM para Fase 2 (Spark + catálogo) | Medio | Se evalúa al planificar Fase 2 (`.wslconfig`, alternativas livianas) |
 | `gh` 2.46 falla en `gh pr edit` | Bajo | Usar la API REST (`gh api`) |
 
