@@ -3,12 +3,19 @@ name = "personal-finance-platform"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "pdfplumber>=0.11.10",
+    "pikepdf>=10.13.0.post1",
     "pydantic>=2.13.5",
 ]
 
 [dependency-groups]
 dev = [
+    "bandit>=1.9.4",
+    "diff-cover>=10.5.1",
+    "fpdf2>=2.8.8",
+    "import-linter>=2.15",
     "mypy>=2.3.1",
+    "pip-audit>=2.10.1",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.7",
@@ -23,3 +30,28 @@ strict = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["ingestion", "lakehouse", "scripts"]
+
+# Arquitectura (razones en CONSTRAINTS.md). Cada contrato prohíbe el paquete entero y
+# `ignore_imports` declara la única dependencia permitida. Mientras esa importación no
+# exista (llega en T14), import-linter solo avisa "No matches" en vez de fallar.
+[tool.importlinter]
+root_packages = ["ingestion", "lakehouse"]
+
+[[tool.importlinter.contracts]]
+name = "El parsing no importa lakehouse (solo ingestion.cli orquesta ambos)"
+type = "forbidden"
+source_modules = ["ingestion"]
+forbidden_modules = ["lakehouse"]
+ignore_imports = ["ingestion.cli -> lakehouse.**"]
+unmatched_ignore_imports_alerting = "warn"
+
+[[tool.importlinter.contracts]]
+name = "lakehouse solo depende del esquema (ingestion.schema), nunca de los parsers"
+type = "forbidden"
+source_modules = ["lakehouse"]
+forbidden_modules = ["ingestion"]
+ignore_imports = ["lakehouse.** -> ingestion.schema"]
+unmatched_ignore_imports_alerting = "warn"

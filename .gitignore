@@ -22,3 +22,11 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .coverage
+coverage.xml
+.import_linter_cache/
+
+# Configuración local de Obsidian (el vault es brain/)
+.obsidian/
+
+# Copias de trabajo (git worktrees) de los agentes de Claude Code
+.claude/worktrees/

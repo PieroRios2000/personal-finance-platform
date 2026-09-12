@@ -68,11 +68,15 @@ cp .env.example .env && chmod 600 .env   # rellena los valores; .env nunca se su
 Los PDFs reales viven **fuera del repo**, solo con permisos para tu usuario:
 
 ```bash
-mkdir -p ~/finance-data/raw/{bcp,scotiabank}
+mkdir -p ~/finance-data/inbox/<usuario>    # bandeja por usuario, p. ej. inbox/piero
 chmod 700 ~/finance-data
-# copia cada PDF en su carpeta y luego:
-chmod 600 ~/finance-data/raw/*/*.pdf
+# deja ahí los PDFs de ese usuario, de cualquier banco y con cualquier nombre, y luego:
+chmod 600 ~/finance-data/inbox/*/*.pdf
 ```
+
+Al procesarlos (`pfp ingest`, desde T12b y T14), cada PDF se archiva en
+`~/finance-data/raw/<usuario>/<banco>/<cuenta>/<periodo>.pdf`; los repetidos van a `_duplicados/` y los
+que no se reconocen, a `_por_clasificar/`. Nunca se borra un archivo.
 
 ### Librerías de Python
 
@@ -85,10 +89,17 @@ Están consolidadas en un solo lugar y se instalan todas con `uv sync --locked`:
 | Librería | Versión fijada | Tipo | Para qué |
 |---|---|---|---|
 | pydantic | 2.13.5 | runtime | Modelos y validación de transacciones |
+| pikepdf | 10.13.0.post1 | runtime | Abrir y descifrar los PDFs con contraseña |
+| pdfplumber | 0.11.10 | runtime | Leer el texto de los PDFs con sus posiciones |
+| fpdf2 | 2.8.8 | dev | Generar PDFs sintéticos dentro de los tests |
 | pytest | 9.1.1 | dev | Tests |
 | pytest-cov | 7.1.0 | dev | Cobertura |
 | ruff | 0.16.7 | dev | Lint y formato |
 | mypy | 2.3.1 | dev | Tipos (modo estricto) |
+| diff-cover | 10.5.1 | dev | Cobertura de las líneas cambiadas contra la rama base |
+| import-linter | 2.15 | dev | Contratos de arquitectura (quién importa a quién) |
+| pip-audit | 2.10.1 | dev | Vulnerabilidades conocidas en las dependencias |
+| bandit | 1.9.4 | dev | Problemas de seguridad en el código |
 
 No uses `pip install` ni un `requirements.txt`: se desalinean del lock. Para agregar una
 librería: `uv add <lib>` (o `uv add --dev <lib>`), y se suben juntos `pyproject.toml` y
@@ -97,7 +108,7 @@ librería: `uv add <lib>` (o `uv add --dev <lib>`), y se suben juntos `pyproject
 ## 5. Verificación
 
 ```bash
-uv run ruff check . && uv run ruff format --check . && uv run mypy . && uv run pytest
+make check-task                     # lint, formato, tipos, tests, floor-guard y arquitectura
 pre-commit run --all-files
 docker run --rm hello-world         # Docker Desktop debe estar abierto
 tesseract --list-langs              # debe incluir "spa"
