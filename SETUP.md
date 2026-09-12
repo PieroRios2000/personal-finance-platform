@@ -89,6 +89,10 @@ Están consolidadas en un solo lugar y se instalan todas con `uv sync --locked`:
 | pytest-cov | 7.1.0 | dev | Cobertura |
 | ruff | 0.16.7 | dev | Lint y formato |
 | mypy | 2.3.1 | dev | Tipos (modo estricto) |
+| diff-cover | 10.5.1 | dev | Cobertura de las líneas cambiadas contra la rama base |
+| import-linter | 2.15 | dev | Contratos de arquitectura (quién importa a quién) |
+| pip-audit | 2.10.1 | dev | Vulnerabilidades conocidas en las dependencias |
+| bandit | 1.9.4 | dev | Problemas de seguridad en el código |
 
 No uses `pip install` ni un `requirements.txt`: se desalinean del lock. Para agregar una
 librería: `uv add <lib>` (o `uv add --dev <lib>`), y se suben juntos `pyproject.toml` y
