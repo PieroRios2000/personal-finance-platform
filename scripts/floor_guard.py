@@ -157,7 +157,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         added, removed = changes(base)
     except subprocess.CalledProcessError as error:
-        print(f"floor-guard: no se pudo correr: {error.stderr}", file=sys.stderr)
+        detail = error.stderr.strip() or f"no hay historia común con {base}"
+        print(
+            f"floor-guard: no se pudo correr contra {base}: {detail}\n"
+            "Trae la rama base con su historia (`git fetch origin` o "
+            "`git fetch --unshallow`); en el CI, `fetch-depth: 0` en el checkout.",
+            file=sys.stderr,
+        )
         return 2
 
     allowed = exceptions()
