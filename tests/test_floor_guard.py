@@ -1,5 +1,4 @@
 import subprocess
-from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -219,11 +218,11 @@ def test_config_outside_pyproject_fails(
     assert name in out
 
 
-@pytest.mark.parametrize(("days", "expected"), [(30, 0), (-1, 1)])
-def test_exception_applies_until_review_date(
-    days: int, expected: int, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize("review", ["2020-01-01", "2099-12-31", "2026-02-30"])
+def test_exception_applies_while_its_row_exists(
+    review: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    review = date.today() + timedelta(days=days)
+    """La fecha es un recordatorio para Piero: floor-guard no la evalúa."""
     write("app.py", "x = 1\ny = f()  # type: ignore\n")
     write(
         "CONSTRAINTS.md",
@@ -234,9 +233,8 @@ def test_exception_applies_until_review_date(
 
     code, out = run(capsys)
 
-    assert code == expected
-    if expected == 0:
-        assert "excepción" in out
+    assert code == 0
+    assert "excepción aprobada [supresion] app.py:2" in out
 
 
 def test_guard_cannot_run_without_base(capsys: pytest.CaptureFixture[str]) -> None:
