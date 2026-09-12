@@ -64,9 +64,9 @@
 **Descripción:** CLAUDE.md que apunta al cerebro y a las reglas; template de PR; PROJECT.md al día con las decisiones.
 
 **Criterios de aceptación:**
-- [ ] `CLAUDE.md`: flujo de ramas, "solo Piero mergea", datos nunca en Git, leer `brain/` y `CONSTRAINTS.md`.
-- [ ] `.github/pull_request_template.md` con checklist (DoD + nota del cerebro).
-- [ ] `PROJECT.md` refleja bancos BCP/Scotiabank, almacenamiento S3 y stack de Fase 1.
+- [x] `CLAUDE.md`: flujo de ramas, "solo Piero mergea", datos nunca en Git, leer `brain/` y `CONSTRAINTS.md`.
+- [x] `.github/pull_request_template.md` con checklist (DoD + nota del cerebro).
+- [x] `PROJECT.md` refleja bancos BCP/Scotiabank, almacenamiento S3 y stack de Fase 1.
 
 **Verificación:**
 - [ ] Un PR de prueba (el propio) muestra el template; CLAUDE.md se carga en una sesión nueva.
