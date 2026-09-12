@@ -96,11 +96,13 @@
 - [ ] Jobs: `lint-types`, `tests` (+ diff-cover), `security` (gitleaks, pip-audit, bandit), `architecture`, `floor-guard`.
 - [ ] Reglas numéricas con `continue-on-error` hasta 2026-09-26; acciones fijadas por SHA y `sha_pinning_required` activado.
 - [ ] Checks bloqueantes agregados como obligatorios en el ruleset `protect-main-develop`.
+- [ ] Fallos fáciles de leer: anotaciones en la línea exacta del PR (ruff y mypy con formato GitHub), resumen de pytest en el job y sección "Revisar el CI" en `SETUP.md` (`gh pr checks`, `gh run view`, log del job con `gh api …/actions/jobs/<id>/logs` porque `--log-failed` sale vacío con gh 2.46, `gh run rerun --failed`).
 
 **Verificación:**
 - [ ] Un PR con un error de ruff falla y queda `BLOCKED`; el mismo PR corregido pasa.
+- [ ] Ese error aparece anotado en la línea del archivo dentro del PR.
 
-**Dependencias:** T4 · **Archivos:** `.github/workflows/ci.yml` · **Tamaño:** M · **Skill:** ci-cd-and-automation
+**Dependencias:** T4 · **Archivos:** `.github/workflows/ci.yml`, `SETUP.md` · **Tamaño:** M · **Skill:** ci-cd-and-automation
 
 ### ✅ Checkpoint A
 - [ ] CI en verde en `develop` · [ ] pre-commit funciona en local · [ ] cerebro navegable · [ ] revisión con Piero
@@ -295,6 +297,7 @@
 **Criterios de aceptación:**
 - [ ] Job de CI: `docker compose -p pfp-pr-<n> up -d --wait` → `pfp ingest` del fixture sintético dos veces (la segunda agrega 0 filas) → `dbt build` → `sqlfluff lint` → `down -v` con `if: always()`.
 - [ ] Tests `integration` corren en este job; sin secretos y con `timeout-minutes`.
+- [ ] Antes de destruir el entorno se guardan `docker compose logs` y los artefactos de dbt (`target/run_results.json`, `logs/dbt.log`) como artifact del job (`if: always()`, retención corta), para revisar un fallo cuando el entorno ya no existe.
 - [ ] `make poc`: el mismo flujo en local con tus PDFs reales; imprime solo pass/fail y diferencias de reconciliación, y destruye el entorno al terminar.
 
 **Verificación:**

@@ -157,7 +157,8 @@ Cada PR que toque datos se prueba en una plataforma temporal que se crea, se usa
    **reales solo en local** (`make poc`), mostrando únicamente pass/fail y diferencias de reconciliación.
 3. **Comparar** — la misma corrida con la rama base y con la del PR; las diferencias
    (filas por modelo, esquema, valores) se publican en el resumen del job.
-4. **Destruir siempre** — `docker compose -p pfp-pr-<n> down -v`, también si algo falló (`if: always()`).
+4. **Guardar logs y destruir siempre** — primero `docker compose logs` y los artefactos de dbt se suben
+   como artifact del job; luego `docker compose -p pfp-pr-<n> down -v`, también si algo falló (`if: always()`).
 
 Estos jobs no usan secretos, así que funcionan igual para PRs desde forks. Los entornos en
 la nube (Fase 4) solo corren en ramas del propio repo, se destruyen siempre y llevan expiración.
