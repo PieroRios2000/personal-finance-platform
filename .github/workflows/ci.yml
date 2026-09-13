@@ -1,5 +1,6 @@
-# Quality gates on every PR into develop or main. Rules, thresholds and reasons are in
-# CONSTRAINTS.md; if this file and CONSTRAINTS.md disagree, CONSTRAINTS.md wins.
+# Quality gates on every PR into develop or main, plus a full run on every push to develop
+# and once a week (ADR 0008). Rules, thresholds and reasons are in CONSTRAINTS.md; if this
+# file and CONSTRAINTS.md disagree, CONSTRAINTS.md wins.
 #
 # `continue-on-error: true` marks the numeric rules that only warn until 2026-09-26 (T19
 # removes it so they start blocking). The floor (lint-types, tests' pytest step, gitleaks,

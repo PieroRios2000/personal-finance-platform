@@ -69,7 +69,7 @@ the failure without stopping the recipe) and `continue-on-error` in CI (T5). Bot
 | Coverage of changed lines | ≥ 80% | `uv run pytest --cov --cov-report=xml` then `uv run diff-cover coverage.xml --compare-branch=origin/develop --fail-under=80` | `make check-full`, CI | Warns until 2026-09-26, then blocks | Forces testing what's new without requiring it for every config line |
 | Security: dependencies | 0 known vulnerabilities | `uv run pip-audit` | `make check-full`, CI | Warns until 2026-09-26, then blocks | pip-audit doesn't filter by severity, so it's stricter than "no high severity": any published vulnerability fails it. If no fixed version exists, an exception is requested (`--ignore-vuln <ID>`) |
 | Security: code | 0 high-severity findings | `uv run bandit -q -r . -x ./.venv --severity-level high` | `make check-full`, CI | Warns until 2026-09-26, then blocks | Below high tends to be noise (e.g. `assert` in tests) |
-| Performance | The mean doesn't get worse by more than 20% | pytest-benchmark with `--benchmark-compare-fail=mean:20%`, base vs PR on the same runner | CI (T15) | Warns until 2026-09-26, then blocks | Leaves room for runner noise. **Still to be measured in T15** |
+| Performance | The mean doesn't get worse by more than 20% | `uv run pytest -m benchmark --benchmark-min-rounds=10 --benchmark-compare --benchmark-compare-fail=mean:20%`, base vs PR on the same runner | CI's `benchmarks` job (T15) | Warns until 2026-09-26, then blocks | Leaves room for runner noise: two runs of the *same* code came out 17% apart at pytest-benchmark's default 5 rounds and ~3% apart at the 10 rounds the job uses. An artificial `time.sleep(0.1)` in `bcp.parse` is caught as `mean` +42.6% (T15's verification). The benchmarks only run when the change affects them (ADR 0008) |
 | Architecture | 0 broken contracts | `uv run lint-imports` | `make check-task`, CI | Warns until 2026-09-26, then blocks | See "Architecture contracts" |
 
 ### Architecture contracts
@@ -120,17 +120,18 @@ Why they're shaped this way (tested with import-linter 2.15):
 
 `BASE` changes the comparison branch: `make check-full BASE=origin/main`.
 
-## Measured (2026-09-12, on the current code)
+## Measured (2026-09-13, on the current code)
 
 | Metric | Today | Note |
 |---|---|---|
-| Project coverage (`ingestion`, `lakehouse`, `scripts`) | 98% (178 statements, 3 uncovered) | Uncovered: the scripts' `sys.exit(main())` lines and one branch of T9's inspector |
-| Coverage of changed lines (diff-cover) | 100% | On T4's diff |
-| `make check-fast` duration | 1.1 s with mypy's cache; 14.4 s the first time | The first run (no cache, mypy also checks pdfplumber and pikepdf) goes over 5 s |
-| `make check-task` duration | 11.4 s | 65 tests |
-| `make check-full` duration | 21.7 s | Includes pip-audit's network lookup, which varies |
+| Project coverage (`ingestion`, `lakehouse`, `scripts`) | 96% (820 statements, 33 uncovered) | Uncovered: `ingestion/parsers/base.py`'s Protocol body (9, never executed), the CLI's argparse wiring (8), the BCP parser's defensive branches (9), and the scripts' `sys.exit(main())` lines |
+| Coverage of changed lines (diff-cover) | 90% | On T15's diff: 11 lines, 1 uncovered (`scripts/ci_impact.py`'s `sys.exit(main())`) |
+| `make check-fast` duration | 0.7 s with mypy's cache; 16.8 s the first time | The first run (no cache, mypy also checks pdfplumber and pikepdf) goes over 5 s |
+| `make check-task` duration | 28.2 s | 200 tests, 5 deselected (`real_pdf`, `integration`, `benchmark`) |
+| `make check-full` duration | 37.4 s | Includes pip-audit's network lookup, which varies |
 | pip-audit / bandit | 0 vulnerabilities / 0 high findings | |
-| Parsing and write performance | Still to be measured (T15) | |
+| Parsing: a 3-page, 120-row synthetic statement (`bcp.parse`) | **274 ms mean** (median 259 ms, 10 rounds) | `uv run pytest -m benchmark` on Piero's WSL2 machine (T15). A GitHub runner's own numbers will differ; what the gate compares is base vs PR on one runner, never a number from here |
+| Write: a 100-transaction statement to bronze (`bronze.write_statement`) | **99 ms mean** (median 96 ms, 16 rounds) | Three Delta appends (transactions, statements, ingested_files) to a `tmp_path` lake, not S3 (ADR 0006) |
 
 ## Exceptions
 

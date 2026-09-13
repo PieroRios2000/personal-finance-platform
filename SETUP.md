@@ -109,6 +109,7 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | fpdf2 | 2.8.8 | dev | Generate synthetic PDFs inside the tests |
 | pytest | 9.1.1 | dev | Tests |
 | pytest-cov | 7.1.0 | dev | Coverage |
+| pytest-benchmark | 5.3.0 | dev | Parsing and bronze-write benchmarks, base vs PR (T15) |
 | ruff | 0.16.7 | dev | Lint and format |
 | mypy | 2.3.1 | dev | Types (strict mode) |
 | diff-cover | 10.5.1 | dev | Coverage of changed lines against the base branch |
@@ -134,7 +135,8 @@ All green = the environment is ready.
 ## Reviewing CI
 
 Every PR runs `.github/workflows/ci.yml`: `lint-types`, `tests`, `security`, `architecture`
-and `floor-guard`. From the terminal:
+and `floor-guard`, plus `changes` and — only when `changes` says the PR affects them —
+`benchmarks` (T15, ADR 0008). From the terminal:
 
 ```bash
 gh pr checks <n>                     # pass/fail per job for PR <n>
@@ -146,9 +148,21 @@ gh run rerun <run_id> --failed       # re-run only what failed
 `<run_id>` shows up in `gh run list` or in the PR's checks. A failure
 in `lint-types` is also annotated on the exact file and line inside the PR's *Files changed*
 tab (ruff via `--output-format=github`, mypy via a problem matcher). Until 2026-09-26,
-`diff-cover`, `pip-audit`, `bandit` and `import-linter` only warn (see CONSTRAINTS.md); a red
-`X` on `tests`, `security`'s gitleaks step, `lint-types` or `floor-guard` is what actually
-blocks the merge.
+`diff-cover`, `pip-audit`, `bandit`, `import-linter` and the benchmark comparison only warn
+(see CONSTRAINTS.md); a red `X` on `tests`, `security`'s gitleaks step, `lint-types` or
+`floor-guard` is what actually blocks the merge.
+
+The benchmarks are deselected from the normal test run (a timing only means something against
+a baseline from the same machine). To run them locally, and to reproduce CI's comparison:
+
+```bash
+uv run pytest -m benchmark                         # just the numbers
+git checkout origin/develop -- ingestion lakehouse # measure the base branch
+uv run pytest -m benchmark -q --benchmark-min-rounds=10 --benchmark-save=base
+git checkout HEAD -- ingestion lakehouse           # back to your code
+uv run pytest -m benchmark -q --benchmark-min-rounds=10 \
+  --benchmark-compare --benchmark-compare-fail=mean:20%
+```
 
 ## Known issues
 
