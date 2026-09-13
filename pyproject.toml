@@ -3,8 +3,10 @@ name = "personal-finance-platform"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "deltalake>=1.6.3",
     "pdfplumber>=0.11.10",
     "pikepdf>=10.13.0.post1",
+    "pyarrow>=25.0.1",
     "pydantic>=2.13.5",
     "pytesseract>=0.3.13",
 ]
@@ -38,27 +40,28 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.mypy]
 strict = true
 
-# pytesseract ships no type stubs or py.typed marker (T11b); no types-pytesseract
-# package exists on PyPI either, so this is the standard mypy escape hatch for one
-# untyped third-party import, scoped to that module only.
+# pytesseract and pyarrow ship no type stubs or py.typed marker (T11b, T14); no
+# official types-pytesseract or types-pyarrow package exists on PyPI either, so
+# this is the standard mypy escape hatch, scoped to just these two imports.
 [[tool.mypy.overrides]]
-module = "pytesseract"
+module = ["pytesseract", "pyarrow", "pyarrow.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-m 'not real_pdf'"
+addopts = "-m 'not real_pdf and not integration'"
 markers = [
     "real_pdf: runs against the owner's real PDFs; deselected by default (ADR 0004). Run with `pytest -m real_pdf`.",
+    "integration: needs local S3 (SeaweedFS, T13) running via `docker compose up`; deselected by default. Run with `pytest -m integration`.",
 ]
 
 [tool.coverage.run]
 source = ["ingestion", "lakehouse", "scripts"]
 
 # Architecture (reasons in CONSTRAINTS.md). Each contract forbids the whole package, and
-# `ignore_imports` declares the one allowed dependency. While that import doesn't exist yet
-# (it lands in T14), import-linter only warns "No matches" instead of failing.
+# `ignore_imports` declares the one allowed dependency (T14): ingestion.cli orchestrates
+# both organizer and bronze; lakehouse depends only on the schema, never on the parsers.
 [tool.importlinter]
 root_packages = ["ingestion", "lakehouse"]
 
@@ -77,3 +80,9 @@ source_modules = ["lakehouse"]
 forbidden_modules = ["ingestion"]
 ignore_imports = ["lakehouse -> ingestion.schema", "lakehouse.** -> ingestion.schema"]
 unmatched_ignore_imports_alerting = "warn"
+
+[[tool.importlinter.contracts]]
+name = "ingestion.schema never imports the rest of ingestion (T14)"
+type = "forbidden"
+source_modules = ["ingestion.schema"]
+forbidden_modules = ["ingestion"]
