@@ -212,6 +212,7 @@ def bcp_real_layout_statement_pdf(
     reconciles: bool = True,
     account_number: str = _REAL_ACCOUNT_NUMBER,
     row_description_x: float = 240,
+    zero_and_real_row: Decimal | None = None,
 ) -> bytes:
     """Render a fictional BCP statement matching the *real* layout found in
     T9's masked inspection of the owner's own statement (2026-09), which
@@ -236,6 +237,10 @@ def bcp_real_layout_statement_pdf(
       this: it defaults to the DESCRIPCION header's own x (no misalignment,
       matching every other test), but a caller can move it left of that,
       independently of the header, to exercise this specific real trait.
+    - A real row can print "0.00" in one of CARGO/ABONO alongside a real
+      amount in the other — a third real statement had a row that did
+      exactly this. `zero_and_real_row` appends one such row (a "0.00"
+      charge plus the given credit amount) after `movements`.
 
     `bcp_statement_pdf` (the original T10 fixture) is left untouched since
     dozens of other tests depend on its exact shape; this is a separate,
@@ -246,6 +251,14 @@ def bcp_real_layout_statement_pdf(
     for movement in movements:
         running += movement.amount
         rows.append((movement, running))
+    if zero_and_real_row is not None:
+        extra = Movement(
+            (movements[-1].when if movements else date.today()),
+            "AJUSTE A CERO FICTICIO",
+            zero_and_real_row,
+        )
+        running += extra.amount
+        rows.append((extra, running))
     computed_closing = running
 
     if closing_balance is not None:
@@ -286,6 +299,8 @@ def bcp_real_layout_statement_pdf(
         row_y += 15
         charge = _money(-movement.amount) if movement.amount < 0 else ""
         credit = _money(movement.amount) if movement.amount > 0 else ""
+        if zero_and_real_row is not None and movement.amount == zero_and_real_row:
+            charge = _money(Decimal("0.00"))
         # A different processing date than the value date, so a test can
         # prove the parser reads the *second* FECHA column, not the first.
         proc_date = movement.when.replace(day=max(1, movement.when.day - 1))

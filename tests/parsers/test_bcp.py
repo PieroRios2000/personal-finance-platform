@@ -204,6 +204,24 @@ def test_parse_reads_a_description_that_starts_left_of_its_own_header(
     ]
 
 
+def test_parse_ignores_a_literal_zero_printed_alongside_a_real_amount(
+    tmp_path: Path,
+) -> None:
+    """A third real statement had a row printing "0.00" under CARGO right
+    alongside a real amount under ABONO — previously raised "row ... has
+    both a charge and a credit" (a genuine ValueError, since both cells
+    were non-empty), even though only one of them is a real movement. A
+    literal "0.00" has no monetary effect, same as an empty cell."""
+    path = tmp_path / "zero-and-real.pdf"
+    path.write_bytes(bcp_real_layout_statement_pdf(zero_and_real_row=Decimal("75.00")))
+
+    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert len(statement.transactions) == len(DEFAULT_MOVEMENTS) + 1
+    extra = next(t for t in statement.transactions if t.amount == Decimal("75.00"))
+    assert extra.description == "AJUSTE A CERO FICTICIO"
+
+
 def test_parse_extracts_charges_and_credits_on_the_real_layout(
     tmp_path: Path,
 ) -> None:

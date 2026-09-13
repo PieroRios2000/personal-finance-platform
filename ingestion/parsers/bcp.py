@@ -363,6 +363,16 @@ def parse(
 
         charge = cells.get("CARGO", "").strip()
         credit = cells.get("ABONO", "").strip()
+        # A printed "0.00" in either column has no monetary effect, same as
+        # an empty one — treating it as absent handles both a literal-zero
+        # informational row (the real layout prints one) and a row that
+        # prints "0.00" in one column alongside the real amount in the
+        # other, which would otherwise look like "both a charge and a
+        # credit" even though only one of them is a real movement.
+        if charge and _money(charge) == 0:
+            charge = ""
+        if credit and _money(credit) == 0:
+            credit = ""
         if charge and credit:
             raise ValueError(f"row {row_date} has both a charge and a credit")
         if charge:
