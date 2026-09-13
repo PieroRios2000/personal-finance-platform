@@ -1,4 +1,5 @@
-"""Tests for lakehouse.bronze: append-only Delta tables for bronze (T14)."""
+"""Tests for lakehouse.bronze: bronze's Delta tables (T14) and the backfill
+replace path (T14c)."""
 
 import hashlib
 from datetime import date
@@ -200,6 +201,146 @@ def test_ingesting_twice_does_not_duplicate_rows_when_the_caller_checks_first(
 
     table = DeltaTable(str(lakehouse / "bronze" / "transactions")).to_pyarrow_table()
     assert table.num_rows == 1
+
+
+def test_replace_statement_removes_the_old_transaction_rows(lakehouse: Path) -> None:
+    """A backfill (T14c) re-parses a file already in bronze: the rows the
+    previous (buggy) parse wrote are gone, and only the fresh ones remain."""
+    from deltalake import DeltaTable
+
+    bronze.write_statement(_statement(), VALID_SHA256)
+
+    corrected = _statement(
+        transactions=[
+            Transaction(
+                user_id="piero",
+                bank="BCP",
+                account_id=VALID_ACCOUNT_ID,
+                account_last4="1234",
+                date=date(2026, 1, 15),
+                description="CORRECTED ONE",
+                amount=Decimal("-10.00"),
+                currency="PEN",
+                source_file_sha256=VALID_SHA256,
+            ),
+            Transaction(
+                user_id="piero",
+                bank="BCP",
+                account_id=VALID_ACCOUNT_ID,
+                account_last4="1234",
+                date=date(2026, 1, 16),
+                description="CORRECTED TWO",
+                amount=Decimal("-15.50"),
+                currency="PEN",
+                source_file_sha256=VALID_SHA256,
+            ),
+        ]
+    )
+    bronze.replace_statement(corrected, VALID_SHA256)
+
+    table = DeltaTable(str(lakehouse / "bronze" / "transactions")).to_pyarrow_table()
+    assert sorted(table.column("description").to_pylist()) == [
+        "CORRECTED ONE",
+        "CORRECTED TWO",
+    ]
+
+
+def test_replace_statement_replaces_the_statements_row(lakehouse: Path) -> None:
+    from deltalake import DeltaTable
+
+    bronze.write_statement(_statement(closing_balance=Decimal("74.50")), VALID_SHA256)
+
+    bronze.replace_statement(_statement(closing_balance=Decimal("80.00")), VALID_SHA256)
+
+    table = DeltaTable(str(lakehouse / "bronze" / "statements")).to_pyarrow_table()
+    assert table.num_rows == 1
+    assert table.to_pylist()[0]["closing_balance"] == Decimal("80.00")
+
+
+def test_replace_statement_writes_a_file_that_was_never_ingested(
+    lakehouse: Path,
+) -> None:
+    """Nothing to delete (a fresh lake has no tables at all) is a normal case,
+    not an error: the statement is just written."""
+    from deltalake import DeltaTable
+
+    bronze.replace_statement(_statement(), VALID_SHA256)
+
+    assert bronze.is_ingested("piero", VALID_SHA256) is True
+    table = DeltaTable(str(lakehouse / "bronze" / "transactions")).to_pyarrow_table()
+    assert table.num_rows == 1
+
+
+def test_replace_statement_keeps_the_original_ingested_files_row(
+    lakehouse: Path,
+) -> None:
+    """A backfill corrects a file's *interpretation*, not the fact that the file
+    itself was ingested at some earlier moment: `ingested_files` keeps its one
+    row, with the `ingested_at` it already had."""
+    from deltalake import DeltaTable
+
+    bronze.write_statement(_statement(), VALID_SHA256)
+    uri = str(lakehouse / "bronze" / "ingested_files")
+    before = DeltaTable(uri).to_pyarrow_table().to_pylist()
+
+    bronze.replace_statement(_statement(), VALID_SHA256)
+
+    after = DeltaTable(uri).to_pyarrow_table().to_pylist()
+    assert len(after) == 1
+    assert after == before
+
+
+def test_replace_statement_only_touches_the_given_users_rows(
+    lakehouse: Path,
+) -> None:
+    """The same PDF can legitimately belong to two users (ADR 0009: a joint
+    account lands as two independent copies, one per user), and both copies
+    share one sha256 — so the delete has to be scoped by `user_id`, exactly like
+    `is_ingested()` already is."""
+    from deltalake import DeltaTable
+
+    bronze.write_statement(_statement(user_id="piero"), VALID_SHA256)
+    bronze.write_statement(_statement(user_id="ana"), VALID_SHA256)
+
+    bronze.replace_statement(_statement(user_id="piero"), VALID_SHA256)
+
+    table = DeltaTable(str(lakehouse / "bronze" / "transactions")).to_pyarrow_table()
+    assert sorted(table.column("user_id").to_pylist()) == ["ana", "piero"]
+    statements = DeltaTable(str(lakehouse / "bronze" / "statements")).to_pyarrow_table()
+    assert sorted(statements.column("user_id").to_pylist()) == ["ana", "piero"]
+
+
+def test_transaction_rows_is_empty_on_a_fresh_lake() -> None:
+    assert bronze.transaction_rows("piero", VALID_SHA256) == []
+
+
+def test_transaction_rows_returns_only_the_given_files_rows(lakehouse: Path) -> None:
+    """What `pfp backfill --dry-run` compares a fresh parse against (T14c):
+    date, description and amount for one file, and nothing else's."""
+    other_sha256 = hashlib.sha256(b"another statement").hexdigest()
+    bronze.write_statement(_statement(), VALID_SHA256)
+    bronze.write_statement(
+        _statement(
+            transactions=[
+                Transaction(
+                    user_id="piero",
+                    bank="BCP",
+                    account_id=VALID_ACCOUNT_ID,
+                    account_last4="1234",
+                    date=date(2026, 2, 15),
+                    description="ANOTHER FILE'S MOVEMENT",
+                    amount=Decimal("-1.00"),
+                    currency="PEN",
+                    source_file_sha256=other_sha256,
+                )
+            ]
+        ),
+        other_sha256,
+    )
+
+    assert bronze.transaction_rows("piero", VALID_SHA256) == [
+        (date(2026, 1, 15), "TEST MOVEMENT", Decimal("-25.50"))
+    ]
 
 
 def test_two_users_land_in_separate_partitions_and_are_independent(
