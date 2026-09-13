@@ -172,11 +172,15 @@
 **Description:** Generate a fake PDF with BCP's layout inside the tests (no binary files in Git).
 
 **Acceptance criteria:**
-- [ ] A generator (fpdf2, dev dependency) that produces a fictional BCP statement with coherent totals.
-- [ ] A pytest fixture that creates it in `tmp_path`.
+- [x] A generator (fpdf2, dev dependency) that produces a fictional BCP statement with coherent totals.
+- [x] A pytest fixture that creates it in `tmp_path`.
 
 **Verification:**
-- [ ] T9's dump on the synthetic PDF matches the real one structurally.
+- [ ] T9's dump on the synthetic PDF matches the real one structurally. No masked dump of a
+      real statement was available this session, so this is checked only against a plausible,
+      well-formed shape (headers unmasked, amounts/dates masked, columns aligned) plus an
+      automated test — see the PR for the actual dump. Full comparison stays open until Piero
+      shares T9's dump of a real statement (before or during T11).
 
 **Dependencies:** T9 · **Files:** `tests/fixtures/synthetic_pdfs.py`, `tests/conftest.py` · **Size:** S
 
