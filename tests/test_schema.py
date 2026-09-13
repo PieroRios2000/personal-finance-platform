@@ -186,7 +186,7 @@ def test_hash_account_raises_a_specific_error_when_the_key_is_missing(
 # --- last4_of ----------------------------------------------------------
 
 
-def test_last4_of_takes_the_last_four_characters() -> None:
+def test_last4_of_takes_the_last_four_digits() -> None:
     assert last4_of("1234567890123456") == "3456"
 
 
@@ -194,9 +194,25 @@ def test_last4_of_strips_surrounding_whitespace_first() -> None:
     assert last4_of("  1234567890123456  ") == "3456"
 
 
+def test_last4_of_ignores_dashes() -> None:
+    # A real Peruvian bank account number, e.g. "191-48273615-0-37": the last
+    # 4 DIGITS are what matters, not the last 4 raw characters ("0-37").
+    assert last4_of("191-48273615-0-37") == "5037"
+
+
+def test_last4_of_ignores_internal_whitespace() -> None:
+    assert last4_of("1914 8273 6150 037") == "0037"
+
+
 def test_last4_of_rejects_a_too_short_number() -> None:
-    with pytest.raises(ValueError, match="at least 4 characters"):
+    with pytest.raises(ValueError, match="at least 4 digits"):
         last4_of("12")
+
+
+def test_last4_of_rejects_too_few_digits_even_with_extra_characters() -> None:
+    # 3 digits total even though the raw string is longer than 4 characters.
+    with pytest.raises(ValueError, match="at least 4 digits"):
+        last4_of("1-2-3")
 
 
 # --- normalize_description --------------------------------------------

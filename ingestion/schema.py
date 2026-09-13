@@ -30,9 +30,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 Currency = Literal["PEN", "USD"]
 
-_ACCOUNT_ID_PATTERN = r"^[0-9a-f]{64}$"  # a sha256 hexdigest
+# A sha256 hexdigest; account_id is one too, being an HMAC-SHA256.
+_SHA256_HEX_PATTERN = r"^[0-9a-f]{64}$"
 _LAST4_PATTERN = r"^\d{4}$"
-_SHA256_PATTERN = r"^[0-9a-f]{64}$"
 
 
 class MissingAccountKeyError(RuntimeError):
@@ -68,15 +68,18 @@ def hash_account(bank: str, number: str) -> str:
 
 
 def last4_of(number: str) -> str:
-    """Return the last 4 characters of a real account number.
+    """Return the last 4 digits of a real account number.
 
+    Real account numbers can include separators (e.g. a Peruvian format like
+    "191-48273615-0-37"), so this ignores anything that isn't a digit rather
+    than taking the last 4 raw characters, which could be mostly punctuation.
     Applied to the number before it's hashed and discarded: nothing longer
     than this ever reaches a `Transaction` or `Statement`.
     """
-    trimmed = number.strip()
-    if len(trimmed) < 4:
-        raise ValueError("account number must have at least 4 characters")
-    return trimmed[-4:]
+    digits = re.sub(r"\D", "", number)
+    if len(digits) < 4:
+        raise ValueError("account number must have at least 4 digits")
+    return digits[-4:]
 
 
 # Characters some banks use to pad a fixed-width description column
@@ -118,13 +121,13 @@ class Transaction(BaseModel):
 
     user_id: str = Field(min_length=1)
     bank: str = Field(min_length=1)
-    account_id: str = Field(pattern=_ACCOUNT_ID_PATTERN)
+    account_id: str = Field(pattern=_SHA256_HEX_PATTERN)
     account_last4: str = Field(pattern=_LAST4_PATTERN)
     date: date
     description: str = Field(min_length=1)
     amount: Decimal
     currency: Currency
-    source_file_sha256: str = Field(pattern=_SHA256_PATTERN)
+    source_file_sha256: str = Field(pattern=_SHA256_HEX_PATTERN)
 
     @field_validator("amount")
     @classmethod
@@ -142,7 +145,7 @@ class Statement(BaseModel):
 
     user_id: str = Field(min_length=1)
     bank: str = Field(min_length=1)
-    account_id: str = Field(pattern=_ACCOUNT_ID_PATTERN)
+    account_id: str = Field(pattern=_SHA256_HEX_PATTERN)
     account_last4: str = Field(pattern=_LAST4_PATTERN)
     period_start: date
     period_end: date
