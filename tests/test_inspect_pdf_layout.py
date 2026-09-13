@@ -8,7 +8,8 @@ from PIL import Image
 
 from scripts.inspect_pdf_layout import main, mask
 
-# Datos ficticios que nunca deben aparecer en la salida del inspector.
+# Fake data that must never show up in the inspector's output. Kept in Spanish,
+# like the headers below: this simulates a real BCP/Scotiabank statement.
 NAME = "ROSALINDA QUISPECAHUA"
 ACCOUNT = "191-48273615-0-37"
 MERCHANT = "BODEGA SANTA ROSITA"
@@ -60,7 +61,7 @@ def test_mask_keeps_known_headers_and_hides_the_rest(word: str, expected: str) -
 def test_output_hides_synthetic_personal_data(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    pdf = tmp_path / f"estado {NAME}.pdf"
+    pdf = tmp_path / f"statement {NAME}.pdf"
     pdf.write_bytes(statement_pdf())
 
     out = run(capsys, str(pdf))
@@ -74,33 +75,33 @@ def test_output_hides_synthetic_personal_data(
 def test_opens_pdf_with_bytes_before_the_header(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    pdf = tmp_path / "prefijo.pdf"
+    pdf = tmp_path / "prefix.pdf"
     pdf.write_bytes(b"$BOP$" + statement_pdf())
 
     out = run(capsys, str(pdf))
 
-    assert "Cifrado: no" in out
+    assert "Encrypted: no" in out
     assert "FECHA" in out
 
 
 def test_unlocks_encrypted_pdf_with_password_from_env(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    pdf = tmp_path / "cifrado.pdf"
-    save_encrypted(pdf, "clave-sintetica")
-    monkeypatch.setenv("BCP_PDF_PASSWORD", "clave-sintetica")
+    pdf = tmp_path / "encrypted.pdf"
+    save_encrypted(pdf, "synthetic-key")
+    monkeypatch.setenv("BCP_PDF_PASSWORD", "synthetic-key")
 
     out = run(capsys, str(pdf), "--password-env", "BCP_PDF_PASSWORD")
 
-    assert "Cifrado: sí" in out
+    assert "Encrypted: yes" in out
     assert "SALDO" in out
 
 
 def test_encrypted_pdf_without_password_exits_with_a_hint(tmp_path: Path) -> None:
-    pdf = tmp_path / "cifrado.pdf"
-    save_encrypted(pdf, "clave-sintetica")
+    pdf = tmp_path / "encrypted.pdf"
+    save_encrypted(pdf, "synthetic-key")
 
-    with pytest.raises(SystemExit, match="contraseña"):
+    with pytest.raises(SystemExit, match="password"):
         main([str(pdf)])
 
 
@@ -113,9 +114,9 @@ def test_reports_pages_without_text_layer(
     pdf.text(40, 60, "SALDO")
     pdf.add_page()
     pdf.image(Image.new("RGB", (200, 100), "gray"), x=40, y=60, w=400)
-    path = tmp_path / "escaneado.pdf"
+    path = tmp_path / "scanned.pdf"
     path.write_bytes(bytes(pdf.output()))
 
     out = run(capsys, str(path))
 
-    assert "Páginas sin capa de texto (escaneadas): 2" in out
+    assert "Pages without a text layer (scanned): 2" in out

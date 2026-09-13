@@ -1,13 +1,13 @@
-"""floor-guard: falla si el diff contra la rama base baja el nivel de calidad.
+"""floor-guard: fails if the diff against the base branch lowers the quality bar.
 
-Revisa las líneas agregadas y quitadas entre el merge-base con la rama base y el
-árbol de trabajo (incluye archivos sin seguimiento). Se corre desde la raíz del repo:
+Checks the lines added and removed between the merge-base with the base branch and the
+working tree (untracked files included). Run it from the repo root:
 
     uv run python scripts/floor_guard.py [--base origin/develop]
 
-Salida: 0 limpio, 1 el nivel bajó, 2 no se pudo correr. Las excepciones aprobadas
-se leen de la tabla de excepciones de CONSTRAINTS.md. Nunca imprime el texto de la
-línea (podría contener un secreto), solo la regla y la ubicación.
+Exit codes: 0 clean, 1 the bar dropped, 2 could not run. Approved exceptions are read
+from CONSTRAINTS.md's exceptions table. Never prints the line's text (it could hold a
+secret), only the rule and the location.
 """
 
 import argparse
@@ -17,7 +17,7 @@ import sys
 from fnmatch import fnmatch
 from pathlib import Path
 
-# Comentarios que apagan un check del nivel: ruff, mypy, bandit, cobertura, gitleaks.
+# Comments that turn off a floor check: ruff, mypy, bandit, coverage, gitleaks.
 SUPPRESSION = re.compile(
     r"#.*\b(noqa|type:\s*ignore|nosec|pragma:\s*no\s*cover|fmt:\s*(off|skip)"
     r"|mypy:\s*(ignore-errors|disable-error-code))\b|gitleaks:allow",
@@ -26,7 +26,7 @@ SUPPRESSION = re.compile(
 SKIP = re.compile(r"\b(pytest|mark|unittest)\.(skip|xfail)|\b(skipTest|importorskip)\b")
 TEST_OR_ASSERT = re.compile(r"\bdef test_|\bassert\b|pytest\.raises")
 CONFIG = ("pyproject.toml", "Makefile", ".pre-commit-config.yaml")
-# Archivos que pueden pisar la config de mypy, ruff, pytest o la cobertura.
+# Files that could override mypy's, ruff's, pytest's or coverage's config.
 OTHER_CONFIG = (
     *("mypy.ini", ".mypy.ini", "setup.cfg", "tox.ini", "pytest.ini"),
     *("ruff.toml", ".ruff.toml", ".coveragerc"),
@@ -38,24 +38,24 @@ RELAXED = re.compile(
     re.IGNORECASE,
 )
 STRICT = re.compile(r"\bstrict\s*=\s*true", re.IGNORECASE)
-# Checks del piso: no pueden desaparecer ni correr sin cortar ("-" o "|| true").
+# Floor checks: must not disappear, or run without stopping ("-" or "|| true").
 FLOOR_TOOL = re.compile(r"\b(ruff|mypy|pytest|floor_guard|gitleaks)\b")
 IGNORED_FAILURE = re.compile(r"^\t-|\|\|\s*true")
 NUMBER = re.compile(r"\d+(?:\.\d+)?")
-VERSION_SPEC = re.compile(r"[<>=~!]=")  # "bandit>=1.9.4" es una versión, no un umbral
+VERSION_SPEC = re.compile(r"[<>=~!]=")  # "bandit>=1.9.4" is a version, not a threshold
 HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)")
-# Diff con el mismo formato sin importar la config de git de quien lo corre
-# (prefijos, rutas no ASCII, renames, diff externo).
+# Same diff shape regardless of the runner's git config (prefixes, non-ASCII paths,
+# renames, an external diff tool).
 DIFF = (
     *("-c", "core.quotePath=false", "diff", "--no-color", "--no-ext-diff"),
     *("--no-renames", "--src-prefix=a/", "--dst-prefix=b/", "--unified=0"),
 )
 EXCEPTION_ROW = re.compile(r"^\|\s*([\w-]+)\s*\|\s*`?([^|`]+?)`?\s*\|")
-# Sus propios patrones y fixtures contienen los marcadores que busca.
+# Its own patterns and fixtures contain the very markers it looks for.
 SELF = ("scripts/floor_guard.py", "tests/test_floor_guard.py")
 
-Line = tuple[str, int, str]  # (archivo, número de línea, texto)
-Finding = tuple[str, str, str]  # (regla, archivo, ubicación)
+Line = tuple[str, int, str]  # (file, line number, text)
+Finding = tuple[str, str, str]  # (rule, file, location)
 
 
 def git(*args: str) -> str:
@@ -65,7 +65,7 @@ def git(*args: str) -> str:
 
 
 def changes(base: str) -> tuple[list[Line], list[Line]]:
-    """Líneas agregadas y quitadas desde el merge-base con `base`."""
+    """Lines added and removed since the merge-base with `base`."""
     merge_base = git("merge-base", base, "HEAD").strip()
     added: list[Line] = []
     removed: list[Line] = []
@@ -96,29 +96,29 @@ def findings(added: list[Line], removed: list[Line]) -> list[Finding]:
         if path.endswith(".md") or path in SELF:
             continue
         if SUPPRESSION.search(text):
-            found.append(("supresion", path, f"{path}:{n}"))
+            found.append(("suppression", path, f"{path}:{n}"))
         if SKIP.search(text):
-            found.append(("test-desactivado", path, f"{path}:{n}"))
+            found.append(("disabled-test", path, f"{path}:{n}"))
         floor_ignored = FLOOR_TOOL.search(text) and IGNORED_FAILURE.search(text)
         if path in CONFIG and (RELAXED.search(text) or floor_ignored):
-            found.append(("config-relajada", path, f"{path}:{n}"))
+            found.append(("relaxed-config", path, f"{path}:{n}"))
     for path in sorted({p for p, _, _ in added if Path(p).name in OTHER_CONFIG}):
-        found.append(("config-relajada", path, f"{path}: config fuera de pyproject"))
+        found.append(("relaxed-config", path, f"{path}: config outside pyproject"))
 
     for path, n, text in removed:
         if path not in CONFIG:
             continue
         same_file = [t for p, _, t in added if p == path]
         if STRICT.search(text) and not any(STRICT.search(t) for t in same_file):
-            found.append(("config-relajada", path, f"{path}:{n} (quitada)"))
+            found.append(("relaxed-config", path, f"{path}:{n} (removed)"))
         for tool in FLOOR_TOOL.findall(text):
             if not any(tool in t for t in same_file):
-                found.append(("config-relajada", path, f"{path}:{n} ({tool} quitado)"))
+                found.append(("relaxed-config", path, f"{path}:{n} ({tool} removed)"))
         for new_text in same_file:
             same_shape = NUMBER.sub("#", new_text) == NUMBER.sub("#", text)
             same_shape = same_shape and not VERSION_SPEC.search(text)
             if same_shape and nums(new_text) < nums(text):
-                found.append(("umbral-rebajado", path, f"{path}:{n}"))
+                found.append(("lowered-threshold", path, f"{path}:{n}"))
 
     balance: dict[str, int] = {}
     for sign, lines in ((1, added), (-1, removed)):
@@ -126,7 +126,7 @@ def findings(added: list[Line], removed: list[Line]) -> list[Finding]:
             if Path(path).name.startswith("test_") and TEST_OR_ASSERT.search(text):
                 balance[path] = balance.get(path, 0) + sign
     found += [
-        ("tests-quitados", path, f"{path}: {-count} tests o asserts menos")
+        ("removed-tests", path, f"{path}: {-count} fewer tests or asserts")
         for path, count in balance.items()
         if count < 0
     ]
@@ -138,10 +138,10 @@ def nums(text: str) -> list[float]:
 
 
 def exceptions() -> list[tuple[str, str]]:
-    """(regla, glob de archivo) de la tabla de excepciones de CONSTRAINTS.md.
+    """(rule, file glob) from CONSTRAINTS.md's exceptions table.
 
-    La fecha de revisión es un recordatorio para Piero y no se evalúa: una vez mergeada,
-    la línea exceptuada ya está en la base y no vuelve a aparecer en el diff.
+    The review date is a reminder for Piero and is not evaluated: once merged, the
+    excepted line is already in the base branch and never shows up in a diff again.
     """
     path = Path("CONSTRAINTS.md")
     if not path.exists():
@@ -157,11 +157,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         added, removed = changes(base)
     except subprocess.CalledProcessError as error:
-        detail = error.stderr.strip() or f"no hay historia común con {base}"
+        detail = error.stderr.strip() or f"no common history with {base}"
         print(
-            f"floor-guard: no se pudo correr contra {base}: {detail}\n"
-            "Trae la rama base con su historia (`git fetch origin` o "
-            "`git fetch --unshallow`); en el CI, `fetch-depth: 0` en el checkout.",
+            f"floor-guard: could not run against {base}: {detail}\n"
+            "Fetch the base branch with its history (`git fetch origin` or "
+            "`git fetch --unshallow`); in CI, set `fetch-depth: 0` on the checkout.",
             file=sys.stderr,
         )
         return 2
@@ -170,15 +170,15 @@ def main(argv: list[str] | None = None) -> int:
     blocking = []
     for rule, path, where in findings(added, removed):
         if any(rule == r and fnmatch(path, glob) for r, glob in allowed):
-            print(f"floor-guard: excepción aprobada [{rule}] {where}")
+            print(f"floor-guard: approved exception [{rule}] {where}")
         else:
             blocking.append(f"  [{rule}] {where}")
     if not blocking:
-        print("floor-guard: limpio")
+        print("floor-guard: clean")
         return 0
-    print(f"floor-guard: el nivel bajó ({len(blocking)}):", file=sys.stderr)
+    print(f"floor-guard: the bar dropped ({len(blocking)}):", file=sys.stderr)
     print("\n".join(blocking), file=sys.stderr)
-    print("Corrige el código o pide una excepción en CONSTRAINTS.md.", file=sys.stderr)
+    print("Fix the code or request an exception in CONSTRAINTS.md.", file=sys.stderr)
     return 1
 
 

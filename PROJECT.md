@@ -1,157 +1,157 @@
-# Plataforma de Datos de Finanzas Personales (End-to-End)
+# Personal Finance Data Platform (End-to-End)
 
-Proyecto personal de portafolio para demostrar competencias de **Data Lead / Data Engineer**: ingesta, modelado, orquestación, calidad y gobierno de datos, ML en producción e infraestructura como código — construido íntegramente con herramientas **open source** y ejecutable en local a costo cero.
+Personal portfolio project to demonstrate **Data Lead / Data Engineer** skills: ingestion, modeling, orchestration, data quality and governance, ML in production, and infrastructure as code — built entirely with **open source** tools and runnable locally at zero cost.
 
-> **Contexto de uso:** este documento es la especificación maestra del proyecto. Está pensado para desarrollarse con Claude Code, fase por fase. Cada fase es publicable en GitHub por sí sola y cierra un hueco técnico concreto.
+> **Usage context:** this document is the project's master spec. It's meant to be developed with Claude Code, phase by phase. Each phase is independently publishable on GitHub and closes one concrete technical gap.
 
 ---
 
-## Objetivo
+## Goal
 
-Ingerir estados de cuenta bancarios en PDF (BCP y Scotiabank), procesarlos y validarlos, modelarlos bajo arquitectura medallón, orquestar el flujo, correr modelos de ML encima y servirlos en un dashboard — replicando en open source lo que en entornos corporativos se hace con Azure Data Factory + ADLS + Synapse/Databricks.
+Ingest bank statement PDFs (BCP and Scotiabank), process and validate them, model them under a medallion architecture, orchestrate the flow, run ML models on top of it, and serve it through a dashboard — replicating in open source what corporate environments do with Azure Data Factory + ADLS + Synapse/Databricks.
 
-**Equivalencia que demuestra el proyecto (para entrevistas):**
+**Equivalence the project demonstrates (for interviews):**
 
-| Mundo Azure (trabajo) | Equivalente open source (este proyecto) |
+| Azure world (work) | Open source equivalent (this project) |
 |---|---|
-| Azure Data Factory (orquestación) | Dagster |
+| Azure Data Factory (orchestration) | Dagster |
 | ADLS Gen2 / Blob (storage) | SeaweedFS (S3-compatible) |
-| Delta/Parquet en el lake | Delta Lake sobre SeaweedFS |
-| Synapse / Databricks (procesamiento) | DuckDB + delta-rs; Apache Spark (PySpark) cuando haya un motivo medible |
+| Delta/Parquet in the lake | Delta Lake on SeaweedFS |
+| Synapse / Databricks (processing) | DuckDB + delta-rs; Apache Spark (PySpark) once there's a measurable reason |
 | Power BI | Streamlit + Power BI |
 
 ---
 
-## Principios de diseño
+## Design principles
 
-1. **Los datos nunca tocan Git.** El repositorio contiene solo código. Los PDFs crudos y las tablas procesadas viven en SeaweedFS (S3 local). Cualquiera puede clonar el repo, levantar el stack y correrlo con *sus propios* PDFs.
-2. **Todo open source y reproducible.** Un `docker compose up` levanta la plataforma completa.
-3. **Idempotencia.** Subir el mismo reporte dos veces no duplica datos. Deduplicación en dos niveles (archivo y transacción).
-4. **Reconciliación.** Cada PDF parseado se valida contra el saldo/total que el propio estado de cuenta declara.
-5. **Costo cero en desarrollo.** Todo corre en local; la nube (Fase 4) es opcional y solo se despliega para demostración.
+1. **Data never touches Git.** The repository holds only code. Raw PDFs and processed tables live in SeaweedFS (local S3). Anyone can clone the repo, spin up the stack, and run it with *their own* PDFs.
+2. **Fully open source and reproducible.** A single `docker compose up` brings up the whole platform.
+3. **Idempotency.** Uploading the same statement twice never duplicates data. Deduplication happens at two levels (file and transaction).
+4. **Reconciliation.** Every parsed PDF is validated against the balance/total the statement itself declares.
+5. **Zero cost in development.** Everything runs locally; the cloud (Phase 4) is optional and only deployed for demonstration.
 
 ---
 
-## Stack técnico
+## Tech stack
 
-| Capa | Herramienta | Notas |
+| Layer | Tool | Notes |
 |---|---|---|
-| Ingesta / parsing PDF | `pdfplumber`, `pikepdf`, `pytesseract` | `pikepdf` desbloquea PDFs con contraseña; `pytesseract` lee las páginas escaneadas (pdfplumber las renderiza a imagen, así que no hace falta PyMuPDF) |
-| Validación de esquema | `pydantic` | Esquema `Transaction` común a todos los bancos |
-| Storage / lakehouse | SeaweedFS + Delta Lake | Parquet + transacciones ACID + MERGE + time-travel. SeaweedFS reemplaza a MinIO, cuya edición Community quedó sin mantenimiento en 2025 |
-| Procesamiento | DuckDB (embebido) + delta-rs | Fase 1 sin JVM ni cluster ni Postgres; Spark (PySpark) entra cuando el volumen o la demo den un motivo medible |
-| Transformación | dbt | Medallón bronze/silver/gold; materialización `incremental` con estrategia `merge` |
-| Orquestación | Dagster | (Alternativa: Airflow si se prioriza reconocimiento por ATS) |
-| Calidad de datos | dbt tests + Great Expectations / Elementary | Tests de calidad y expectativas |
-| Gobierno / linaje | OpenMetadata o DataHub | Catálogo y linaje |
-| ML / MLOps | scikit-learn, MLflow, FastAPI, Evidently | Tracking, serving y monitoreo de drift |
-| Serving | Streamlit (+ Power BI) | Dashboard y uploader de PDFs |
-| Infra | Docker Compose, Terraform | IaC; cloud en free tier (Fase 4) |
-| CI/CD | GitHub Actions | `dbt build`, tests y linters (`sqlfluff`, `ruff`) en cada PR; entorno efímero por PR y CI por impacto (solo corre lo caro si el cambio lo afecta) |
-| Seguridad | `.gitignore` + `gitleaks` (pre-commit) | Red de seguridad para que datos/secretos nunca lleguen a Git |
+| Ingestion / PDF parsing | `pdfplumber`, `pikepdf`, `pytesseract` | `pikepdf` unlocks password-protected PDFs; `pytesseract` reads scanned pages (pdfplumber already renders pages to an image, so PyMuPDF isn't needed) |
+| Schema validation | `pydantic` | `Transaction` schema shared across all banks |
+| Storage / lakehouse | SeaweedFS + Delta Lake | Parquet + ACID transactions + MERGE + time-travel. SeaweedFS replaces MinIO, whose Community edition went unmaintained in 2025 |
+| Processing | DuckDB (embedded) + delta-rs | Phase 1 with no JVM, no cluster, no Postgres; Spark (PySpark) comes in once volume or a demo gives a measurable reason |
+| Transformation | dbt | Medallion bronze/silver/gold; `incremental` materialization with a `merge` strategy |
+| Orchestration | Dagster | (Alternative: Airflow, if ATS recognition is a priority) |
+| Data quality | dbt tests + Great Expectations / Elementary | Quality tests and expectations |
+| Governance / lineage | OpenMetadata or DataHub | Catalog and lineage |
+| ML / MLOps | scikit-learn, MLflow, FastAPI, Evidently | Tracking, serving and drift monitoring |
+| Serving | Streamlit (+ Power BI) | Dashboard and PDF uploader |
+| Infra | Docker Compose, Terraform | IaC; free-tier cloud (Phase 4) |
+| CI/CD | GitHub Actions | `dbt build`, tests and linters (`sqlfluff`, `ruff`) on every PR; ephemeral per-PR environment and impact-based CI (expensive jobs run only when a change affects them) |
+| Security | `.gitignore` + `gitleaks` (pre-commit) | Safety net so data/secrets never reach Git |
 
 ---
 
-## Arquitectura de datos
+## Data architecture
 
 ```
-PDF (estado de cuenta)
+PDF (bank statement)
    │
    ▼
-[ Ingesta ]  detección de banco → parser específico → esquema Transaction (pydantic)
-   │          + reconciliación (suma transacciones == total declarado en el PDF)
-   │          + hash de archivo (SHA-256) para dedup a nivel archivo
+[ Ingestion ]  bank detection → bank-specific parser → Transaction schema (pydantic)
+   │           + reconciliation (sum of transactions == total declared in the PDF)
+   │           + file hash (SHA-256) for file-level dedup
    ▼
-[ Bronze ]  Delta Lake sobre SeaweedFS — datos crudos parseados, append-only
+[ Bronze ]  Delta Lake on SeaweedFS — raw parsed data, append-only
    │
    ▼
-[ Silver ]  dbt incremental + MERGE por business key (dedup a nivel transacción)
-   │          descripción normalizada, tipos, moneda, cuenta
+[ Silver ]  dbt incremental + MERGE by business key (transaction-level dedup)
+   │           normalized description, types, currency, account
    ▼
-[ Gold ]    dbt — modelo estrella: fact_transacciones + dims (fecha, categoría, cuenta)
+[ Gold ]    dbt — star schema: fact_transactions + dims (date, category, account)
    │
-   ├──► [ ML / MLOps ]  categorización, pronóstico de gasto, detección de anomalías
+   ├──► [ ML / MLOps ]  categorization, spend forecasting, anomaly detection
    │
    └──► [ Serving ]  Streamlit dashboard + Power BI
 ```
 
-Todo el flujo lo dispara y coordina **Dagster**; **CI/CD**, **IaC** y **gobierno** son la capa de plataforma transversal.
+The whole flow is triggered and coordinated by **Dagster**; **CI/CD**, **IaC** and **governance** are the cross-cutting platform layer.
 
 ---
 
-## Deduplicación (detalle clave del proyecto)
+## Deduplication (a key project detail)
 
-**Nivel archivo** — evita reprocesar el mismo PDF:
-- SHA-256 del contenido del archivo.
-- Registro de archivos ya ingeridos; si el hash existe, se salta.
+**File level** — avoids reprocessing the same PDF:
+- SHA-256 of the file's content.
+- Registry of already-ingested files; if the hash exists, it's skipped.
 
-**Nivel transacción** — evita duplicados entre PDFs *distintos* con movimientos solapados (ej. reporte de enero vs. reporte "últimos 60 días"):
-- Se construye una **business key** determinística: `fecha + monto + descripción_normalizada + cuenta`.
-- La descripción se normaliza (trim, uppercase, quitar códigos de relleno) para que la clave sea estable entre reportes.
-- Se usa `MERGE` (upsert) en Delta / dbt incremental: inserta si es nueva, ignora si es idéntica, actualiza si cambió.
+**Transaction level** — avoids duplicates across *different* PDFs with overlapping movements (e.g. January's statement vs. a "last 60 days" one):
+- A deterministic **business key** is built: `date + amount + normalized_description + account`.
+- The description is normalized (trim, uppercase, strip filler codes) so the key stays stable across statements.
+- `MERGE` (upsert) is used in Delta / dbt incremental: insert if new, ignore if identical, update if changed.
 
-> Esta es la operación que Delta Lake hace nativa y que un conjunto de parquets sueltos no puede hacer. Es lenguaje de ingeniería de datos senior.
-
----
-
-## Reconciliación (conecta con perfiles de migración)
-
-Cada parser valida que la suma de las transacciones extraídas cuadre con el saldo/total que declara el propio estado de cuenta. Si no cuadra, el parser falla y reporta la discrepancia. Es la contraparte personal del *"reconciliation and validation methodologies"* que piden roles de migración de datos.
+> This is the operation Delta Lake makes native that a pile of loose parquet files can't do. It's senior data-engineering language.
 
 ---
 
-## Fases
+## Reconciliation (ties into migration roles)
 
-### Fase 1 — Fundación
-**Objetivo:** demostrar orden y buenas prácticas desde el primer commit.
-- Estructura del repo, `docker-compose` (SeaweedFS como S3 local; DuckDB embebido, sin Postgres), `.gitignore` + `gitleaks`.
-- Esquema `Transaction` (pydantic) y parsers de BCP y Scotiabank con `pdfplumber` + `pikepdf`; OCR con `pytesseract` para páginas escaneadas.
-- Hash de archivo (dedup nivel archivo) + reconciliación básica.
-- Capa bronze en Delta (delta-rs) sobre SeaweedFS.
-- Proyecto dbt inicial (bronze → silver) con tests.
-- GitHub Actions: `dbt build`, tests, `ruff`, `sqlfluff` en cada PR.
+Every parser validates that the sum of the extracted transactions matches the balance/total the statement itself declares. If it doesn't match, the parser fails and reports the discrepancy. This is the personal counterpart to the *"reconciliation and validation methodologies"* that data-migration roles ask for.
 
-**Cierra:** modelado, calidad básica, CI/CD, seguridad de datos.
+---
 
-### Fase 2 — Orquestación + Gobierno
-**Objetivo:** el hueco más importante para roles de liderazgo de datos.
-- Dagster orquestando: ingesta → dbt → tests → refresh.
-- MERGE incremental por business key (dedup nivel transacción) en silver.
-- Modelo gold (estrella): `fact_transacciones` + dimensiones.
-- Great Expectations / Elementary para calidad.
-- Catálogo y linaje (OpenMetadata o DataHub).
+## Phases
 
-**Cierra:** orquestación, gobierno de datos, deduplicación idempotente.
+### Phase 1 — Foundation
+**Goal:** show discipline and good practices from the very first commit.
+- Repo structure, `docker-compose` (SeaweedFS as local S3; embedded DuckDB, no Postgres), `.gitignore` + `gitleaks`.
+- `Transaction` schema (pydantic) and BCP/Scotiabank parsers with `pdfplumber` + `pikepdf`; OCR with `pytesseract` for scanned pages.
+- File hash (file-level dedup) + basic reconciliation.
+- Bronze layer in Delta (delta-rs) on SeaweedFS.
+- Initial dbt project (bronze → silver) with tests.
+- GitHub Actions: `dbt build`, tests, `ruff`, `sqlfluff` on every PR.
 
-### Fase 3 — ML en producción
-**Objetivo:** desplegar y monitorear, no solo entrenar.
-- Categorización automática de transacciones (clasificación).
-- Pronóstico de gasto mensual (series temporales).
-- Detección de cargos anómalos.
+**Closes:** modeling, basic quality, CI/CD, data security.
+
+### Phase 2 — Orchestration + Governance
+**Goal:** the most important gap for data-leadership roles.
+- Dagster orchestrating: ingestion → dbt → tests → refresh.
+- Incremental MERGE by business key (transaction-level dedup) in silver.
+- Gold model (star schema): `fact_transactions` + dimensions.
+- Great Expectations / Elementary for quality.
+- Catalog and lineage (OpenMetadata or DataHub).
+
+**Closes:** orchestration, data governance, idempotent deduplication.
+
+### Phase 3 — ML in production
+**Goal:** deploy and monitor, not just train.
+- Automatic transaction categorization (classification).
+- Monthly spend forecasting (time series).
+- Anomalous-charge detection.
 - MLflow (tracking), FastAPI (serving), Evidently (drift).
 
-**Cierra:** MLOps.
+**Closes:** MLOps.
 
-### Fase 4 — Cloud + IaC
-**Objetivo:** el "nice to have" de cloud que aparece en las vacantes.
-- Terraform para provisionar infra en AWS o GCP (free tier).
-- Despliegue del stack; secretos en secrets manager (nunca hardcodeados).
+### Phase 4 — Cloud + IaC
+**Goal:** the cloud "nice to have" that shows up in job postings.
+- Terraform to provision infra on AWS or GCP (free tier).
+- Stack deployment; secrets in a secrets manager (never hardcoded).
 
-**Cierra:** cloud, infraestructura como código.
+**Closes:** cloud, infrastructure as code.
 
-### Fase 5 — Serving + Uploader
-**Objetivo:** hacer el repo demostrable y operable.
-- Dashboard en Streamlit sobre las tablas gold.
-- Uploader mínimo (`st.file_uploader`) → guarda en SeaweedFS → dispara el pipeline.
-- (Opcional) Conexión Power BI.
+### Phase 5 — Serving + Uploader
+**Goal:** make the repo demonstrable and operable.
+- Streamlit dashboard over the gold tables.
+- Minimal uploader (`st.file_uploader`) → saves to SeaweedFS → triggers the pipeline.
+- (Optional) Power BI connection.
 
-**Cierra:** entrega end-to-end, vitrina para reclutadores.
+**Closes:** end-to-end delivery, a showcase for recruiters.
 
-> **Nota de scope:** el uploader se mantiene en su versión mínima y funcional. Ninguna de las vacantes objetivo valora skills de frontend; el valor está en lo que ocurre *después* de que el archivo entra (parsing, reconciliación, MERGE, orquestación, ML).
+> **Scope note:** the uploader stays at its minimal, functional version. None of the target job postings value frontend skills; the value is in what happens *after* the file comes in (parsing, reconciliation, MERGE, orchestration, ML).
 
 ---
 
-## Estructura de repositorio sugerida
+## Suggested repository structure
 
 ```
 .
@@ -159,19 +159,19 @@ Cada parser valida que la suma de las transacciones extraídas cuadre con el sal
 ├── .gitignore
 ├── .pre-commit-config.yaml        # gitleaks, ruff, sqlfluff
 ├── README.md
-├── PROJECT.md                     # este documento
+├── PROJECT.md                     # this document
 ├── pyproject.toml
 ├── ingestion/
 │   ├── schema.py                  # Transaction (pydantic)
-│   ├── dispatcher.py              # detecta banco → rutea al parser
+│   ├── dispatcher.py              # detects the bank → routes to its parser
 │   ├── reconciliation.py
-│   ├── dedup.py                   # hash de archivo + business key
-│   ├── ocr.py                     # pytesseract para páginas escaneadas
+│   ├── dedup.py                   # file hash + business key
+│   ├── ocr.py                     # pytesseract for scanned pages
 │   └── parsers/
 │       ├── base.py
 │       ├── bcp.py
 │       └── scotiabank.py
-├── lakehouse/                     # utilidades Delta / S3
+├── lakehouse/                     # Delta / S3 utilities
 ├── dbt/
 │   ├── models/
 │   │   ├── bronze/
@@ -191,8 +191,8 @@ Cada parser valida que la suma de las transacciones extraídas cuadre con el sal
 
 ---
 
-## Cómo demostrarlo (para el CV / entrevista)
+## How to showcase it (for the CV / interview)
 
-- Repo público con README claro, diagrama de arquitectura y GIF/screenshots del dashboard corriendo.
-- Frase de entrevista: *"En el trabajo uso ADF + ADLS + Synapse; en mi proyecto repliqué esa arquitectura con Dagster + SeaweedFS (S3) + Delta + DuckDB, con cargas incrementales idempotentes y deduplicación por business key vía MERGE en Delta."*
-- Cada fase = un hito con su propio PR y descripción, mostrando historia de commits limpia.
+- A public repo with a clear README, an architecture diagram, and GIFs/screenshots of the dashboard running.
+- Interview line: *"At work I use ADF + ADLS + Synapse; in my project I replicated that architecture with Dagster + SeaweedFS (S3) + Delta + DuckDB, with idempotent incremental loads and business-key deduplication via MERGE in Delta."*
+- Each phase is a milestone with its own PR and description, showing a clean commit history.
