@@ -231,14 +231,15 @@
 **Description:** Process a folder of PDFs under any name: detect duplicates by content and file each one in its standard place by user, bank, account and period (ADR 0009).
 
 **Acceptance criteria:**
-- [ ] `pfp organize --user <u>` walks `~/finance-data/inbox/<u>/` (a configurable path). For each PDF: hash it (T7); if the user already has it, move it to `_duplicates/`; otherwise read the bank, account and period from its content (T12) and move it to `raw/<u>/<bank>/<last4>-<id6>/<start>_<end>.pdf`.
-- [ ] Anything unreadable (unknown bank, no account or period, wrong password) goes to `_needs_review/`, with a report saying why and what to do.
-- [ ] The same account and period with different content (a regenerated PDF) → saved as `_v2` with a warning. A PDF holding several accounts → `<bank>/_multi-account/`.
-- [ ] Never deletes a file. The report shows, per account (bank and last 4), which periods are archived and which months are missing.
+- [x] `pfp organize --user <u>` walks `~/finance-data/inbox/<u>/` (a configurable path). For each PDF: hash it (T7); if the user already has it, move it to `_duplicates/`; otherwise read the bank, account and period from its content (T12) and move it to `raw/<u>/<bank>/<last4>-<id6>/<start>_<end>.pdf`. Duplicate detection is scoped to what a persistent registry isn't needed for yet — see the PR and `brain/components/inbox-organizer.md`.
+- [x] Anything unreadable (unknown bank, no account or period, wrong password) goes to `_needs_review/`, with a report saying why and what to do.
+- [x] The same account and period with different content (a regenerated PDF) → saved as `_v2` with a warning. Climbs to `_v3` etc. if needed.
+- [ ] A PDF holding several accounts → `<bank>/_multi-account/`. **Not implemented**: today's single-account `bcp.parse()` (T11) can't signal "there was a second account", so there's nothing to trigger this path with — see the PR and the brain note for the full explanation.
+- [x] Never deletes a file. The report shows, per account (bank and last 4), which periods are archived and which months are missing.
 
 **Verification:**
-- [ ] Three synthetic PDFs sharing a name (`EECC.pdf`, `EECC (1).pdf`, `EECC (2).pdf`) from three different accounts end up in three different folders; a repeat lands in `_duplicates/` and an unreadable one in `_needs_review/`.
-- [ ] On your machine, with your real PDFs in the inbox, the report classifies all of them without showing full numbers or amounts.
+- [x] Three synthetic PDFs sharing a name (`EECC.pdf`, `EECC (1).pdf`, `EECC (2).pdf`) from three different accounts end up in three different folders; a repeat lands in `_duplicates/` and an unreadable one in `_needs_review/`.
+- [ ] On your machine, with your real PDFs in the inbox, the report classifies all of them without showing full numbers or amounts. **Piero's step**: `uv run pfp organize --user piero` (uses the default `~/finance-data/inbox/piero/` and `~/finance-data/raw/piero/`).
 
 **Dependencies:** T6, T7, T12 · **Files:** `ingestion/organizer.py`, `ingestion/cli.py`, tests · **Size:** M · **Skill:** test-driven-development
 
