@@ -19,8 +19,9 @@ The foundation for all the code: Python 3.12 managed by uv, pinned dependencies 
 | `ingestion/`, `lakehouse/` | Pipeline packages, empty until Block B |
 | [`tests/test_smoke.py`](../../tests/test_smoke.py) | Checks the packages import |
 
-There is no `build-system` yet: tests find the packages via `pythonpath = ["."]`. Packaging
-lands in T12, with the `pfp` command.
+Tests still find the packages via `pythonpath = ["."]`, but the project is also an installable
+package now (hatchling, `[tool.hatch.build.targets.wheel] packages`): `[project.scripts]`
+exposes `pfp` as a console command (T12).
 
 ## How to use it and how to verify it
 
