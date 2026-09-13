@@ -2,7 +2,7 @@
 type: component
 phase: 1
 status: built
-task: T11
+task: T11, fix/bcp-parser-real-layout
 ---
 
 # BCP parser
@@ -20,17 +20,41 @@ account number and period from the PDF's own content — never from the file nam
 
 ## How the layout is read
 
-Column positions (FECHA/DESCRIPCION/CARGO/ABONO/SALDO) aren't hardcoded to one fixed set of
-pixel coordinates. `parse()` finds the row containing all five header words in *this* PDF,
-records each one's x-position, then assigns every other row's words to the nearest header to
-its left. T10's synthetic fixture and a real BCP statement won't necessarily share exact
-positions, but they do share this column order, so deriving the boundaries from the header row
-itself should generalize better than one fixture's coordinates would.
+Column positions (FECHA/DESCRIPCION/CARGO(S)/ABONO(S), and SALDO when present) aren't
+hardcoded to one fixed set of pixel coordinates. `parse()` finds the row containing the
+header words in *this* PDF, records each one's x-position, then assigns every other row's
+words to the nearest header to its left.
 
-**This is still provisional.** It has only been checked against T10's synthetic PDF — not a
-real masked layout dump, which the owner hasn't shared yet (see [T10](layout-inspector.md) and
-the matching risk in `tasks/plan.md`). The real-PDF test below is designed to catch a mismatch
-once that dump exists, without needing this component itself to change first.
+**Calibrated against a real masked layout dump** (T9's inspector, 2026-09 — Piero's own real
+BCP statement was landing in `_needs_review/` until this). The real layout turned out to
+differ from T10's original synthetic fixture in several ways, all handled by one
+implementation rather than a special case per format:
+
+- No "CUENTA NRO." or "PERIODO" labels at all. The account number is found by its own shape
+  (dash-grouped digits with a long middle group) wherever it appears on the page; the period
+  is a line with "DEL \<date\> AL \<date\>", no leading label required.
+- A 2-digit year in the period (`_parse_date` accepts both 2 and 4).
+- The header row has FECHA *twice* (processing date, then value date, ~46pt apart) and
+  CARGOS/ABONOS (plural) with no SALDO column in the table at all. Only the later FECHA
+  occurrence becomes the "FECHA" column `parse()` reads; earlier ones are given a throwaway
+  column so their words don't bleed into it.
+- Each row's own date is "DDMMM" (day + 3-letter Spanish month abbreviation, e.g. "05ENE"),
+  alongside the original "DD/MM".
+- The closing balance is a bare "SALDO" (no "ACTUAL"/"FINAL" qualifier), and its amount sits
+  on a *neighboring* line rather than beside it — found by scanning bottom-up for the last
+  "SALDO" mention on the page (protecting against a transaction description that happens to
+  contain the word "SALDO"), checking the closest lines above and below for an amount.
+
+`tests/fixtures/synthetic_pdfs.py`'s `bcp_real_layout_statement_pdf()` renders every one of
+these traits (additive next to the original fixture, which dozens of other tests still use
+unchanged). The closing-balance search is the one piece built on a best-evidenced heuristic
+rather than a certainty — see the module docstring in `ingestion/parsers/bcp.py`;
+`reconcile()` is the actual backstop if it ever picks the wrong amount, failing loudly as a
+`ReconciliationError` instead of silently accepting a wrong balance.
+
+**Not yet verified end-to-end against Piero's own real PDF** (ADR 0004 — nobody, including
+Claude, opens it directly): the fix was built and tested entirely against the masked dump and
+the new synthetic fixture. The next step is running `pfp ingest` against the real file again.
 
 ## OCR fallback for scanned pages (T11b)
 
