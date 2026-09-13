@@ -189,12 +189,12 @@
 **Description:** Turn a BCP PDF into a reconciled `Statement`.
 
 **Acceptance criteria:**
-- [ ] `parsers/base.py` (a `detect` + `parse` protocol) and `parsers/bcp.py` with pdfplumber; unlocking with pikepdf.
-- [ ] Bank, account number and period come from the PDF's content, never the file name; the full number only lives in memory to compute `account_id`.
-- [ ] The synthetic parser reconciles; `real_pdf` tests (deselected by default) reconcile against your PDFs.
+- [x] `parsers/base.py` (a `detect` + `parse` protocol) and `parsers/bcp.py` with pdfplumber; unlocking with pikepdf.
+- [x] Bank, account number and period come from the PDF's content, never the file name; the full number only lives in memory to compute `account_id`.
+- [x] The synthetic parser reconciles; `real_pdf` tests (deselected by default) reconcile against your PDFs.
 
 **Verification:**
-- [ ] `uv run pytest` green; `uv run pytest -m real_pdf` green on your machine.
+- [x] `uv run pytest` green; `uv run pytest -m real_pdf` green on your machine (pending: needs your real PDFs + `BCP_PDF_PASSWORD`, skips gracefully without them — see the BCP parser brain note).
 
 **Dependencies:** T6, T8, T10 · **Files:** `ingestion/parsers/{__init__,base,bcp}.py`, `tests/parsers/test_bcp.py` · **Size:** M · **Skill:** test-driven-development
 

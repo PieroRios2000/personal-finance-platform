@@ -146,5 +146,4 @@ The rule is one of floor-guard's (`suppression`, `disabled-test`, `removed-tests
 
 | Rule | File | Reason | Approved by | Review by |
 |---|---|---|---|---|
-
-None yet.
+| disabled-test | `tests/parsers/test_bcp.py` | The `real_pdf`-marked test conditionally skips at runtime when no real PDF or `BCP_PDF_PASSWORD` is available on this machine (T11's own acceptance criteria require this test to exist and be skippable, per ADR 0004). No skip mechanism exists that both matches floor-guard's other rules and evades this heuristic without hiding that fact from review, so this is an explicit exception rather than a workaround. | Piero | 2026-12-12 |

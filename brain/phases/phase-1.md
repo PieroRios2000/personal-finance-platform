@@ -14,7 +14,7 @@ and written to bronze; dbt builds silver with tests, and CI validates every PR. 
 | Block | Tasks | Status |
 |---|---|---|
 | A — Repo foundation | T1 guards (#8) · T2 Python project (#10) · T3a brain (#14) · T3b CLAUDE.md (#15) · T4 CONSTRAINTS (#17, fixes in #21) · T5 CI quality gates (#26) | T1–T5 done |
-| B — Ingestion | T6–T12b | T9 inspector done (#16); T10 synthetic fixture done (#29); T12b (inbox) planned (#19); the rest pending |
+| B — Ingestion | T6–T12b | T6 schema (#30, fix #32) · T7 file hash (#28) · T8 reconciliation (#34) · T9 inspector (#16) · T10 synthetic fixture (#29) · T11 BCP parser done; T11b OCR, T12 dispatcher/CLI and T12b inbox pending |
 | C — Lakehouse | T13–T15 | Pending |
 | D — Transformation | T16, T17, T17b | Pending |
 | E — Second bank and close | T18, T18b, T19 | Pending |
@@ -31,6 +31,7 @@ integral reconciliation plan (#19).
 - [CI](../components/ci.md) — in progress: branch policy and quality gates (T5) done; impact-based CI in T15.
 - [Masked layout inspector](../components/layout-inspector.md) — built (T9).
 - [Quality bar](../components/quality-bar.md) — built (T4).
+- [BCP parser](../components/bcp-parser.md) — built (T11), provisional column layout pending a real masked dump.
 
 ## Decisions
 
