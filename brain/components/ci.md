@@ -33,8 +33,10 @@ benchmarks are built; the rest lands in T17 and T17b (details in the
   a workflow-level filter.
 - `ci.yml` also runs on a push to `develop` and weekly (Mondays 06:00 UTC), where everything
   runs regardless of the impact map. There's no PR base on those events, so the workflow-level
-  `BASE_REF` defaults to `develop` for the diff-based steps (diff-cover, floor-guard): they
-  compare `develop` against itself, an empty diff they pass trivially.
+  `PFP_BASE_REF` defaults to `develop` for the diff-based steps (diff-cover, floor-guard): they
+  compare `develop` against itself, an empty diff they pass trivially. The name is prefixed on
+  purpose — a plain `BASE_REF` in the workflow's env is picked up by gitleaks-action as its own
+  scan range and breaks the `security` job.
 - `ci.yml`'s numeric-rule steps (`diff-cover`, `pip-audit`, `bandit`, `import-linter`, and
   T15's benchmark comparison) carry `continue-on-error: true` until 2026-09-26 (per
   [Quality bar](quality-bar.md)); the job stays required in the ruleset the whole time (except

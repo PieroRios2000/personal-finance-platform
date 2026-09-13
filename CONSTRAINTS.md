@@ -130,8 +130,9 @@ Why they're shaped this way (tested with import-linter 2.15):
 | `make check-task` duration | 28.2 s | 200 tests, 5 deselected (`real_pdf`, `integration`, `benchmark`) |
 | `make check-full` duration | 37.4 s | Includes pip-audit's network lookup, which varies |
 | pip-audit / bandit | 0 vulnerabilities / 0 high findings | |
-| Parsing: a 3-page, 120-row synthetic statement (`bcp.parse`) | **274 ms mean** (median 259 ms, 10 rounds) | `uv run pytest -m benchmark` on Piero's WSL2 machine (T15). A GitHub runner's own numbers will differ; what the gate compares is base vs PR on one runner, never a number from here |
-| Write: a 100-transaction statement to bronze (`bronze.write_statement`) | **99 ms mean** (median 96 ms, 16 rounds) | Three Delta appends (transactions, statements, ingested_files) to a `tmp_path` lake, not S3 (ADR 0006) |
+| Parsing: a 3-page, 120-row synthetic statement (`bcp.parse`) | **277 ms mean** (median 264 ms, 10 rounds) | `uv run pytest -m benchmark` on Piero's WSL2 machine (T15); a GitHub runner measured 132 ms. What the gate compares is base vs PR on one runner, never a number from here |
+| Write: a 100-transaction statement to bronze (`bronze.write_statement`) | **35 ms mean** (median 34 ms, 14 rounds) | Three Delta appends (transactions, statements, ingested_files) into a fresh `tmp_path` lake each round, not S3 (ADR 0006) |
+| Run-to-run noise on the same code | parse ±3%, bronze append ±5% on a quiet machine, but whole append runs came out 30-50% slower under load | The append is I/O-bound, so it's the one to watch before the numeric rules start blocking on 2026-09-26: a false "regression" there costs nothing today (warn mode) but would block a PR afterwards |
 
 ## Exceptions
 

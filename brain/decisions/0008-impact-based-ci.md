@@ -91,9 +91,17 @@ and everything runs in full on a schedule anyway.**
   every push to `develop` already covers `develop` itself.
 - The diff-based jobs (`tests`' diff-cover, `floor-guard`) needed a base to compare against
   outside a PR, where `github.event.pull_request.base.ref` is empty: a workflow-level
-  `BASE_REF` defaults them to `develop`, which on a push to `develop` means comparing it
+  `PFP_BASE_REF` defaults them to `develop`, which on a push to `develop` means comparing it
   against itself — an empty diff they pass trivially, while the full test, lint, security and
-  benchmark runs still happen.
+  benchmark runs still happen. The prefix isn't decoration: a plain `BASE_REF` in the
+  workflow's env is read by gitleaks-action as *its* scan range, which turned the `security`
+  job red on this very PR (`fatal: ambiguous argument 'develop^..<sha>'`).
+- **A benchmark has to measure the same work every round, not the same call.** The first CI run
+  flagged the bronze append at +26% on code the PR never touched: every round appended to the
+  same lake, so each one paid for a longer Delta log, and pytest-benchmark's auto-calibrated
+  round count (57 against 71) turned that into a systematic difference between the two runs.
+  Each round now writes into its own empty lake. Worth remembering for T17's benchmarks: any
+  measured operation that leaves state behind will drift the same way.
 
 ## Related
 

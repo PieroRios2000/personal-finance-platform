@@ -12,6 +12,7 @@ tables — without a container or the network in the middle of the number.
 import hashlib
 from datetime import date
 from decimal import Decimal
+from itertools import count
 from pathlib import Path
 
 import pytest
@@ -60,9 +61,22 @@ def test_append_a_statement_to_bronze(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LAKEHOUSE_URI", str(tmp_path / "lake"))
-    statement = _statement()
+    """Every round writes into its own empty lake.
 
-    benchmark(bronze.write_statement, statement, FILE_SHA256)
+    Pointing every round at the *same* lake measures the Delta log growing
+    rather than the write: pytest-benchmark picks its own round count, and on
+    a GitHub runner the mean came out 40.97 ms over 57 rounds against 51.78 ms
+    over 71 — +26%, on identical code, which the 20% gate duly reported as a
+    regression. Redirecting `LAKEHOUSE_URI` costs microseconds against a
+    ~40 ms write, and makes every round measure the same work.
+    """
+    statement = _statement()
+    lakes = (tmp_path / f"lake-{index}" for index in count())
+
+    def append_to_a_fresh_lake() -> None:
+        monkeypatch.setenv("LAKEHOUSE_URI", str(next(lakes)))
+        bronze.write_statement(statement, FILE_SHA256)
+
+    benchmark(append_to_a_fresh_lake)
 
     assert bronze.is_ingested(USER_ID, FILE_SHA256) is True
