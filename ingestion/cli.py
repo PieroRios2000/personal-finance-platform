@@ -1,10 +1,15 @@
-"""`pfp` command-line interface (T12).
+"""`pfp` command-line interface (T12, T12b).
 
     uv run pfp parse <pdf> [--user <id>]
+    uv run pfp organize [--user <id>] [--inbox-root DIR] [--archive-root DIR]
 
-Detects the bank, parses and reconciles the statement, and prints a short
-summary. Exits non-zero (with a message on stderr) if the bank isn't
-recognized, the password is wrong, or the statement doesn't reconcile.
+`parse` detects the bank, parses and reconciles one statement, and prints a short
+summary. Exits non-zero (with a message on stderr) if the bank isn't recognized,
+the password is wrong, or the statement doesn't reconcile.
+
+`organize` files every PDF in a user's inbox into the standard archive layout
+(ADR 0009) and prints a report; see `ingestion.organizer` for what it does with
+duplicates, unreadable files and regenerated statements.
 """
 
 import argparse
@@ -15,7 +20,7 @@ from pathlib import Path
 
 import pikepdf
 
-from ingestion import dispatcher
+from ingestion import dispatcher, organizer
 from ingestion.dedup import file_sha256
 from ingestion.reconciliation import ReconciliationError
 from ingestion.schema import MissingAccountKeyError
@@ -66,6 +71,19 @@ def _run_parse(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_organize(args: argparse.Namespace) -> int:
+    user_id: str | None = args.user
+    if not user_id:
+        print("error: --user is required (or set PFP_USER)", file=sys.stderr)
+        return 2
+
+    report = organizer.organize(
+        user_id, inbox_root=args.inbox_root, archive_root=args.archive_root
+    )
+    print(report.render())
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pfp")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -78,6 +96,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--user", default=os.environ.get("PFP_USER"), help="defaults to $PFP_USER"
     )
     parse_cmd.set_defaults(func=_run_parse)
+
+    organize_cmd = subparsers.add_parser(
+        "organize",
+        help="File every PDF in the inbox into the standard archive layout and "
+        "print a report.",
+    )
+    organize_cmd.add_argument(
+        "--user", default=os.environ.get("PFP_USER"), help="defaults to $PFP_USER"
+    )
+    organize_cmd.add_argument(
+        "--inbox-root",
+        type=Path,
+        default=organizer.DEFAULT_INBOX_ROOT,
+        help=f"defaults to {organizer.DEFAULT_INBOX_ROOT}",
+    )
+    organize_cmd.add_argument(
+        "--archive-root",
+        type=Path,
+        default=organizer.DEFAULT_ARCHIVE_ROOT,
+        help=f"defaults to {organizer.DEFAULT_ARCHIVE_ROOT}",
+    )
+    organize_cmd.set_defaults(func=_run_organize)
 
     return parser
 
