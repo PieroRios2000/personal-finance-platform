@@ -15,7 +15,7 @@ comprueba, para que ni una persona ni un agente bajen el nivel sin que se note.
 | Pieza | Qué hace |
 |---|---|
 | [`CONSTRAINTS.md`](../../CONSTRAINTS.md) | El contrato: piso, reglas numéricas (umbral, comando, dónde corre, aviso o bloqueo), métricas medidas y excepciones |
-| [`Makefile`](../../Makefile) | `check-fast` (< 5 s), `check-task` (< 90 s) y `check-full` (lo que corre el CI), todo con `uv run` |
+| [`Makefile`](../../Makefile) | `check-fast` (< 5 s), `check-task` (< 90 s) y `check-full` (lo que corre el CI salvo gitleaks, que va en pre-commit), todo con `uv run` |
 | [`scripts/floor_guard.py`](../../scripts/floor_guard.py) | Revisa el diff contra la rama base y falla si el nivel bajó: supresiones nuevas, tests desactivados o borrados, config relajada, umbrales rebajados |
 | [`tests/test_floor_guard.py`](../../tests/test_floor_guard.py) | Prueba cada movimiento que floor-guard debe detectar, en un repo de git temporal |
 | [`pyproject.toml`](../../pyproject.toml) | Contratos de import-linter entre `ingestion` y `lakehouse` y la fuente de la cobertura |
@@ -27,7 +27,8 @@ comprueba, para que ni una persona ni un agente bajen el nivel sin que se note.
 - Las reglas numéricas llevan `-` en el Makefile: muestran el fallo sin cortar la receta hasta
   el 2026-09-26; ese día se quita el `-` y pasan a bloquear.
 - Si una regla no se puede cumplir, se pide una excepción en `CONSTRAINTS.md` (regla, archivo,
-  razón, quién aprobó, fecha de revisión); floor-guard la respeta hasta esa fecha.
+  razón, quién aprobó, fecha de revisión). floor-guard la respeta mientras la fila exista; la
+  fecha es un recordatorio para revisarla.
 - Verificación: las tres recetas en verde sobre el código actual, y un `# type: ignore`
   inyectado a propósito hace que floor-guard falle con código 1.
 

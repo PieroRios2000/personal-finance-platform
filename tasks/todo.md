@@ -8,7 +8,7 @@
 - [x] Instalar `uv` a nivel usuario (sin sudo) y Python 3.12 gestionado por uv.
 - [x] Docker accesible sin sudo desde WSL (reiniciar WSL tras entrar al grupo `docker`).
 - [ ] PDFs reales en la bandeja `~/finance-data/inbox/<usuario>/`, con cualquier nombre (ADR 0009; antes estaban en `raw/{bcp,scotiabank}/`); T12b los archiva.
-- [ ] Tesseract OCR (`sudo apt install tesseract-ocr tesseract-ocr-spa`) antes de T11b.
+- [x] Tesseract OCR (`sudo apt install tesseract-ocr tesseract-ocr-spa`) antes de T11b.
 
 ---
 

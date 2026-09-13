@@ -13,15 +13,16 @@ en [tasks/plan.md](../../tasks/plan.md) y tareas en [tasks/todo.md](../../tasks/
 
 | Bloque | Tareas | Estado |
 |---|---|---|
-| A — Fundación del repo | T1 guardas (#8) · T2 proyecto Python (#10) · T3a cerebro (#14) · T3b CLAUDE.md (#15) · T4 CONSTRAINTS (#17) · T5 CI de calidad | T1–T3b hechas; T4 en revisión; T5 pendiente |
-| B — Ingesta | T6–T12 | T9 inspector hecha (#16); el resto pendiente |
+| A — Fundación del repo | T1 guardas (#8) · T2 proyecto Python (#10) · T3a cerebro (#14) · T3b CLAUDE.md (#15) · T4 CONSTRAINTS (#17, correcciones en #21) · T5 CI de calidad | T1–T4 hechas; T5 pendiente |
+| B — Ingesta | T6–T12b | T9 inspector hecha (#16); T12b (bandeja) planificada (#19); el resto pendiente |
 | C — Lakehouse | T13–T15 | Pendiente |
 | D — Transformación | T16, T17, T17b | Pendiente |
-| E — Segundo banco y cierre | T18, T19 | Pendiente |
+| E — Segundo banco y cierre | T18, T18b, T19 | Pendiente |
 
 También integrados: [SETUP.md](../../SETUP.md) con la reproducción del entorno (#10), el plan de
-entornos efímeros y CI por impacto (#12), y [CLAUDE.md](../../CLAUDE.md) con las reglas para
-agentes, el template de PR y PROJECT.md al día (#15).
+entornos efímeros y CI por impacto (#12), [CLAUDE.md](../../CLAUDE.md) con las reglas para
+agentes, el template de PR y PROJECT.md al día (#15), y el plan de varios usuarios, varias cuentas y
+conciliación integral (#19).
 
 ## Componentes
 
@@ -29,6 +30,7 @@ agentes, el template de PR y PROJECT.md al día (#15).
 - [Proyecto Python](../componentes/proyecto-python.md) — construido (T2).
 - [CI](../componentes/ci.md) — en curso: política de ramas hecha; calidad en T5.
 - [Inspector de layout enmascarado](../componentes/inspector-de-layout.md) — construido (T9).
+- [Nivel de calidad](../componentes/nivel-de-calidad.md) — construido (T4).
 
 ## Decisiones
 

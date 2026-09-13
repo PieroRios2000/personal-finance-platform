@@ -19,7 +19,7 @@ Empieza por tu tarea en `tasks/todo.md` y lee solo lo que necesites:
 | Plan de la fase, decisiones, riesgos, Definition of Done | [tasks/plan.md](tasks/plan.md) |
 | Tu tarea: criterios, verificación, archivos, skill | [tasks/todo.md](tasks/todo.md) |
 | Versiones, instalación y problemas conocidos | [SETUP.md](SETUP.md) |
-| Reglas de calidad y umbrales | `CONSTRAINTS.md` (cuando exista, tarea T4) |
+| Reglas de calidad y umbrales | [CONSTRAINTS.md](CONSTRAINTS.md) |
 | Visión y fases del proyecto completo | [PROJECT.md](PROJECT.md) |
 
 ## Git y PRs
@@ -54,7 +54,7 @@ Empieza por tu tarea en `tasks/todo.md` y lee solo lo que necesites:
 - Librerías solo con `uv add <lib>` (o `uv add --dev <lib>`); nunca `pip install` ni
   `requirements.txt`. `pyproject.toml` y `uv.lock` se suben juntos.
 - Checks: `uv run ruff check . && uv run ruff format --check . && uv run mypy . && uv run pytest`
-  y `pre-commit run --all-files` (`make check-task` cuando exista, T4).
+  y `pre-commit run --all-files`, o `make check-task` (lint + tipos + tests + floor-guard + arquitectura).
 - Skills por tipo de trabajo: las de "Forma de trabajo" en `tasks/plan.md`.
 - Lo más simple que cumpla los criterios; nada especulativo.
 

@@ -1,5 +1,4 @@
 import subprocess
-from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -8,9 +7,21 @@ from scripts import floor_guard
 
 BASE_FILES = {
     "tests/test_a.py": "def test_a() -> None:\n    assert 1 + 1 == 2\n",
+    "tests/test_señal.py": "def test_s() -> None:\n    assert True\n",
     "app.py": "x = 1\n",
-    "pyproject.toml": "[tool.mypy]\nstrict = true\n",
-    "Makefile": "cov:\n\tuv run diff-cover coverage.xml --fail-under=80\n",
+    "legacy.py": "y = f()  # type: ignore\n",
+    "pyproject.toml": (
+        '[dependency-groups]\ndev = [\n    "bandit>=1.9.4",\n]\n\n'
+        "[tool.mypy]\nstrict = true\n"
+    ),
+    "Makefile": (
+        "check:\n\tuv run mypy .\n\tuv run python scripts/floor_guard.py\n"
+        "\tuv run diff-cover coverage.xml --fail-under=80\n"
+    ),
+    ".pre-commit-config.yaml": (
+        "repos:\n  - repo: https://github.com/gitleaks/gitleaks\n"
+        "    hooks:\n      - id: gitleaks\n"
+    ),
 }
 
 
@@ -21,6 +32,12 @@ def git(*args: str) -> None:
 def write(path: str, text: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(text)
+
+
+def replace(path: str, old: str, new: str) -> None:
+    text = Path(path).read_text()
+    assert old in text
+    Path(path).write_text(text.replace(old, new))
 
 
 @pytest.fixture(autouse=True)
@@ -60,6 +77,15 @@ def test_clean_change_passes(capsys: pytest.CaptureFixture[str]) -> None:
         "@pytest.mark.skip",
         "@pytest.mark.xfail(reason='x')",
         "pytest.skip('luego')",
+        "import os  # NOQA",
+        "# mypy: ignore-errors",
+        "# mypy: disable-error-code=attr-defined",
+        "# fmt: off",
+        "x = [1,2]  # fmt: skip",
+        "@pytest.mark.skipif(True, reason='x')",
+        "@unittest.skip('x')",
+        "self.skipTest('x')",
+        "pytest.importorskip('pdfplumber')",
     ],
 )
 def test_new_suppression_or_skip_fails(
@@ -71,6 +97,12 @@ def test_new_suppression_or_skip_fails(
 
     assert code == 1
     assert "app.py" in out
+
+
+def test_removing_a_suppression_passes(capsys: pytest.CaptureFixture[str]) -> None:
+    write("legacy.py", "y = f()\n")
+
+    assert run(capsys) == (0, "floor-guard: limpio\n")
 
 
 def test_untracked_file_is_checked(capsys: pytest.CaptureFixture[str]) -> None:
@@ -97,6 +129,37 @@ def test_deleted_test_file_fails(capsys: pytest.CaptureFixture[str]) -> None:
     assert "tests/test_a.py" in out
 
 
+@pytest.mark.parametrize("option", ["diff.mnemonicPrefix", "diff.noprefix"])
+def test_diff_does_not_depend_on_git_config(
+    option: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    git("config", option, "true")
+    git("rm", "-q", "tests/test_a.py")
+
+    code, out = run(capsys)
+
+    assert code == 1
+    assert "tests/test_a.py" in out
+
+
+def test_non_ascii_path_is_reported(capsys: pytest.CaptureFixture[str]) -> None:
+    git("rm", "-q", "tests/test_señal.py")
+
+    code, out = run(capsys)
+
+    assert code == 1
+    assert "tests/test_señal.py" in out
+
+
+def test_renamed_test_file_counts_as_removed(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    git("mv", "tests/test_a.py", "tests/a_checks.py")
+    git("commit", "-qm", "rename", "--no-gpg-sign")
+
+    assert run(capsys)[0] == 1
+
+
 def test_removed_assertion_fails(capsys: pytest.CaptureFixture[str]) -> None:
     write("tests/test_a.py", "def test_a() -> None:\n    pass\n")
 
@@ -110,18 +173,28 @@ def test_rewritten_assertion_passes(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 @pytest.mark.parametrize(
-    ("path", "text"),
+    ("path", "old", "new"),
     [
-        ("Makefile", "cov:\n\tuv run diff-cover coverage.xml --fail-under=70\n"),
-        ("pyproject.toml", "[tool.mypy]\nstrict = false\n"),
-        ("pyproject.toml", "[tool.mypy]\n"),
-        ("pyproject.toml", "[tool.mypy]\nstrict = true\nignore_errors = true\n"),
+        ("Makefile", "--fail-under=80", "--fail-under=70"),
+        ("pyproject.toml", "strict = true", "strict = false"),
+        ("pyproject.toml", "strict = true\n", ""),
+        ("pyproject.toml", "strict = true", "strict = true\nignore_errors = true"),
+        ("pyproject.toml", "strict = true", "strict = true\ndisallow_any_expr = false"),
+        (
+            "pyproject.toml",
+            "[tool.mypy]",
+            "[tool.ruff.lint.per-file-ignores]\n[tool.mypy]",
+        ),
+        ("Makefile", "\tuv run mypy .", "\t-uv run mypy ."),
+        ("Makefile", "\tuv run mypy .", "\tuv run mypy . || true"),
+        ("Makefile", "\tuv run python scripts/floor_guard.py\n", ""),
+        (".pre-commit-config.yaml", "      - id: gitleaks\n", ""),
     ],
 )
 def test_weakened_config_fails(
-    path: str, text: str, capsys: pytest.CaptureFixture[str]
+    path: str, old: str, new: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    write(path, text)
+    replace(path, old, new)
 
     code, out = run(capsys)
 
@@ -129,17 +202,43 @@ def test_weakened_config_fails(
     assert path in out
 
 
-def test_raised_threshold_passes(capsys: pytest.CaptureFixture[str]) -> None:
-    write("Makefile", "cov:\n\tuv run diff-cover coverage.xml --fail-under=90\n")
-
-    assert run(capsys)[0] == 0
-
-
-@pytest.mark.parametrize(("days", "expected"), [(30, 0), (-1, 1)])
-def test_exception_applies_until_review_date(
-    days: int, expected: int, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    ("path", "old", "new"),
+    [
+        ("Makefile", "--fail-under=80", "--fail-under=90"),
+        ("pyproject.toml", "bandit>=1.9.4", "bandit>=1.10.0"),
+        ("pyproject.toml", "strict = true", "strict=true"),
+        ("pyproject.toml", "strict = true", "strict = true\nxfail_strict = false"),
+    ],
+)
+def test_harmless_config_change_passes(
+    path: str, old: str, new: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    review = date.today() + timedelta(days=days)
+    replace(path, old, new)
+
+    assert run(capsys) == (0, "floor-guard: limpio\n")
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["mypy.ini", ".mypy.ini", "setup.cfg", "tox.ini", "tests/pytest.ini", "ruff.toml"],
+)
+def test_config_outside_pyproject_fails(
+    name: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write(name, "[tool]\nkey = 1\n")
+
+    code, out = run(capsys)
+
+    assert code == 1
+    assert name in out
+
+
+@pytest.mark.parametrize("review", ["2020-01-01", "2099-12-31", "2026-02-30"])
+def test_exception_applies_while_its_row_exists(
+    review: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """La fecha es un recordatorio para Piero: floor-guard no la evalúa."""
     write("app.py", "x = 1\ny = f()  # type: ignore\n")
     write(
         "CONSTRAINTS.md",
@@ -150,10 +249,23 @@ def test_exception_applies_until_review_date(
 
     code, out = run(capsys)
 
-    assert code == expected
-    if expected == 0:
-        assert "excepción" in out
+    assert code == 0
+    assert "excepción aprobada [supresion] app.py:2" in out
 
 
 def test_guard_cannot_run_without_base(capsys: pytest.CaptureFixture[str]) -> None:
     assert floor_guard.main(["--base", "no-existe"]) == 2
+    assert "git fetch" in capsys.readouterr().err
+
+
+def test_no_common_history_explains_how_to_fix(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Como en un clon superficial: merge-base falla sin decir nada."""
+    git("switch", "-q", "--orphan", "other")
+    git("commit", "-q", "--allow-empty", "-m", "x", "--no-gpg-sign")
+
+    assert floor_guard.main(["--base", "main"]) == 2
+    err = capsys.readouterr().err
+    assert "no hay historia común" in err
+    assert "fetch-depth: 0" in err
