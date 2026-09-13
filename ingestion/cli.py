@@ -30,6 +30,7 @@ from ingestion.dedup import file_sha256
 from ingestion.reconciliation import ReconciliationError
 from ingestion.schema import MissingAccountKeyError
 from lakehouse import bronze
+from lakehouse.storage import MissingLakehouseURIError, lakehouse_uri
 
 
 def _run_parse(args: argparse.Namespace) -> int:
@@ -99,6 +100,12 @@ def _run_ingest(args: argparse.Namespace) -> int:
     if not user_id:
         print("error: --user is required (or set PFP_USER)", file=sys.stderr)
         return 2
+
+    try:
+        lakehouse_uri()
+    except MissingLakehouseURIError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
 
     try:
         report = organizer.organize(

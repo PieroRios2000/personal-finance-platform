@@ -183,6 +183,37 @@ def test_organize_reports_a_missing_account_key_clearly(
     assert "PFP_ACCOUNT_KEY" in err
 
 
+def test_ingest_reports_a_missing_lakehouse_uri_clearly_before_touching_the_inbox(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Failing fast on a missing LAKEHOUSE_URI, before organize() moves anything
+    out of the inbox, matters: once a file is archived it's no longer picked up
+    by a later `pfp ingest` run (organize() only looks at the inbox), so
+    crashing mid-run after archiving but before writing to bronze would leave
+    that statement stuck outside bronze with no automatic retry."""
+    monkeypatch.delenv("LAKEHOUSE_URI", raising=False)
+    inbox_root = tmp_path / "inbox"
+    archive_root = tmp_path / "raw"
+    inbox = inbox_root / "piero"
+    inbox.mkdir(parents=True)
+    (inbox / "statement.pdf").write_bytes(_bcp_pdf())
+
+    code, _, err = run(
+        capsys,
+        "ingest",
+        "--user",
+        "piero",
+        "--inbox-root",
+        str(inbox_root),
+        "--archive-root",
+        str(archive_root),
+    )
+
+    assert code != 0
+    assert "LAKEHOUSE_URI" in err
+    assert list(inbox.glob("*.pdf")), "the file must stay in the inbox, untouched"
+
+
 def test_ingest_organizes_the_inbox_and_writes_to_bronze(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], lakehouse: Path
 ) -> None:
