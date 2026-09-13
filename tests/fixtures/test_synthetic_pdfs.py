@@ -82,6 +82,14 @@ def test_default_statement_is_a_well_formed_plausible_bcp_dump(tmp_path: Path) -
         assert secret not in out
 
 
+def test_account_number_is_configurable(tmp_path: Path) -> None:
+    custom_account = "191-48273615-0-37"
+
+    text = raw_text(bcp_statement_pdf(account_number=custom_account), tmp_path)
+
+    assert f"CUENTA NRO. {custom_account}" in text
+
+
 def test_bcp_pdf_fixture_returns_a_path_to_a_valid_unlocked_pdf(bcp_pdf: Path) -> None:
     assert bcp_pdf.exists()
     assert bcp_pdf.suffix == ".pdf"

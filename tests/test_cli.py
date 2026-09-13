@@ -103,3 +103,72 @@ def test_parse_gives_the_same_result_under_an_arbitrary_file_name(
     _, out_odd, _ = run(capsys, "parse", str(odd), "--user", "piero")
 
     assert out_normal == out_odd
+
+
+def test_organize_files_the_inbox_and_prints_the_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    inbox_root = tmp_path / "inbox"
+    archive_root = tmp_path / "raw"
+    inbox = inbox_root / "piero"
+    inbox.mkdir(parents=True)
+    (inbox / "statement.pdf").write_bytes(_bcp_pdf())
+
+    code, out, _ = run(
+        capsys,
+        "organize",
+        "--user",
+        "piero",
+        "--inbox-root",
+        str(inbox_root),
+        "--archive-root",
+        str(archive_root),
+    )
+
+    assert code == 0
+    assert "Archived: 1" in out
+    assert list((archive_root / "piero").rglob("*.pdf"))
+    assert not list(inbox.glob("*.pdf"))
+
+
+def test_organize_fails_clearly_without_a_user(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("PFP_USER", raising=False)
+
+    code, _, err = run(
+        capsys,
+        "organize",
+        "--inbox-root",
+        str(tmp_path / "inbox"),
+        "--archive-root",
+        str(tmp_path / "raw"),
+    )
+
+    assert code != 0
+    assert "--user" in err
+
+
+def test_organize_reports_a_missing_account_key_clearly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("PFP_ACCOUNT_KEY", raising=False)
+    inbox_root = tmp_path / "inbox"
+    archive_root = tmp_path / "raw"
+    inbox = inbox_root / "piero"
+    inbox.mkdir(parents=True)
+    (inbox / "statement.pdf").write_bytes(_bcp_pdf())
+
+    code, _, err = run(
+        capsys,
+        "organize",
+        "--user",
+        "piero",
+        "--inbox-root",
+        str(inbox_root),
+        "--archive-root",
+        str(archive_root),
+    )
+
+    assert code != 0
+    assert "PFP_ACCOUNT_KEY" in err
