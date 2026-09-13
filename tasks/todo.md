@@ -93,14 +93,14 @@
 **Description:** A workflow that runs the rules on every PR, blocking or warning per CONSTRAINTS.md.
 
 **Acceptance criteria:**
-- [ ] Jobs: `lint-types`, `tests` (+ diff-cover), `security` (gitleaks, pip-audit, bandit), `architecture`, `floor-guard`.
-- [ ] Numeric rules with `continue-on-error` until 2026-09-26; actions pinned by SHA and `sha_pinning_required` turned on.
-- [ ] Blocking checks added as required in the `protect-main-develop` ruleset.
-- [ ] Readable failures: annotations on the exact PR line (ruff and mypy in GitHub's format), a pytest summary in the job, and a "Reviewing CI" section in `SETUP.md` (`gh pr checks`, `gh run view`, the job's log via `gh api …/actions/jobs/<id>/logs` since `--log-failed` comes back empty with gh 2.46, `gh run rerun --failed`).
+- [x] Jobs: `lint-types`, `tests` (+ diff-cover), `security` (gitleaks, pip-audit, bandit), `architecture`, `floor-guard`.
+- [x] Numeric rules with `continue-on-error` until 2026-09-26; actions pinned by SHA and `sha_pinning_required` turned on.
+- [x] Blocking checks added as required in the `protect-main-develop` ruleset.
+- [x] Readable failures: annotations on the exact PR line (ruff and mypy in GitHub's format), a pytest summary in the job, and a "Reviewing CI" section in `SETUP.md` (`gh pr checks`, `gh run view`, the job's log via `gh api …/actions/jobs/<id>/logs`, `gh run rerun --failed`).
 
 **Verification:**
-- [ ] A PR with a ruff error fails and stays `BLOCKED`; the same PR, fixed, passes.
-- [ ] That error shows up annotated on the file's line inside the PR.
+- [x] A PR with a mypy error (not ruff — ruff is a pre-commit hook, so a real ruff violation can't reach a commit without `--no-verify`, which CLAUDE.md forbids; mypy isn't a local hook) fails and stays `BLOCKED`; the same PR, reverted, passes.
+- [x] That error shows up annotated on the file's exact line inside the PR (`ingestion/__init__.py:5`).
 
 **Dependencies:** T4 · **Files:** `.github/workflows/ci.yml`, `SETUP.md` · **Size:** M · **Skill:** ci-cd-and-automation
 
