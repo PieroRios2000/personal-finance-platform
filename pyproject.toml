@@ -6,6 +6,7 @@ dependencies = [
     "pdfplumber>=0.11.10",
     "pikepdf>=10.13.0.post1",
     "pydantic>=2.13.5",
+    "pytesseract>=0.3.13",
 ]
 
 [project.scripts]
@@ -36,6 +37,13 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.mypy]
 strict = true
+
+# pytesseract ships no type stubs or py.typed marker (T11b); no types-pytesseract
+# package exists on PyPI either, so this is the standard mypy escape hatch for one
+# untyped third-party import, scoped to that module only.
+[[tool.mypy.overrides]]
+module = "pytesseract"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

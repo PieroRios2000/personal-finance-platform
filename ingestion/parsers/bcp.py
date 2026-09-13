@@ -21,6 +21,7 @@ from typing import Any
 import pdfplumber
 import pikepdf
 
+from ingestion import ocr
 from ingestion.reconciliation import reconcile
 from ingestion.schema import (
     Statement,
@@ -123,7 +124,12 @@ def parse(
         full_text = "\n".join(page.extract_text() or "" for page in doc.pages)
         words: list[Word] = []
         for page in doc.pages:
-            words.extend(page.extract_words())
+            # A scanned page (T9) has no text layer, so extract_words() comes back
+            # empty; fall back to OCR (T11b) for that page's words only. The rest of
+            # parsing (line-grouping, column-assignment, reconciliation) doesn't know
+            # or care where a word came from — reconcile() below is what catches a
+            # misread character, not this fallback itself.
+            words.extend(page.extract_words() or ocr.extract_words(page))
 
     account_match = _ACCOUNT_RE.search(full_text)
     period_match = _PERIOD_RE.search(full_text)

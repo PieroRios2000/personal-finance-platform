@@ -203,12 +203,12 @@
 **Description:** Some PDFs are scanned; when a page has no text layer, get its text via OCR.
 
 **Acceptance criteria:**
-- [ ] `ingestion/ocr.py`: if a page's `extract_text()` comes back empty, render it at 300 dpi (pdfplumber) and read it with Tesseract in Spanish.
-- [ ] Parsers receive the text without knowing whether it came from OCR; reconciliation catches read errors.
-- [ ] CI installs Tesseract and tests against a rasterized synthetic PDF.
+- [x] `ingestion/ocr.py`: if a page's `extract_text()` comes back empty, render it at 300 dpi (pdfplumber) and read it with Tesseract in Spanish.
+- [x] Parsers receive the text without knowing whether it came from OCR; reconciliation catches read errors.
+- [x] CI installs Tesseract and tests against a rasterized synthetic PDF.
 
 **Verification:**
-- [ ] `uv run pytest -m real_pdf` reconciles the real scanned PDF on your machine.
+- [ ] `uv run pytest -m real_pdf` reconciles the real scanned PDF on your machine. (Verified end to end against a synthetic scanned page; needs your real scanned PDF to close out.)
 
 **Dependencies:** T9, T11 · **Files:** `ingestion/ocr.py`, `tests/test_ocr.py`, `.github/workflows/ci.yml` · **Size:** M · **Skill:** source-driven-development
 

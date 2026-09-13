@@ -54,6 +54,10 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
       - run: uv sync --locked
+      # OCR fallback for scanned pages (T11b): GitHub-hosted Ubuntu runners have
+      # passwordless sudo, and no build step needs Tesseract, only pytest.
+      - name: install Tesseract OCR (Spanish)
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-spa
       # Guarantees origin/<base> is resolvable regardless of what checkout's own
       # refspec fetched (see the same note in scripts/floor_guard.py's error message).
       - run: git fetch origin ${{ github.event.pull_request.base.ref }}
