@@ -132,11 +132,11 @@
 **Description:** SHA-256 of the PDF's content, so the same file never gets reprocessed.
 
 **Acceptance criteria:**
-- [ ] `file_sha256(path)` using `hashlib.file_digest` (streaming, stdlib).
-- [ ] The same content under a different name → the same hash.
+- [x] `file_sha256(path)` using `hashlib.file_digest` (streaming, stdlib).
+- [x] The same content under a different name → the same hash.
 
 **Verification:**
-- [ ] Tests with temporary files.
+- [x] Tests with temporary files.
 
 **Dependencies:** T5 · **Files:** `ingestion/dedup.py`, `tests/test_dedup.py` · **Size:** XS
 
