@@ -44,17 +44,39 @@ implementation rather than a special case per format:
   on a *neighboring* line rather than beside it — found by scanning bottom-up for the last
   "SALDO" mention on the page (protecting against a transaction description that happens to
   contain the word "SALDO"), checking the closest lines above and below for an amount.
+- A row's description *data* can start to the left of where the "DESCRIPCION" *header* word
+  itself is drawn (58pt left of it, in a second real dump) — closer to the FECHA (value date)
+  header than its own. Words landing in the FECHA cell that aren't the date itself (the date
+  is always the leftmost one) get moved to the front of the real description instead of
+  wrecking that row's date.
+- A cell can print a literal "0.00" — alone (an informational row) or beside the real amount
+  in the other column (which used to look like "both a charge and a credit" even though only
+  one side is a real movement). Treated as absent, same as an empty cell, since it has no
+  monetary effect either way.
+- Whatever lands in CARGO/ABONO isn't guaranteed to be a clean amount at all; a fourth real
+  statement had non-numeric text bleed in there and crashed the whole process with a raw
+  `decimal.InvalidOperation`. Validated against the amount shape before `_money()` ever sees
+  it; a mismatch is now a normal, row-scoped `ValueError` (never the raw cell text itself,
+  which could hold leaked real content) instead of an unhandled crash.
+- **Multi-page statements**: a real BCP page repeats the same header row and account/period
+  boilerplate at the *same* y-position on every page. Lines are grouped *within each page*
+  separately, not across the whole flattened document — otherwise an unrelated row on a later
+  page at that same y silently merges into the current one, corrupting both. This was the
+  final piece: it's the normal case for any multi-page statement, not a rare edge case.
 
 `tests/fixtures/synthetic_pdfs.py`'s `bcp_real_layout_statement_pdf()` renders every one of
 these traits (additive next to the original fixture, which dozens of other tests still use
-unchanged). The closing-balance search is the one piece built on a best-evidenced heuristic
-rather than a certainty — see the module docstring in `ingestion/parsers/bcp.py`;
-`reconcile()` is the actual backstop if it ever picks the wrong amount, failing loudly as a
-`ReconciliationError` instead of silently accepting a wrong balance.
+unchanged), plus a dedicated hand-built multi-page test for the last one. The closing-balance
+search is the one piece still built on a best-evidenced heuristic rather than a certainty —
+see the module docstring in `ingestion/parsers/bcp.py`; `reconcile()` is the backstop if it
+ever picks the wrong amount, failing loudly as a `ReconciliationError` instead of silently
+accepting a wrong balance.
 
-**Not yet verified end-to-end against Piero's own real PDF** (ADR 0004 — nobody, including
-Claude, opens it directly): the fix was built and tested entirely against the masked dump and
-the new synthetic fixture. The next step is running `pfp ingest` against the real file again.
+**Verified end to end against all four of Piero's real BCP statements** (2026-09): every one
+now archives and reconciles, three months (2025-09 to 2025-11) with no gaps. Each of the five
+fixes above was found by iterating — Piero ran `pfp ingest`, hit a real error, ran T9's masked
+inspector on the specific failing file when a new masked dump was needed, and I calibrated the
+next fix against it — never by guessing ahead of what the data actually showed.
 
 ## OCR fallback for scanned pages (T11b)
 
