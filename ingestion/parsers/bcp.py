@@ -347,7 +347,17 @@ def parse(
     transactions = []
     for line in lines:
         cells = _assign_columns(line, columns)
-        row_date = cells.get("FECHA", "").strip()
+        # A row's own description *data* can start to the left of where the
+        # "DESCRIPCION" *header* word itself is drawn — closer to the FECHA
+        # (value date) column than its own (confirmed in a second real
+        # masked dump: 58pt left of the header). Naive column assignment
+        # then swallows the first description word(s) into the FECHA cell.
+        # The date is always the leftmost word there (words are assigned in
+        # left-to-right order), so anything after it is leaked description,
+        # moved to the front of the real DESCRIPCION cell instead.
+        fecha_words = cells.get("FECHA", "").split()
+        row_date = fecha_words[0] if fecha_words else ""
+        stray_words = fecha_words[1:]
         if not _is_row_date(row_date):
             continue  # header row, or an info line like "SALDO ANTERIOR ..."
 
@@ -362,6 +372,7 @@ def parse(
         else:
             continue  # a dated row with no amount isn't a movement
 
+        description_words = [*stray_words, cells.get("DESCRIPCION", "")]
         transactions.append(
             Transaction(
                 user_id=user_id,
@@ -369,7 +380,7 @@ def parse(
                 account_id=account_id,
                 account_last4=account_last4,
                 date=_row_date(row_date, period_start, period_end),
-                description=normalize_description(cells.get("DESCRIPCION", "")),
+                description=normalize_description(" ".join(description_words)),
                 amount=amount,
                 currency="PEN",
                 source_file_sha256=file_sha256,

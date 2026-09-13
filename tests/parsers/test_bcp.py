@@ -175,6 +175,35 @@ def test_parse_reads_ddmmm_transaction_dates_using_the_value_date_column(
     ]
 
 
+def test_parse_reads_a_description_that_starts_left_of_its_own_header(
+    tmp_path: Path,
+) -> None:
+    """A real transaction row's description *data* started well to the left
+    of the "DESCRIPCION" *header* word (58pt left, in the masked dump of a
+    second real statement) — closer to the FECHA (value date) header than
+    its own. Naive "nearest column header to the left" assignment then
+    swallows the first description word(s) into the FECHA cell, wrecking
+    both the date and the description for every row: on the real statement
+    this made every one of that row's date fail `_is_row_date()`, silently
+    dropping the transaction and breaking reconciliation (Piero hit this on
+    3 of his 4 real statements)."""
+    path = tmp_path / "misaligned-description.pdf"
+    path.write_bytes(bcp_real_layout_statement_pdf(row_description_x=180))
+
+    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert len(statement.transactions) == len(DEFAULT_MOVEMENTS)
+    by_amount = {t.amount: t for t in statement.transactions}
+    assert by_amount[Decimal("-120.50")].description == "COMPRA TIENDA FICTICIA"
+    dates = sorted(t.date for t in statement.transactions)
+    assert dates == [
+        date(2026, 1, 5),
+        date(2026, 1, 12),
+        date(2026, 1, 20),
+        date(2026, 1, 28),
+    ]
+
+
 def test_parse_extracts_charges_and_credits_on_the_real_layout(
     tmp_path: Path,
 ) -> None:

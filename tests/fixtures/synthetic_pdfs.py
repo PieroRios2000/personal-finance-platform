@@ -211,6 +211,7 @@ def bcp_real_layout_statement_pdf(
     closing_balance: Decimal | None = None,
     reconciles: bool = True,
     account_number: str = _REAL_ACCOUNT_NUMBER,
+    row_description_x: float = 240,
 ) -> bytes:
     """Render a fictional BCP statement matching the *real* layout found in
     T9's masked inspection of the owner's own statement (2026-09), which
@@ -228,6 +229,13 @@ def bcp_real_layout_statement_pdf(
     - The closing balance is a bare "SALDO" (no "ACTUAL"/"FINAL" qualifier),
       with its amount one line *above* the label rather than beside it — the
       real dump showed them 8pt apart, past `_group_lines`' 3pt tolerance.
+    - A row's own description *data* starts to the left of where the
+      "DESCRIPCION" *header* word itself is drawn (58pt left of it in the
+      real dump: header at x=181, row data at x=123) — closer to the FECHA
+      (value date) header than to its own. `row_description_x` reproduces
+      this: it defaults to the DESCRIPCION header's own x (no misalignment,
+      matching every other test), but a caller can move it left of that,
+      independently of the header, to exercise this specific real trait.
 
     `bcp_statement_pdf` (the original T10 fixture) is left untouched since
     dozens of other tests depend on its exact shape; this is a separate,
@@ -288,7 +296,7 @@ def bcp_real_layout_statement_pdf(
             row_y,
             f"{movement.when.day:02d}{_SPANISH_MONTH_ABBR[movement.when.month]}",
         )
-        pdf.text(240, row_y, movement.description)
+        pdf.text(row_description_x, row_y, movement.description)
         pdf.text(400, row_y, charge)
         pdf.text(460, row_y, credit)
 
