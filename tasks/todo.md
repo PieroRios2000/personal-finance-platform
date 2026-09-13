@@ -271,13 +271,13 @@
 **Description:** Save transactions to Delta (append-only) and register ingested files; `pfp ingest`.
 
 **Acceptance criteria:**
-- [ ] `lakehouse/` writes `bronze/transactions`, `bronze/statements` (period, balances and totals for each statement) and `bronze/ingested_files` with `deltalake`, partitioned by `user_id`, located via `LAKEHOUSE_URI`.
-- [ ] `pfp ingest --user <u>`: organizes the inbox (T12b) and, for every new file, parses → reconciles → writes to bronze; if (user, hash) already exists, it's skipped. The original file name is never stored.
-- [ ] Ingesting the same PDF twice never adds rows.
+- [x] `lakehouse/` writes `bronze/transactions`, `bronze/statements` (period, balances and totals for each statement) and `bronze/ingested_files` with `deltalake`, partitioned by `user_id`, located via `LAKEHOUSE_URI`.
+- [x] `pfp ingest --user <u>`: organizes the inbox (T12b) and, for every new file, parses → reconciles → writes to bronze; if (user, hash) already exists, it's skipped. The original file name is never stored.
+- [x] Ingesting the same PDF twice never adds rows.
 
 **Verification:**
-- [ ] Tests with the lake in `tmp_path`; an integration test (`integration` marker) against local S3.
-- [ ] Two users with synthetic PDFs end up in separate partitions; deleting one doesn't affect the other.
+- [x] Tests with the lake in `tmp_path`; an integration test (`integration` marker) against local S3.
+- [x] Two users with synthetic PDFs end up in separate partitions; deleting one doesn't affect the other.
 
 **Dependencies:** T12b, T13 · **Files:** `lakehouse/{storage,bronze}.py`, `ingestion/cli.py`, tests · **Size:** M · **Skill:** source-driven-development
 

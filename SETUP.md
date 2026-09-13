@@ -104,6 +104,8 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | pikepdf | 10.13.0.post1 | runtime | Open and decrypt password-protected PDFs |
 | pdfplumber | 0.11.10 | runtime | Read PDF text along with positions |
 | pytesseract | 0.3.13 | runtime | OCR (Spanish) for scanned pages with no text layer |
+| deltalake | 1.6.3 | runtime | Write and read bronze's Delta tables (T14, ADR 0006) |
+| pyarrow | 25.0.1 | runtime | Explicit table schemas for Delta writes (T14, ADR 0006) |
 | fpdf2 | 2.8.8 | dev | Generate synthetic PDFs inside the tests |
 | pytest | 9.1.1 | dev | Tests |
 | pytest-cov | 7.1.0 | dev | Coverage |
