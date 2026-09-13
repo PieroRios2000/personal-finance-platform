@@ -1,0 +1,132 @@
+# Quality gates on every PR into develop or main. Rules, thresholds and reasons are in
+# CONSTRAINTS.md; if this file and CONSTRAINTS.md disagree, CONSTRAINTS.md wins.
+#
+# `continue-on-error: true` marks the numeric rules that only warn until 2026-09-26 (T19
+# removes it so they start blocking). The floor (lint-types, tests' pytest step, gitleaks,
+# floor-guard) has no continue-on-error and blocks from day 1.
+name: ci
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.12.13"
+
+jobs:
+  lint-types:
+    name: lint-types
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - run: uv sync --locked
+      - name: ruff check
+        run: uv run ruff check --output-format=github .
+      - name: ruff format
+        run: uv run ruff format --check .
+      - name: mypy
+        run: |
+          echo "::add-matcher::.github/matchers/mypy.json"
+          uv run mypy .
+
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - run: uv sync --locked
+      # Guarantees origin/<base> is resolvable regardless of what checkout's own
+      # refspec fetched (see the same note in scripts/floor_guard.py's error message).
+      - run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - name: pytest
+        run: |
+          set -o pipefail
+          uv run pytest --cov --cov-report=term-missing --cov-report=xml | tee pytest.log
+          {
+            echo "### pytest"
+            echo '```'
+            tail -n 5 pytest.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: diff-cover (warns until 2026-09-26, see CONSTRAINTS.md)
+        continue-on-error: true
+        run: >-
+          uv run diff-cover coverage.xml
+          --compare-branch=origin/${{ github.event.pull_request.base.ref }}
+          --fail-under=80
+
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - run: uv sync --locked
+      - name: pip-audit (warns until 2026-09-26, see CONSTRAINTS.md)
+        continue-on-error: true
+        run: uv run pip-audit
+      - name: bandit (warns until 2026-09-26, see CONSTRAINTS.md)
+        continue-on-error: true
+        run: uv run bandit -q -r . -x ./.venv --severity-level high
+
+  architecture:
+    name: architecture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - run: uv sync --locked
+      - name: import-linter (warns until 2026-09-26, see CONSTRAINTS.md)
+        continue-on-error: true
+        run: uv run lint-imports --no-logo
+
+  floor-guard:
+    name: floor-guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - run: uv sync --locked
+      - run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - run: >-
+          uv run python scripts/floor_guard.py
+          --base origin/${{ github.event.pull_request.base.ref }}
