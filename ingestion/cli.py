@@ -130,6 +130,26 @@ def _run_ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_inbox_args(subcommand: argparse.ArgumentParser) -> None:
+    """`--user`, `--inbox-root` and `--archive-root`: shared by every subcommand
+    that walks a user's inbox (`organize`, `ingest`)."""
+    subcommand.add_argument(
+        "--user", default=os.environ.get("PFP_USER"), help="defaults to $PFP_USER"
+    )
+    subcommand.add_argument(
+        "--inbox-root",
+        type=Path,
+        default=organizer.DEFAULT_INBOX_ROOT,
+        help=f"defaults to {organizer.DEFAULT_INBOX_ROOT}",
+    )
+    subcommand.add_argument(
+        "--archive-root",
+        type=Path,
+        default=organizer.DEFAULT_ARCHIVE_ROOT,
+        help=f"defaults to {organizer.DEFAULT_ARCHIVE_ROOT}",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pfp")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -148,42 +168,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="File every PDF in the inbox into the standard archive layout and "
         "print a report.",
     )
-    organize_cmd.add_argument(
-        "--user", default=os.environ.get("PFP_USER"), help="defaults to $PFP_USER"
-    )
-    organize_cmd.add_argument(
-        "--inbox-root",
-        type=Path,
-        default=organizer.DEFAULT_INBOX_ROOT,
-        help=f"defaults to {organizer.DEFAULT_INBOX_ROOT}",
-    )
-    organize_cmd.add_argument(
-        "--archive-root",
-        type=Path,
-        default=organizer.DEFAULT_ARCHIVE_ROOT,
-        help=f"defaults to {organizer.DEFAULT_ARCHIVE_ROOT}",
-    )
+    _add_inbox_args(organize_cmd)
     organize_cmd.set_defaults(func=_run_organize)
 
     ingest_cmd = subparsers.add_parser(
         "ingest",
         help="Organize the inbox and write newly archived statements to bronze.",
     )
-    ingest_cmd.add_argument(
-        "--user", default=os.environ.get("PFP_USER"), help="defaults to $PFP_USER"
-    )
-    ingest_cmd.add_argument(
-        "--inbox-root",
-        type=Path,
-        default=organizer.DEFAULT_INBOX_ROOT,
-        help=f"defaults to {organizer.DEFAULT_INBOX_ROOT}",
-    )
-    ingest_cmd.add_argument(
-        "--archive-root",
-        type=Path,
-        default=organizer.DEFAULT_ARCHIVE_ROOT,
-        help=f"defaults to {organizer.DEFAULT_ARCHIVE_ROOT}",
-    )
+    _add_inbox_args(ingest_cmd)
     ingest_cmd.set_defaults(func=_run_ingest)
 
     return parser
