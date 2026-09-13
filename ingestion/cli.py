@@ -1,8 +1,10 @@
-"""`pfp` command-line interface (T12, T12b, T14).
+"""`pfp` command-line interface (T12, T12b, T14, T14c).
 
     uv run pfp parse <pdf> [--user <id>]
     uv run pfp organize [--user <id>] [--inbox-root DIR] [--archive-root DIR]
     uv run pfp ingest [--user <id>] [--inbox-root DIR] [--archive-root DIR]
+    uv run pfp backfill [--user <id>] [--archive-root DIR] [--bank B]
+                        [--account LAST4] [--dry-run]
 
 `parse` detects the bank, parses and reconciles one statement, and prints a short
 summary. Exits non-zero (with a message on stderr) if the bank isn't recognized,
@@ -15,6 +17,13 @@ duplicates, unreadable files and regenerated statements.
 `ingest` does what `organize` does, then writes every newly archived statement to
 the bronze lakehouse (T14), skipping any file whose sha256 is already recorded in
 `bronze/ingested_files` for that user.
+
+`backfill` (T14c) goes the other way: it re-parses statements that are *already*
+archived and already in bronze, replacing their rows with what today's parser
+reads (ADR 0010). It's what makes a parser fix reach historical data, since
+`ingest` only ever looks at the inbox and skips a file whose sha256 bronze
+already knows. Nothing is moved or deleted on disk; `--dry-run` writes nothing
+at all.
 """
 
 import argparse
@@ -130,6 +139,143 @@ def _run_ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+# Where `organize()` puts what it couldn't file as a statement. Neither holds an
+# archived statement, so neither is backfill's to re-parse: a `_needs_review/`
+# file was never ingested in the first place, and the way to retry one is to move
+# it back to the inbox and run `pfp ingest` again.
+_NOT_ARCHIVED_STATEMENTS = ("_duplicates", "_needs_review")
+
+
+def _backfill_targets(
+    archive: Path, *, bank: str | None, account: str | None
+) -> list[Path]:
+    """Every archived PDF under `archive` the filters keep.
+
+    Both filters match the directory layout `organize()` already produced —
+    `<bank>/<last4>-<id6>/<start>_<end>.pdf` (ADR 0009) — so narrowing a run
+    never costs a parse. A path that isn't that shape (anything not exactly
+    bank/account/file deep) isn't an archived statement and is left alone.
+    """
+    targets = []
+    for pdf in sorted(archive.rglob("*.pdf")):
+        parts = pdf.relative_to(archive).parts
+        if len(parts) != 3 or parts[0] in _NOT_ARCHIVED_STATEMENTS:
+            continue
+        if bank is not None and parts[0].lower() != bank.lower():
+            continue
+        if account is not None and parts[1].split("-")[0] != account:
+            continue
+        targets.append(pdf)
+    return targets
+
+
+def _backfill_report(
+    archive: Path,
+    scanned: int,
+    replaced: list[str],
+    failures: list[tuple[str, str]],
+    *,
+    dry_run: bool,
+) -> str:
+    """A plain-text report, under the same rule as `OrganizeReport.render()`:
+    counts, dates, sha256 prefixes and a bank plus last 4 digits, never an
+    extracted value (a description, an amount, a full account number) and never
+    a file's name on disk."""
+    label = "Would replace" if dry_run else "Replaced"
+    lines = [
+        f"Archive: {archive}",
+        f"Scanned: {scanned}  {label}: {len(replaced)}  Failed: {len(failures)}",
+    ]
+    if dry_run:
+        lines.append("(dry run: nothing was written)")
+
+    if replaced:
+        lines.append("")
+        lines.append(f"{label}:")
+        lines.extend(replaced)
+
+    if failures:
+        lines.append("")
+        lines.append("Failed to re-parse (their bronze rows are left untouched):")
+        for n, (digest, reason) in enumerate(failures, start=1):
+            lines.append(f"  #{n} (sha256 {digest[:8]}...): {reason}")
+
+    return "\n".join(lines)
+
+
+def _run_backfill(args: argparse.Namespace) -> int:
+    user_id: str | None = args.user
+    if not user_id:
+        print("error: --user is required (or set PFP_USER)", file=sys.stderr)
+        return 2
+
+    try:
+        lakehouse_uri()
+    except MissingLakehouseURIError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+    archive: Path = args.archive_root / user_id
+    targets = _backfill_targets(archive, bank=args.bank, account=args.account)
+    replaced: list[str] = []
+    failures: list[tuple[str, str]] = []
+
+    for pdf in targets:
+        digest = file_sha256(pdf)
+        try:
+            entry = dispatcher.detect(pdf)
+        except dispatcher.UnrecognizedBankError:
+            failures.append((digest, "no bank recognized this file's content"))
+            continue
+
+        password = os.environ.get(entry.password_env, "")
+        try:
+            statement = entry.parse(
+                pdf, user_id=user_id, file_sha256=digest, password=password
+            )
+        except MissingAccountKeyError as error:
+            # Not a per-file problem: every file would fail the same way.
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        except pikepdf.PasswordError:
+            failures.append(
+                (digest, f"wrong or missing password (checked {entry.password_env})")
+            )
+            continue
+        except ReconciliationError as error:
+            failures.append((digest, f"the statement did not reconcile: {error}"))
+            continue
+        except ValueError as error:
+            failures.append((digest, f"could not parse the statement: {error}"))
+            continue
+
+        in_bronze = bronze.transactions_for_file(user_id, digest)
+        fresh = sorted(
+            (transaction.date, transaction.description, transaction.amount)
+            for transaction in statement.transactions
+        )
+        verdict = (
+            "dates, descriptions and amounts unchanged"
+            if in_bronze == fresh
+            else "dates, descriptions or amounts differ"
+        )
+        replaced.append(
+            f"  {statement.bank} ...{statement.account_last4} "
+            f"{statement.period_start} to {statement.period_end} "
+            f"(sha256 {digest[:8]}...): "
+            f"{len(in_bronze)} -> {len(fresh)} transaction(s), {verdict}"
+        )
+        if not args.dry_run:
+            bronze.replace_statement(statement, digest)
+
+    print(
+        _backfill_report(
+            archive, len(targets), replaced, failures, dry_run=args.dry_run
+        )
+    )
+    return 0
+
+
 def _add_inbox_args(subcommand: argparse.ArgumentParser) -> None:
     """`--user`, `--inbox-root` and `--archive-root`: shared by every subcommand
     that walks a user's inbox (`organize`, `ingest`)."""
@@ -177,6 +323,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_inbox_args(ingest_cmd)
     ingest_cmd.set_defaults(func=_run_ingest)
+
+    backfill_cmd = subparsers.add_parser(
+        "backfill",
+        help="Re-parse already-archived statements with today's parser and "
+        "replace their rows in bronze.",
+    )
+    backfill_cmd.add_argument(
+        "--user", default=os.environ.get("PFP_USER"), help="defaults to $PFP_USER"
+    )
+    backfill_cmd.add_argument(
+        "--archive-root",
+        type=Path,
+        default=organizer.DEFAULT_ARCHIVE_ROOT,
+        help=f"defaults to {organizer.DEFAULT_ARCHIVE_ROOT}",
+    )
+    backfill_cmd.add_argument(
+        "--bank", help="only re-parse this bank's archived statements"
+    )
+    backfill_cmd.add_argument(
+        "--account", help="only re-parse this account (its last 4 digits)"
+    )
+    backfill_cmd.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="report what would change and write nothing",
+    )
+    backfill_cmd.set_defaults(func=_run_backfill)
 
     return parser
 

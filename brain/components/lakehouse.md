@@ -2,7 +2,7 @@
 type: component
 phase: 1
 status: built
-task: T14
+task: T14, T14c
 ---
 
 # Lakehouse (bronze)
@@ -16,8 +16,37 @@ it points at local S3 (SeaweedFS, ADR 0003) or a plain disk path in unit tests (
 | Piece | What it does |
 |---|---|
 | [`lakehouse/storage.py`](../../lakehouse/storage.py) | `lakehouse_uri()` reads `LAKEHOUSE_URI`, raising `MissingLakehouseURIError` if it's unset. `storage_options()` returns `None` for a plain path, or the S3-compatible options `deltalake` needs for a non-AWS, plain-HTTP endpoint like SeaweedFS when it starts with `s3://`. `table_uri(name)` builds `<LAKEHOUSE_URI>/bronze/<name>` |
-| [`lakehouse/bronze.py`](../../lakehouse/bronze.py) | `is_ingested(user_id, file_sha256)`: true if that file is already recorded for that user. `write_statement(statement, file_sha256)`: appends the statement's transactions to `bronze/transactions`, a summary row to `bronze/statements`, and a record to `bronze/ingested_files` — always appends; the caller checks `is_ingested()` first (see [CLI](cli.md)'s `pfp ingest`) |
+| [`lakehouse/bronze.py`](../../lakehouse/bronze.py) | `is_ingested(user_id, file_sha256)`: true if that file is already recorded for that user. `write_statement(statement, file_sha256)`: appends the statement's transactions to `bronze/transactions`, a summary row to `bronze/statements`, and a record to `bronze/ingested_files` — transactions and statements always append, so the caller checks `is_ingested()` first (see [CLI](cli.md)'s `pfp ingest`); the `ingested_files` record is written only when that sha256 isn't registered yet. `replace_statement(statement, file_sha256)` and `transactions_for_file(user_id, file_sha256)`: the backfill pair, below |
 | [`ingestion/organizer.py`](../../ingestion/organizer.py)'s `ArchivedItem` | Carries the already-parsed `Statement` and its `sha256` (T14 extension) so `pfp ingest` writes to bronze without re-opening, re-decrypting or re-parsing a file `organize()` already handled |
+
+## Replacing a file's rows (T14c)
+
+`replace_statement(statement, file_sha256)` is what [`pfp backfill`](cli.md) calls once it has
+re-parsed an already-archived statement: it deletes that file's rows from `bronze/transactions`
+(`source_file_sha256`) and `bronze/statements` (`file_sha256`) with `DeltaTable.delete()`, then
+writes the fresh parse through `write_statement()`. Three things about it are deliberate, and
+[ADR 0010](../decisions/0010-bronze-backfill-replaces-not-versions.md) has the full reasoning:
+
+- **The delete is scoped by `user_id` as well as the sha256.** Two users can hold the identical
+  PDF (ADR 0009 files a joint account as one copy per user) and would share one `file_sha256`,
+  so an unscoped delete would take the other user's rows with it. `user_id` is also the
+  partition column, so the rewrite only ever touches that user's files. Covered by its own test.
+- **`ingested_files` is untouched, `ingested_at` included** — the file's bytes never changed,
+  only this parser's reading of them, so its "first ingested at" record stays true. The
+  replacement `transactions`/`statements` rows do get a fresh `ingested_at`, which is what tells
+  a backfilled row from an originally ingested one.
+- **It's a thin wrapper, not a `replace=True` flag** inside `write_statement()`: the only
+  difference from an ingest is the two deletes in front.
+
+`transactions_for_file(user_id, file_sha256)` reads back what bronze currently holds for one
+file as sorted `(date, description, amount)` tuples. It exists for `pfp backfill --dry-run`'s
+comparison only; none of it is ever printed — the CLI reports counts and an unchanged/differs
+verdict, never a value (ADR 0004).
+
+Neither the delete nor the write is atomic with the other (delta-rs has no cross-table
+transaction), so a crash mid-replace can leave a file with rows missing; re-running
+`pfp backfill` fixes it, since the archived PDF is what the rows are derived from. Delta's log
+keeps the previous rows readable by time travel (`DeltaTable(uri, version=n)`) until a `VACUUM`.
 
 ## A real bug found while building this
 
@@ -36,6 +65,7 @@ hold. Covered by a dedicated regression test
 
 ```bash
 uv run pfp ingest --user piero   # organizes the inbox, then writes new statements to bronze
+uv run pfp backfill --user piero --dry-run   # what re-parsing the archive would change
 ```
 
 - Unit tests point `LAKEHOUSE_URI` at a `tmp_path` (disk, no S3 needed):
@@ -59,6 +89,9 @@ uv run pfp ingest --user piero   # organizes the inbox, then writes new statemen
 - [ADR 0003: Local S3 with SeaweedFS](../decisions/0003-local-s3-with-seaweedfs.md)
 - [ADR 0009: Several users, several accounts](../decisions/0009-multi-user-multi-account-content-over-filename.md) —
   the `user_id` partitioning this component relies on.
-- [CLI](cli.md) — `pfp ingest`, the only caller of `write_statement()`/`is_ingested()`.
+- [ADR 0010: A backfill replaces a file's rows](../decisions/0010-bronze-backfill-replaces-not-versions.md) —
+  why `replace_statement()` deletes instead of versioning.
+- [CLI](cli.md) — `pfp ingest` and `pfp backfill`, the only callers of `write_statement()`,
+  `is_ingested()`, `replace_statement()` and `transactions_for_file()`.
 - [Inbox organizer](inbox-organizer.md) — produces the `ArchivedItem`s `pfp ingest` writes.
 - [Phase 1](../phases/phase-1.md)

@@ -281,6 +281,24 @@
 
 **Dependencies:** T12b, T13 · **Files:** `lakehouse/{storage,bronze}.py`, `ingestion/cli.py`, tests · **Size:** M · **Skill:** source-driven-development
 
+### T14c: Bronze backfill — `feat/bronze-backfill`
+
+**Description:** Re-parse statements that are already archived and already in bronze with today's parser, replacing their rows, so a parser fix reaches historical data and not just the next statement (`pfp backfill`). ADR 0010.
+
+**Acceptance criteria:**
+- [x] `lakehouse.bronze.replace_statement(statement, file_sha256)` deletes that file's rows from `bronze/transactions` and `bronze/statements` — scoped by `user_id` as well as the sha256 — and writes the fresh parse. `bronze/ingested_files` keeps its single row with its original `ingested_at`: the file's bytes didn't change, only its interpretation.
+- [x] `pfp backfill --user <u> [--archive-root DIR] [--bank BANK] [--account LAST4] [--dry-run]` walks `<archive-root>/<user>/**/*.pdf`, never the inbox, skipping `_duplicates/` and `_needs_review/`; `--bank`/`--account` filter on the directory layout `organize()` produced, without parsing.
+- [x] A file that fails to re-parse (unknown bank, wrong password, reconciliation failure, malformed statement) is reported with a plain-language reason and leaves its bronze rows untouched; the run finishes. A missing `PFP_ACCOUNT_KEY` or `LAKEHOUSE_URI` stops it instead, with a clear message.
+- [x] `--dry-run` writes nothing and reports, per file, the transaction count in bronze versus in the fresh parse and whether they differ. The report never prints a description, an amount or a full account number (ADR 0004).
+- [x] ADR 0010 records the replace-not-version decision, the alternative considered, and the consequences (history of a wrong parse, no cross-table atomicity).
+
+**Verification:**
+- [x] Tests with the lake in `tmp_path`: a replace leaves only the fresh rows, doesn't touch another user's rows sharing the same sha256, leaves `ingested_files` alone, and writes fresh when the file was never ingested.
+- [x] Run for real on a throwaway archive and lake: `pfp ingest` (2 synthetic statements, 8 transaction rows), then `--dry-run`, a full backfill and an `--account`-filtered one — still 8/2/2 rows in `transactions`/`statements`/`ingested_files` afterwards, i.e. replaced, not appended.
+- [ ] On your machine, with your real statements already archived: `uv run pfp backfill --user piero --dry-run`, then the same without `--dry-run`, and confirm the reported counts. **Piero's step.**
+
+**Dependencies:** T14 · **Files:** `lakehouse/bronze.py`, `ingestion/cli.py`, tests, `brain/decisions/0010-bronze-backfill-replaces-not-versions.md` · **Size:** M · **Skill:** test-driven-development
+
 ### T15: Benchmarks — `perf/benchmarks`
 
 **Description:** Measure parsing and writes, and warn if a PR makes them worse.
