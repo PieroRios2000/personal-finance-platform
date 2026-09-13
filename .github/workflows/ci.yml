@@ -1,5 +1,6 @@
-# Quality gates on every PR into develop or main. Rules, thresholds and reasons are in
-# CONSTRAINTS.md; if this file and CONSTRAINTS.md disagree, CONSTRAINTS.md wins.
+# Quality gates on every PR into develop or main, plus a full run on every push to develop
+# and once a week (ADR 0008). Rules, thresholds and reasons are in CONSTRAINTS.md; if this
+# file and CONSTRAINTS.md disagree, CONSTRAINTS.md wins.
 #
 # `continue-on-error: true` marks the numeric rules that only warn until 2026-09-26 (T19
 # removes it so they start blocking). The floor (lint-types, tests' pytest step, gitleaks,
@@ -9,18 +10,62 @@ name: ci
 on:
   pull_request:
     branches: [main, develop]
+  # The impact map's safety net (ADR 0008): a push to develop and the weekly
+  # schedule run everything, so a relationship the map misses still gets caught.
+  push:
+    branches: [develop]
+  schedule:
+    - cron: "0 6 * * 1" # Mondays, 06:00 UTC
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
   UV_VERSION: "0.12.13"
+  # What the diff-based checks compare against. Outside a PR (push to develop,
+  # weekly schedule) there is no base: they compare develop against itself, an
+  # empty diff they pass trivially, while the full lint, type, test, security
+  # and benchmark runs still happen.
+  # Prefixed because a workflow-level `BASE_REF` is read by gitleaks-action as
+  # its own scan range and breaks the security job ("Overriding baseRef for
+  # scan with develop" -> `fatal: ambiguous argument 'develop^..<sha>'").
+  PFP_BASE_REF: ${{ github.event.pull_request.base.ref || 'develop' }}
 
 jobs:
+  # Which expensive jobs this change affects (ADR 0008). The decision itself
+  # lives in scripts/ci_impact.py, where tests/test_ci_impact.py can check it
+  # without a live Actions run; this job only feeds it the diff.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      benchmarks: ${{ steps.impact.outputs.benchmarks }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: impact map
+        id: impact
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "$PFP_BASE_REF"
+            git diff --name-only "origin/$PFP_BASE_REF...HEAD" \
+              | python3 scripts/ci_impact.py >> "$GITHUB_OUTPUT"
+          else
+            echo "benchmarks=true" >> "$GITHUB_OUTPUT"
+          fi
+          {
+            echo "### changes (ADR 0008)"
+            echo '```'
+            cat "$GITHUB_OUTPUT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   lint-types:
     name: lint-types
     runs-on: ubuntu-latest
@@ -60,7 +105,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-spa
       # Guarantees origin/<base> is resolvable regardless of what checkout's own
       # refspec fetched (see the same note in scripts/floor_guard.py's error message).
-      - run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - run: git fetch origin "$PFP_BASE_REF"
       - name: pytest
         run: |
           set -o pipefail
@@ -75,7 +120,7 @@ jobs:
         continue-on-error: true
         run: >-
           uv run diff-cover coverage.xml
-          --compare-branch=origin/${{ github.event.pull_request.base.ref }}
+          --compare-branch="origin/$PFP_BASE_REF"
           --fail-under=80
 
   security:
@@ -130,7 +175,55 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
       - run: uv sync --locked
-      - run: git fetch origin ${{ github.event.pull_request.base.ref }}
-      - run: >-
-          uv run python scripts/floor_guard.py
-          --base origin/${{ github.event.pull_request.base.ref }}
+      - run: git fetch origin "$PFP_BASE_REF"
+      - run: uv run python scripts/floor_guard.py --base "origin/$PFP_BASE_REF"
+
+  # Performance (CONSTRAINTS.md): the base branch and this change measured on
+  # the same runner, minutes apart, with only ingestion/ and lakehouse/ swapped
+  # between the two runs — same benchmark code, same dependencies, same machine.
+  benchmarks:
+    name: benchmarks
+    needs: changes
+    if: needs.changes.outputs.benchmarks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - run: uv sync --locked
+      - name: check out the base branch's code
+        run: |
+          git fetch origin "$PFP_BASE_REF"
+          git checkout "origin/$PFP_BASE_REF" -- ingestion lakehouse
+      # 10 rounds, not pytest-benchmark's default 5: two runs of the *same*
+      # code came out 17% apart at 5 rounds and ~3% apart at 10, and a 20%
+      # gate on a number that noisy would be a coin toss.
+      - name: measure the base branch
+        continue-on-error: true
+        run: uv run pytest -m benchmark -q --benchmark-min-rounds=10 --benchmark-save=base
+      # Always, so a failed base measurement can never leave the comparison
+      # measuring the base branch against itself.
+      - name: restore this change's code
+        if: always()
+        run: git checkout HEAD -- ingestion lakehouse
+      - name: compare (warns until 2026-09-26, see CONSTRAINTS.md)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          uv run pytest -m benchmark -q --benchmark-min-rounds=10 \
+            --benchmark-compare --benchmark-compare-fail=mean:20% \
+            | tee benchmarks.log && status=0 || status=$?
+          {
+            echo "### benchmarks (base vs this change)"
+            echo '```'
+            # The comparison table and any "Performance has regressed" line come
+            # first; what follows a regression is pytest-benchmark's own traceback.
+            head -n 40 benchmarks.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status

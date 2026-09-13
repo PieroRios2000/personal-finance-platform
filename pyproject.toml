@@ -30,6 +30,7 @@ dev = [
     "mypy>=2.3.1",
     "pip-audit>=2.10.1",
     "pytest>=9.1.1",
+    "pytest-benchmark>=5.3.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.7",
 ]
@@ -50,10 +51,11 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-m 'not real_pdf and not integration'"
+addopts = "-m 'not real_pdf and not integration and not benchmark'"
 markers = [
     "real_pdf: runs against the owner's real PDFs; deselected by default (ADR 0004). Run with `pytest -m real_pdf`.",
     "integration: needs local S3 (SeaweedFS, T13) running via `docker compose up`; deselected by default. Run with `pytest -m integration`.",
+    "benchmark: measures performance instead of behavior (T15); deselected by default, since a timing is only meaningful against a baseline on the same machine. CI's `benchmarks` job runs them base vs PR on one runner. Run with `pytest -m benchmark`.",
 ]
 
 [tool.coverage.run]

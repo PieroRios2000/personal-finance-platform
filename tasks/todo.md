@@ -286,14 +286,14 @@
 **Description:** Measure parsing and writes, and warn if a PR makes them worse.
 
 **Acceptance criteria:**
-- [ ] Parsing benchmarks (an N-page synthetic PDF) and a bronze append.
-- [ ] A CI job comparing base vs PR on the same runner (`--benchmark-compare-fail=mean:20%`), in warn mode.
-- [ ] A `changes` job (ADR 0008): affected areas per `git diff` against the base and the impact map; benchmarks run only if `ingestion/`, `lakehouse/` or the dependencies change. Everything runs on push to `develop` and once a week.
-- [ ] Current values noted in CONSTRAINTS.md ("Measured"), and ADR 0008 created in `brain/decisions/`.
+- [x] Parsing benchmarks (an N-page synthetic PDF) and a bronze append.
+- [x] A CI job comparing base vs PR on the same runner (`--benchmark-compare-fail=mean:20%`), in warn mode.
+- [x] A `changes` job (ADR 0008): affected areas per `git diff` against the base and the impact map; benchmarks run only if `ingestion/`, `lakehouse/` or the dependencies change. Everything runs on push to `develop` and once a week.
+- [x] Current values noted in CONSTRAINTS.md ("Measured"), and ADR 0008 created in `brain/decisions/`.
 
 **Verification:**
-- [ ] A PR with an artificial `sleep` triggers the warning (and gets discarded).
-- [ ] A PR that only touches docs skips the benchmarks and stays mergeable; one that touches `ingestion/` runs them.
+- [x] A PR with an artificial `sleep` triggers the warning (and gets discarded).
+- [x] A PR that only touches docs skips the benchmarks and stays mergeable; one that touches `ingestion/` runs them.
 
 **Dependencies:** T14 · **Files:** `tests/benchmarks/*`, `.github/workflows/ci.yml`, `CONSTRAINTS.md` · **Size:** S · **Skill:** performance-optimization
 
