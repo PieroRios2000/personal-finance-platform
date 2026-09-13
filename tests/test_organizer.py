@@ -21,7 +21,6 @@ _ACCOUNT_B = "191-00000000-0-0002"
 _ACCOUNT_C = "191-00000000-0-0003"
 
 _JAN_MOVEMENTS = (Movement(date(2026, 1, 5), "COMPRA FICTICIA", Decimal("-50.00")),)
-_FEB_MOVEMENTS = (Movement(date(2026, 2, 5), "COMPRA FICTICIA", Decimal("-50.00")),)
 
 
 @pytest.fixture(autouse=True)
