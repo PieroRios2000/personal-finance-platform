@@ -2,7 +2,7 @@
 type: component
 phase: 1
 status: built
-task: T11
+task: T11, fix/bcp-parser-real-layout
 ---
 
 # BCP parser
@@ -20,17 +20,63 @@ account number and period from the PDF's own content — never from the file nam
 
 ## How the layout is read
 
-Column positions (FECHA/DESCRIPCION/CARGO/ABONO/SALDO) aren't hardcoded to one fixed set of
-pixel coordinates. `parse()` finds the row containing all five header words in *this* PDF,
-records each one's x-position, then assigns every other row's words to the nearest header to
-its left. T10's synthetic fixture and a real BCP statement won't necessarily share exact
-positions, but they do share this column order, so deriving the boundaries from the header row
-itself should generalize better than one fixture's coordinates would.
+Column positions (FECHA/DESCRIPCION/CARGO(S)/ABONO(S), and SALDO when present) aren't
+hardcoded to one fixed set of pixel coordinates. `parse()` finds the row containing the
+header words in *this* PDF, records each one's x-position, then assigns every other row's
+words to the nearest header to its left.
 
-**This is still provisional.** It has only been checked against T10's synthetic PDF — not a
-real masked layout dump, which the owner hasn't shared yet (see [T10](layout-inspector.md) and
-the matching risk in `tasks/plan.md`). The real-PDF test below is designed to catch a mismatch
-once that dump exists, without needing this component itself to change first.
+**Calibrated against a real masked layout dump** (T9's inspector, 2026-09 — Piero's own real
+BCP statement was landing in `_needs_review/` until this). The real layout turned out to
+differ from T10's original synthetic fixture in several ways, all handled by one
+implementation rather than a special case per format:
+
+- No "CUENTA NRO." or "PERIODO" labels at all. The account number is found by its own shape
+  (dash-grouped digits with a long middle group) wherever it appears on the page; the period
+  is a line with "DEL \<date\> AL \<date\>", no leading label required.
+- A 2-digit year in the period (`_parse_date` accepts both 2 and 4).
+- The header row has FECHA *twice* (processing date, then value date, ~46pt apart) and
+  CARGOS/ABONOS (plural) with no SALDO column in the table at all. Only the later FECHA
+  occurrence becomes the "FECHA" column `parse()` reads; earlier ones are given a throwaway
+  column so their words don't bleed into it.
+- Each row's own date is "DDMMM" (day + 3-letter Spanish month abbreviation, e.g. "05ENE"),
+  alongside the original "DD/MM".
+- The closing balance is a bare "SALDO" (no "ACTUAL"/"FINAL" qualifier), and its amount sits
+  on a *neighboring* line rather than beside it — found by scanning bottom-up for the last
+  "SALDO" mention on the page (protecting against a transaction description that happens to
+  contain the word "SALDO"), checking the closest lines above and below for an amount.
+- A row's description *data* can start to the left of where the "DESCRIPCION" *header* word
+  itself is drawn (58pt left of it, in a second real dump) — closer to the FECHA (value date)
+  header than its own. Words landing in the FECHA cell that aren't the date itself (the date
+  is always the leftmost one) get moved to the front of the real description instead of
+  wrecking that row's date.
+- A cell can print a literal "0.00" — alone (an informational row) or beside the real amount
+  in the other column (which used to look like "both a charge and a credit" even though only
+  one side is a real movement). Treated as absent, same as an empty cell, since it has no
+  monetary effect either way.
+- Whatever lands in CARGO/ABONO isn't guaranteed to be a clean amount at all; a fourth real
+  statement had non-numeric text bleed in there and crashed the whole process with a raw
+  `decimal.InvalidOperation`. Validated against the amount shape before `_money()` ever sees
+  it; a mismatch is now a normal, row-scoped `ValueError` (never the raw cell text itself,
+  which could hold leaked real content) instead of an unhandled crash.
+- **Multi-page statements**: a real BCP page repeats the same header row and account/period
+  boilerplate at the *same* y-position on every page. Lines are grouped *within each page*
+  separately, not across the whole flattened document — otherwise an unrelated row on a later
+  page at that same y silently merges into the current one, corrupting both. This was the
+  final piece: it's the normal case for any multi-page statement, not a rare edge case.
+
+`tests/fixtures/synthetic_pdfs.py`'s `bcp_real_layout_statement_pdf()` renders every one of
+these traits (additive next to the original fixture, which dozens of other tests still use
+unchanged), plus a dedicated hand-built multi-page test for the last one. The closing-balance
+search is the one piece still built on a best-evidenced heuristic rather than a certainty —
+see the module docstring in `ingestion/parsers/bcp.py`; `reconcile()` is the backstop if it
+ever picks the wrong amount, failing loudly as a `ReconciliationError` instead of silently
+accepting a wrong balance.
+
+**Verified end to end against all four of Piero's real BCP statements** (2026-09): every one
+now archives and reconciles, three months (2025-09 to 2025-11) with no gaps. Each of the five
+fixes above was found by iterating — Piero ran `pfp ingest`, hit a real error, ran T9's masked
+inspector on the specific failing file when a new masked dump was needed, and I calibrated the
+next fix against it — never by guessing ahead of what the data actually showed.
 
 ## OCR fallback for scanned pages (T11b)
 

@@ -186,6 +186,153 @@ def _table_image(
     return image
 
 
+_SPANISH_MONTH_ABBR = {
+    1: "ENE",
+    2: "FEB",
+    3: "MAR",
+    4: "ABR",
+    5: "MAY",
+    6: "JUN",
+    7: "JUL",
+    8: "AGO",
+    9: "SET",
+    10: "OCT",
+    11: "NOV",
+    12: "DIC",
+}
+
+_REAL_ACCOUNT_NUMBER = "000-00000000-0-00"
+
+
+def bcp_real_layout_statement_pdf(
+    *,
+    opening_balance: Decimal = Decimal("1000.00"),
+    movements: Sequence[Movement] = DEFAULT_MOVEMENTS,
+    closing_balance: Decimal | None = None,
+    reconciles: bool = True,
+    account_number: str = _REAL_ACCOUNT_NUMBER,
+    row_description_x: float = 240,
+    zero_and_real_row: Decimal | None = None,
+    garble_first_row_charge: bool = False,
+) -> bytes:
+    """Render a fictional BCP statement matching the *real* layout found in
+    T9's masked inspection of the owner's own statement (2026-09), which
+    differs from `bcp_statement_pdf`'s original (T10) assumptions in several
+    ways confirmed from that masked dump:
+
+    - No "CUENTA NRO." or "PERIODO" labels: the account number is a bare
+      `NNN-NNNNNNNN-N-NN`-shaped token near "CUENTA"/"MONEDA" column headers,
+      and the date range is just "DEL <date> AL <date>" with no leading label.
+    - The period uses a 2-digit year ("DD/MM/YY"), not 4.
+    - The transaction table's header row has FECHA *twice* (processing date,
+      then value date) and "CARGOS"/"ABONOS" (plural), with no SALDO column.
+    - Each row's own date is "DDMMM" (day + 3-letter Spanish month
+      abbreviation, no separator, e.g. "05ENE"), not "DD/MM".
+    - The closing balance is a bare "SALDO" (no "ACTUAL"/"FINAL" qualifier),
+      with its amount one line *above* the label rather than beside it — the
+      real dump showed them 8pt apart, past `_group_lines`' 3pt tolerance.
+    - A row's own description *data* starts to the left of where the
+      "DESCRIPCION" *header* word itself is drawn (58pt left of it in the
+      real dump: header at x=181, row data at x=123) — closer to the FECHA
+      (value date) header than to its own. `row_description_x` reproduces
+      this: it defaults to the DESCRIPCION header's own x (no misalignment,
+      matching every other test), but a caller can move it left of that,
+      independently of the header, to exercise this specific real trait.
+    - A real row can print "0.00" in one of CARGO/ABONO alongside a real
+      amount in the other — a third real statement had a row that did
+      exactly this. `zero_and_real_row` appends one such row (a "0.00"
+      charge plus the given credit amount) after `movements`.
+    - Non-numeric text can land in the CARGO/ABONO cell too (a fourth real
+      statement crashed the parser outright with a raw `decimal.
+      InvalidOperation`, from some other column's boundary mismatch bleeding
+      stray text into it). `garble_first_row_charge` reproduces that by
+      drawing extra non-numeric text at the CARGO column's position on the
+      first row.
+
+    `bcp_statement_pdf` (the original T10 fixture) is left untouched since
+    dozens of other tests depend on its exact shape; this is a separate,
+    additive fixture used only to test the parser against the real layout.
+    """
+    rows: list[tuple[Movement, Decimal]] = []
+    running = opening_balance
+    for movement in movements:
+        running += movement.amount
+        rows.append((movement, running))
+    if zero_and_real_row is not None:
+        extra = Movement(
+            (movements[-1].when if movements else date.today()),
+            "AJUSTE A CERO FICTICIO",
+            zero_and_real_row,
+        )
+        running += extra.amount
+        rows.append((extra, running))
+    computed_closing = running
+
+    if closing_balance is not None:
+        printed_closing = closing_balance
+    elif reconciles:
+        printed_closing = computed_closing
+    else:
+        printed_closing = computed_closing + _BROKEN_DRIFT
+
+    dates = [movement.when for movement, _ in rows] or [date.today()]
+    period_start, period_end = min(dates), max(dates)
+
+    pdf = FPDF(unit="pt")
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=9)
+
+    pdf.text(40, 50, "ESTADO DE CUENTA")
+    pdf.text(40, 65, "TIPO DE CUENTA MONEDA")
+    pdf.text(40, 80, f"{account_number} SOLES")
+    pdf.text(
+        40,
+        95,
+        f"DEL {period_start:%d/%m/%y} AL {period_end:%d/%m/%y}",
+    )
+    pdf.text(40, 110, f"SALDO ANTERIOR {_money(opening_balance)}")
+
+    header_y = 130
+    pdf.text(40, header_y, "FECHA")
+    pdf.text(90, header_y, "PROC.")
+    pdf.text(140, header_y, "FECHA")
+    pdf.text(190, header_y, "VALOR")
+    pdf.text(240, header_y, "DESCRIPCION")
+    pdf.text(400, header_y, "CARGOS")
+    pdf.text(460, header_y, "ABONOS")
+
+    row_y = header_y
+    for row_index, (movement, _) in enumerate(rows):
+        row_y += 15
+        charge = _money(-movement.amount) if movement.amount < 0 else ""
+        credit = _money(movement.amount) if movement.amount > 0 else ""
+        if zero_and_real_row is not None and movement.amount == zero_and_real_row:
+            charge = _money(Decimal("0.00"))
+        if garble_first_row_charge and row_index == 0:
+            charge = "REF.A1B2"
+        # A different processing date than the value date, so a test can
+        # prove the parser reads the *second* FECHA column, not the first.
+        proc_date = movement.when.replace(day=max(1, movement.when.day - 1))
+        proc_abbr = _SPANISH_MONTH_ABBR[proc_date.month]
+        pdf.text(40, row_y, f"{proc_date.day:02d}{proc_abbr}")
+        pdf.text(
+            140,
+            row_y,
+            f"{movement.when.day:02d}{_SPANISH_MONTH_ABBR[movement.when.month]}",
+        )
+        pdf.text(row_description_x, row_y, movement.description)
+        pdf.text(400, row_y, charge)
+        pdf.text(460, row_y, credit)
+
+    # The amount one line *above* its bare "SALDO" label, mirroring the real
+    # dump (y=680 amount, y=688 label — 8pt apart, past the 3pt same-line
+    # tolerance `_group_lines` uses).
+    pdf.text(400, row_y + 30, _money(printed_closing))
+    pdf.text(40, row_y + 40, "SALDO")
+
+    return bytes(pdf.output())
+
+
 def bcp_scanned_statement_pdf(
     *,
     opening_balance: Decimal = Decimal("1000.00"),
