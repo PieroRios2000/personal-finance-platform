@@ -1,264 +1,270 @@
-# Plan de implementación — Fase 1: Fundación
+# Implementation plan — Phase 1: Foundation
 
-> Especificación maestra: [`PROJECT.md`](../PROJECT.md). Tareas detalladas: [`tasks/todo.md`](todo.md).
-> Estado: **aprobado** (PR #6); los cambios posteriores entran por PR.
+> Master spec: [`PROJECT.md`](../PROJECT.md). Detailed tasks: [`tasks/todo.md`](todo.md).
+> Status: **approved** (PR #6); later changes come in via PR.
 
-## Resumen
+## Summary
 
-La Fase 1 deja una plataforma que se puede correr en local de punta a punta:
-un PDF de estado de cuenta (BCP o Scotiabank) se parsea al esquema `Transaction`,
-se reconcilia contra los totales que declara el propio PDF, se descarta si ya fue
-ingerido (hash SHA-256) y se escribe en la capa **bronze** (Delta Lake sobre S3 local).
-dbt transforma bronze → **silver** con tests. El CI valida calidad, seguridad,
-rendimiento y arquitectura en cada PR, y el **cerebro** (`brain/`) documenta
-el contexto y cómo se relaciona cada pieza. Los datos son **por usuario y por cuenta**, y la
-conciliación es integral: cada estado de cuenta, la continuidad entre periodos y las
-transferencias entre cuentas.
+Phase 1 leaves a platform that can run end-to-end locally:
+a bank statement PDF (BCP or Scotiabank) gets parsed into the `Transaction` schema,
+reconciled against the totals the PDF itself declares, skipped if already
+ingested (SHA-256 hash), and written to the **bronze** layer (Delta Lake on local S3).
+dbt transforms bronze → **silver** with tests. CI validates quality, security,
+performance and architecture on every PR, and the **brain** (`brain/`) documents
+the context and how each piece relates. Data is **per user and per account**, and
+reconciliation is integral: every statement, continuity across periods, and
+transfers between accounts.
 
-**Resultado verificable al cerrar la fase:**
+**Verifiable result once the phase closes:**
 
 ```bash
-docker compose up -d                  # S3 local
-cp /mnt/c/Users/<tú>/Downloads/EECC*.pdf ~/finance-data/inbox/piero/   # con cualquier nombre
-uv run pfp ingest --user piero        # → archiva en raw/piero/<banco>/<cuenta>/ y escribe bronze
-cp /mnt/c/Users/<tú>/Downloads/EECC*.pdf ~/finance-data/inbox/piero/   # los mismos otra vez
-uv run pfp ingest --user piero        # → "duplicado", 0 filas nuevas
-uv run dbt build --project-dir dbt    # → silver + tests en verde
+docker compose up -d                  # local S3
+cp /mnt/c/Users/<you>/Downloads/EECC*.pdf ~/finance-data/inbox/piero/   # any name works
+uv run pfp ingest --user piero        # → filed into raw/piero/<bank>/<account>/, written to bronze
+cp /mnt/c/Users/<you>/Downloads/EECC*.pdf ~/finance-data/inbox/piero/   # the same files again
+uv run pfp ingest --user piero        # → "duplicate", 0 new rows
+uv run dbt build --project-dir dbt    # → silver + tests green
 ```
 
-## Cambios respecto a PROJECT.md
+## Changes from PROJECT.md
 
-| PROJECT.md | Este plan | Motivo |
+| PROJECT.md | This plan | Why |
 |---|---|---|
-| Bancos BCP, BBVA, Interbank | **BCP y Scotiabank** | Decisión de Piero (2026-09-12) |
-| MinIO | **SeaweedFS** (aprobado 2026-09-12) | MinIO Community dejó de publicar imágenes (oct-2025), entró en mantenimiento (dic-2025) y su repo está archivado (2026): sin parches de seguridad |
-| Postgres / DuckDB | Solo **DuckDB** embebido | Un servicio menos; DuckDB cubre la Fase 1 |
-| PySpark / DuckDB / Polars | **DuckDB + delta-rs** en Fase 1; Spark cuando haya un motivo medible | 7 GB de RAM en WSL; evitar tres motores para el mismo trabajo |
-| PyMuPDF, pytesseract | **pytesseract** para páginas escaneadas (T11b); sin PyMuPDF | Hay PDFs escaneados; pdfplumber ya renderiza páginas a imagen para el OCR |
+| BCP, BBVA, Interbank banks | **BCP and Scotiabank** | Piero's decision (2026-09-12) |
+| MinIO | **SeaweedFS** (approved 2026-09-12) | MinIO Community stopped publishing images (Oct 2025), went into maintenance (Dec 2025) and its repo is archived (2026): no more security patches |
+| Postgres / DuckDB | Only embedded **DuckDB** | One less service; DuckDB covers Phase 1 |
+| PySpark / DuckDB / Polars | **DuckDB + delta-rs** in Phase 1; Spark once there's a measurable reason | 7 GB of RAM in WSL; avoid three engines doing the same job |
+| PyMuPDF, pytesseract | **pytesseract** for scanned pages (T11b); no PyMuPDF | There are scanned PDFs; pdfplumber already renders pages to an image for OCR |
 
-`PROJECT.md` se actualiza con estos cambios en la tarea T3b.
+`PROJECT.md` gets updated with these changes in task T3b.
 
-## Decisiones de arquitectura
+## Architecture decisions
 
-Cada decisión se registra como ADR en `brain/decisiones/` en la tarea donde se toma.
+Every decision gets recorded as an ADR in `brain/decisions/` in the task where it's made.
 
-| ADR | Decisión | Por qué |
+| ADR | Decision | Why |
 |---|---|---|
-| 0001 | Python **3.12** gestionado con **uv** (`pyproject.toml` + `uv.lock`) | El 3.14 del sistema es muy nuevo para parte del stack (dbt lo soporta hace poco y con caveats de dependencias; herramientas de fases 2–3 suelen ir detrás). uv instala Python sin sudo y fija versiones con lockfile |
-| 0002 | **DuckDB + delta-rs** (`deltalake`) antes que Spark | Mismo formato Delta, sin JVM ni cluster; Spark entra cuando el volumen o la demo lo justifiquen |
-| 0003 | S3 local con **SeaweedFS** en vez de MinIO | Mantenido, Apache 2.0, API S3 estándar: cambiar de servidor es cambiar un endpoint |
-| 0004 | **Los PDFs reales nunca salen de tu máquina** | El CI usa PDFs sintéticos generados en los tests; los parsers se diseñan con un volcado de layout enmascarado |
-| 0005 | `Transaction` con `Decimal`, `user_id` y cuenta identificada por `account_id` = HMAC-SHA256 del banco y el número completo (clave `PFP_ACCOUNT_KEY` en `.env`) + últimos 4 dígitos; el número completo y el nombre del archivo nunca se guardan | Sin errores de coma flotante; varias cuentas por banco y por usuario sin guardar el número (un hash sin clave se revierte probando todos los números posibles) |
-| 0006 | Ubicación del lake por URI (`LAKEHOUSE_URI`) | `s3://…` en local/CI de integración, ruta de disco en tests unitarios |
-| 0007 | **Entornos efímeros por PR**: el mismo `docker-compose.yml` en local y en CI, con nombre de proyecto único, datos sintéticos y destrucción siempre al final | Probar cada mejora sobre la plataforma real sin servidores fijos ni costo, y ver su efecto en los datos (base vs PR), no solo si los tests pasan |
-| 0008 | **CI por impacto**: los checks baratos (lint, tipos, tests unitarios, seguridad) corren siempre completos; los caros (entorno efímero, dbt, benchmarks) solo si el cambio los afecta, según un mapa de dependencias; todo completo en `develop` y una vez por semana | Evaluar lo que cambia y lo que depende de ello, no el proyecto entero, sin perder efectos indirectos: los checks baratos tardan segundos y son los que detectan roturas entre módulos (mypy), y la corrida completa atrapa lo que el mapa no vea |
-| 0009 | **Varios usuarios y varias cuentas en una instalación**: banco, cuenta y periodo se leen del contenido del PDF, nunca del nombre del archivo; `user_id` en todos los datos; PDFs en una bandeja por usuario que se archivan en `raw/<usuario>/<banco>/<cuenta>/`; lake particionado por `user_id` | Más de una persona y varias cuentas por banco; borrar los datos de alguien es borrar su partición; el nombre del archivo puede contener números de cuenta |
+| 0001 | Python **3.12** managed with **uv** (`pyproject.toml` + `uv.lock`) | The system's 3.14 is too new for part of the stack (dbt has only recently supported it, with dependency caveats; Phase 2-3 tools tend to lag behind). uv installs Python without sudo and pins versions with a lockfile |
+| 0002 | **DuckDB + delta-rs** (`deltalake`) before Spark | Same Delta format, no JVM or cluster; Spark comes in once volume or a demo justify it |
+| 0003 | Local S3 with **SeaweedFS** instead of MinIO | Maintained, Apache 2.0, standard S3 API: switching servers means switching an endpoint |
+| 0004 | **Real PDFs never leave your machine** | CI uses synthetic PDFs generated in the tests; parsers are designed from a masked layout dump |
+| 0005 | `Transaction` with `user_id` and an account identified by `account_id` = HMAC-SHA256 of the bank and the full number (key `PFP_ACCOUNT_KEY` in `.env`) + the last 4 digits; the full number and the file name are never stored | No floating-point errors; several accounts per bank and per user without storing the number (a hash without a key is reversible by trying every possible number) |
+| 0006 | Lake location by URI (`LAKEHOUSE_URI`) | `s3://…` locally/in integration CI, a disk path in unit tests |
+| 0007 | **Ephemeral per-PR environments**: the same `docker-compose.yml` locally and in CI, with a unique project name, synthetic data, and always torn down at the end | Test every improvement against the real platform with no fixed servers or cost, and see its effect on the data (base vs PR), not just whether tests pass |
+| 0008 | **Impact-based CI**: cheap checks (lint, types, unit tests, security) always run in full; expensive ones (ephemeral environment, dbt, benchmarks) only if the change affects them, per a dependency map; everything runs in full on `develop` and once a week | Evaluate what changes and what depends on it, not the whole project, without missing indirect effects: cheap checks take seconds and are what catches breakage between modules (mypy), and the full run catches whatever the map misses |
+| 0009 | **Several users and several accounts in one install**: bank, account and period are read from the PDF's content, never from the file name; `user_id` on all data; PDFs land in a per-user inbox and get filed into `raw/<user>/<bank>/<account>/`; the lake is partitioned by `user_id` | More than one person and several accounts per bank; deleting someone's data means dropping their partition; the file name can contain account numbers |
 
-## Estructura al cerrar la Fase 1
+## Structure once Phase 1 closes
 
 ```
 .
 ├── .github/
 │   ├── workflows/{branch-policy,ci}.yml
 │   └── pull_request_template.md
-├── brain/                    # cerebro: conceptos, componentes, decisiones, fases
-├── dbt/                      # proyecto dbt (bronze → silver)
+├── brain/                    # brain: concepts, components, decisions, phases
+├── dbt/                      # dbt project (bronze → silver)
 ├── ingestion/
 │   ├── schema.py  dedup.py  reconciliation.py  dispatcher.py  cli.py
 │   └── parsers/{base,bcp,scotiabank}.py
-├── lakehouse/                # escritura Delta + registro de archivos ingeridos
+├── lakehouse/                # Delta writer + ingested-files registry
 ├── scripts/                  # inspect_pdf_layout.py, floor_guard, data_diff.py
-├── tests/                    # unit, fixtures sintéticas, benchmarks, integración
+├── tests/                    # unit, synthetic fixtures, benchmarks, integration
 ├── tasks/{plan,todo}.md
 ├── CLAUDE.md  CONSTRAINTS.md  Makefile  PROJECT.md  README.md
 ├── docker-compose.yml  pyproject.toml  uv.lock  .python-version
 └── .gitignore  .env.example  .pre-commit-config.yaml
 ```
 
-## Forma de trabajo
+## Ways of working
 
-- **1 tarea = 1 rama desde `develop` = 1 PR hacia `develop`.** Ramas `<tipo>/<nombre>`
+- **1 task = 1 branch from `develop` = 1 PR into `develop`.** Branches `<type>/<name>`
   (`feat/`, `fix/`, `test/`, `docs/`, `ci/`, `chore/`, `infra/`, `perf/`).
-- **Commits atómicos** con prefijo convencional (`feat:`, `test:`, `docs:`…); en tareas
-  con lógica, primero el commit del test que falla y luego la implementación.
-- **Cada PR actualiza el cerebro**: la nota del componente o concepto que toca y
-  `brain/fases/fase-1.md`. El template de PR lo recuerda.
-- **Solo Piero aprueba y mergea.** Claude crea ramas, commits y PRs; nunca mergea.
-- **Skills por tipo de trabajo:** `test-driven-development` en toda la lógica,
-  `source-driven-development` para deltalake / dbt-duckdb / DuckDB-S3,
-  `security-and-hardening` en PDFs y secretos, `performance-optimization` en benchmarks,
-  `documentation-and-adrs` en el cerebro, y `ponytail-review` + `review` antes de abrir cada PR.
-- **Release de fase:** al cerrar, PR `develop → main` titulado "Fase 1 — Fundación".
+- **Atomic commits** with a conventional prefix (`feat:`, `test:`, `docs:`…); in tasks
+  with logic, the failing test's commit comes first, then the implementation.
+- **Every PR updates the brain**: the component or concept note it touches, and
+  `brain/phases/phase-1.md`. The PR template is there to remind you.
+- **Only Piero approves and merges.** Claude creates branches, commits and PRs; never merges.
+- **Skills by kind of work:** `test-driven-development` for all logic,
+  `source-driven-development` for deltalake / dbt-duckdb / DuckDB-S3,
+  `security-and-hardening` for PDFs and secrets, `performance-optimization` for benchmarks,
+  `documentation-and-adrs` for the brain, and `ponytail-review` + `review` before opening every PR.
+- **Phase release:** on close, a `develop → main` PR titled "Phase 1 — Foundation".
 
-## Calidad (se detalla en CONSTRAINTS.md, tarea T4)
+## Quality (detailed in CONSTRAINTS.md, task T4)
 
-| Regla | Herramienta | Modo |
+| Rule | Tool | Mode |
 |---|---|---|
-| Mínimo: lint, formato, tipos, secretos, tests sin desactivar | ruff, mypy, gitleaks, floor-guard | **Bloquea** desde el día 1 |
-| Cobertura ≥ 80 % en líneas nuevas | pytest-cov + diff-cover | Avisa hasta **2026-09-26**, luego bloquea |
-| Seguridad: nada de severidad alta | pip-audit (dependencias), bandit (código) | Avisa hasta 2026-09-26, luego bloquea |
-| Rendimiento: no empeorar > 20 % | pytest-benchmark (base vs PR en el mismo runner) | Avisa hasta 2026-09-26, luego bloquea |
-| Arquitectura: quién puede importar a quién | import-linter | Avisa hasta 2026-09-26, luego bloquea |
+| Floor: lint, format, types, secrets, tests never disabled | ruff, mypy, gitleaks, floor-guard | **Blocks** from day 1 |
+| Coverage ≥ 80% on new lines | pytest-cov + diff-cover | Warns until **2026-09-26**, then blocks |
+| Security: nothing high-severity | pip-audit (dependencies), bandit (code) | Warns until 2026-09-26, then blocks |
+| Performance: no more than 20% worse | pytest-benchmark (base vs PR on the same runner) | Warns until 2026-09-26, then blocks |
+| Architecture: who can import whom | import-linter | Warns until 2026-09-26, then blocks |
 
-## Definition of Done (para cada tarea)
+## Definition of Done (for every task)
 
-- [ ] Criterios de aceptación de la tarea cumplidos.
-- [ ] `make check-task` en verde en local y checks bloqueantes del CI en verde.
-- [ ] Comportamiento verificado ejecutándolo, no solo con tests.
-- [ ] Los tests nuevos fallan sin el cambio y pasan con él.
-- [ ] Sin datos reales ni secretos en el diff.
-- [ ] Nota del cerebro actualizada (y ADR si hubo una decisión).
-- [ ] `SETUP.md` al día si la tarea añade librerías, programas, versiones o variables de entorno.
-- [ ] `ponytail-review` y `review` sin hallazgos pendientes.
-- [ ] PR revisado y mergeado por Piero.
+- [ ] The task's acceptance criteria are met.
+- [ ] `make check-task` green locally and CI's blocking checks green.
+- [ ] Behavior verified by running it, not just with tests.
+- [ ] New tests fail without the change and pass with it.
+- [ ] No real data or secrets in the diff.
+- [ ] Brain note updated (and an ADR if a decision was made).
+- [ ] `SETUP.md` kept current if the task adds libraries, programs, versions or env vars.
+- [ ] `ponytail-review` and `review` with no pending findings.
+- [ ] PR reviewed and merged by Piero.
 
-## Tareas
+## Tasks
 
-Detalle, criterios y verificación de cada una en [`todo.md`](todo.md).
+Details, criteria and verification for each one live in [`todo.md`](todo.md).
 
-**Bloque A — Fundación del repo**
-- T1 `chore/security-guards` — .gitignore, .env.example, pre-commit con gitleaks
+**Block A — Repo foundation**
+- T1 `chore/security-guards` — .gitignore, .env.example, pre-commit with gitleaks
 - T2 `chore/python-project` — pyproject + uv + ruff/mypy/pytest + smoke test
-- T3a `docs/brain-vault` — cerebro: estructura, mapa, conceptos, ADR 0001–0004
-- T3b `docs/claude-md` — CLAUDE.md, template de PR, PROJECT.md actualizado
-- T4 `chore/constraints` — CONSTRAINTS.md, Makefile de checks, floor-guard, import-linter
-- T5 `ci/quality-gates` — workflow de CI + checks obligatorios en el ruleset
-- ✅ **Checkpoint A** — CI en verde en `develop`, cerebro navegable en GitHub
+- T3a `docs/brain-vault` — brain: structure, map, concepts, ADR 0001–0004
+- T3b `docs/claude-md` — CLAUDE.md, PR template, updated PROJECT.md
+- T4 `chore/constraints` — CONSTRAINTS.md, checks Makefile, floor-guard, import-linter
+- T5 `ci/quality-gates` — CI workflow + required checks in the ruleset
+- ✅ **Checkpoint A** — CI green on `develop`, brain browsable on GitHub
 
-**Bloque B — Ingesta**
-- T6 `feat/transaction-schema` — modelos `Transaction` / `Statement` por usuario y cuenta (`account_id` HMAC) + normalización
-- T7 `feat/file-hash` — SHA-256 del archivo (dedup nivel archivo)
-- T8 `feat/reconciliation` — cuadre contra saldos y totales declarados
-- T9 `chore/pdf-layout-inspector` — volcado enmascarado del layout de un PDF
-- T10 `test/bcp-synthetic-fixture` — generador de PDF sintético estilo BCP
-- T11 `feat/parser-bcp` — parser BCP + desbloqueo con contraseña
-- T11b `feat/ocr-fallback` — OCR con Tesseract para páginas escaneadas
-- T12 `feat/dispatcher-cli` — detección de banco por contenido + CLI `pfp parse --user`
-- T12b `feat/inbox-organizer` — bandeja de entrada: duplicados por contenido y archivo por usuario, banco, cuenta y periodo
-- ✅ **Checkpoint B** — un PDF real de BCP se parsea y reconcilia en local
+**Block B — Ingestion**
+- T6 `feat/transaction-schema` — `Transaction` / `Statement` models per user and account (`account_id` HMAC) + normalization
+- T7 `feat/file-hash` — SHA-256 of the file (file-level dedup)
+- T8 `feat/reconciliation` — matching against declared balances and totals
+- T9 `chore/pdf-layout-inspector` — masked dump of a PDF's layout
+- T10 `test/bcp-synthetic-fixture` — BCP-style synthetic PDF generator
+- T11 `feat/parser-bcp` — BCP parser + password unlocking
+- T11b `feat/ocr-fallback` — OCR with Tesseract for scanned pages
+- T12 `feat/dispatcher-cli` — content-based bank detection + `pfp parse --user` CLI
+- T12b `feat/inbox-organizer` — inbox: content-based duplicate detection and filing by user, bank, account and period
+- ✅ **Checkpoint B** — a real BCP PDF parses and reconciles locally
 
-**Bloque C — Lakehouse**
-- T13 `infra/s3-local` — docker-compose con SeaweedFS + bucket, aislable por proyecto (`make poc-up` / `poc-down`)
-- T14 `feat/bronze-writer` — bronze en Delta particionado por usuario (transacciones, estados de cuenta, archivos) + `pfp ingest`
-- T15 `perf/benchmarks` — benchmarks de parsing y escritura + job de CI
-- ✅ **Checkpoint C** — `pfp ingest` de punta a punta; reingestar no duplica
+**Block C — Lakehouse**
+- T13 `infra/s3-local` — docker-compose with SeaweedFS + bucket, isolatable per project (`make poc-up` / `poc-down`)
+- T14 `feat/bronze-writer` — bronze in Delta partitioned by user (transactions, statements, files) + `pfp ingest`
+- T15 `perf/benchmarks` — parsing and write benchmarks + CI job
+- ✅ **Checkpoint C** — `pfp ingest` end-to-end; re-ingesting doesn't duplicate
 
-**Bloque D — Transformación**
-- T16 `feat/dbt-silver` — proyecto dbt-duckdb, fuente bronze, modelo silver + tests (incluida la continuidad de saldos)
-- T17 `ci/ephemeral-integration` — entorno efímero en CI por impacto: compose por PR + ingesta sintética + `dbt build --select @state:modified` + sqlfluff + destrucción; `make poc` en local
-- T17b `ci/pr-data-diff` — comparación base vs PR de los datos, publicada en el resumen del job
-- ✅ **Checkpoint D** — `dbt build` en verde en local y en CI; cada PR muestra su efecto en los datos
+**Block D — Transformation**
+- T16 `feat/dbt-silver` — dbt-duckdb project, bronze source, silver model + tests (including balance continuity)
+- T17 `ci/ephemeral-integration` — impact-based ephemeral environment in CI: per-PR compose + synthetic ingestion + `dbt build --select @state:modified` + sqlfluff + teardown; `make poc` locally
+- T17b `ci/pr-data-diff` — base-vs-PR data comparison, published in the job summary
+- ✅ **Checkpoint D** — `dbt build` green locally and in CI; every PR shows its effect on the data
 
-**Bloque E — Segundo banco y cierre**
-- T18 `feat/parser-scotiabank` — fixture + parser Scotiabank
-- T18b `feat/inter-account-reconciliation` — emparejar transferencias entre cuentas del mismo usuario
-- T19 `docs/phase-1-close` — README, cerebro al día, activar bloqueo de reglas numéricas
-- ✅ **Checkpoint final** → PR de release `develop → main`
+**Block E — Second bank and close**
+- T18 `feat/parser-scotiabank` — fixture + Scotiabank parser
+- T18b `feat/inter-account-reconciliation` — matching transfers between accounts of the same user
+- T19 `docs/phase-1-close` — README, brain kept current, turn on blocking for numeric rules
+- ✅ **Final checkpoint** → `develop → main` release PR
 
-## Entornos efímeros (ADR 0007)
+## Ephemeral environments (ADR 0007)
 
-Cada PR que toque datos se prueba en una plataforma temporal que se crea, se usa y se destruye:
+Every PR that touches data gets tested on a temporary platform that's created, used, and torn down:
 
-1. **Levantar**, solo si el cambio afecta a datos (ADR 0008) — `docker compose -p pfp-pr-<n> up -d --wait` (en local: `make poc-up`).
-   El nombre de proyecto aísla contenedores, redes y volúmenes.
-2. **Ejecutar** — ingesta y transformación con datos **sintéticos** en CI; con tus PDFs
-   **reales solo en local** (`make poc`), mostrando únicamente pass/fail y diferencias de reconciliación.
-3. **Comparar** — la misma corrida con la rama base y con la del PR; las diferencias
-   (filas por modelo, esquema, valores) se publican en el resumen del job.
-4. **Guardar logs y destruir siempre** — primero `docker compose logs` y los artefactos de dbt se suben
-   como artifact del job; luego `docker compose -p pfp-pr-<n> down -v`, también si algo falló (`if: always()`).
+1. **Spin up**, only if the change affects data (ADR 0008) — `docker compose -p pfp-pr-<n> up -d --wait` (locally: `make poc-up`).
+   The project name isolates containers, networks and volumes.
+2. **Run** — ingestion and transformation with **synthetic** data in CI; with your
+   **real PDFs only locally** (`make poc`), showing only pass/fail and reconciliation differences.
+3. **Compare** — the same run against the base branch and the PR's; the differences
+   (rows per model, schema, values) get published in the job summary.
+4. **Save logs and always tear down** — first `docker compose logs` and dbt's artifacts get
+   uploaded as job artifacts; then `docker compose -p pfp-pr-<n> down -v`, even on failure (`if: always()`).
 
-Estos jobs no usan secretos, así que funcionan igual para PRs desde forks. Los entornos en
-la nube (Fase 4) solo corren en ramas del propio repo, se destruyen siempre y llevan expiración.
+These jobs use no secrets, so they work the same way for PRs from forks. Cloud
+environments (Phase 4) only run on branches of this repo, always get torn down, and carry an expiry.
 
-| Fase | Qué se prueba en el entorno efímero | Dónde se planifica |
+| Phase | What gets tested in the ephemeral environment | Where it's planned |
 |---|---|---|
-| 1 | Ingesta sintética (reingestar no duplica) + `dbt build` + comparación base vs PR | T13, T17, T17b |
-| 1 | Rendimiento base vs PR en el mismo runner | T15 |
-| 2 | Pipeline completo en Dagster y sus checks | Plan de la Fase 2 |
-| 3 | Entrenamiento con datos sintéticos (MLflow temporal) y métricas vs el modelo base | Plan de la Fase 3 |
-| 3 y 5 | FastAPI y Streamlit en contenedores + pruebas de humo | Planes de las Fases 3 y 5 |
-| 4 | `terraform plan` en cada PR; crear y destruir infraestructura real solo a pedido | Plan de la Fase 4 |
+| 1 | Synthetic ingestion (re-ingesting doesn't duplicate) + `dbt build` + base-vs-PR comparison | T13, T17, T17b |
+| 1 | Base-vs-PR performance on the same runner | T15 |
+| 2 | The full Dagster pipeline and its checks | Phase 2 plan |
+| 3 | Training on synthetic data (temporary MLflow) and metrics vs. the base model | Phase 3 plan |
+| 3 and 5 | FastAPI and Streamlit in containers + smoke tests | Phase 3 and 5 plans |
+| 4 | `terraform plan` on every PR; create and destroy real infrastructure only on request | Phase 4 plan |
 
-## CI por impacto (ADR 0008)
+## Impact-based CI (ADR 0008)
 
-Cada PR se evalúa por lo que toca y lo que depende de eso, no el proyecto entero:
+Every PR is evaluated by what it touches and what depends on it, not the whole project:
 
-| Qué cambia | Qué se evalúa, además de los checks baratos |
+| What changes | What gets evaluated, on top of the cheap checks |
 |---|---|
-| Solo documentación (`*.md`, `brain/`) | Nada más |
-| `ingestion/` o `lakehouse/` | Benchmarks + entorno efímero con `dbt build` completo (cambia lo que llega a bronze) |
-| `dbt/` | Entorno efímero con `dbt build --select @state:modified` |
-| `pyproject.toml`, `uv.lock`, `docker-compose.yml`, `.github/` | Todo |
+| Docs only (`*.md`, `brain/`) | Nothing else |
+| `ingestion/` or `lakehouse/` | Benchmarks + ephemeral environment with a full `dbt build` (changes what reaches bronze) |
+| `dbt/` | Ephemeral environment with `dbt build --select @state:modified` |
+| `pyproject.toml`, `uv.lock`, `docker-compose.yml`, `.github/` | Everything |
 
-- **Checks baratos siempre completos** (ruff, mypy, pytest unitario, gitleaks, pip-audit, bandit):
-  tardan segundos, y mypy necesita el proyecto entero para ver cuándo un cambio rompe a quien lo importa.
-- **dbt:** `dbt parse` sobre el commit base genera el manifest de comparación sin conectarse a una base
-  de datos; el PR construye `@state:modified`: lo modificado, todo lo que depende de ello y los
-  ancestros necesarios para construirlo en el entorno vacío.
-- **Red de seguridad:** en cada push a `develop` y una vez por semana corre todo, por si el mapa no ve una relación.
-- **Cómo se salta un job:** un job `changes` calcula las áreas con `git diff` contra la base y cada job
-  caro tiene su `if`. Nunca con filtros `paths` del workflow: un workflow filtrado deja los checks
-  obligatorios en "Pending" y bloquea el merge. Y como un job saltado cuenta como exitoso, solo se
-  salta lo que el cambio no afecta; nunca un control como `branch-policy`.
+- **Cheap checks always run in full** (ruff, mypy, unit pytest, gitleaks, pip-audit, bandit):
+  they take seconds, and mypy needs the whole project to see when a change breaks whoever imports it.
+- **dbt:** `dbt parse` on the base commit generates the comparison manifest with no database
+  connection; the PR builds `@state:modified`: what changed, everything that depends on it, and
+  the ancestors needed to build it in the empty environment.
+- **Safety net:** everything runs in full on every push to `develop` and once a week, in case
+  the map misses a relationship.
+- **How a job gets skipped:** a `changes` job computes the affected areas via `git diff`
+  against the base, and each expensive job has its own `if`. Never with workflow-level `paths`
+  filters: a filtered workflow leaves required checks stuck on "Pending" and blocks the merge.
+  And since a skipped job counts as successful, only what the change doesn't affect gets
+  skipped — never a control like `branch-policy`.
 
-## Usuarios, cuentas y conciliación integral (ADR 0005 y 0009)
+## Users, accounts and integral reconciliation (ADR 0005 and 0009)
 
-Una instalación sirve a varios usuarios, y cada uno puede tener varias cuentas, incluso en el mismo banco.
+One install serves several users, and each one can hold several accounts, even at the same bank.
 
-- **El contenido manda, no el nombre del archivo.** El parser lee del PDF el banco, la cuenta y el
-  periodo; el archivo se reconoce por su hash y su nombre nunca se guarda (puede contener números de cuenta).
-- **Usuario (`user_id`)** en todos los datos: viene del contexto de la ingesta (`pfp ingest --user`,
-  por defecto `PFP_USER`), no del PDF. El lake se particiona por `user_id`: borrar los datos de una
-  persona es borrar su partición.
-- **Bandeja y archivo estandarizado (T12b).** Los PDFs se dejan con cualquier nombre en
-  `~/finance-data/inbox/<usuario>/`. Al procesarlos, cada uno se reconoce por su hash y su contenido y
-  se mueve a `~/finance-data/raw/<usuario>/<banco>/<últimos4>-<id6>/<inicio>_<fin>.pdf` (id6 = primeros
-  6 caracteres de `account_id`, para que dos cuentas con los mismos 4 dígitos no se mezclen). Un
-  duplicado va a `_duplicados/` y lo que no se reconoce, a `_por_clasificar/`, con un reporte que dice
-  qué hacer. Nunca se borra un archivo.
-- **Cuenta (`account_id`)**: HMAC-SHA256 del banco y el número completo con la clave `PFP_ACCOUNT_KEY`
-  de `.env`, más los últimos 4 dígitos para mostrar. El número completo solo existe en memoria durante
-  el parseo.
+- **Content rules, not the file name.** The parser reads the bank, the account and the
+  period from the PDF; the file is recognized by its hash and its name is never stored (it
+  can contain account numbers).
+- **User (`user_id`)** on all data: comes from the ingestion context (`pfp ingest --user`,
+  defaulting to `PFP_USER`), never from the PDF. The lake is partitioned by `user_id`: deleting
+  someone's data means dropping their partition.
+- **Inbox and standardized archive (T12b).** PDFs get dropped with any name into
+  `~/finance-data/inbox/<user>/`. When processed, each one is recognized by its hash and its
+  content and moved to `~/finance-data/raw/<user>/<bank>/<last4>-<id6>/<start>_<end>.pdf`
+  (id6 = the first 6 characters of `account_id`, so two accounts with the same last 4 digits
+  don't collide). A duplicate goes to `_duplicates/` and anything unrecognized goes to
+  `_needs_review/`, with a report saying what to do. A file is never deleted.
+- **Account (`account_id`)**: HMAC-SHA256 of the bank and the full number with the
+  `PFP_ACCOUNT_KEY` secret from `.env`, plus the last 4 digits for display. The full number
+  only exists in memory during parsing.
 
-**Conciliación integral**, en tres niveles:
+**Integral reconciliation**, at three levels:
 
-| Nivel | Qué comprueba | Dónde |
+| Level | What it checks | Where |
 |---|---|---|
-| Estado de cuenta | Saldo inicial + movimientos = saldo final, y los totales declarados | T8 |
-| Continuidad | El saldo final de un periodo es el saldo inicial del siguiente, por cuenta; detecta estados de cuenta faltantes | T16 |
-| Entre cuentas | Cada transferencia entre cuentas del mismo usuario tiene su contraparte y no cuenta como gasto ni ingreso | T18b |
+| Statement | Opening balance + movements = closing balance, and the declared totals | T8 |
+| Continuity | A period's closing balance is the next period's opening balance, per account; catches missing statements | T16 |
+| Between accounts | Every transfer between accounts of the same user has its counterpart, and never counts as an expense or income | T18b |
 
-## Riesgos y mitigaciones
+## Risks and mitigations
 
-| Riesgo | Impacto | Mitigación |
+| Risk | Impact | Mitigation |
 |---|---|---|
-| Diseñar parsers con PDFs reales expone datos personales (lo que yo leo sale de tu máquina) | Alto | T9: volcado de layout con dígitos y textos enmascarados; nunca leo un PDF real sin enmascarar sin tu OK |
-| El PDF sintético no refleja el real | Medio | Tests locales marcados `real_pdf` contra tus PDFs + la reconciliación como red de seguridad |
-| MinIO sin mantenimiento | Alto | SeaweedFS (ADR 0003); API S3 estándar, cambio de servidor = cambio de endpoint |
-| DuckDB leyendo Delta en S3 local (endpoint, path-style, SSL) | Medio | Prueba mínima al inicio de T16 antes de modelar |
-| delta-rs sobre S3 sin locking | Bajo en Fase 1 (un solo escritor) | Documentado en ADR 0006; se revisa en Fase 2 con Dagster |
-| PDFs con contraseña y al menos uno escaneado (confirmado) | Alto | pikepdf + contraseña en `.env`; T9 detecta páginas sin texto; OCR con Tesseract (T11b); la reconciliación detecta errores de lectura del OCR |
-| Benchmarks ruidosos en CI | Medio | Base y PR en el mismo runner, margen 20 %, 2 semanas en modo aviso |
-| Un entorno efímero queda vivo (contenedores, volúmenes) o alarga demasiado el CI | Bajo | Nombre de proyecto por PR, `down -v` con `if: always()` y `timeout-minutes` en el job; la verificación de T17 comprueba que no queda nada |
-| El mapa de impacto no ve una relación indirecta y salta un job que debía correr | Medio | Checks baratos siempre completos; corrida completa en push a `develop` y semanal; cambios en dependencias, compose o CI corren todo |
-| Se pierde `PFP_ACCOUNT_KEY` y cambian todos los `account_id` | Medio | Respaldo fuera del repo (gestor de contraseñas), documentado en SETUP.md en T6; cambiar la clave exige reprocesar desde los PDFs |
-| Transferencias entre bancos con comisión, días de desfase o distinta moneda | Medio | Ventana de días y tolerancia configurables; lo que no empareja se marca para revisión, nunca se descarta; entre monedas queda fuera de T18b |
-| Cuenta mancomunada (dos usuarios, la misma cuenta) | Bajo | Pregunta abierta: hoy cada usuario tendría su copia; se decide si aparece el caso |
-| Un PDF trae varias cuentas | Medio | El parser devuelve un `Statement` por cuenta; el archivo se guarda una vez en `<banco>/_varias-cuentas/`; el volcado de T9 confirma si pasa |
-| El banco regenera el PDF de un periodo (bytes distintos) | Bajo | Se archiva como segunda versión (`_v2`) y se avisa; la business key evita duplicar movimientos |
-| 7 GB de RAM para Fase 2 (Spark + catálogo) | Medio | Se evalúa al planificar Fase 2 (`.wslconfig`, alternativas livianas) |
-| `gh` 2.46 falla en `gh pr edit` | Bajo | Usar la API REST (`gh api`) |
+| Designing parsers with real PDFs exposes personal data (what I read leaves your machine) | High | T9: a layout dump with digits and text masked; I never read a real PDF unmasked without your OK |
+| The synthetic PDF doesn't reflect the real one | Medium | Local tests marked `real_pdf` against your PDFs + reconciliation as a safety net |
+| MinIO unmaintained | High | SeaweedFS (ADR 0003); standard S3 API, switching servers means switching an endpoint |
+| DuckDB reading Delta on local S3 (endpoint, path-style, SSL) | Medium | A minimal test at the start of T16, before modeling |
+| delta-rs on S3 with no locking | Low in Phase 1 (a single writer) | Documented in ADR 0006; revisited in Phase 2 with Dagster |
+| Password-protected PDFs, at least one scanned (confirmed) | High | pikepdf + password in `.env`; T9 detects pages with no text; OCR with Tesseract (T11b); reconciliation catches OCR misreads |
+| Noisy benchmarks in CI | Medium | Base and PR on the same runner, a 20% margin, 2 weeks in warn mode |
+| An ephemeral environment stays alive (containers, volumes) or stretches CI too long | Low | Per-PR project name, `down -v` with `if: always()` and `timeout-minutes` on the job; T17's verification checks that nothing's left behind |
+| The impact map misses an indirect relationship and skips a job that should have run | Medium | Cheap checks always run in full; full run on push to `develop` and weekly; changes to dependencies, compose or CI run everything |
+| `PFP_ACCOUNT_KEY` gets lost and every `account_id` changes | Medium | Back it up outside the repo (a password manager), documented in SETUP.md in T6; changing the key requires reprocessing from the PDFs |
+| Cross-bank transfers with a fee, a day's lag, or a different currency | Medium | Configurable day window and tolerance; anything that doesn't match gets flagged for review, never dropped; cross-currency stays out of T18b |
+| A joint account (two users, the same account) | Low | Open question: today each user would get their own copy; revisited if the case comes up |
+| A PDF holds several accounts | Medium | The parser returns one `Statement` per account; the file is saved once, in `<bank>/_multi-account/`; T9's dump confirms whether this happens |
+| The bank regenerates a period's PDF (different bytes) | Low | Filed as a second version (`_v2`) with a warning; the business key keeps movements from duplicating |
+| 7 GB of RAM for Phase 2 (Spark + catalog) | Medium | Evaluated when planning Phase 2 (`.wslconfig`, lighter alternatives) |
+| `gh` 2.46 fails on `gh pr edit` | Low | Use the REST API (`gh api`) |
 
-## Decisiones confirmadas (2026-09-12)
+## Confirmed decisions (2026-09-12)
 
-1. **Almacenamiento S3:** SeaweedFS.
-2. **Privacidad:** los parsers se diseñan con el volcado enmascarado de T9; Claude no lee PDFs reales sin enmascarar.
-3. **PDFs:** tienen contraseña y al menos uno es escaneado → OCR entra en la Fase 1 (T11b).
-4. **Ubicación:** bandeja `~/finance-data/inbox/<usuario>/` con cualquier nombre, y archivo estandarizado `~/finance-data/raw/<usuario>/<banco>/<cuenta>/` (antes `raw/{bcp,scotiabank}/`), fuera del repo y con permisos solo para su dueño.
-5. **Usuarios y cuentas:** varios usuarios en una instalación; cuenta identificada por HMAC con clave + últimos 4 dígitos; conciliación entre cuentas en la Fase 1 (T18b).
+1. **S3 storage:** SeaweedFS.
+2. **Privacy:** parsers are designed from T9's masked dump; Claude never reads real PDFs unmasked.
+3. **PDFs:** password-protected, and at least one is scanned → OCR enters Phase 1 (T11b).
+4. **Location:** inbox `~/finance-data/inbox/<user>/` with any name, and a standardized archive
+   `~/finance-data/raw/<user>/<bank>/<account>/` (previously `raw/{bcp,scotiabank}/`), outside
+   the repo and readable only by its owner.
+5. **Users and accounts:** several users in one install; an account identified by an HMAC
+   with a key + the last 4 digits; inter-account reconciliation in Phase 1 (T18b).
 
-## Preguntas abiertas
+## Open questions
 
-1. **Fecha para pasar de aviso a bloqueo:** propuesta 2026-09-26.
-2. **Qué PDFs o páginas son escaneados:** lo responde el inspector de T9.
+1. **Date to switch from warn to block:** proposed 2026-09-26.
+2. **Which PDFs or pages are scanned:** answered by T9's inspector.

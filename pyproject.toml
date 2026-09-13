@@ -34,14 +34,14 @@ pythonpath = ["."]
 [tool.coverage.run]
 source = ["ingestion", "lakehouse", "scripts"]
 
-# Arquitectura (razones en CONSTRAINTS.md). Cada contrato prohíbe el paquete entero y
-# `ignore_imports` declara la única dependencia permitida. Mientras esa importación no
-# exista (llega en T14), import-linter solo avisa "No matches" en vez de fallar.
+# Architecture (reasons in CONSTRAINTS.md). Each contract forbids the whole package, and
+# `ignore_imports` declares the one allowed dependency. While that import doesn't exist yet
+# (it lands in T14), import-linter only warns "No matches" instead of failing.
 [tool.importlinter]
 root_packages = ["ingestion", "lakehouse"]
 
 [[tool.importlinter.contracts]]
-name = "El parsing no importa lakehouse (solo ingestion.cli orquesta ambos)"
+name = "Parsing does not import lakehouse (only ingestion.cli orchestrates both)"
 type = "forbidden"
 source_modules = ["ingestion"]
 forbidden_modules = ["lakehouse"]
@@ -49,7 +49,7 @@ ignore_imports = ["ingestion.cli -> lakehouse", "ingestion.cli -> lakehouse.**"]
 unmatched_ignore_imports_alerting = "warn"
 
 [[tool.importlinter.contracts]]
-name = "lakehouse solo depende del esquema (ingestion.schema), nunca de los parsers"
+name = "lakehouse only depends on the schema (ingestion.schema), never on the parsers"
 type = "forbidden"
 source_modules = ["lakehouse"]
 forbidden_modules = ["ingestion"]

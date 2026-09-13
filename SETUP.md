@@ -1,128 +1,128 @@
-# Puesta en marcha
+# Setup
 
-Pasos para reproducir el proyecto en otra computadora. Se ejecutan una sola vez y en orden;
-al terminar, la sección 5 comprueba que todo quedó bien.
+Steps to reproduce the project on another computer. Run them once, in order;
+section 5 checks that everything came out right at the end.
 
-## 1. Requisitos
+## 1. Requirements
 
-Versiones con las que se probó el proyecto. Versiones más nuevas suelen funcionar;
-si algo falla, vuelve a estas.
+Versions the project was tested with. Newer versions usually work;
+if something breaks, fall back to these.
 
-| Programa | Versión probada | Para qué | Se usa desde |
+| Program | Tested version | What for | Needed from |
 |---|---|---|---|
-| Windows + WSL2 con Ubuntu | Ubuntu 26.04 LTS, kernel 6.6 | Entorno Linux de desarrollo | Inicio |
-| Git | 2.53 | Control de versiones | Inicio |
-| curl | 8.18 | Descargar el instalador de uv | Inicio |
-| uv | 0.12.13 | Instala Python y las librerías según `uv.lock` | Inicio |
-| Python | 3.12.14 (lo instala uv) | Lenguaje del proyecto | Inicio |
-| pre-commit | 4.6.2 | Guardas de seguridad y lint antes de cada commit | Inicio |
-| make | 4.4 | Atajos de checks (`make check-task`) | T4 |
-| Docker Desktop | 4.43.2 (Engine 28.3.2, Compose 2.38) | S3 local con SeaweedFS | T13 |
-| Tesseract OCR + idioma español | 5.5 | OCR de los PDFs escaneados | T11b |
-| GitHub CLI (`gh`) | 2.46 | PRs desde la terminal | Opcional |
+| Windows + WSL2 with Ubuntu | Ubuntu 26.04 LTS, kernel 6.6 | Linux development environment | Start |
+| Git | 2.53 | Version control | Start |
+| curl | 8.18 | Download the uv installer | Start |
+| uv | 0.12.13 | Installs Python and the libraries per `uv.lock` | Start |
+| Python | 3.12.14 (installed by uv) | Project language | Start |
+| pre-commit | 4.6.2 | Security guards and lint before every commit | Start |
+| make | 4.4 | Check shortcuts (`make check-task`) | T4 |
+| Docker Desktop | 4.43.2 (Engine 28.3.2, Compose 2.38) | Local S3 with SeaweedFS | T13 |
+| Tesseract OCR + Spanish language pack | 5.5 | OCR for scanned PDFs | T11b |
+| GitHub CLI (`gh`) | 2.46 | PRs from the terminal | Optional |
 
-No hace falta instalar Python del sistema ni Go: uv trae su propio Python y pre-commit
-compila gitleaks por su cuenta.
+No need to install a system Python or Go: uv brings its own Python, and pre-commit
+builds gitleaks on its own.
 
-## 2. Windows: WSL2 y Docker Desktop
+## 2. Windows: WSL2 and Docker Desktop
 
-1. En PowerShell como administrador: `wsl --install` (instala WSL2 con Ubuntu) y reinicia.
-2. Instala [Docker Desktop](https://www.docker.com/products/docker-desktop/) y activa
-   **Settings → Resources → WSL integration** para tu distro.
-3. Dentro de Ubuntu, da acceso a Docker sin `sudo`:
+1. In an admin PowerShell: `wsl --install` (installs WSL2 with Ubuntu) and reboot.
+2. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and turn on
+   **Settings → Resources → WSL integration** for your distro.
+3. Inside Ubuntu, give yourself access to Docker without `sudo`:
 
    ```bash
    sudo usermod -aG docker "$USER"
    ```
 
-   Luego, en PowerShell, `wsl --shutdown` y vuelve a abrir Ubuntu para que tome el grupo.
+   Then, in PowerShell, run `wsl --shutdown` and reopen Ubuntu so it picks up the group.
 
-## 3. Ubuntu (WSL): paquetes del sistema y uv
+## 3. Ubuntu (WSL): system packages and uv
 
 ```bash
 sudo apt update
 sudo apt install -y git curl make tesseract-ocr tesseract-ocr-spa gh
 
-# uv, en la versión probada (se instala en ~/.local/bin, sin sudo)
+# uv, at the tested version (installs into ~/.local/bin, no sudo needed)
 curl -LsSf https://astral.sh/uv/0.12.13/install.sh | sh
 ```
 
-Abre una terminal nueva para que `~/.local/bin` quede en el `PATH`.
+Open a new terminal so `~/.local/bin` lands on your `PATH`.
 
-## 4. Proyecto
+## 4. Project
 
-Clona dentro del disco de Linux (`~/…`), no en `/mnt/c`: es mucho más rápido.
+Clone inside the Linux filesystem (`~/…`), not under `/mnt/c`: it's much faster.
 
 ```bash
 git clone https://github.com/PieroRios2000/personal-finance-platform.git
 cd personal-finance-platform
 
-uv sync --locked                    # Python 3.12 + todas las librerías exactas de uv.lock
+uv sync --locked                    # Python 3.12 + every exact library from uv.lock
 uv tool install pre-commit==4.6.2
-pre-commit install                  # activa los hooks en este clon
-pre-commit install-hooks            # descarga los hooks (gitleaks, ruff…) una vez
+pre-commit install                  # enables the hooks in this clone
+pre-commit install-hooks            # downloads the hooks (gitleaks, ruff…) once
 
-cp .env.example .env && chmod 600 .env   # rellena los valores; .env nunca se sube a Git
+cp .env.example .env && chmod 600 .env   # fill in the values; .env never gets committed
 ```
 
-Los PDFs reales viven **fuera del repo**, solo con permisos para tu usuario:
+Real PDFs live **outside the repo**, readable only by your user:
 
 ```bash
-mkdir -p ~/finance-data/inbox/<usuario>    # bandeja por usuario, p. ej. inbox/piero
+mkdir -p ~/finance-data/inbox/<user>    # per-user inbox, e.g. inbox/piero
 chmod 700 ~/finance-data
-# deja ahí los PDFs de ese usuario, de cualquier banco y con cualquier nombre, y luego:
+# drop that user's PDFs there, from any bank, under any name, then:
 chmod 600 ~/finance-data/inbox/*/*.pdf
 ```
 
-Al procesarlos (`pfp ingest`, desde T12b y T14), cada PDF se archiva en
-`~/finance-data/raw/<usuario>/<banco>/<cuenta>/<periodo>.pdf`; los repetidos van a `_duplicados/` y los
-que no se reconocen, a `_por_clasificar/`. Nunca se borra un archivo.
+Once processed (`pfp ingest`, from T12b and T14), each PDF gets filed into
+`~/finance-data/raw/<user>/<bank>/<account>/<period>.pdf`; repeats go to `_duplicates/` and
+unrecognized ones go to `_needs_review/`. A file is never deleted.
 
-### Librerías de Python
+### Python libraries
 
-Están consolidadas en un solo lugar y se instalan todas con `uv sync --locked`:
+They're consolidated in one place and all installed with `uv sync --locked`:
 
-- `pyproject.toml`: las dependencias directas.
-- `uv.lock`: la versión exacta (con hash) de cada librería, incluidas las indirectas.
-  Es lo que garantiza que todas las computadoras instalen lo mismo.
+- `pyproject.toml`: the direct dependencies.
+- `uv.lock`: the exact version (with a hash) of every library, including transitive ones.
+  This is what guarantees every machine installs the exact same thing.
 
-| Librería | Versión fijada | Tipo | Para qué |
+| Library | Pinned version | Type | What for |
 |---|---|---|---|
-| pydantic | 2.13.5 | runtime | Modelos y validación de transacciones |
-| pikepdf | 10.13.0.post1 | runtime | Abrir y descifrar los PDFs con contraseña |
-| pdfplumber | 0.11.10 | runtime | Leer el texto de los PDFs con sus posiciones |
-| fpdf2 | 2.8.8 | dev | Generar PDFs sintéticos dentro de los tests |
+| pydantic | 2.13.5 | runtime | Transaction models and validation |
+| pikepdf | 10.13.0.post1 | runtime | Open and decrypt password-protected PDFs |
+| pdfplumber | 0.11.10 | runtime | Read PDF text along with positions |
+| fpdf2 | 2.8.8 | dev | Generate synthetic PDFs inside the tests |
 | pytest | 9.1.1 | dev | Tests |
-| pytest-cov | 7.1.0 | dev | Cobertura |
-| ruff | 0.16.7 | dev | Lint y formato |
-| mypy | 2.3.1 | dev | Tipos (modo estricto) |
-| diff-cover | 10.5.1 | dev | Cobertura de las líneas cambiadas contra la rama base |
-| import-linter | 2.15 | dev | Contratos de arquitectura (quién importa a quién) |
-| pip-audit | 2.10.1 | dev | Vulnerabilidades conocidas en las dependencias |
-| bandit | 1.9.4 | dev | Problemas de seguridad en el código |
+| pytest-cov | 7.1.0 | dev | Coverage |
+| ruff | 0.16.7 | dev | Lint and format |
+| mypy | 2.3.1 | dev | Types (strict mode) |
+| diff-cover | 10.5.1 | dev | Coverage of changed lines against the base branch |
+| import-linter | 2.15 | dev | Architecture contracts (who can import whom) |
+| pip-audit | 2.10.1 | dev | Known vulnerabilities in dependencies |
+| bandit | 1.9.4 | dev | Security issues in the code |
 
-No uses `pip install` ni un `requirements.txt`: se desalinean del lock. Para agregar una
-librería: `uv add <lib>` (o `uv add --dev <lib>`), y se suben juntos `pyproject.toml` y
-`uv.lock`, actualizando esta tabla.
+Don't use `pip install` or a `requirements.txt`: they drift out of sync with the lock. To add a
+library: `uv add <lib>` (or `uv add --dev <lib>`), then commit `pyproject.toml` and `uv.lock`
+together, updating this table.
 
-## 5. Verificación
+## 5. Verification
 
 ```bash
-make check-task                     # lint, formato, tipos, tests, floor-guard y arquitectura
+make check-task                     # lint, format, types, tests, floor-guard and architecture
 pre-commit run --all-files
-docker run --rm hello-world         # Docker Desktop debe estar abierto
-tesseract --list-langs              # debe incluir "spa"
+docker run --rm hello-world         # Docker Desktop must be running
+tesseract --list-langs              # should include "spa"
 ```
 
-Todo en verde = el entorno está listo.
+All green = the environment is ready.
 
-## Problemas conocidos
+## Known issues
 
-| Síntoma | Solución |
+| Symptom | Fix |
 |---|---|
-| `The command 'docker' could not be found in this WSL 2 distro` | Docker Desktop está cerrado o la integración WSL está desactivada (paso 2) |
-| Docker Desktop: `wsl-bootstrap … exit status 1` al arrancar | En PowerShell `wsl --shutdown` y vuelve a abrir Docker Desktop; si persiste, `wsl --update` |
-| `permission denied` en `/var/run/docker.sock` | Falta el grupo `docker` o no se reinició WSL (sección 2, punto 3) |
-| `gh pr edit` falla con un error de *Projects classic* (gh 2.46) | Usa `gh api --method PATCH repos/<owner>/<repo>/pulls/<n>` o actualiza gh desde cli.github.com |
-| `gh run view --log` o `--log-failed` no muestran nada (gh 2.46) | Pide el log del job a la API: `gh api repos/<owner>/<repo>/actions/jobs/<job_id>/logs` (el `job_id` aparece en `gh run view <run_id>`) |
-| Aparecen archivos `NombreDelPDF.pdf:Zone.Identifier` en `~/finance-data/` | Windows los agrega al copiar desde el Explorador; bórralos (`find ~/finance-data -name '*:Zone.Identifier' -delete`), no son parte del PDF |
+| `The command 'docker' could not be found in this WSL 2 distro` | Docker Desktop is closed or WSL integration is off (step 2) |
+| Docker Desktop: `wsl-bootstrap … exit status 1` on startup | In PowerShell, `wsl --shutdown`, then reopen Docker Desktop; if it persists, `wsl --update` |
+| `permission denied` on `/var/run/docker.sock` | Missing the `docker` group, or WSL wasn't restarted (section 2, step 3) |
+| `gh pr edit` fails with a *Projects classic* error (gh 2.46) | Use `gh api --method PATCH repos/<owner>/<repo>/pulls/<n>`, or upgrade gh from cli.github.com |
+| `gh run view --log` or `--log-failed` show nothing (gh 2.46) | Fetch the job's log from the API: `gh api repos/<owner>/<repo>/actions/jobs/<job_id>/logs` (the `job_id` shows up in `gh run view <run_id>`) |
+| Files named `<PdfName>.pdf:Zone.Identifier` appear under `~/finance-data/` | Windows adds them when copying from File Explorer; delete them (`find ~/finance-data -name '*:Zone.Identifier' -delete`) — they're not part of the PDF |

@@ -1,402 +1,402 @@
-# Tareas — Fase 1: Fundación
+# Tasks — Phase 1: Foundation
 
-> Contexto, decisiones y riesgos en [`plan.md`](plan.md). Cada tarea = 1 rama desde `develop` = 1 PR.
-> Toda tarea cumple además la **Definition of Done** de `plan.md`.
+> Context, decisions and risks in [`plan.md`](plan.md). Each task = 1 branch from `develop` = 1 PR.
+> Every task also satisfies the **Definition of Done** in `plan.md`.
 
-## Prerrequisitos del entorno (no generan PR)
+## Environment prerequisites (no PR generated)
 
-- [x] Instalar `uv` a nivel usuario (sin sudo) y Python 3.12 gestionado por uv.
-- [x] Docker accesible sin sudo desde WSL (reiniciar WSL tras entrar al grupo `docker`).
-- [ ] PDFs reales en la bandeja `~/finance-data/inbox/<usuario>/`, con cualquier nombre (ADR 0009; antes estaban en `raw/{bcp,scotiabank}/`); T12b los archiva.
-- [x] Tesseract OCR (`sudo apt install tesseract-ocr tesseract-ocr-spa`) antes de T11b.
+- [x] Install `uv` at the user level (no sudo) and Python 3.12 managed by uv.
+- [x] Docker reachable without sudo from WSL (restart WSL after joining the `docker` group).
+- [ ] Real PDFs in the inbox `~/finance-data/inbox/<user>/`, under any name (ADR 0009; they used to live in `raw/{bcp,scotiabank}/`); T12b files them.
+- [x] Tesseract OCR (`sudo apt install tesseract-ocr tesseract-ocr-spa`) before T11b.
 
 ---
 
-## Bloque A — Fundación del repo
+## Block A — Repo foundation
 
-### T1: Guardas de seguridad — `chore/security-guards`
+### T1: Security guards — `chore/security-guards`
 
-**Descripción:** Antes de cualquier código, impedir que datos o secretos lleguen a Git.
+**Description:** Before any code, keep data or secrets from ever reaching Git.
 
-**Criterios de aceptación:**
-- [x] `*.pdf`, `.env`, `*.duckdb`, `data/` y el lake local están ignorados.
-- [x] pre-commit con gitleaks (+ detect-private-key, check-added-large-files) instalado.
-- [x] `.env.example` documenta las variables sin valores reales.
+**Acceptance criteria:**
+- [x] `*.pdf`, `.env`, `*.duckdb`, `data/` and the local lake are ignored.
+- [x] pre-commit with gitleaks (+ detect-private-key, check-added-large-files) installed.
+- [x] `.env.example` documents the variables with no real values.
 
-**Verificación:**
-- [x] `git check-ignore -v x.pdf .env` confirma las reglas.
-- [x] Un secreto falso de prueba es bloqueado por el hook (y se descarta).
-- [x] `pre-commit run --all-files` en verde.
+**Verification:**
+- [x] `git check-ignore -v x.pdf .env` confirms the rules.
+- [x] A fake test secret gets blocked by the hook (and discarded).
+- [x] `pre-commit run --all-files` is green.
 
-**Dependencias:** ninguna · **Archivos:** `.gitignore`, `.env.example`, `.pre-commit-config.yaml` · **Tamaño:** S · **Skill:** security-and-hardening
+**Dependencies:** none · **Files:** `.gitignore`, `.env.example`, `.pre-commit-config.yaml` · **Size:** S · **Skill:** security-and-hardening
 
-### T2: Proyecto Python — `chore/python-project`
+### T2: Python project — `chore/python-project`
 
-**Descripción:** Proyecto con uv y Python 3.12, herramientas de calidad configuradas y un smoke test.
+**Description:** A project with uv and Python 3.12, quality tools configured, and a smoke test.
 
-**Criterios de aceptación:**
+**Acceptance criteria:**
 - [x] `pyproject.toml` (requires-python 3.12, pydantic; dev: pytest, pytest-cov, ruff, mypy), `.python-version`, `uv.lock`.
-- [x] Paquetes `ingestion/` y `lakehouse/` importables; ruff en pre-commit.
-- [x] Config de ruff, mypy (strict) y pytest en `pyproject.toml`.
+- [x] `ingestion/` and `lakehouse/` packages importable; ruff in pre-commit.
+- [x] ruff, mypy (strict) and pytest configured in `pyproject.toml`.
 
-**Verificación:**
-- [x] `uv sync` limpio; `uv run ruff check .`, `uv run mypy .`, `uv run pytest` en verde.
+**Verification:**
+- [x] `uv sync` clean; `uv run ruff check .`, `uv run mypy .`, `uv run pytest` all green.
 
-**Dependencias:** T1 · **Archivos:** `pyproject.toml`, `uv.lock`, `.python-version`, `ingestion/__init__.py`, `lakehouse/__init__.py`, `tests/test_smoke.py` · **Tamaño:** S
+**Dependencies:** T1 · **Files:** `pyproject.toml`, `uv.lock`, `.python-version`, `ingestion/__init__.py`, `lakehouse/__init__.py`, `tests/test_smoke.py` · **Size:** S
 
-### T3a: Cerebro del proyecto — `docs/brain-vault`
+### T3a: Project brain — `docs/brain-vault`
 
-**Descripción:** Vault Markdown enlazado que explica el contexto y cómo se relacionan conceptos, componentes, decisiones y fases.
+**Description:** A linked Markdown vault explaining the context and how concepts, components, decisions and phases relate.
 
-**Criterios de aceptación:**
-- [x] `brain/README.md` con mapa Mermaid, índice y convención de notas (frontmatter `tipo` y `fase`; relaciones como links relativos en la sección "Relacionado").
-- [x] Plantillas en `brain/_plantillas/`; conceptos base (medallón, idempotencia, business key, reconciliación, dedup por archivo).
-- [x] ADR 0001–0004 en `brain/decisiones/` y `brain/fases/fase-1.md` enlazando este plan.
+**Acceptance criteria:**
+- [x] `brain/README.md` with a Mermaid map, an index, and note conventions (frontmatter `type` and `phase`; relationships as relative links in a "Related" section).
+- [x] Templates in `brain/_templates/`; base concepts (medallion, idempotency, business key, reconciliation, file-level dedup).
+- [x] ADR 0001–0004 in `brain/decisions/` and `brain/phases/phase-1.md`, linking this plan.
 
-**Verificación:**
-- [x] Los links navegan en la vista de GitHub del PR y el Mermaid se renderiza.
-- [x] Ningún link roto (comprobación con script o lychee en local).
+**Verification:**
+- [x] Links navigate in the PR's GitHub view, and the Mermaid diagram renders.
+- [x] No broken links (checked with a script or lychee locally).
 
-**Dependencias:** T2 · **Archivos:** `brain/**` · **Tamaño:** M (solo Markdown) · **Skill:** documentation-and-adrs
+**Dependencies:** T2 · **Files:** `brain/**` · **Size:** M (Markdown only) · **Skill:** documentation-and-adrs
 
-### T3b: Contexto para agentes y PRs — `docs/claude-md`
+### T3b: Context for agents and PRs — `docs/claude-md`
 
-**Descripción:** CLAUDE.md que apunta al cerebro y a las reglas; template de PR; PROJECT.md al día con las decisiones.
+**Description:** A CLAUDE.md pointing to the brain and the rules; a PR template; PROJECT.md kept current with the decisions.
 
-**Criterios de aceptación:**
-- [x] `CLAUDE.md`: flujo de ramas, "solo Piero mergea", datos nunca en Git, leer `brain/` y `CONSTRAINTS.md`.
-- [x] `.github/pull_request_template.md` con checklist (DoD + nota del cerebro).
-- [x] `PROJECT.md` refleja bancos BCP/Scotiabank, almacenamiento S3 y stack de Fase 1.
+**Acceptance criteria:**
+- [x] `CLAUDE.md`: branch flow, "only Piero merges", data never in Git, read `brain/` and `CONSTRAINTS.md`.
+- [x] `.github/pull_request_template.md` with a checklist (DoD + brain note).
+- [x] `PROJECT.md` reflects the BCP/Scotiabank banks, S3 storage and Phase 1's stack.
 
-**Verificación:**
-- [ ] Un PR de prueba (el propio) muestra el template; CLAUDE.md se carga en una sesión nueva.
+**Verification:**
+- [ ] A test PR (this one) shows the template; CLAUDE.md loads in a new session.
 
-**Dependencias:** T3a · **Archivos:** `CLAUDE.md`, `.github/pull_request_template.md`, `PROJECT.md` · **Tamaño:** S · **Skill:** context-engineering
+**Dependencies:** T3a · **Files:** `CLAUDE.md`, `.github/pull_request_template.md`, `PROJECT.md` · **Size:** S · **Skill:** context-engineering
 
-### T4: Nivel de calidad — `chore/constraints`
+### T4: Quality bar — `chore/constraints`
 
-**Descripción:** CONSTRAINTS.md con reglas, números y razones, y los comandos que las verifican.
+**Description:** CONSTRAINTS.md with rules, numbers and reasons, and the commands that check them.
 
-**Criterios de aceptación:**
-- [x] `CONSTRAINTS.md` con piso, tabla de reglas numéricas (comando + dónde corre), métricas medidas y excepciones.
-- [x] `Makefile` con `check-fast` (< 5 s), `check-task` (< 90 s) y `check-full` (CI).
-- [x] floor-guard adaptado y contratos de import-linter para `ingestion` / `lakehouse`.
+**Acceptance criteria:**
+- [x] `CONSTRAINTS.md` with the floor, a table of numeric rules (command + where it runs), measured metrics and exceptions.
+- [x] `Makefile` with `check-fast` (< 5 s), `check-task` (< 90 s) and `check-full` (CI).
+- [x] floor-guard adapted, plus import-linter contracts for `ingestion` / `lakehouse`.
 
-**Verificación:**
-- [x] `make check-full` en verde sobre el código actual.
-- [x] floor-guard detecta un `# type: ignore` inyectado en un diff de prueba.
+**Verification:**
+- [x] `make check-full` green on the current code.
+- [x] floor-guard catches a `# type: ignore` injected into a test diff.
 
-**Dependencias:** T2 · **Archivos:** `CONSTRAINTS.md`, `Makefile`, `scripts/floor_guard*`, `pyproject.toml` · **Tamaño:** M · **Skill:** constraint-driven-development
+**Dependencies:** T2 · **Files:** `CONSTRAINTS.md`, `Makefile`, `scripts/floor_guard*`, `pyproject.toml` · **Size:** M · **Skill:** constraint-driven-development
 
-### T5: CI de calidad — `ci/quality-gates`
+### T5: Quality CI — `ci/quality-gates`
 
-**Descripción:** Workflow que ejecuta las reglas en cada PR, con bloqueo o aviso según CONSTRAINTS.md.
+**Description:** A workflow that runs the rules on every PR, blocking or warning per CONSTRAINTS.md.
 
-**Criterios de aceptación:**
+**Acceptance criteria:**
 - [ ] Jobs: `lint-types`, `tests` (+ diff-cover), `security` (gitleaks, pip-audit, bandit), `architecture`, `floor-guard`.
-- [ ] Reglas numéricas con `continue-on-error` hasta 2026-09-26; acciones fijadas por SHA y `sha_pinning_required` activado.
-- [ ] Checks bloqueantes agregados como obligatorios en el ruleset `protect-main-develop`.
-- [ ] Fallos fáciles de leer: anotaciones en la línea exacta del PR (ruff y mypy con formato GitHub), resumen de pytest en el job y sección "Revisar el CI" en `SETUP.md` (`gh pr checks`, `gh run view`, log del job con `gh api …/actions/jobs/<id>/logs` porque `--log-failed` sale vacío con gh 2.46, `gh run rerun --failed`).
+- [ ] Numeric rules with `continue-on-error` until 2026-09-26; actions pinned by SHA and `sha_pinning_required` turned on.
+- [ ] Blocking checks added as required in the `protect-main-develop` ruleset.
+- [ ] Readable failures: annotations on the exact PR line (ruff and mypy in GitHub's format), a pytest summary in the job, and a "Reviewing CI" section in `SETUP.md` (`gh pr checks`, `gh run view`, the job's log via `gh api …/actions/jobs/<id>/logs` since `--log-failed` comes back empty with gh 2.46, `gh run rerun --failed`).
 
-**Verificación:**
-- [ ] Un PR con un error de ruff falla y queda `BLOCKED`; el mismo PR corregido pasa.
-- [ ] Ese error aparece anotado en la línea del archivo dentro del PR.
+**Verification:**
+- [ ] A PR with a ruff error fails and stays `BLOCKED`; the same PR, fixed, passes.
+- [ ] That error shows up annotated on the file's line inside the PR.
 
-**Dependencias:** T4 · **Archivos:** `.github/workflows/ci.yml`, `SETUP.md` · **Tamaño:** M · **Skill:** ci-cd-and-automation
+**Dependencies:** T4 · **Files:** `.github/workflows/ci.yml`, `SETUP.md` · **Size:** M · **Skill:** ci-cd-and-automation
 
 ### ✅ Checkpoint A
-- [ ] CI en verde en `develop` · [ ] pre-commit funciona en local · [ ] cerebro navegable · [ ] revisión con Piero
+- [ ] CI green on `develop` · [ ] pre-commit works locally · [ ] brain browsable · [ ] reviewed with Piero
 
 ---
 
-## Bloque B — Ingesta
+## Block B — Ingestion
 
-### T6: Esquema de transacciones — `feat/transaction-schema`
+### T6: Transaction schema — `feat/transaction-schema`
 
-**Descripción:** Modelos pydantic comunes a todos los bancos, por usuario y por cuenta (ADR 0005 y 0009).
+**Description:** pydantic models shared across all banks, per user and per account (ADR 0005 and 0009).
 
-**Criterios de aceptación:**
-- [ ] `Transaction` (`user_id`, banco, `account_id`, últimos 4 de la cuenta, fecha, descripción, monto `Decimal` a 2 decimales, moneda PEN/USD, sha del archivo).
-- [ ] `Statement` (`user_id`, banco, `account_id`, últimos 4, periodo, saldos inicial/final, totales declarados, transacciones).
-- [ ] `hash_account(bank, number)`: HMAC-SHA256 con la clave `PFP_ACCOUNT_KEY`; error claro si falta la clave. `PFP_ACCOUNT_KEY` y `PFP_USER` en `.env.example` y SETUP.md, con cómo generar y respaldar la clave.
-- [ ] `normalize_description()` estable (trim, mayúsculas, sin códigos de relleno).
-- [ ] ADR 0005 y ADR 0009 creados en `brain/decisiones/`.
+**Acceptance criteria:**
+- [ ] `Transaction` (`user_id`, bank, `account_id`, last 4 of the account, date, description, `Decimal` amount to 2 places, PEN/USD currency, file sha).
+- [ ] `Statement` (`user_id`, bank, `account_id`, last 4, period, opening/closing balances, declared totals, transactions).
+- [ ] `hash_account(bank, number)`: HMAC-SHA256 with the `PFP_ACCOUNT_KEY` secret; a clear error if the key is missing. `PFP_ACCOUNT_KEY` and `PFP_USER` in `.env.example` and SETUP.md, including how to generate and back up the key.
+- [ ] `normalize_description()` is stable (trim, uppercase, no filler codes).
+- [ ] ADR 0005 and ADR 0009 written in `brain/decisions/`.
 
-**Verificación:**
-- [ ] Tests TDD: montos inválidos, moneda desconocida y cuenta completa son rechazados; mismo banco y número → mismo `account_id`; otro banco u otra clave → distinto.
+**Verification:**
+- [ ] TDD tests: invalid amounts, unknown currency and a full account number are rejected; same bank and number → same `account_id`; a different bank or key → a different one.
 
-**Dependencias:** T5 · **Archivos:** `ingestion/schema.py`, `tests/test_schema.py`, `.env.example`, `SETUP.md` · **Tamaño:** M · **Skill:** test-driven-development
+**Dependencies:** T5 · **Files:** `ingestion/schema.py`, `tests/test_schema.py`, `.env.example`, `SETUP.md` · **Size:** M · **Skill:** test-driven-development
 
-### T7: Hash de archivo — `feat/file-hash`
+### T7: File hash — `feat/file-hash`
 
-**Descripción:** SHA-256 del contenido del PDF para no reprocesar el mismo archivo.
+**Description:** SHA-256 of the PDF's content, so the same file never gets reprocessed.
 
-**Criterios de aceptación:**
-- [ ] `file_sha256(path)` con `hashlib.file_digest` (streaming, stdlib).
-- [ ] Mismo contenido con otro nombre → mismo hash.
+**Acceptance criteria:**
+- [ ] `file_sha256(path)` using `hashlib.file_digest` (streaming, stdlib).
+- [ ] The same content under a different name → the same hash.
 
-**Verificación:**
-- [ ] Tests con archivos temporales.
+**Verification:**
+- [ ] Tests with temporary files.
 
-**Dependencias:** T5 · **Archivos:** `ingestion/dedup.py`, `tests/test_dedup.py` · **Tamaño:** XS
+**Dependencies:** T5 · **Files:** `ingestion/dedup.py`, `tests/test_dedup.py` · **Size:** XS
 
-### T8: Reconciliación — `feat/reconciliation`
+### T8: Reconciliation — `feat/reconciliation`
 
-**Descripción:** Verificar que lo extraído cuadra con lo que declara el PDF.
+**Description:** Verify that what's extracted matches what the PDF declares.
 
-**Criterios de aceptación:**
-- [ ] `reconcile(statement)`: saldo inicial + Σ montos == saldo final, y totales de cargos/abonos cuando existan.
-- [ ] `ReconciliationError` con esperado, obtenido y diferencia.
+**Acceptance criteria:**
+- [ ] `reconcile(statement)`: opening balance + Σ amounts == closing balance, plus the charge/credit totals when present.
+- [ ] `ReconciliationError` with the expected value, the actual one, and the difference.
 
-**Verificación:**
-- [ ] Tests: cuadre exacto, descuadre de 0.01, statement sin transacciones.
+**Verification:**
+- [ ] Tests: an exact match, a 0.01 mismatch, a statement with no transactions.
 
-**Dependencias:** T6 · **Archivos:** `ingestion/reconciliation.py`, `tests/test_reconciliation.py` · **Tamaño:** S · **Skill:** test-driven-development
+**Dependencies:** T6 · **Files:** `ingestion/reconciliation.py`, `tests/test_reconciliation.py` · **Size:** S · **Skill:** test-driven-development
 
-### T9: Inspector de layout enmascarado — `chore/pdf-layout-inspector`
+### T9: Masked layout inspector — `chore/pdf-layout-inspector`
 
-**Descripción:** Script local que describe la estructura de un PDF sin exponer datos personales, para diseñar parsers y fixtures.
+**Description:** A local script that describes a PDF's structure without exposing personal data, for designing parsers and fixtures.
 
-**Criterios de aceptación:**
-- [x] Abre PDFs con bytes antes de `%PDF-` (el de BCP empieza con `$BOP$`) y los desbloquea con la contraseña de `.env`; imprime por página líneas y columnas con posiciones.
-- [x] Dígitos → `9`; textos fuera de una lista de encabezados conocidos → enmascarados.
-- [x] Reporta si el PDF está cifrado y qué páginas no tienen capa de texto (escaneadas).
+**Acceptance criteria:**
+- [x] Opens PDFs with bytes before `%PDF-` (BCP's starts with `$BOP$`) and unlocks them with the password from `.env`; prints lines and columns with positions, per page.
+- [x] Digits → `9`; text outside a list of known headers → masked.
+- [x] Reports whether the PDF is encrypted and which pages have no text layer (scanned).
 
-**Verificación:**
-- [ ] Piero lo corre sobre un PDF real y confirma que la salida no contiene datos personales antes de compartirla.
+**Verification:**
+- [ ] Piero runs it on a real PDF and confirms the output holds no personal data before sharing it.
 
-**Dependencias:** T2 · **Archivos:** `scripts/inspect_pdf_layout.py`, `tests/test_inspect_pdf_layout.py` · **Tamaño:** S · **Skill:** security-and-hardening
+**Dependencies:** T2 · **Files:** `scripts/inspect_pdf_layout.py`, `tests/test_inspect_pdf_layout.py` · **Size:** S · **Skill:** security-and-hardening
 
-### T10: Fixture sintético BCP — `test/bcp-synthetic-fixture`
+### T10: BCP synthetic fixture — `test/bcp-synthetic-fixture`
 
-**Descripción:** Generar en los tests un PDF falso con el layout de BCP (sin archivos binarios en Git).
+**Description:** Generate a fake PDF with BCP's layout inside the tests (no binary files in Git).
 
-**Criterios de aceptación:**
-- [ ] Generador (fpdf2, dependencia dev) que produce un estado de cuenta BCP ficticio con totales coherentes.
-- [ ] Fixture de pytest que lo crea en `tmp_path`.
+**Acceptance criteria:**
+- [ ] A generator (fpdf2, dev dependency) that produces a fictional BCP statement with coherent totals.
+- [ ] A pytest fixture that creates it in `tmp_path`.
 
-**Verificación:**
-- [ ] El volcado de T9 sobre el PDF sintético coincide estructuralmente con el del real.
+**Verification:**
+- [ ] T9's dump on the synthetic PDF matches the real one structurally.
 
-**Dependencias:** T9 · **Archivos:** `tests/fixtures/synthetic_pdfs.py`, `tests/conftest.py` · **Tamaño:** S
+**Dependencies:** T9 · **Files:** `tests/fixtures/synthetic_pdfs.py`, `tests/conftest.py` · **Size:** S
 
-### T11: Parser BCP — `feat/parser-bcp`
+### T11: BCP parser — `feat/parser-bcp`
 
-**Descripción:** Convertir un PDF de BCP en un `Statement` reconciliado.
+**Description:** Turn a BCP PDF into a reconciled `Statement`.
 
-**Criterios de aceptación:**
-- [ ] `parsers/base.py` (protocolo `detect` + `parse`) y `parsers/bcp.py` con pdfplumber; desbloqueo con pikepdf.
-- [ ] Banco, número de cuenta y periodo salen del contenido del PDF, nunca del nombre del archivo; el número completo solo vive en memoria para calcular `account_id`.
-- [ ] El parser sintético reconcilia; tests `real_pdf` (deseleccionados por defecto) reconcilian con tus PDFs.
+**Acceptance criteria:**
+- [ ] `parsers/base.py` (a `detect` + `parse` protocol) and `parsers/bcp.py` with pdfplumber; unlocking with pikepdf.
+- [ ] Bank, account number and period come from the PDF's content, never the file name; the full number only lives in memory to compute `account_id`.
+- [ ] The synthetic parser reconciles; `real_pdf` tests (deselected by default) reconcile against your PDFs.
 
-**Verificación:**
-- [ ] `uv run pytest` en verde; `uv run pytest -m real_pdf` en verde en tu máquina.
+**Verification:**
+- [ ] `uv run pytest` green; `uv run pytest -m real_pdf` green on your machine.
 
-**Dependencias:** T6, T8, T10 · **Archivos:** `ingestion/parsers/{__init__,base,bcp}.py`, `tests/parsers/test_bcp.py` · **Tamaño:** M · **Skill:** test-driven-development
+**Dependencies:** T6, T8, T10 · **Files:** `ingestion/parsers/{__init__,base,bcp}.py`, `tests/parsers/test_bcp.py` · **Size:** M · **Skill:** test-driven-development
 
-### T11b: OCR para páginas escaneadas — `feat/ocr-fallback`
+### T11b: OCR for scanned pages — `feat/ocr-fallback`
 
-**Descripción:** Algunos PDFs son escaneados; cuando una página no tiene capa de texto, obtenerlo con OCR.
+**Description:** Some PDFs are scanned; when a page has no text layer, get its text via OCR.
 
-**Criterios de aceptación:**
-- [ ] `ingestion/ocr.py`: si `extract_text()` de una página viene vacío, se renderiza a 300 dpi (pdfplumber) y se lee con Tesseract en español.
-- [ ] Los parsers reciben el texto sin saber si vino de OCR; la reconciliación detecta errores de lectura.
-- [ ] El CI instala Tesseract y prueba con un PDF sintético rasterizado.
+**Acceptance criteria:**
+- [ ] `ingestion/ocr.py`: if a page's `extract_text()` comes back empty, render it at 300 dpi (pdfplumber) and read it with Tesseract in Spanish.
+- [ ] Parsers receive the text without knowing whether it came from OCR; reconciliation catches read errors.
+- [ ] CI installs Tesseract and tests against a rasterized synthetic PDF.
 
-**Verificación:**
-- [ ] `uv run pytest -m real_pdf` reconcilia el PDF escaneado real en tu máquina.
+**Verification:**
+- [ ] `uv run pytest -m real_pdf` reconciles the real scanned PDF on your machine.
 
-**Dependencias:** T9, T11 · **Archivos:** `ingestion/ocr.py`, `tests/test_ocr.py`, `.github/workflows/ci.yml` · **Tamaño:** M · **Skill:** source-driven-development
+**Dependencies:** T9, T11 · **Files:** `ingestion/ocr.py`, `tests/test_ocr.py`, `.github/workflows/ci.yml` · **Size:** M · **Skill:** source-driven-development
 
-### T12: Dispatcher y CLI — `feat/dispatcher-cli`
+### T12: Dispatcher and CLI — `feat/dispatcher-cli`
 
-**Descripción:** Detectar el banco de un PDF por su contenido y exponer `pfp parse <pdf>`.
+**Description:** Detect a PDF's bank from its content and expose `pfp parse <pdf>`.
 
-**Criterios de aceptación:**
-- [ ] `dispatcher.py` elige el parser por `detect` (contenido, no nombre del archivo); error claro si ningún parser lo reconoce.
-- [ ] CLI con argparse (`[project.scripts] pfp`): `--user` (por defecto `PFP_USER`); imprime resumen (banco, últimos 4, periodo) y resultado de reconciliación.
+**Acceptance criteria:**
+- [ ] `dispatcher.py` picks the parser via `detect` (content, not the file name); a clear error if no parser recognizes it.
+- [ ] An argparse CLI (`[project.scripts] pfp`): `--user` (defaulting to `PFP_USER`); prints a summary (bank, last 4, period) and the reconciliation result.
 
-**Verificación:**
-- [ ] `uv run pfp parse <pdf real BCP>` muestra el resumen y "reconciliación OK".
-- [ ] El mismo PDF sintético con un nombre arbitrario da el mismo resultado.
+**Verification:**
+- [ ] `uv run pfp parse <real BCP pdf>` shows the summary and "reconciliation OK".
+- [ ] The same synthetic PDF under an arbitrary name gives the same result.
 
-**Dependencias:** T7, T11 · **Archivos:** `ingestion/dispatcher.py`, `ingestion/cli.py`, tests · **Tamaño:** S
+**Dependencies:** T7, T11 · **Files:** `ingestion/dispatcher.py`, `ingestion/cli.py`, tests · **Size:** S
 
-### T12b: Bandeja de entrada y archivo — `feat/inbox-organizer`
+### T12b: Inbox and archive — `feat/inbox-organizer`
 
-**Descripción:** Procesar una carpeta de PDFs con cualquier nombre: detectar duplicados por contenido y guardar cada archivo en su lugar estándar por usuario, banco, cuenta y periodo (ADR 0009).
+**Description:** Process a folder of PDFs under any name: detect duplicates by content and file each one in its standard place by user, bank, account and period (ADR 0009).
 
-**Criterios de aceptación:**
-- [ ] `pfp organize --user <u>` recorre `~/finance-data/inbox/<u>/` (ruta configurable). Por cada PDF: hash (T7); si el usuario ya lo tiene, lo mueve a `_duplicados/`; si no, lee banco, cuenta y periodo del contenido (T12) y lo mueve a `raw/<u>/<banco>/<últimos4>-<id6>/<inicio>_<fin>.pdf`.
-- [ ] Lo que no se puede leer (banco desconocido, sin cuenta o sin periodo, contraseña incorrecta) va a `_por_clasificar/`, y el reporte dice por qué y qué hacer.
-- [ ] Misma cuenta y periodo con otro contenido (PDF regenerado) → se guarda como `_v2` y se avisa. Un PDF con varias cuentas → `<banco>/_varias-cuentas/`.
-- [ ] Nunca borra un archivo. El reporte muestra, por cuenta (banco y últimos 4), los periodos archivados y los meses que faltan.
+**Acceptance criteria:**
+- [ ] `pfp organize --user <u>` walks `~/finance-data/inbox/<u>/` (a configurable path). For each PDF: hash it (T7); if the user already has it, move it to `_duplicates/`; otherwise read the bank, account and period from its content (T12) and move it to `raw/<u>/<bank>/<last4>-<id6>/<start>_<end>.pdf`.
+- [ ] Anything unreadable (unknown bank, no account or period, wrong password) goes to `_needs_review/`, with a report saying why and what to do.
+- [ ] The same account and period with different content (a regenerated PDF) → saved as `_v2` with a warning. A PDF holding several accounts → `<bank>/_multi-account/`.
+- [ ] Never deletes a file. The report shows, per account (bank and last 4), which periods are archived and which months are missing.
 
-**Verificación:**
-- [ ] Tres PDFs sintéticos con el mismo nombre (`EECC.pdf`, `EECC (1).pdf`, `EECC (2).pdf`) de tres cuentas distintas quedan en tres carpetas distintas; uno repetido termina en `_duplicados/` y uno ilegible, en `_por_clasificar/`.
-- [ ] En tu máquina, con tus PDFs reales en la bandeja, el reporte los clasifica todos sin mostrar números completos ni montos.
+**Verification:**
+- [ ] Three synthetic PDFs sharing a name (`EECC.pdf`, `EECC (1).pdf`, `EECC (2).pdf`) from three different accounts end up in three different folders; a repeat lands in `_duplicates/` and an unreadable one in `_needs_review/`.
+- [ ] On your machine, with your real PDFs in the inbox, the report classifies all of them without showing full numbers or amounts.
 
-**Dependencias:** T6, T7, T12 · **Archivos:** `ingestion/organizer.py`, `ingestion/cli.py`, tests · **Tamaño:** M · **Skill:** test-driven-development
+**Dependencies:** T6, T7, T12 · **Files:** `ingestion/organizer.py`, `ingestion/cli.py`, tests · **Size:** M · **Skill:** test-driven-development
 
 ### ✅ Checkpoint B
-- [ ] Un PDF real de BCP se parsea y reconcilia en local · [ ] la bandeja archiva tus PDFs por banco y cuenta · [ ] CI en verde · [ ] revisión con Piero
+- [ ] A real BCP PDF parses and reconciles locally · [ ] the inbox files your PDFs by bank and account · [ ] CI green · [ ] reviewed with Piero
 
 ---
 
-## Bloque C — Lakehouse
+## Block C — Lakehouse
 
-### T13: S3 local — `infra/s3-local`
+### T13: Local S3 — `infra/s3-local`
 
-**Descripción:** Levantar el almacenamiento S3 compatible con un solo comando, en entornos aislados que se crean y se destruyen (ADR 0007).
+**Description:** Bring up S3-compatible storage with a single command, in isolated environments that get created and torn down (ADR 0007).
 
-**Criterios de aceptación:**
-- [ ] `docker-compose.yml` con SeaweedFS (tag fijado), healthcheck y bucket `lakehouse` creado al iniciar.
-- [ ] Sin `container_name` fijo y con el puerto del host configurable por variable, para que varios proyectos (`-p <nombre>`) convivan.
-- [ ] Credenciales solo desde `.env`; ADR 0003 actualizado con la configuración final y ADR 0007 creado.
-- [ ] `make poc-up` / `make poc-down` (`up -d --wait` y `down -v` con nombre de proyecto).
+**Acceptance criteria:**
+- [ ] `docker-compose.yml` with SeaweedFS (pinned tag), a healthcheck, and a `lakehouse` bucket created on startup.
+- [ ] No fixed `container_name`, and the host port configurable via a variable, so several projects (`-p <name>`) can coexist.
+- [ ] Credentials only from `.env`; ADR 0003 updated with the final configuration, and ADR 0007 created.
+- [ ] `make poc-up` / `make poc-down` (`up -d --wait` and `down -v` with a project name).
 
-**Verificación:**
-- [ ] `docker compose up -d` → servicio `healthy`; escribir y leer un objeto de prueba.
-- [ ] Dos proyectos levantados a la vez no chocan; tras `make poc-down` no quedan contenedores ni volúmenes del proyecto.
+**Verification:**
+- [ ] `docker compose up -d` → the service is `healthy`; writing and reading a test object works.
+- [ ] Two projects running at the same time don't collide; after `make poc-down` no containers or volumes from the project remain.
 
-**Dependencias:** T5 · **Archivos:** `docker-compose.yml`, `.env.example`, `Makefile` · **Tamaño:** S
+**Dependencies:** T5 · **Files:** `docker-compose.yml`, `.env.example`, `Makefile` · **Size:** S
 
-### T14: Escritura bronze — `feat/bronze-writer`
+### T14: Bronze writer — `feat/bronze-writer`
 
-**Descripción:** Guardar transacciones en Delta (append-only) y registrar archivos ingeridos; `pfp ingest`.
+**Description:** Save transactions to Delta (append-only) and register ingested files; `pfp ingest`.
 
-**Criterios de aceptación:**
-- [ ] `lakehouse/` escribe `bronze/transactions`, `bronze/statements` (periodo, saldos y totales de cada estado de cuenta) y `bronze/ingested_files` con `deltalake`, particionados por `user_id`, ubicación por `LAKEHOUSE_URI`.
-- [ ] `pfp ingest --user <u>`: organiza la bandeja (T12b) y, por cada archivo nuevo, parsea → reconcilia → escribe bronze; si (usuario, hash) ya existe, lo salta. El nombre original del archivo no se guarda.
-- [ ] Ingerir dos veces el mismo PDF no agrega filas.
+**Acceptance criteria:**
+- [ ] `lakehouse/` writes `bronze/transactions`, `bronze/statements` (period, balances and totals for each statement) and `bronze/ingested_files` with `deltalake`, partitioned by `user_id`, located via `LAKEHOUSE_URI`.
+- [ ] `pfp ingest --user <u>`: organizes the inbox (T12b) and, for every new file, parses → reconciles → writes to bronze; if (user, hash) already exists, it's skipped. The original file name is never stored.
+- [ ] Ingesting the same PDF twice never adds rows.
 
-**Verificación:**
-- [ ] Tests con lake en `tmp_path`; test de integración (marker `integration`) contra el S3 local.
-- [ ] Dos usuarios con PDFs sintéticos quedan en particiones separadas; borrar una no afecta a la otra.
+**Verification:**
+- [ ] Tests with the lake in `tmp_path`; an integration test (`integration` marker) against local S3.
+- [ ] Two users with synthetic PDFs end up in separate partitions; deleting one doesn't affect the other.
 
-**Dependencias:** T12b, T13 · **Archivos:** `lakehouse/{storage,bronze}.py`, `ingestion/cli.py`, tests · **Tamaño:** M · **Skill:** source-driven-development
+**Dependencies:** T12b, T13 · **Files:** `lakehouse/{storage,bronze}.py`, `ingestion/cli.py`, tests · **Size:** M · **Skill:** source-driven-development
 
 ### T15: Benchmarks — `perf/benchmarks`
 
-**Descripción:** Medir parsing y escritura, y avisar si un PR los empeora.
+**Description:** Measure parsing and writes, and warn if a PR makes them worse.
 
-**Criterios de aceptación:**
-- [ ] Benchmarks de parsing (PDF sintético de N páginas) y append a bronze.
-- [ ] Job de CI que compara base vs PR en el mismo runner (`--benchmark-compare-fail=mean:20%`), en modo aviso.
-- [ ] Job `changes` (ADR 0008): áreas afectadas según `git diff` contra la base y el mapa de impacto; los benchmarks corren solo si cambian `ingestion/`, `lakehouse/` o las dependencias. En push a `develop` y una vez por semana corre todo.
-- [ ] Valores actuales anotados en CONSTRAINTS.md ("Medido") y ADR 0008 creado en `brain/decisiones/`.
+**Acceptance criteria:**
+- [ ] Parsing benchmarks (an N-page synthetic PDF) and a bronze append.
+- [ ] A CI job comparing base vs PR on the same runner (`--benchmark-compare-fail=mean:20%`), in warn mode.
+- [ ] A `changes` job (ADR 0008): affected areas per `git diff` against the base and the impact map; benchmarks run only if `ingestion/`, `lakehouse/` or the dependencies change. Everything runs on push to `develop` and once a week.
+- [ ] Current values noted in CONSTRAINTS.md ("Measured"), and ADR 0008 created in `brain/decisions/`.
 
-**Verificación:**
-- [ ] Un PR con un `sleep` artificial dispara el aviso (y se descarta).
-- [ ] Un PR que solo toca documentación salta los benchmarks y queda mergeable; uno que toca `ingestion/` los corre.
+**Verification:**
+- [ ] A PR with an artificial `sleep` triggers the warning (and gets discarded).
+- [ ] A PR that only touches docs skips the benchmarks and stays mergeable; one that touches `ingestion/` runs them.
 
-**Dependencias:** T14 · **Archivos:** `tests/benchmarks/*`, `.github/workflows/ci.yml`, `CONSTRAINTS.md` · **Tamaño:** S · **Skill:** performance-optimization
+**Dependencies:** T14 · **Files:** `tests/benchmarks/*`, `.github/workflows/ci.yml`, `CONSTRAINTS.md` · **Size:** S · **Skill:** performance-optimization
 
 ### ✅ Checkpoint C
-- [ ] `pfp ingest` real de punta a punta · [ ] reingestar no duplica · [ ] revisión con Piero
+- [ ] Real `pfp ingest` end-to-end · [ ] re-ingesting doesn't duplicate · [ ] reviewed with Piero
 
 ---
 
-## Bloque D — Transformación
+## Block D — Transformation
 
 ### T16: dbt silver — `feat/dbt-silver`
 
-**Descripción:** Proyecto dbt-duckdb que lee bronze (Delta en S3) y produce silver con tests.
+**Description:** A dbt-duckdb project reading bronze (Delta on S3) and producing silver with tests.
 
-**Criterios de aceptación:**
-- [ ] Prueba mínima de lectura `delta_scan` sobre el S3 local antes de modelar.
-- [ ] Fuentes `bronze.transactions` y `bronze.statements`, modelo `silver/transactions` (tipos, descripción normalizada, moneda, usuario, cuenta).
-- [ ] Tests dbt (not_null, accepted_values de moneda), test de continuidad (saldo final de un periodo = saldo inicial del siguiente, por usuario y cuenta) y config de sqlfluff.
+**Acceptance criteria:**
+- [ ] A minimal `delta_scan` read test against local S3, before any modeling.
+- [ ] `bronze.transactions` and `bronze.statements` sources, `silver/transactions` model (types, normalized description, currency, account).
+- [ ] dbt tests (not_null, accepted_values for currency), a continuity test (a period's closing balance = the next period's opening balance, per user and account), and sqlfluff config.
 
-**Verificación:**
-- [ ] `uv run dbt build` y `uv run sqlfluff lint dbt/models` en verde en local.
-- [ ] Un estado de cuenta sintético faltante entre dos periodos hace fallar el test de continuidad.
+**Verification:**
+- [ ] `uv run dbt build` and `uv run sqlfluff lint dbt/models` green locally.
+- [ ] A synthetic statement missing between two periods fails the continuity test.
 
-**Dependencias:** T14 · **Archivos:** `dbt/**`, `pyproject.toml` · **Tamaño:** M · **Skill:** source-driven-development
+**Dependencies:** T14 · **Files:** `dbt/**`, `pyproject.toml` · **Size:** M · **Skill:** source-driven-development
 
-### T17: Entorno efímero de integración — `ci/ephemeral-integration`
+### T17: Ephemeral integration environment — `ci/ephemeral-integration`
 
-**Descripción:** En cada PR, crear la plataforma temporal, ingerir datos sintéticos, correr dbt y destruirla (ADR 0007). Lo mismo en local con tus PDFs reales.
+**Description:** On every PR, create the temporary platform, ingest synthetic data, run dbt, and tear it down (ADR 0007). The same thing locally with your real PDFs.
 
-**Criterios de aceptación:**
-- [ ] Job de CI: `docker compose -p pfp-pr-<n> up -d --wait` → `pfp ingest` del fixture sintético dos veces (la segunda agrega 0 filas) → `dbt build` → `sqlfluff lint` → `down -v` con `if: always()`.
-- [ ] Por impacto (ADR 0008): el entorno solo se levanta si cambian `ingestion/`, `lakehouse/`, `dbt/` o las dependencias; `dbt parse` sobre el commit base genera el manifest y el PR construye `@state:modified`; si cambian `ingestion/` o `lakehouse/`, `dbt build` completo.
-- [ ] Tests `integration` corren en este job; sin secretos y con `timeout-minutes`.
-- [ ] Antes de destruir el entorno se guardan `docker compose logs` y los artefactos de dbt (`target/run_results.json`, `logs/dbt.log`) como artifact del job (`if: always()`, retención corta), para revisar un fallo cuando el entorno ya no existe.
-- [ ] `make poc`: el mismo flujo en local con tus PDFs reales; imprime solo pass/fail y diferencias de reconciliación, y destruye el entorno al terminar.
+**Acceptance criteria:**
+- [ ] CI job: `docker compose -p pfp-pr-<n> up -d --wait` → `pfp ingest` the synthetic fixture twice (the second adds 0 rows) → `dbt build` → `sqlfluff lint` → `down -v` with `if: always()`.
+- [ ] Impact-based (ADR 0008): the environment only spins up if `ingestion/`, `lakehouse/`, `dbt/` or the dependencies change; `dbt parse` on the base commit generates the manifest, and the PR builds `@state:modified`; if `ingestion/` or `lakehouse/` change, a full `dbt build`.
+- [ ] `integration` tests run in this job; no secrets, with `timeout-minutes`.
+- [ ] Before tearing down, save `docker compose logs` and dbt's artifacts (`target/run_results.json`, `logs/dbt.log`) as a job artifact (`if: always()`, short retention), so a failure can still be reviewed once the environment is gone.
+- [ ] `make poc`: the same flow locally with your real PDFs; prints only pass/fail and reconciliation differences, and tears the environment down at the end.
 
-**Verificación:**
-- [ ] Job en verde; romper un test dbt a propósito lo pone en rojo (y se descarta).
-- [ ] Al terminar el job, en verde o en rojo, no quedan contenedores ni volúmenes del proyecto.
-- [ ] `make poc` en verde en tu máquina y sin restos.
-- [ ] Un PR que cambia un modelo silver construye solo ese modelo, sus descendientes y los ancestros necesarios (visible en el log de dbt).
+**Verification:**
+- [ ] The job is green; breaking a dbt test on purpose turns it red (and gets discarded).
+- [ ] Once the job finishes, green or red, no containers or volumes from the project remain.
+- [ ] `make poc` green on your machine and leaves nothing behind.
+- [ ] A PR that changes a silver model only builds that model, its descendants, and the ancestors needed (visible in dbt's log).
 
-**Dependencias:** T15, T16 · **Archivos:** `.github/workflows/ci.yml`, `Makefile` · **Tamaño:** M · **Skill:** ci-cd-and-automation
+**Dependencies:** T15, T16 · **Files:** `.github/workflows/ci.yml`, `Makefile` · **Size:** M · **Skill:** ci-cd-and-automation
 
-### T17b: Comparación base vs PR — `ci/pr-data-diff`
+### T17b: Base-vs-PR comparison — `ci/pr-data-diff`
 
-**Descripción:** Mostrar en cada PR qué cambia en los datos: la misma corrida efímera con la rama base y con la del PR, comparadas.
+**Description:** Show what changes in the data on every PR: the same ephemeral run against the base branch and against the PR's, compared.
 
-**Criterios de aceptación:**
-- [ ] El job corre el flujo de T17 para el commit base y para el del PR, con los mismos datos sintéticos y en ubicaciones separadas (prefijo del lake y archivo DuckDB por corrida).
-- [ ] `scripts/data_diff.py` compara con DuckDB los modelos construidos en la corrida: filas por modelo, columnas y tipos, y filas distintas (`EXCEPT` en ambos sentidos, con muestra limitada).
-- [ ] Resultado en Markdown en el resumen del job (`$GITHUB_STEP_SUMMARY`); modo aviso, no bloquea.
+**Acceptance criteria:**
+- [ ] The job runs T17's flow for the base commit and for the PR's, with the same synthetic data in separate locations (a lake prefix and a DuckDB file per run).
+- [ ] `scripts/data_diff.py` compares the models built in the run using DuckDB: rows per model, columns and types, and differing rows (`EXCEPT` both ways, with a limited sample).
+- [ ] Results in Markdown in the job summary (`$GITHUB_STEP_SUMMARY`); warn mode, doesn't block.
 
-**Verificación:**
-- [ ] Tests TDD del script con dos bases DuckDB pequeñas.
-- [ ] Un PR que cambia un modelo silver muestra la diferencia; uno sin cambios en los modelos muestra "sin cambios".
+**Verification:**
+- [ ] TDD tests for the script with two small DuckDB databases.
+- [ ] A PR that changes a silver model shows the difference; one with no model changes shows "no changes".
 
-**Dependencias:** T17 · **Archivos:** `scripts/data_diff.py`, `tests/test_data_diff.py`, `.github/workflows/ci.yml` · **Tamaño:** M · **Skill:** test-driven-development
+**Dependencies:** T17 · **Files:** `scripts/data_diff.py`, `tests/test_data_diff.py`, `.github/workflows/ci.yml` · **Size:** M · **Skill:** test-driven-development
 
 ### ✅ Checkpoint D
-- [ ] `dbt build` en verde en local y en CI · [ ] el entorno efímero se destruye siempre · [ ] un PR muestra su diff de datos · [ ] un PR solo de documentación no levanta el entorno · [ ] revisión con Piero
+- [ ] `dbt build` green locally and in CI · [ ] the ephemeral environment always gets torn down · [ ] a PR shows its data diff · [ ] a docs-only PR doesn't spin up the environment · [ ] reviewed with Piero
 
 ---
 
-## Bloque E — Segundo banco y cierre
+## Block E — Second bank and close
 
-### T18: Parser Scotiabank — `feat/parser-scotiabank`
+### T18: Scotiabank parser — `feat/parser-scotiabank`
 
-**Descripción:** Segundo banco: valida que el diseño de parsers y dispatcher escala.
+**Description:** A second bank: proves the parser and dispatcher design scales.
 
-**Criterios de aceptación:**
-- [ ] Layout enmascarado (T9), fixture sintético y `parsers/scotiabank.py` registrado en el dispatcher.
-- [ ] Como en T11: banco, cuenta y periodo salen del contenido del PDF, y la bandeja (T12b) archiva sus PDFs.
-- [ ] Tests sintéticos en CI y `real_pdf` en local reconcilian.
+**Acceptance criteria:**
+- [ ] A masked layout (T9), a synthetic fixture, and `parsers/scotiabank.py` registered in the dispatcher.
+- [ ] Like T11: bank, account and period come from the PDF's content, and the inbox (T12b) files its PDFs.
+- [ ] Synthetic tests in CI and `real_pdf` locally both reconcile.
 
-**Verificación:**
-- [ ] `uv run pfp ingest <pdf real Scotiabank>` escribe en bronze y `dbt build` lo incluye en silver.
+**Verification:**
+- [ ] `uv run pfp ingest <real Scotiabank pdf>` writes to bronze, and `dbt build` includes it in silver.
 
-**Dependencias:** T11b, T12, T14 · **Archivos:** `ingestion/parsers/scotiabank.py`, `tests/fixtures/…`, `tests/parsers/test_scotiabank.py` · **Tamaño:** M · **Skill:** test-driven-development
+**Dependencies:** T11b, T12, T14 · **Files:** `ingestion/parsers/scotiabank.py`, `tests/fixtures/…`, `tests/parsers/test_scotiabank.py` · **Size:** M · **Skill:** test-driven-development
 
-### T18b: Conciliación entre cuentas — `feat/inter-account-reconciliation`
+### T18b: Inter-account reconciliation — `feat/inter-account-reconciliation`
 
-**Descripción:** Emparejar las transferencias entre cuentas del mismo usuario, para que no cuenten como gasto ni ingreso y para detectar las que no tienen contraparte (ADR 0009).
+**Description:** Match transfers between accounts of the same user, so they never count as an expense or income, and flag the ones with no counterpart (ADR 0009).
 
-**Criterios de aceptación:**
-- [ ] Modelo dbt `silver/internal_transfers`: empareja una salida y una entrada del mismo usuario, en cuentas distintas, con la misma moneda, el mismo monto (tolerancia configurable, por defecto 0) y a N días o menos (por defecto 3). Cada movimiento está en una pareja como máximo.
-- [ ] `silver/transactions` marca `is_internal_transfer`; las candidatas sin pareja quedan en `silver/unmatched_transfers` para revisión, nunca se descartan.
-- [ ] Las transferencias entre monedas distintas quedan fuera de esta tarea y aparecen como sin pareja.
+**Acceptance criteria:**
+- [ ] A dbt model `silver/internal_transfers`: matches an outflow and an inflow from the same user, on different accounts, in the same currency, for the same amount (configurable tolerance, default 0), within N days or fewer (default 3). Every movement is in at most one pair.
+- [ ] `silver/transactions` flags `is_internal_transfer`; unmatched candidates land in `silver/unmatched_transfers` for review, never dropped.
+- [ ] Cross-currency transfers stay out of this task and show up as unmatched.
 
-**Verificación:**
-- [ ] Con datos sintéticos de BCP y Scotiabank y una transferencia entre ambos, queda emparejada; si se quita la entrada, aparece en `unmatched_transfers`.
-- [ ] `make poc` con tus PDFs reales muestra solo cuántas se emparejaron y cuántas no, sin montos.
+**Verification:**
+- [ ] With synthetic BCP and Scotiabank data and a transfer between them, it comes back matched; removing the inflow makes it show up in `unmatched_transfers`.
+- [ ] `make poc` against your real PDFs shows only how many matched and how many didn't, with no amounts.
 
-**Dependencias:** T16, T18 · **Archivos:** `dbt/models/silver/**`, tests · **Tamaño:** M · **Skill:** test-driven-development
+**Dependencies:** T16, T18 · **Files:** `dbt/models/silver/**`, tests · **Size:** M · **Skill:** test-driven-development
 
-### T19: Cierre de fase — `docs/phase-1-close`
+### T19: Phase close — `docs/phase-1-close`
 
-**Descripción:** Dejar la fase presentable y activar el bloqueo de las reglas numéricas.
+**Description:** Leave the phase presentable and turn on blocking for the numeric rules.
 
-**Criterios de aceptación:**
-- [ ] README: qué es, diagrama, cómo correrlo, equivalencia Azure ↔ open source.
-- [ ] Cerebro al día (fase-1 cerrada, mapa Mermaid, componentes).
-- [ ] Reglas numéricas pasan a bloquear (si ya pasó 2026-09-26).
+**Acceptance criteria:**
+- [ ] README: what this is, a diagram, how to run it, the Azure ↔ open-source equivalence.
+- [ ] Brain kept current (phase-1 closed, Mermaid map, components).
+- [ ] Numeric rules switch to blocking (if 2026-09-26 has passed).
 
-**Verificación:**
-- [ ] Clonar el repo en una carpeta limpia y seguir el README hasta `dbt build` sin pasos faltantes.
+**Verification:**
+- [ ] Clone the repo into a clean folder and follow the README through to `dbt build` with no missing steps.
 
-**Dependencias:** T17b, T18b · **Archivos:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Tamaño:** S
+**Dependencies:** T17b, T18b · **Files:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Size:** S
 
-### ✅ Checkpoint final
-- [ ] Todos los criterios cumplidos · [ ] conciliación integral en verde (estado, continuidad y entre cuentas) · [ ] PR de release `develop → main` "Fase 1 — Fundación" · [ ] merge por Piero
+### ✅ Final checkpoint
+- [ ] All criteria met · [ ] integral reconciliation green (statement, continuity and between accounts) · [ ] `develop → main` release PR "Phase 1 — Foundation" · [ ] merged by Piero

@@ -1,85 +1,86 @@
-# Cerebro del proyecto
+# Project brain
 
-Notas enlazadas que explican **por qué** el proyecto es como es: los conceptos que usa, las piezas
-que lo forman, las decisiones que se tomaron y en qué fase está cada cosa. El código dice *qué* hace;
-aquí está el contexto.
+Linked notes that explain **why** the project is the way it is: the concepts it uses, the
+pieces that make it up, the decisions behind it, and what phase each thing is in. The code
+says *what* it does; this is the context.
 
-- **En GitHub:** navega con los links de cada nota.
-- **En Obsidian:** abre la carpeta `brain/` como vault; la vista de grafo dibuja las relaciones.
+- **On GitHub:** navigate through each note's links.
+- **In Obsidian:** open the `brain/` folder as a vault; the graph view draws the relationships.
 
-## Mapa
+## Map
 
 ```mermaid
 flowchart LR
-    PDF[("PDF de estado de cuenta")]
+    PDF[("Bank statement PDF")]
 
-    subgraph construido["Construido"]
-        GS["Guardas de seguridad"]
-        PY["Proyecto Python"]
+    subgraph built["Built"]
+        GS["Security guards"]
+        PY["Python project"]
         CI["CI"]
-        INS["Inspector de layout"]
-        CAL["Nivel de calidad"]
+        INS["Layout inspector"]
+        CAL["Quality bar"]
     end
 
-    subgraph planificado["Planificado · Fase 1"]
-        ING["Ingesta"]
+    subgraph planned["Planned · Phase 1"]
+        ING["Ingestion"]
         LAKE["Lakehouse · bronze"]
         DBT["dbt · silver"]
     end
 
     PDF --> ING --> LAKE --> DBT
     PY --> ING
-    CI -. valida .-> PY
-    GS -. protege .-> PDF
-    INS -. diseña .-> ING
-    CAL -. exige .-> PY
+    CI -. validates .-> PY
+    GS -. protects .-> PDF
+    INS -. designs .-> ING
+    CAL -. enforces .-> PY
 
-    ING -. usa .-> REC(["Reconciliación"])
-    ING -. usa .-> DED(["Dedup por archivo"])
-    LAKE -. sigue .-> MED(["Medallón"])
-    DBT -. usa .-> BK(["Business key"])
-    DED --> IDE(["Idempotencia"])
+    ING -. uses .-> REC(["Reconciliation"])
+    ING -. uses .-> DED(["File-level dedup"])
+    LAKE -. follows .-> MED(["Medallion"])
+    DBT -. uses .-> BK(["Business key"])
+    DED --> IDE(["Idempotency"])
     BK --> IDE
 
     A1{{"ADR 0001 · Python 3.12 + uv"}} --> PY
     A2{{"ADR 0002 · DuckDB + delta-rs"}} --> LAKE
     A2 --> DBT
     A3{{"ADR 0003 · SeaweedFS"}} --> LAKE
-    A4{{"ADR 0004 · PDFs reales no salen"}} --> GS
+    A4{{"ADR 0004 · Real PDFs never leave"}} --> GS
     A4 --> ING
     A4 --> INS
 ```
 
-Rectángulo = componente · óvalo = concepto · hexágono = decisión (ADR) · línea punteada = relación de uso.
+Rectangle = component · oval = concept · hexagon = decision (ADR) · dotted line = uses relationship.
 
-## Índice
+## Index
 
-| Tipo | Notas |
+| Type | Notes |
 |---|---|
-| Fases | [Fase 1 — Fundación](fases/fase-1.md) |
-| Componentes | [Guardas de seguridad](componentes/guardas-de-seguridad.md) · [Proyecto Python](componentes/proyecto-python.md) · [CI](componentes/ci.md) · [Inspector de layout](componentes/inspector-de-layout.md) · [Nivel de calidad](componentes/nivel-de-calidad.md) |
-| Conceptos | [Medallón](conceptos/medallon.md) · [Idempotencia](conceptos/idempotencia.md) · [Business key](conceptos/business-key.md) · [Reconciliación](conceptos/reconciliacion.md) · [Dedup por archivo](conceptos/dedup-por-archivo.md) · [Usuarios y cuentas](conceptos/usuarios-y-cuentas.md) |
-| Decisiones | [0001 Python 3.12 con uv](decisiones/0001-python-312-con-uv.md) · [0002 DuckDB + delta-rs](decisiones/0002-duckdb-y-delta-rs-antes-que-spark.md) · [0003 SeaweedFS](decisiones/0003-s3-local-con-seaweedfs.md) · [0004 PDFs reales](decisiones/0004-pdfs-reales-no-salen-de-la-maquina.md) |
+| Phases | [Phase 1 — Foundation](phases/phase-1.md) |
+| Components | [Security guards](components/security-guards.md) · [Python project](components/python-project.md) · [CI](components/ci.md) · [Layout inspector](components/layout-inspector.md) · [Quality bar](components/quality-bar.md) |
+| Concepts | [Medallion](concepts/medallion.md) · [Idempotency](concepts/idempotency.md) · [Business key](concepts/business-key.md) · [Reconciliation](concepts/reconciliation.md) · [File-level dedup](concepts/file-level-dedup.md) · [Users and accounts](concepts/users-and-accounts.md) |
+| Decisions | [0001 Python 3.12 with uv](decisions/0001-python-312-with-uv.md) · [0002 DuckDB + delta-rs](decisions/0002-duckdb-and-delta-rs-before-spark.md) · [0003 SeaweedFS](decisions/0003-local-s3-with-seaweedfs.md) · [0004 Real PDFs](decisions/0004-real-pdfs-never-leave-your-machine.md) |
 
-## Convención de notas
+## Note conventions
 
-- **Una idea por nota**, en la carpeta de su tipo: `conceptos/`, `componentes/`, `decisiones/`, `fases/`.
-- **Nombre del archivo** en minúsculas, con guiones y sin tildes (`business-key.md`); los ADR empiezan
-  con su número (`0001-…`).
-- **Frontmatter** al inicio de cada nota:
+- **One idea per note**, in the folder for its type: `concepts/`, `components/`, `decisions/`, `phases/`.
+- **File name** in lowercase, hyphen-separated (`business-key.md`); ADRs start with their
+  number (`0001-…`).
+- **Frontmatter** at the top of every note:
 
   ```yaml
   ---
-  tipo: concepto   # concepto | componente | decision | fase
-  fase: 1          # fase en la que aparece
+  type: concept   # concept | component | decision | phase
+  phase: 1        # phase it appears in
   ---
   ```
 
-  Las decisiones añaden `estado` (propuesta | aceptada | reemplazada) y `fecha`; los componentes,
-  `estado` (planificado | en-curso | construido) y `tarea`.
-- **Relaciones como links relativos** en la sección "Relacionado" de cada nota: GitHub los navega y
-  Obsidian los dibuja en el grafo. No se repiten en el frontmatter, para no mantener dos listas.
-- **Plantillas** en `brain/_plantillas/`: copia la del tipo que necesites.
-- **Cada PR actualiza el cerebro**: la nota del componente o concepto que toca y la
-  [nota de la fase](fases/fase-1.md). Una decisión nueva es un ADR nuevo; los ADR no se borran, se
-  reemplazan con otro que los referencia.
+  Decisions add `status` (proposed | accepted | superseded) and `date`; components add
+  `status` (planned | in-progress | built) and `task`.
+- **Relationships as relative links** in each note's "Related" section: GitHub navigates them
+  and Obsidian draws them in the graph. They're not repeated in the frontmatter, so there's
+  only one list to keep up to date.
+- **Templates** in `brain/_templates/`: copy the one for the type you need.
+- **Every PR updates the brain**: the component or concept note it touches, and the
+  [phase note](phases/phase-1.md). A new decision is a new ADR; ADRs are never deleted, only
+  superseded by another one that references them.
