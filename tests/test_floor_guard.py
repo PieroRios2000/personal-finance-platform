@@ -7,7 +7,7 @@ from scripts import floor_guard
 
 BASE_FILES = {
     "tests/test_a.py": "def test_a() -> None:\n    assert 1 + 1 == 2\n",
-    "tests/test_señal.py": "def test_s() -> None:\n    assert True\n",
+    "tests/test_señal.py": "def test_s() -> None:\n    assert True\n",  # non-ASCII path
     "app.py": "x = 1\n",
     "legacy.py": "y = f()  # type: ignore\n",
     "pyproject.toml": (
@@ -42,7 +42,7 @@ def replace(path: str, old: str, new: str) -> None:
 
 @pytest.fixture(autouse=True)
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Repo de git con una rama base `main` y la rama de trabajo `feature`."""
+    """A git repo with a `main` base branch and a `feature` working branch."""
     monkeypatch.chdir(tmp_path)
     git("init", "-q", "-b", "main")
     for path, text in BASE_FILES.items():
@@ -64,7 +64,7 @@ def test_clean_change_passes(capsys: pytest.CaptureFixture[str]) -> None:
     write("app.py", "x = 2\n")
     write("tests/test_b.py", "def test_b() -> None:\n    assert True\n")
 
-    assert run(capsys) == (0, "floor-guard: limpio\n")
+    assert run(capsys) == (0, "floor-guard: clean\n")
 
 
 @pytest.mark.parametrize(
@@ -102,7 +102,7 @@ def test_new_suppression_or_skip_fails(
 def test_removing_a_suppression_passes(capsys: pytest.CaptureFixture[str]) -> None:
     write("legacy.py", "y = f()\n")
 
-    assert run(capsys) == (0, "floor-guard: limpio\n")
+    assert run(capsys) == (0, "floor-guard: clean\n")
 
 
 def test_untracked_file_is_checked(capsys: pytest.CaptureFixture[str]) -> None:
@@ -216,7 +216,7 @@ def test_harmless_config_change_passes(
 ) -> None:
     replace(path, old, new)
 
-    assert run(capsys) == (0, "floor-guard: limpio\n")
+    assert run(capsys) == (0, "floor-guard: clean\n")
 
 
 @pytest.mark.parametrize(
@@ -238,19 +238,19 @@ def test_config_outside_pyproject_fails(
 def test_exception_applies_while_its_row_exists(
     review: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """La fecha es un recordatorio para Piero: floor-guard no la evalúa."""
+    """The date is a reminder for Piero: floor-guard does not evaluate it."""
     write("app.py", "x = 1\ny = f()  # type: ignore\n")
     write(
         "CONSTRAINTS.md",
-        "| Regla | Archivo | Razón | Aprobó | Revisar el |\n"
+        "| Rule | File | Reason | Approved by | Review by |\n"
         "|---|---|---|---|---|\n"
-        f"| supresion | `app.py` | librería sin tipos | Piero | {review} |\n",
+        f"| suppression | `app.py` | library with no type stubs | Piero | {review} |\n",
     )
 
     code, out = run(capsys)
 
     assert code == 0
-    assert "excepción aprobada [supresion] app.py:2" in out
+    assert "approved exception [suppression] app.py:2" in out
 
 
 def test_guard_cannot_run_without_base(capsys: pytest.CaptureFixture[str]) -> None:
@@ -261,11 +261,11 @@ def test_guard_cannot_run_without_base(capsys: pytest.CaptureFixture[str]) -> No
 def test_no_common_history_explains_how_to_fix(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Como en un clon superficial: merge-base falla sin decir nada."""
+    """As in a shallow clone: merge-base fails without saying anything."""
     git("switch", "-q", "--orphan", "other")
     git("commit", "-q", "--allow-empty", "-m", "x", "--no-gpg-sign")
 
     assert floor_guard.main(["--base", "main"]) == 2
     err = capsys.readouterr().err
-    assert "no hay historia común" in err
+    assert "no common history" in err
     assert "fetch-depth: 0" in err
