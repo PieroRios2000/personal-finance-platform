@@ -217,12 +217,12 @@
 **Description:** Detect a PDF's bank from its content and expose `pfp parse <pdf>`.
 
 **Acceptance criteria:**
-- [ ] `dispatcher.py` picks the parser via `detect` (content, not the file name); a clear error if no parser recognizes it.
-- [ ] An argparse CLI (`[project.scripts] pfp`): `--user` (defaulting to `PFP_USER`); prints a summary (bank, last 4, period) and the reconciliation result.
+- [x] `dispatcher.py` picks the parser via `detect` (content, not the file name); a clear error if no parser recognizes it.
+- [x] An argparse CLI (`[project.scripts] pfp`): `--user` (defaulting to `PFP_USER`); prints a summary (bank, last 4, period) and the reconciliation result.
 
 **Verification:**
-- [ ] `uv run pfp parse <real BCP pdf>` shows the summary and "reconciliation OK".
-- [ ] The same synthetic PDF under an arbitrary name gives the same result.
+- [ ] `uv run pfp parse <real BCP pdf>` shows the summary and "reconciliation OK". (Verified against a synthetic PDF; needs your real PDF + `BCP_PDF_PASSWORD` to close out.)
+- [x] The same synthetic PDF under an arbitrary name gives the same result.
 
 **Dependencies:** T7, T11 · **Files:** `ingestion/dispatcher.py`, `ingestion/cli.py`, tests · **Size:** S
 
