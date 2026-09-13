@@ -24,6 +24,9 @@ __pycache__/
 .coverage
 coverage.xml
 .import_linter_cache/
+# Saved benchmark runs (T15): a timing only means something on the machine
+# that produced it, so they are never shared through Git.
+.benchmarks/
 
 # Local Obsidian config (the vault is brain/)
 .obsidian/
