@@ -124,11 +124,11 @@ and `floor-guard`. From the terminal:
 ```bash
 gh pr checks <n>                     # pass/fail per job for PR <n>
 gh run view <run_id>                 # which job and step failed, and the error
-gh api repos/<owner>/<repo>/actions/jobs/<job_id>/logs   # that job's full log
+gh run view <run_id> --log-failed    # the full log of just the failed steps
 gh run rerun <run_id> --failed       # re-run only what failed
 ```
 
-`<run_id>` and `<job_id>` show up in `gh run list` and in `gh run view <run_id>`. A failure
+`<run_id>` shows up in `gh run list` or in the PR's checks. A failure
 in `lint-types` is also annotated on the exact file and line inside the PR's *Files changed*
 tab (ruff via `--output-format=github`, mypy via a problem matcher). Until 2026-09-26,
 `diff-cover`, `pip-audit`, `bandit` and `import-linter` only warn (see CONSTRAINTS.md); a red
@@ -143,5 +143,4 @@ blocks the merge.
 | Docker Desktop: `wsl-bootstrap … exit status 1` on startup | In PowerShell, `wsl --shutdown`, then reopen Docker Desktop; if it persists, `wsl --update` |
 | `permission denied` on `/var/run/docker.sock` | Missing the `docker` group, or WSL wasn't restarted (section 2, step 3) |
 | `gh pr edit` fails with a *Projects classic* error (gh 2.46) | Use `gh api --method PATCH repos/<owner>/<repo>/pulls/<n>`, or upgrade gh from cli.github.com |
-| `gh run view --log` or `--log-failed` show nothing (gh 2.46) | Fetch the job's log from the API: `gh api repos/<owner>/<repo>/actions/jobs/<job_id>/logs` (the `job_id` shows up in `gh run view <run_id>`) |
 | Files named `<PdfName>.pdf:Zone.Identifier` appear under `~/finance-data/` | Windows adds them when copying from File Explorer; delete them (`find ~/finance-data -name '*:Zone.Identifier' -delete`) — they're not part of the PDF |
