@@ -5,7 +5,7 @@
 
 BASE ?= origin/develop
 
-.PHONY: check-fast check-task check-full
+.PHONY: check-fast check-task check-full poc-up poc-down
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -25,3 +25,13 @@ check-full: check-task
 	-uv run pip-audit
 	-uv run bandit -q -r . -x ./.venv --severity-level high
 	-uv run diff-cover coverage.xml --compare-branch=$(BASE) --fail-under=80
+
+# Local S3 (SeaweedFS) for the lakehouse (ADR 0003, ADR 0007). Fixed project name:
+# fine for one developer's machine; T17 gives each CI job its own project name.
+# bucket-init runs separately (`run --rm`, not part of `up`'s set): see docker-compose.yml.
+poc-up:
+	docker compose -p pfp-poc up -d --wait seaweedfs
+	docker compose -p pfp-poc run --rm bucket-init
+
+poc-down:
+	docker compose -p pfp-poc down -v

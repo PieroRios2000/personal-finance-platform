@@ -1,0 +1,45 @@
+# Local S3-compatible storage for the lakehouse (ADR 0003, ADR 0007).
+# Same file locally (`make poc-up`/`make poc-down`) and in CI (T17): run with a
+# project name (`-p`) so several instances can coexist without colliding, and
+# tear down with `-v` so no volume outlives the environment.
+#
+# Credentials come only from `.env` (see `.env.example`); nothing is hardcoded here.
+
+services:
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.46
+    command: ["server", "-dir=/data", "-s3", "-s3.port=8333"]
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    ports:
+      - "${SEAWEEDFS_S3_PORT:-8333}:8333"
+    volumes:
+      - seaweedfs-data:/data
+    healthcheck:
+      # No -f: any HTTP response (even 403 for an unsigned request) proves the S3
+      # gateway is up and serving; -f would treat that 403 as a failed healthcheck.
+      test: ["CMD", "curl", "-s", "-o", "/dev/null", "http://localhost:8333/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # One-shot: waits for the S3 gateway to be healthy, then creates the "lakehouse"
+  # bucket (a directory under the filer's /buckets, no S3 credentials needed for
+  # this step) and exits. Safe to run repeatedly: creating an existing bucket is a
+  # no-op. Not part of `up`'s default set (see Makefile's `poc-up`): `docker compose
+  # up --wait` treats any container exiting, even with code 0, as a failure unless
+  # another long-running service depends on it (docker/compose#10596) — a plain
+  # `run --rm` sidesteps that.
+  bucket-init:
+    image: chrislusf/seaweedfs:4.46
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "echo 's3.bucket.create -name lakehouse' | weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888"
+
+volumes:
+  seaweedfs-data:

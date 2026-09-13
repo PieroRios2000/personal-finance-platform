@@ -42,7 +42,7 @@ integral reconciliation plan (#19).
 | 0004 | Real PDFs never leave your machine | [ADR 0004](../decisions/0004-real-pdfs-never-leave-your-machine.md) |
 | 0005 | `Transaction` with `Decimal`, user and HMAC-based account + last 4 | Written in T6 |
 | 0006 | Lake location by URI | Written in T14 |
-| 0007 | Ephemeral per-PR environments | Written in T13 |
+| 0007 | Ephemeral per-PR environments | [ADR 0007](../decisions/0007-ephemeral-per-pr-environments.md) |
 | 0008 | Impact-based CI | Written in T15 |
 | 0009 | Several users and accounts; PDF content rules over the file name | Written in T6 |
 
