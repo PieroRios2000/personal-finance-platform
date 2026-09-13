@@ -59,6 +59,7 @@ def bcp_statement_pdf(
     movements: Sequence[Movement] = DEFAULT_MOVEMENTS,
     closing_balance: Decimal | None = None,
     reconciles: bool = True,
+    account_number: str = _ACCOUNT_NUMBER,
 ) -> bytes:
     """Render a fictional, one-page BCP-style statement as PDF bytes.
 
@@ -72,6 +73,9 @@ def bcp_statement_pdf(
     the printed closing balance, simulating a statement that fails reconciliation.
     Pass an explicit `closing_balance` to control the printed value directly
     (takes precedence over `reconciles`).
+
+    Pass `account_number` to render a different (still obviously fake) account,
+    e.g. to build several statements that a test can tell apart by account (T12b).
     """
     rows: list[tuple[Movement, Decimal]] = []
     running = opening_balance
@@ -95,7 +99,7 @@ def bcp_statement_pdf(
     pdf.set_font("Helvetica", size=9)
 
     pdf.text(40, 50, "ESTADO DE CUENTA")
-    pdf.text(40, 65, f"CUENTA NRO. {_ACCOUNT_NUMBER}")
+    pdf.text(40, 65, f"CUENTA NRO. {account_number}")
     pdf.text(40, 80, f"PERIODO DEL {period_start:%d/%m/%Y} AL {period_end:%d/%m/%Y}")
     pdf.text(40, 100, f"SALDO ANTERIOR {_money(opening_balance)}")
 
