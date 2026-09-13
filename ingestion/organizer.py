@@ -49,6 +49,7 @@ import pikepdf
 from ingestion import dispatcher
 from ingestion.dedup import file_sha256
 from ingestion.reconciliation import ReconciliationError
+from ingestion.schema import Statement
 
 DEFAULT_INBOX_ROOT = Path.home() / "finance-data" / "inbox"
 DEFAULT_ARCHIVE_ROOT = Path.home() / "finance-data" / "raw"
@@ -60,7 +61,12 @@ _PERIOD_PREFIX = re.compile(r"^(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})")
 
 @dataclass(frozen=True)
 class ArchivedItem:
-    """One PDF successfully filed into the archive."""
+    """One PDF successfully filed into the archive.
+
+    Carries the already-parsed `statement` and its `sha256` (T14) so a caller
+    like `pfp ingest` can write it to bronze without re-opening, re-decrypting
+    and re-parsing a file `organize()` already did all of that for.
+    """
 
     bank: str
     account_last4: str
@@ -68,6 +74,8 @@ class ArchivedItem:
     period_end: date
     dest: Path
     version: int  # 1 for the first copy of this account/period; 2+ if regenerated
+    sha256: str
+    statement: Statement
 
 
 @dataclass(frozen=True)
@@ -300,6 +308,8 @@ def organize(
                 period_end=statement.period_end,
                 dest=dest_path,
                 version=version,
+                sha256=digest,
+                statement=statement,
             )
         )
 
