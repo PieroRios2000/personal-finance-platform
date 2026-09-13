@@ -218,6 +218,28 @@ def test_parse_raises_reconciliation_error_on_a_broken_real_layout_statement(
         bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
 
+def test_parse_reports_a_bcp_looking_pdf_missing_account_period_or_balances(
+    tmp_path: Path,
+) -> None:
+    """The FECHA/DESCRIPCION/CARGO/ABONO header row is there (so a real BCP
+    statement with a still-unrecognized account/period layout gets this
+    specific message, not the generic "header row not found" one)."""
+    from fpdf import FPDF
+
+    pdf = FPDF(unit="pt")
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=9)
+    pdf.text(40, 40, "FECHA")
+    pdf.text(180, 40, "DESCRIPCION")
+    pdf.text(340, 40, "CARGOS")
+    pdf.text(400, 40, "ABONOS")
+    path = tmp_path / "no-account-or-period.pdf"
+    path.write_bytes(bytes(pdf.output()))
+
+    with pytest.raises(ValueError, match="account number, period or balances"):
+        bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+
 @pytest.mark.real_pdf
 def test_parses_and_reconciles_a_real_bcp_statement() -> None:
     """Runs only on the owner's machine, against their own real PDFs.

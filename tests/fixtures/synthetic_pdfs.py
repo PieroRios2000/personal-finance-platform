@@ -266,12 +266,12 @@ def bcp_real_layout_statement_pdf(
 
     header_y = 130
     pdf.text(40, header_y, "FECHA")
-    pdf.text(65, header_y, "PROC.")
-    pdf.text(100, header_y, "FECHA")
-    pdf.text(125, header_y, "VALOR")
-    pdf.text(180, header_y, "DESCRIPCION")
-    pdf.text(340, header_y, "CARGOS")
-    pdf.text(400, header_y, "ABONOS")
+    pdf.text(90, header_y, "PROC.")
+    pdf.text(140, header_y, "FECHA")
+    pdf.text(190, header_y, "VALOR")
+    pdf.text(240, header_y, "DESCRIPCION")
+    pdf.text(400, header_y, "CARGOS")
+    pdf.text(460, header_y, "ABONOS")
 
     row_y = header_y
     for movement, _ in rows:
@@ -284,18 +284,18 @@ def bcp_real_layout_statement_pdf(
         proc_abbr = _SPANISH_MONTH_ABBR[proc_date.month]
         pdf.text(40, row_y, f"{proc_date.day:02d}{proc_abbr}")
         pdf.text(
-            100,
+            140,
             row_y,
             f"{movement.when.day:02d}{_SPANISH_MONTH_ABBR[movement.when.month]}",
         )
-        pdf.text(180, row_y, movement.description)
-        pdf.text(340, row_y, charge)
-        pdf.text(400, row_y, credit)
+        pdf.text(240, row_y, movement.description)
+        pdf.text(400, row_y, charge)
+        pdf.text(460, row_y, credit)
 
     # The amount one line *above* its bare "SALDO" label, mirroring the real
     # dump (y=680 amount, y=688 label — 8pt apart, past the 3pt same-line
     # tolerance `_group_lines` uses).
-    pdf.text(340, row_y + 30, _money(printed_closing))
+    pdf.text(400, row_y + 30, _money(printed_closing))
     pdf.text(40, row_y + 40, "SALDO")
 
     return bytes(pdf.output())
