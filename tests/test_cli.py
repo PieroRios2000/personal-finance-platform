@@ -147,3 +147,28 @@ def test_organize_fails_clearly_without_a_user(
 
     assert code != 0
     assert "--user" in err
+
+
+def test_organize_reports_a_missing_account_key_clearly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("PFP_ACCOUNT_KEY", raising=False)
+    inbox_root = tmp_path / "inbox"
+    archive_root = tmp_path / "raw"
+    inbox = inbox_root / "piero"
+    inbox.mkdir(parents=True)
+    (inbox / "statement.pdf").write_bytes(_bcp_pdf())
+
+    code, _, err = run(
+        capsys,
+        "organize",
+        "--user",
+        "piero",
+        "--inbox-root",
+        str(inbox_root),
+        "--archive-root",
+        str(archive_root),
+    )
+
+    assert code != 0
+    assert "PFP_ACCOUNT_KEY" in err
