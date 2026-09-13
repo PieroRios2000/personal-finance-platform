@@ -77,9 +77,13 @@ def _run_organize(args: argparse.Namespace) -> int:
         print("error: --user is required (or set PFP_USER)", file=sys.stderr)
         return 2
 
-    report = organizer.organize(
-        user_id, inbox_root=args.inbox_root, archive_root=args.archive_root
-    )
+    try:
+        report = organizer.organize(
+            user_id, inbox_root=args.inbox_root, archive_root=args.archive_root
+        )
+    except MissingAccountKeyError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
     print(report.render())
     return 0
 
