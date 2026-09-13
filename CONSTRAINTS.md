@@ -19,21 +19,45 @@ si el Makefile y este archivo difieren, manda este archivo.
 [floor-guard](scripts/floor_guard.py) revisa el diff contra la rama base (commits, cambios sin
 commitear y archivos nuevos) y sale con código 1 si encuentra alguna de estas reglas:
 
-- `supresion`: un comentario nuevo que apaga un check: `# noqa`, `# type: ignore`, `# nosec`,
-  `# pragma: no cover` o `gitleaks:allow`.
-- `test-desactivado`: `pytest.mark.skip`, `skipif` o `xfail`, `pytest.skip()` o `unittest.skip`.
+- `supresion`: un comentario nuevo que apaga un check, en mayúsculas o minúsculas: `# noqa`,
+  `# type: ignore`, `# mypy: ignore-errors`, `# mypy: disable-error-code`, `# fmt: off`,
+  `# fmt: skip`, `# nosec`, `# pragma: no cover` o `gitleaks:allow`.
+- `test-desactivado`: `pytest.mark.skip`, `skipif` o `xfail`, `pytest.skip()`, `pytest.xfail()`,
+  `pytest.importorskip()`, `unittest.skip` o `self.skipTest()`.
 - `tests-quitados`: un `test_*.py` con menos tests o asserts que antes (borrarlo cuenta).
-- `config-relajada`: en `pyproject.toml` o el `Makefile`, `strict = true` quitado o
-  `strict = false`, o una clave nueva `ignore`, `extend-ignore`, `per-file-ignores`,
-  `ignore_errors`, `ignore_missing_imports` o `disable_error_code`.
+- `config-relajada`: en `pyproject.toml`, el `Makefile` o `.pre-commit-config.yaml`, cualquiera
+  de estos cambios:
+  - `strict = true` quitado o `strict = false`.
+  - Una clave nueva `ignore`, `extend-ignore`, `ignore_errors`, `ignore_missing_imports` o
+    `disable_error_code`, o un `disallow_*` o `warn_*` en `false`.
+  - `per-file-ignores`, como clave o como tabla.
+  - Un check del piso (ruff, mypy, pytest, floor-guard, gitleaks) que desaparece del archivo
+    o que pasa a correr con `-` o `|| true`.
+  - Un archivo de config fuera de `pyproject.toml` (`mypy.ini`, `.mypy.ini`, `setup.cfg`,
+    `tox.ini`, `pytest.ini`, `ruff.toml`, `.ruff.toml`, `.coveragerc`), que podría pisar la
+    configuración.
 - `umbral-rebajado`: en esos mismos archivos, una línea igual a otra salvo por un número más
-  bajo (por ejemplo `--fail-under=80` → `--fail-under=70`).
+  bajo (por ejemplo `--fail-under=80` → `--fail-under=70`). Las versiones de dependencias
+  (`bandit>=1.9.4` → `bandit>=1.10.0`) no cuentan como umbral.
 
-No revisa Markdown (la documentación puede nombrar estos marcadores) ni sus propios archivos
-(sus patrones y tests los contienen). Sale con código 2 si no puede correr (por ejemplo, sin
-`origin/develop`) e informa solo regla y ubicación, nunca el texto de la línea. Lo que no
-detecta (subir el 20 % de rendimiento, mover la fecha de bloqueo o agregar un `ignore_imports`
-a los contratos) cambia este archivo o `pyproject.toml`, y Piero lo revisa en el PR.
+Sale con código 2 si no puede correr (por ejemplo, sin `origin/develop` o en un clon
+superficial) e informa solo regla y ubicación, nunca el texto de la línea.
+
+**Límites conocidos.** Es un chequeo de texto sobre el diff: no entiende el código. Esto no lo
+detecta, y Piero lo revisa en el PR:
+
+- Reducir el `select` de ruff, quitar `fail_under` o `--fail-under`, o cambiar el formato de
+  la opción junto con el número (`--fail-under=80` → `--fail-under 50`).
+- `addopts` con `--deselect` o `-k`, un `testpaths` más corto, un `omit` en la cobertura o
+  `from pytest import skip`.
+- Un assert debilitado (`assert True`), o un test borrado y otro trivial agregado en el mismo
+  archivo. Al revés, mover tests de un archivo a otro sí se marca (falso positivo).
+- Un `-` o `|| true` en las reglas numéricas (ya están en modo aviso hasta el 2026-09-26),
+  subir el 20 % de rendimiento, mover la fecha de bloqueo o agregar un `ignore_imports` a los
+  contratos.
+- Marca los marcadores que aparecen dentro de strings o docstrings de un `.py` (falso
+  positivo). No revisa Markdown, porque la documentación puede nombrarlos, ni sus propios
+  archivos, porque sus patrones y tests los contienen.
 
 ## Reglas numéricas
 
@@ -73,6 +97,14 @@ Por qué tienen esta forma (probado con import-linter 2.15):
 - Comprobado en una copia con el layout futuro: `ingestion.parsers.bcp → lakehouse.bronze` y
   `lakehouse.bronze → ingestion.parsers.bcp` rompen los contratos; `ingestion.cli →
   lakehouse.bronze` y `lakehouse.bronze → ingestion.schema` los cumplen.
+- Cada excepción lista el paquete y sus submódulos (`ingestion.cli -> lakehouse` e
+  `ingestion.cli -> lakehouse.**`), porque `**` no incluye al paquete mismo. Así también se
+  permite `import lakehouse` o `import ingestion.schema` desde `lakehouse/__init__.py`.
+- **Hueco conocido, a cerrar en T14:** al ignorar `lakehouse → ingestion.schema`,
+  import-linter deja de seguir lo que importa el esquema. Si `ingestion.schema` importara un
+  parser, `lakehouse` dependería de él sin que falle ningún contrato (comprobado en la copia
+  de prueba). En T14 se agrega un contrato que prohíba a `ingestion.schema` importar el resto
+  de `ingestion`.
 
 ## Checks
 
@@ -80,7 +112,7 @@ Por qué tienen esta forma (probado con import-linter 2.15):
 |---|---|---|---|
 | `make check-fast` | ruff check, ruff format --check, mypy | < 5 s | Se corre tras cada cambio; si tarda más, se deja de correr |
 | `make check-task` | check-fast + pytest con cobertura + floor-guard + import-linter | < 90 s | Al terminar una tarea (Definition of Done) |
-| `make check-full` | check-task + pip-audit + bandit + diff-cover contra `origin/develop` | Sin límite | Lo que corre el CI; pip-audit necesita red |
+| `make check-full` | check-task + pip-audit + bandit + diff-cover contra `origin/develop` | Sin límite | Lo que corre el CI, salvo gitleaks, que corre en pre-commit (y en el CI desde T5); pip-audit necesita red |
 
 `BASE` cambia la rama de comparación: `make check-full BASE=origin/main`.
 
@@ -88,11 +120,11 @@ Por qué tienen esta forma (probado con import-linter 2.15):
 
 | Métrica | Hoy | Nota |
 |---|---|---|
-| Cobertura del proyecto (`ingestion`, `lakehouse`, `scripts`) | 98 % (167 sentencias, 3 sin cubrir) | Sin cubrir: los `sys.exit(main())` de los scripts y una rama del inspector de T9 |
-| Cobertura de las líneas cambiadas (diff-cover) | 99 % | Sobre el diff de T4 |
-| Duración de `make check-fast` | 0,6 s con la caché de mypy; 12,2 s la primera vez | La primera corrida (sin caché, mypy revisa también pdfplumber y pikepdf) pasa de 5 s |
-| Duración de `make check-task` | 9,4 s | 34 tests |
-| Duración de `make check-full` | 11,2 s | Incluye la consulta de pip-audit por red |
+| Cobertura del proyecto (`ingestion`, `lakehouse`, `scripts`) | 98 % (178 sentencias, 3 sin cubrir) | Sin cubrir: los `sys.exit(main())` de los scripts y una rama del inspector de T9 |
+| Cobertura de las líneas cambiadas (diff-cover) | 100 % | Sobre el diff de T4 |
+| Duración de `make check-fast` | 1,1 s con la caché de mypy; 14,4 s la primera vez | La primera corrida (sin caché, mypy revisa también pdfplumber y pikepdf) pasa de 5 s |
+| Duración de `make check-task` | 11,4 s | 65 tests |
+| Duración de `make check-full` | 21,7 s | Incluye la consulta de pip-audit por red, que varía |
 | pip-audit / bandit | 0 vulnerabilidades / 0 hallazgos altos | |
 | Rendimiento de parsing y escritura | Pendiente de medir (T15) | |
 
@@ -103,9 +135,11 @@ Si una regla no se puede cumplir por una razón real (por ejemplo, una librería
 1. Agrega una fila a la tabla en el mismo PR: regla, archivo (acepta globs como `tests/*`),
    razón, quién aprobó y fecha de revisión, como máximo a 90 días.
 2. Piero la aprueba al revisar el PR. Si no la aprueba, la fila se quita.
-3. floor-guard lee esta tabla: no bloquea esa regla en ese archivo hasta la fecha de revisión
-   y la muestra como "excepción aprobada" para que se vea. Pasada la fecha vuelve a bloquear:
-   o se arregla el código o se renueva con una razón nueva.
+3. floor-guard lee esta tabla: mientras la fila exista, no bloquea esa regla en ese archivo y
+   la muestra como "excepción aprobada" para que se vea. floor-guard no evalúa la fecha de
+   revisión, porque una vez mergeado el cambio exceptuado ya está en la base y no vuelve a
+   aparecer en el diff. La fecha es un recordatorio para Piero: ese día decide si se arregla
+   el código o se renueva la fila con una razón nueva.
 4. En las reglas numéricas, la excepción se configura en la herramienta (por ejemplo,
    `--ignore-vuln <ID>` en pip-audit) y también se anota aquí.
 
