@@ -116,6 +116,25 @@ tesseract --list-langs              # should include "spa"
 
 All green = the environment is ready.
 
+## Reviewing CI
+
+Every PR runs `.github/workflows/ci.yml`: `lint-types`, `tests`, `security`, `architecture`
+and `floor-guard`. From the terminal:
+
+```bash
+gh pr checks <n>                     # pass/fail per job for PR <n>
+gh run view <run_id>                 # which job and step failed, and the error
+gh api repos/<owner>/<repo>/actions/jobs/<job_id>/logs   # that job's full log
+gh run rerun <run_id> --failed       # re-run only what failed
+```
+
+`<run_id>` and `<job_id>` show up in `gh run list` and in `gh run view <run_id>`. A failure
+in `lint-types` is also annotated on the exact file and line inside the PR's *Files changed*
+tab (ruff via `--output-format=github`, mypy via a problem matcher). Until 2026-09-26,
+`diff-cover`, `pip-audit`, `bandit` and `import-linter` only warn (see CONSTRAINTS.md); a red
+`X` on `tests`, `security`'s gitleaks step, `lint-types` or `floor-guard` is what actually
+blocks the merge.
+
 ## Known issues
 
 | Symptom | Fix |
