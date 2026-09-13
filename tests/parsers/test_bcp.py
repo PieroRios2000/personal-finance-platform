@@ -13,7 +13,12 @@ import pytest
 from ingestion.parsers import bcp
 from ingestion.reconciliation import ReconciliationError
 from ingestion.schema import hash_account, last4_of
-from tests.fixtures.synthetic_pdfs import Movement, bcp_statement_pdf
+from tests.fixtures.synthetic_pdfs import (
+    DEFAULT_MOVEMENTS,
+    Movement,
+    bcp_real_layout_statement_pdf,
+    bcp_statement_pdf,
+)
 
 FILE_SHA256 = hashlib.sha256(
     b"whatever bytes; only used as an opaque id here"
@@ -123,6 +128,94 @@ def test_parse_infers_the_year_when_the_period_crosses_new_year(tmp_path: Path) 
 
     dates = sorted(t.date for t in statement.transactions)
     assert dates == [date(2025, 12, 29), date(2026, 1, 3)]
+
+
+def test_parse_reads_the_real_layout_without_nro_or_periodo_labels(
+    tmp_path: Path,
+) -> None:
+    """The real BCP statement (T9's masked dump, 2026-09) has neither "CUENTA
+    NRO." nor "PERIODO" anywhere; account number and period must be found
+    without those labels."""
+    path = tmp_path / "real-layout.pdf"
+    path.write_bytes(bcp_real_layout_statement_pdf(account_number="123-45678901-2-34"))
+
+    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert statement.account_id == hash_account("BCP", "123-45678901-2-34")
+    assert statement.account_last4 == last4_of("123-45678901-2-34")
+
+
+def test_parse_reads_a_two_digit_year_period(tmp_path: Path) -> None:
+    path = tmp_path / "real-layout.pdf"
+    path.write_bytes(bcp_real_layout_statement_pdf())
+
+    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert statement.period_start == date(2026, 1, 5)
+    assert statement.period_end == date(2026, 1, 28)
+
+
+def test_parse_reads_ddmmm_transaction_dates_using_the_value_date_column(
+    tmp_path: Path,
+) -> None:
+    """The real header row has FECHA twice (processing date, then value
+    date); the fixture gives them different values, so this proves the
+    parser reads the *second* FECHA column, not the first."""
+    path = tmp_path / "real-layout.pdf"
+    path.write_bytes(bcp_real_layout_statement_pdf())
+
+    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    dates = sorted(t.date for t in statement.transactions)
+    assert dates == [
+        date(2026, 1, 5),
+        date(2026, 1, 12),
+        date(2026, 1, 20),
+        date(2026, 1, 28),
+    ]
+
+
+def test_parse_extracts_charges_and_credits_on_the_real_layout(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "real-layout.pdf"
+    path.write_bytes(bcp_real_layout_statement_pdf())
+
+    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    by_amount = {t.amount: t for t in statement.transactions}
+    assert by_amount[Decimal("-120.50")].description == "COMPRA TIENDA FICTICIA"
+    assert by_amount[Decimal("2500.00")].description == "DEPOSITO SUELDO FICTICIO"
+
+
+def test_parse_finds_a_closing_balance_under_a_bare_saldo_label(
+    tmp_path: Path,
+) -> None:
+    """The real closing balance has no "ACTUAL"/"FINAL" qualifier, and its
+    amount sits one line above the bare "SALDO" label rather than beside it
+    (8pt apart in the real dump, past _group_lines' 3pt same-line
+    tolerance). A statement that reconciles proves both the opening and
+    closing balances were found correctly."""
+    path = tmp_path / "real-layout.pdf"
+    path.write_bytes(bcp_real_layout_statement_pdf())
+
+    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    expected_closing = Decimal("1000.00") + sum(
+        (movement.amount for movement in DEFAULT_MOVEMENTS), Decimal("0.00")
+    )
+    assert statement.opening_balance == Decimal("1000.00")
+    assert statement.closing_balance == expected_closing
+
+
+def test_parse_raises_reconciliation_error_on_a_broken_real_layout_statement(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "real-layout-broken.pdf"
+    path.write_bytes(bcp_real_layout_statement_pdf(reconciles=False))
+
+    with pytest.raises(ReconciliationError):
+        bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
 
 @pytest.mark.real_pdf
