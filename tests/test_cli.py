@@ -1,7 +1,9 @@
 """Tests for the `pfp` CLI (T12, T14, T14c)."""
 
+import io
 from pathlib import Path
 
+import pikepdf
 import pytest
 from fpdf import FPDF
 
@@ -545,6 +547,32 @@ def test_backfill_reports_files_it_cannot_re_parse_without_aborting_the_run(
     assert "did not reconcile" in out
     table = DeltaTable(str(lakehouse / "bronze" / "transactions")).to_pyarrow_table()
     assert table.num_rows == 4  # only the one good statement's transactions
+
+
+def test_backfill_reports_an_archived_statement_it_cannot_unlock(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real BCP statements are password-protected: an archived one whose
+    password env var isn't set on this machine is one reported file, not a
+    crashed run."""
+    monkeypatch.delenv("BCP_PDF_PASSWORD", raising=False)
+    locked = io.BytesIO()
+    with pikepdf.open(io.BytesIO(bcp_statement_pdf())) as plain:
+        plain.save(locked, encryption=pikepdf.Encryption(owner="x", user="synthetic"))
+    archive_root = tmp_path / "raw"
+    _archived(
+        archive_root,
+        "piero/BCP/0000-abc123/2026-01-05_2026-01-28.pdf",
+        b"$BOP$" + locked.getvalue(),
+    )
+
+    code, out, _ = run(
+        capsys, "backfill", "--user", "piero", "--archive-root", str(archive_root)
+    )
+
+    assert code == 0
+    assert "Failed: 1" in out
+    assert "BCP_PDF_PASSWORD" in out
 
 
 def test_backfill_fails_clearly_without_a_user(
