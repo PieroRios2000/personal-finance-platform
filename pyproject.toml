@@ -6,6 +6,7 @@ dependencies = [
     "pdfplumber>=0.11.10",
     "pikepdf>=10.13.0.post1",
     "pydantic>=2.13.5",
+    "pytesseract>=0.3.13",
 ]
 
 [project.scripts]
