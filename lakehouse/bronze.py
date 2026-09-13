@@ -94,6 +94,15 @@ def write_statement(statement: Statement, file_sha256: str) -> None:
     in bronze (see `ingestion.cli._run_ingest`, T14's actual idempotency
     check). The original file name is never stored anywhere here (ADR 0009);
     only its sha256 identifies it.
+
+    The three tables aren't written atomically (delta-rs has no cross-table
+    transaction); `ingested_files` is written last on purpose. A crash between
+    writes leaves `is_ingested()` still `False`, so a retry re-appends
+    duplicate transaction/statement rows rather than the other way around
+    (writing `ingested_files` first could leave `is_ingested()` `True` with the
+    transactions silently missing). Duplicates are visible and fixable; a
+    silent gap in someone's transactions isn't. Not a concern in practice
+    today — Phase 1 is a single local writer — but the ordering is deliberate.
     """
     ingested_at = datetime.now(UTC)
 
