@@ -19,24 +19,27 @@ flowchart LR
         CI["CI"]
         INS["Layout inspector"]
         CAL["Quality bar"]
+        CLID["Dispatcher and CLI"]
+        BCP["BCP parser"]
+        ORG["Inbox organizer"]
+        LAKE["Lakehouse · bronze"]
     end
 
     subgraph planned["Planned · Phase 1"]
-        ING["Ingestion"]
-        LAKE["Lakehouse · bronze"]
         DBT["dbt · silver"]
     end
 
-    PDF --> ING --> LAKE --> DBT
-    PY --> ING
+    PDF --> CLID --> BCP --> ORG --> LAKE --> DBT
+    PY --> CLID
     CI -. validates .-> PY
     GS -. protects .-> PDF
-    INS -. designs .-> ING
+    INS -. designs .-> BCP
     CAL -. enforces .-> PY
 
-    ING -. uses .-> REC(["Reconciliation"])
-    ING -. uses .-> DED(["File-level dedup"])
+    BCP -. uses .-> REC(["Reconciliation"])
+    ORG -. uses .-> DED(["File-level dedup"])
     LAKE -. follows .-> MED(["Medallion"])
+    LAKE -. partitions by .-> UA(["Users and accounts"])
     DBT -. uses .-> BK(["Business key"])
     DED --> IDE(["Idempotency"])
     BK --> IDE
@@ -46,8 +49,12 @@ flowchart LR
     A2 --> DBT
     A3{{"ADR 0003 · SeaweedFS"}} --> LAKE
     A4{{"ADR 0004 · Real PDFs never leave"}} --> GS
-    A4 --> ING
+    A4 --> BCP
     A4 --> INS
+    A5{{"ADR 0005 · Schema scoped to user/account"}} --> BCP
+    A6{{"ADR 0006 · Lake location by URI"}} --> LAKE
+    A9{{"ADR 0009 · Content over file name"}} --> ORG
+    A9 --> UA
 ```
 
 Rectangle = component · oval = concept · hexagon = decision (ADR) · dotted line = uses relationship.
@@ -57,9 +64,9 @@ Rectangle = component · oval = concept · hexagon = decision (ADR) · dotted li
 | Type | Notes |
 |---|---|
 | Phases | [Phase 1 — Foundation](phases/phase-1.md) |
-| Components | [Security guards](components/security-guards.md) · [Python project](components/python-project.md) · [CI](components/ci.md) · [Layout inspector](components/layout-inspector.md) · [Quality bar](components/quality-bar.md) · [BCP parser](components/bcp-parser.md) · [Dispatcher and CLI](components/cli.md) |
+| Components | [Security guards](components/security-guards.md) · [Python project](components/python-project.md) · [CI](components/ci.md) · [Layout inspector](components/layout-inspector.md) · [Quality bar](components/quality-bar.md) · [BCP parser](components/bcp-parser.md) · [Dispatcher and CLI](components/cli.md) · [Inbox organizer](components/inbox-organizer.md) · [Lakehouse](components/lakehouse.md) |
 | Concepts | [Medallion](concepts/medallion.md) · [Idempotency](concepts/idempotency.md) · [Business key](concepts/business-key.md) · [Reconciliation](concepts/reconciliation.md) · [File-level dedup](concepts/file-level-dedup.md) · [Users and accounts](concepts/users-and-accounts.md) |
-| Decisions | [0001 Python 3.12 with uv](decisions/0001-python-312-with-uv.md) · [0002 DuckDB + delta-rs](decisions/0002-duckdb-and-delta-rs-before-spark.md) · [0003 SeaweedFS](decisions/0003-local-s3-with-seaweedfs.md) · [0004 Real PDFs](decisions/0004-real-pdfs-never-leave-your-machine.md) |
+| Decisions | [0001 Python 3.12 with uv](decisions/0001-python-312-with-uv.md) · [0002 DuckDB + delta-rs](decisions/0002-duckdb-and-delta-rs-before-spark.md) · [0003 SeaweedFS](decisions/0003-local-s3-with-seaweedfs.md) · [0004 Real PDFs](decisions/0004-real-pdfs-never-leave-your-machine.md) · [0005 Schema scoped to user/account](decisions/0005-transaction-schema-with-user-and-account.md) · [0006 Lake location by URI](decisions/0006-lake-location-by-uri.md) · [0007 Ephemeral per-PR environments](decisions/0007-ephemeral-per-pr-environments.md) · [0009 Content over file name](decisions/0009-multi-user-multi-account-content-over-filename.md) |
 
 ## Note conventions
 

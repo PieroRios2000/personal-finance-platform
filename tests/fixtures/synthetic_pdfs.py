@@ -49,6 +49,14 @@ _COLUMNS = (
     (460, "SALDO"),
 )
 
+# Last y a row may use before the table continues on a new page, comfortably
+# inside the default A4 page (841.89 pt tall). A real statement is several
+# pages long and repeats its header row on each one, which is what the parser
+# groups per page (see ingestion/parsers/bcp.py); without this, extra rows keep
+# being drawn past the bottom edge — still extractable, but on an invisible
+# single page, which is not what a many-row statement really looks like.
+_LAST_ROW_Y = 780
+
 
 def _money(amount: Decimal) -> str:
     return f"{amount:,.2f}"
@@ -62,7 +70,11 @@ def bcp_statement_pdf(
     reconciles: bool = True,
     account_number: str = _ACCOUNT_NUMBER,
 ) -> bytes:
-    """Render a fictional, one-page BCP-style statement as PDF bytes.
+    """Render a fictional BCP-style statement as PDF bytes.
+
+    One page for the handful of `DEFAULT_MOVEMENTS`; enough movements and the
+    table continues on a new page with its header row repeated, the way a real
+    multi-page statement does (T15's parsing benchmark renders one).
 
     By default the statement is coherent: `opening_balance + sum(m.amount for m in
     movements)` equals the closing balance printed at the bottom (SALDO ACTUAL), and
@@ -111,6 +123,11 @@ def bcp_statement_pdf(
     row_y = header_y
     for movement, balance in rows:
         row_y += 15
+        if row_y > _LAST_ROW_Y:
+            pdf.add_page()
+            for x, header in _COLUMNS:
+                pdf.text(x, header_y, header)
+            row_y = header_y + 15
         charge = _money(-movement.amount) if movement.amount < 0 else ""
         credit = _money(movement.amount) if movement.amount > 0 else ""
         pdf.text(40, row_y, f"{movement.when:%d/%m}")
@@ -119,6 +136,9 @@ def bcp_statement_pdf(
         pdf.text(350, row_y, credit)
         pdf.text(460, row_y, _money(balance))
 
+    if row_y + 20 > _LAST_ROW_Y:
+        pdf.add_page()
+        row_y = header_y
     pdf.text(40, row_y + 20, f"SALDO ACTUAL {_money(printed_closing)}")
 
     return bytes(pdf.output())
