@@ -282,6 +282,61 @@ def test_parse_raises_reconciliation_error_on_a_broken_real_layout_statement(
         bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
 
+def test_parse_keeps_rows_from_different_pages_separate(tmp_path: Path) -> None:
+    """A fifth real statement (4 pages) had a row corrupted with digits
+    bled in from an unrelated page: `parse()` used to flatten every page's
+    words into one list *before* grouping them into lines by y-position
+    (`top`) alone. Two rows on different pages that happen to land at the
+    same y then merge into one garbled "line" — every real BCP page
+    repeats the same header row and account/period boilerplate at the same
+    y positions, so this isn't a rare coincidence, it's the normal case for
+    a multi-page statement. Builds a minimal 2-page statement with a
+    transaction row at the *same* y on each page, with different dates,
+    descriptions and amounts, and checks both come out intact and distinct."""
+    from fpdf import FPDF
+
+    pdf = FPDF(unit="pt")
+    for page_number in (1, 2):
+        pdf.add_page()
+        pdf.set_font("Helvetica", size=9)
+        pdf.text(40, 65, "TIPO DE CUENTA MONEDA")
+        pdf.text(40, 80, "123-45678901-2-34 SOLES")
+        pdf.text(40, 95, "DEL 05/01/26 AL 12/01/26")
+        pdf.text(40, 110, "SALDO ANTERIOR 1,000.00")
+        pdf.text(40, 130, "FECHA")
+        pdf.text(90, 130, "PROC.")
+        pdf.text(140, 130, "FECHA")
+        pdf.text(190, 130, "VALOR")
+        pdf.text(240, 130, "DESCRIPCION")
+        pdf.text(400, 130, "CARGOS")
+        pdf.text(460, 130, "ABONOS")
+        # Same y (145) on both pages: the exact collision that used to
+        # merge these two, unrelated, same-position rows into one line.
+        if page_number == 1:
+            pdf.text(40, 145, "04ENE")
+            pdf.text(140, 145, "05ENE")
+            pdf.text(240, 145, "PAGE ONE FICTICIA")
+            pdf.text(400, 145, "50.00")
+        else:
+            pdf.text(40, 145, "11ENE")
+            pdf.text(140, 145, "12ENE")
+            pdf.text(240, 145, "PAGE TWO FICTICIA")
+            pdf.text(460, 145, "80.00")
+    pdf.text(400, 175, "1,030.00")
+    pdf.text(40, 185, "SALDO")
+    path = tmp_path / "multi-page.pdf"
+    path.write_bytes(bytes(pdf.output()))
+
+    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert len(statement.transactions) == 2
+    by_amount = {t.amount: t for t in statement.transactions}
+    assert by_amount[Decimal("-50.00")].description == "PAGE ONE FICTICIA"
+    assert by_amount[Decimal("-50.00")].date == date(2026, 1, 5)
+    assert by_amount[Decimal("80.00")].description == "PAGE TWO FICTICIA"
+    assert by_amount[Decimal("80.00")].date == date(2026, 1, 12)
+
+
 def test_parse_reports_a_bcp_looking_pdf_missing_account_period_or_balances(
     tmp_path: Path,
 ) -> None:

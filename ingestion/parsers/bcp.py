@@ -307,15 +307,23 @@ def parse(
 
     with pdfplumber.open(decrypted) as doc:
         words: list[Word] = []
+        lines: list[list[Word]] = []
         for page in doc.pages:
             # A scanned page (T9) has no text layer, so extract_words() comes back
             # empty; fall back to OCR (T11b) for that page's words only. The rest of
             # parsing (line-grouping, column-assignment, reconciliation) doesn't know
             # or care where a word came from — reconcile() below is what catches a
             # misread character, not this fallback itself.
-            words.extend(page.extract_words() or ocr.extract_words(page))
-
-    lines = _group_lines(words)
+            page_words = page.extract_words() or ocr.extract_words(page)
+            words.extend(page_words)
+            # Grouped per page, not across the whole document: a real
+            # multi-page statement repeats its header row and account/period
+            # boilerplate on every page, so a page 1 row and an unrelated
+            # page 3 row at the same y (top) would otherwise merge into one
+            # garbled "line", corrupting both — confirmed against a 4-page
+            # real statement whose row 07NOV came out with extra digits
+            # bled in from a different page entirely.
+            lines.extend(_group_lines(page_words))
     header = _find_header_columns(lines)
     if header is None:
         raise ValueError("could not find the FECHA/DESCRIPCION/CARGO/ABONO header row")
