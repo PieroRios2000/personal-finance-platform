@@ -363,6 +363,16 @@ def parse(
 
         charge = cells.get("CARGO", "").strip()
         credit = cells.get("ABONO", "").strip()
+        # Whatever landed in these cells isn't guaranteed to be a clean
+        # amount — a column-boundary mismatch elsewhere in this row (like
+        # the FECHA/DESCRIPCION one above) could leak non-numeric text in
+        # here too. Fail with a clear, row-scoped message (never the raw
+        # cell text, which could hold leaked real content — ADR 0004) rather
+        # than letting Decimal() crash with an unhandled InvalidOperation.
+        if charge and not _AMOUNT_SHAPE_RE.match(charge):
+            raise ValueError(f"row {row_date}: unrecognized charge amount")
+        if credit and not _AMOUNT_SHAPE_RE.match(credit):
+            raise ValueError(f"row {row_date}: unrecognized credit amount")
         # A printed "0.00" in either column has no monetary effect, same as
         # an empty one — treating it as absent handles both a literal-zero
         # informational row (the real layout prints one) and a row that

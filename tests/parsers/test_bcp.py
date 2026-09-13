@@ -222,6 +222,23 @@ def test_parse_ignores_a_literal_zero_printed_alongside_a_real_amount(
     assert extra.description == "AJUSTE A CERO FICTICIO"
 
 
+def test_parse_reports_a_clear_error_instead_of_crashing_on_garbled_charge_text(
+    tmp_path: Path,
+) -> None:
+    """A fourth real statement crashed the whole `pfp ingest` run with a raw,
+    unhandled `decimal.InvalidOperation` traceback instead of a clean error:
+    some other column's boundary mismatch had leaked non-numeric text into
+    the CARGO cell. `_money()` must never be called on unvalidated cell
+    text; a row whose CARGO/ABONO isn't amount-shaped now raises a normal
+    ValueError (caught by ingestion.organizer the same as any other
+    malformed row) instead of crashing the process."""
+    path = tmp_path / "garbled-charge.pdf"
+    path.write_bytes(bcp_real_layout_statement_pdf(garble_first_row_charge=True))
+
+    with pytest.raises(ValueError, match="unrecognized charge amount"):
+        bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+
 def test_parse_extracts_charges_and_credits_on_the_real_layout(
     tmp_path: Path,
 ) -> None:
