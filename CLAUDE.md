@@ -1,81 +1,82 @@
 # CLAUDE.md
 
-Reglas para agentes que trabajan en este repo. Si algo aquí choca con otro documento,
-no elijas en silencio: pregunta a Piero.
+Rules for agents working in this repo. If something here conflicts with another document,
+don't pick silently — ask Piero.
 
-## Qué es
+## What this is
 
-Plataforma local de finanzas personales para un portafolio de Data Engineering: PDFs de
-estados de cuenta (BCP y Scotiabank) → parser → bronze en Delta Lake → silver con dbt.
-Todo open source, en local y a costo cero; los datos reales nunca salen de la máquina de Piero.
+A local personal-finance platform for a Data Engineering portfolio: bank statement PDFs
+(BCP and Scotiabank) → parser → bronze in Delta Lake → silver with dbt.
+Fully open source, local, zero cost; real data never leaves Piero's machine.
 
-## Dónde está el contexto
+## Where the context is
 
-Empieza por tu tarea en `tasks/todo.md` y lee solo lo que necesites:
+Start with your task in `tasks/todo.md` and read only what you need:
 
-| Necesitas | Lee |
+| You need | Read |
 |---|---|
-| Cómo se relacionan conceptos, componentes y decisiones (ADR) | [brain/README.md](brain/README.md) |
-| Plan de la fase, decisiones, riesgos, Definition of Done | [tasks/plan.md](tasks/plan.md) |
-| Tu tarea: criterios, verificación, archivos, skill | [tasks/todo.md](tasks/todo.md) |
-| Versiones, instalación y problemas conocidos | [SETUP.md](SETUP.md) |
-| Reglas de calidad y umbrales | [CONSTRAINTS.md](CONSTRAINTS.md) |
-| Visión y fases del proyecto completo | [PROJECT.md](PROJECT.md) |
+| How concepts, components and decisions (ADRs) relate | [brain/README.md](brain/README.md) |
+| The phase plan, decisions, risks, Definition of Done | [tasks/plan.md](tasks/plan.md) |
+| Your task: criteria, verification, files, skill | [tasks/todo.md](tasks/todo.md) |
+| Versions, install steps and known issues | [SETUP.md](SETUP.md) |
+| Quality rules and thresholds | [CONSTRAINTS.md](CONSTRAINTS.md) |
+| The full project's vision and phases | [PROJECT.md](PROJECT.md) |
 
-## Git y PRs
+## Git and PRs
 
-- `main` (producción) ← `develop` (integración) ← ramas `<tipo>/<nombre>` creadas desde
+- `main` (production) ← `develop` (integration) ← `<type>/<name>` branches cut from
   `develop` (`feat/`, `fix/`, `test/`, `docs/`, `ci/`, `chore/`, `infra/`, `perf/`).
-- **1 tarea = 1 rama = 1 PR hacia `develop`.** Nunca hagas commit directo en `main` ni en
-  `develop`; a `main` solo llega `develop` (lo exige el check `branch-policy`).
-- **Solo Piero aprueba y mergea.** Tú creas ramas, commits y PRs; nunca mergees, apruebes
-  ni cierres un PR.
-- Commits atómicos y pequeños, en inglés, con prefijo convencional (`feat:`, `fix:`,
-  `test:`, `docs:`, `ci:`, `chore:`). Nunca uses `--no-verify`: los hooks deben pasar.
-- **TDD en toda la lógica:** primero el commit con el test que falla, luego la implementación.
-- El PR sigue `.github/pull_request_template.md` (Qué / Verificación / Notas + checklist),
-  en español y con la salida real de los comandos que ejecutaste.
-- Documentación en español (tuteo, neutro).
+- **1 task = 1 branch = 1 PR into `develop`.** Never commit directly to `main` or
+  `develop`; only `develop` may reach `main` (enforced by the `branch-policy` check).
+- **Only Piero approves and merges.** You create branches, commits and PRs; never merge,
+  approve or close a PR.
+- Small, atomic commits, in English, with a conventional prefix (`feat:`, `fix:`,
+  `test:`, `docs:`, `ci:`, `chore:`). Never use `--no-verify`: hooks must pass.
+- **TDD for all logic:** commit the failing test first, then the implementation.
+- The PR follows `.github/pull_request_template.md` (What / Verification / Notes + checklist),
+  with the real output of the commands you ran.
+- **All project documentation and code (comments, docstrings, identifiers) is in English**,
+  so anyone can pick up the repo. Exception: `HEADERS` in `scripts/inspect_pdf_layout.py` stays
+  in Spanish on purpose — those are the literal words printed on the real bank statements.
 
-## Datos y privacidad
+## Data and privacy
 
-- **Los datos reales nunca van a Git ni al CI.** Los PDFs viven en
-  `~/finance-data/` (bandeja `inbox/<usuario>/`, archivo `raw/<usuario>/`) y los secretos en `.env`
-  (plantilla: `.env.example`).
-  El CI usa PDFs sintéticos generados en los tests.
-- **No leas, abras ni imprimas PDFs reales sin enmascarar ni el `.env`.** Para diseñar
-  parsers usa solo el volcado enmascarado del inspector de T9, y solo después de que Piero
-  lo haya revisado.
-- gitleaks y el hook `forbid-data-files` son la red de seguridad, no el control: revisa tu diff.
+- **Real data never goes into Git or CI.** PDFs live in
+  `~/finance-data/` (inbox at `inbox/<user>/`, archive at `raw/<user>/`) and secrets in `.env`
+  (template: `.env.example`).
+  CI uses synthetic PDFs generated in the tests.
+- **Never read, open, or print a real PDF unmasked, or `.env`.** To design parsers, use only
+  the masked dump from T9's inspector, and only after Piero has reviewed it.
+- gitleaks and the `forbid-data-files` hook are the safety net, not the control: review your diff.
 
-## Herramientas
+## Tools
 
-- Python 3.12 con uv: `uv sync --locked` y `uv run <comando>`.
-- Librerías solo con `uv add <lib>` (o `uv add --dev <lib>`); nunca `pip install` ni
-  `requirements.txt`. `pyproject.toml` y `uv.lock` se suben juntos.
+- Python 3.12 with uv: `uv sync --locked` and `uv run <command>`.
+- Libraries only via `uv add <lib>` (or `uv add --dev <lib>`); never `pip install` or
+  `requirements.txt`. `pyproject.toml` and `uv.lock` are committed together.
 - Checks: `uv run ruff check . && uv run ruff format --check . && uv run mypy . && uv run pytest`
-  y `pre-commit run --all-files`, o `make check-task` (lint + tipos + tests + floor-guard + arquitectura).
-- Skills por tipo de trabajo: las de "Forma de trabajo" en `tasks/plan.md`.
-- Lo más simple que cumpla los criterios; nada especulativo.
+  and `pre-commit run --all-files`, or `make check-task` (lint + types + tests + floor-guard + architecture).
+- Skills by kind of work: see "Ways of working" in `tasks/plan.md`.
+- The simplest thing that meets the criteria; nothing speculative.
 
 ## Definition of Done
 
-La lista completa está en `tasks/plan.md` y en el template de PR. En corto:
+The full list is in `tasks/plan.md` and the PR template. In short:
 
-- Criterios de la tarea cumplidos y sus casillas marcadas en `tasks/todo.md`.
-- Checks en verde en local y en el CI; comportamiento verificado ejecutándolo, no solo con tests.
-- Los tests nuevos fallan sin el cambio y pasan con él.
-- Sin datos reales ni secretos en el diff.
-- **Cerebro al día en cada PR:** la nota del componente o concepto que tocas,
-  `brain/fases/fase-1.md` y un ADR en `brain/decisiones/` si tomaste una decisión.
-- **`SETUP.md` al día** si agregas librerías, programas, versiones o variables de entorno.
-- `ponytail-review` y `review` sin hallazgos pendientes antes de abrir el PR.
+- Task acceptance criteria met and their boxes checked in `tasks/todo.md`.
+- Checks green locally and in CI; behavior verified by running it, not just tests.
+- New tests fail without the change and pass with it.
+- No real data or secrets in the diff.
+- **Brain updated on every PR:** the component or concept note it touches,
+  `brain/phases/phase-1.md`, and an ADR in `brain/decisions/` if a decision was made.
+- **`SETUP.md` kept current** if the task adds libraries, programs, versions or env vars.
+- `ponytail-review` and `review` with no pending findings before opening the PR.
 
-## Problemas conocidos
+## Known issues
 
-- `gh` 2.46: `gh pr edit` falla → `gh api --method PATCH repos/PieroRios2000/personal-finance-platform/pulls/<n> -f body=...`
-- `gh` 2.46: `gh run view --log` y `--log-failed` salen vacíos →
+- `gh` 2.46: `gh pr edit` fails → `gh api --method PATCH repos/PieroRios2000/personal-finance-platform/pulls/<n> -f body=...`
+- `gh` 2.46: `gh run view --log` and `--log-failed` come back empty →
   `gh api repos/PieroRios2000/personal-finance-platform/actions/jobs/<job_id>/logs`
-- `git push` a veces falla con "Authentication failed" (Credential Manager de Windows):
-  reintenta una vez y nunca imprimas credenciales.
-- `uv` o `pre-commit` no se encuentran → `export PATH="$HOME/.local/bin:$PATH"`.
+- `git push` sometimes fails with "Authentication failed" (Windows Credential Manager):
+  retry once, and never print credentials.
+- `uv` or `pre-commit` not found → `export PATH="$HOME/.local/bin:$PATH"`.

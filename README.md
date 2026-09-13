@@ -1,6 +1,6 @@
 # personal-finance-platform
 
-## Desarrollo
+## Development
 
-Requisitos, versiones y pasos para reproducir el proyecto en otra computadora:
+Requirements, versions and steps to reproduce the project on another computer:
 **[SETUP.md](SETUP.md)**.
