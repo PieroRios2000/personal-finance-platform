@@ -65,6 +65,18 @@ pre-commit install-hooks            # downloads the hooks (gitleaks, ruff…) on
 cp .env.example .env && chmod 600 .env   # fill in the values; .env never gets committed
 ```
 
+Two of `.env`'s values matter before you ingest anything (T6, ADR 0005 and ADR 0009):
+
+- **`PFP_ACCOUNT_KEY`**: the secret HMAC key `hash_account()` uses to turn a bank name and a
+  real account number into `account_id`, so the number itself is never stored. Generate one
+  with `openssl rand -hex 32` (or `python -c "import secrets; print(secrets.token_hex(32))"`)
+  and paste it into `.env`. **Back it up outside the repo** (a password manager, for example):
+  losing it changes every `account_id` on the next run, which means re-processing every
+  statement from the original PDFs — this is a known risk, tracked in `tasks/plan.md`.
+- **`PFP_USER`**: the default `--user` for `pfp ingest`/`pfp parse` (ADR 0009) when it isn't
+  passed on the command line; convenient for a single-person install. `--user` always wins
+  over it.
+
 Real PDFs live **outside the repo**, readable only by your user:
 
 ```bash
