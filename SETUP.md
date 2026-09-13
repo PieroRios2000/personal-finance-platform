@@ -125,3 +125,4 @@ Todo en verde = el entorno está listo.
 | `permission denied` en `/var/run/docker.sock` | Falta el grupo `docker` o no se reinició WSL (sección 2, punto 3) |
 | `gh pr edit` falla con un error de *Projects classic* (gh 2.46) | Usa `gh api --method PATCH repos/<owner>/<repo>/pulls/<n>` o actualiza gh desde cli.github.com |
 | `gh run view --log` o `--log-failed` no muestran nada (gh 2.46) | Pide el log del job a la API: `gh api repos/<owner>/<repo>/actions/jobs/<job_id>/logs` (el `job_id` aparece en `gh run view <run_id>`) |
+| Aparecen archivos `NombreDelPDF.pdf:Zone.Identifier` en `~/finance-data/` | Windows los agrega al copiar desde el Explorador; bórralos (`find ~/finance-data -name '*:Zone.Identifier' -delete`), no son parte del PDF |
