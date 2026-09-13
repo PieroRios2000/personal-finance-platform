@@ -30,6 +30,10 @@ strict = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "-m 'not real_pdf'"
+markers = [
+    "real_pdf: runs against the owner's real PDFs; deselected by default (ADR 0004). Run with `pytest -m real_pdf`.",
+]
 
 [tool.coverage.run]
 source = ["ingestion", "lakehouse", "scripts"]
