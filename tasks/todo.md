@@ -145,11 +145,11 @@
 **Description:** Verify that what's extracted matches what the PDF declares.
 
 **Acceptance criteria:**
-- [ ] `reconcile(statement)`: opening balance + Σ amounts == closing balance, plus the charge/credit totals when present.
-- [ ] `ReconciliationError` with the expected value, the actual one, and the difference.
+- [x] `reconcile(statement)`: opening balance + Σ amounts == closing balance, plus the charge/credit totals when present.
+- [x] `ReconciliationError` with the expected value, the actual one, and the difference.
 
 **Verification:**
-- [ ] Tests: an exact match, a 0.01 mismatch, a statement with no transactions.
+- [x] Tests: an exact match, a 0.01 mismatch, a statement with no transactions.
 
 **Dependencies:** T6 · **Files:** `ingestion/reconciliation.py`, `tests/test_reconciliation.py` · **Size:** S · **Skill:** test-driven-development
 
