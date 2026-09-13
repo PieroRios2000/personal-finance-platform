@@ -32,6 +32,31 @@ real masked layout dump, which the owner hasn't shared yet (see [T10](layout-ins
 the matching risk in `tasks/plan.md`). The real-PDF test below is designed to catch a mismatch
 once that dump exists, without needing this component itself to change first.
 
+## OCR fallback for scanned pages (T11b)
+
+Some BCP statement pages are scanned images with no text layer (T9 found at least one in the
+owner's real PDFs). `parse()` reads each page's words with `page.extract_words() or
+ocr.extract_words(page)`: if pdfplumber's own extraction comes back empty, [`ingestion/ocr.py`](../../ingestion/ocr.py)
+renders that one page at 300 dpi (`page.to_image()`, a pdfplumber built-in) and reads it with
+Tesseract in Spanish (`pytesseract.image_to_data`), returning words shaped exactly like
+`extract_words()`'s own output (`text`, `x0`, `x1`, `top`, `bottom`). Line-grouping and
+column-assignment downstream don't know or care where a word came from.
+
+The one design point worth remembering: Tesseract's positions are in pixels, but
+`extract_words()`'s (and this parser's column logic's) are in PDF points. `ocr.py` divides
+every pixel position by `page.to_image()`'s own `.scale` (pixels-per-point, close to but not
+exactly 300/72 — the render rounds to a whole pixel count) rather than assuming the nominal
+ratio, so OCR'd words land in the exact same point-space the vector-text path already uses.
+Getting this wrong would silently misplace every OCR'd word into the wrong column.
+
+Reconciliation is OCR's safety net for free: `parse()` already calls `reconcile()` before
+returning, so a misread digit from OCR makes the statement fail to balance, raising
+`ReconciliationError`, with no extra code needed.
+`tests/test_ocr.py` covers the position math (a known-drawn word ends up within a few points of
+where it was drawn) and both ends of the fallback through `bcp.parse()`: a statement whose
+transaction table lives only on a scanned page reconciles correctly, and one with a garbled
+amount on that scanned page raises `ReconciliationError` instead of being silently accepted.
+
 ## How to use it and how to verify it
 
 ```python
