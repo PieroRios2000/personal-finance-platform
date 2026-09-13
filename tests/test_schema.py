@@ -4,8 +4,11 @@ normalize_description (T6, ADR 0005 and ADR 0009)."""
 import hashlib
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 import pytest
+from pydantic import ValidationError
+
 from ingestion.schema import (
     MissingAccountKeyError,
     Statement,
@@ -14,14 +17,13 @@ from ingestion.schema import (
     last4_of,
     normalize_description,
 )
-from pydantic import ValidationError
 
 VALID_ACCOUNT_ID = hashlib.sha256(b"bcp:1234567890123456").hexdigest()
 VALID_SHA256 = hashlib.sha256(b"a synthetic statement").hexdigest()
 
 
-def _transaction_kwargs(**overrides: object) -> dict[str, object]:
-    kwargs: dict[str, object] = {
+def _transaction_kwargs(**overrides: Any) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
         "user_id": "piero",
         "bank": "BCP",
         "account_id": VALID_ACCOUNT_ID,
@@ -36,8 +38,8 @@ def _transaction_kwargs(**overrides: object) -> dict[str, object]:
     return kwargs
 
 
-def _statement_kwargs(**overrides: object) -> dict[str, object]:
-    kwargs: dict[str, object] = {
+def _statement_kwargs(**overrides: Any) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
         "user_id": "piero",
         "bank": "BCP",
         "account_id": VALID_ACCOUNT_ID,
@@ -97,7 +99,7 @@ def test_transaction_rejects_unknown_fields() -> None:
 def test_transaction_is_immutable() -> None:
     transaction = Transaction(**_transaction_kwargs())
     with pytest.raises(ValidationError):
-        transaction.amount = Decimal("1.00")  # type: ignore[misc]
+        transaction.amount = Decimal("1.00")
 
 
 # --- Statement -----------------------------------------------------------
