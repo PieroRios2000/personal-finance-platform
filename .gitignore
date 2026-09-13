@@ -1,21 +1,21 @@
-# Secretos: nunca a Git (la plantilla es .env.example)
+# Secrets: never to Git (the template is .env.example)
 .env
 .env.*
 !.env.example
 *.pem
 *.key
 
-# Datos financieros reales: viven fuera del repo (~/finance-data) y en el lake
+# Real financial data: lives outside the repo (~/finance-data) and in the lake
 *.[pP][dD][fF]
 data/
 
-# Lake local y bases embebidas
+# Local lake and embedded databases
 *.duckdb
 *.duckdb.wal
 *.parquet
 _delta_log/
 
-# Python y herramientas
+# Python and tooling
 .venv/
 __pycache__/
 .pytest_cache/
@@ -25,8 +25,8 @@ __pycache__/
 coverage.xml
 .import_linter_cache/
 
-# Configuración local de Obsidian (el vault es brain/)
+# Local Obsidian config (the vault is brain/)
 .obsidian/
 
-# Copias de trabajo (git worktrees) de los agentes de Claude Code
+# Claude Code agent working copies (git worktrees)
 .claude/worktrees/

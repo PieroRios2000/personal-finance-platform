@@ -1,4 +1,4 @@
-# Guardas de seguridad que corren antes de cada commit (activar con `pre-commit install`).
+# Security guards that run before every commit (enable with `pre-commit install`).
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
@@ -15,11 +15,11 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
-  # Segunda barrera por si alguien fuerza un `git add -f` sobre un archivo ignorado.
+  # Second barrier in case someone forces a `git add -f` on an ignored file.
   - repo: local
     hooks:
       - id: forbid-data-files
-        name: bloquear PDFs y datos del lake
+        name: block PDFs and lake data
         language: fail
-        entry: los datos reales no van a Git (viven en ~/finance-data y en el lake)
+        entry: real data never goes into Git (it lives in ~/finance-data and the lake)
         files: (?i)\.(pdf|duckdb|parquet)$
