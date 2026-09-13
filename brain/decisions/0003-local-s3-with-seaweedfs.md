@@ -16,8 +16,34 @@ it no longer gets security patches.
 
 ## Decision
 
-SeaweedFS with its S3 gateway (Apache 2.0 license), run via docker compose. The final
-configuration (image tag, credentials and bucket) gets pinned in T13, which updates this ADR.
+SeaweedFS with its S3 gateway (Apache 2.0 license), run via docker compose
+(`docker-compose.yml`, T13).
+
+**Final configuration:**
+
+- **Image:** `chrislusf/seaweedfs:4.46`, pinned (verified pullable on Docker Hub before
+  committing to it; `latest` and `dev` exist too, but a moving tag would make the
+  environment non-reproducible between runs).
+- **Process:** a single `server -s3` process (master + volume + filer + S3 gateway together)
+  — the simplest topology for a laptop; no need for separate master/volume/filer containers
+  at this scale.
+- **Credentials:** only from `.env` (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`,
+  already in `.env.example` since T6), passed as environment variables into the container.
+  `weed`'s S3 gateway reads them itself as a fallback admin identity when no `config.json`
+  is given — no credential value is ever written into `docker-compose.yml`.
+- **Bucket:** `lakehouse`, created on startup by a one-shot `bucket-init` service that waits
+  for the S3 gateway's healthcheck, then runs `weed shell` (`s3.bucket.create -name
+  lakehouse`) against the filer — no S3 credentials needed for that step, and re-running it
+  is a no-op. It runs via `docker compose run --rm`, outside `up --wait`'s tracked set:
+  `up --wait` treats any container exiting, even with code 0, as a failure unless another
+  long-running service depends on it ([docker/compose#10596](https://github.com/docker/compose/issues/10596)).
+- **Host port:** `${SEAWEEDFS_S3_PORT:-8333}`, matching `AWS_ENDPOINT_URL` in `.env.example`;
+  no fixed `container_name` anywhere, so Compose's own `-p <project>` naming keeps
+  several instances (e.g. two PRs' environments) from colliding.
+- **Healthcheck:** `curl` against the S3 port with no `-f` — any HTTP response (even a 403
+  for an unsigned request) proves the gateway is listening and handling requests; `-f`
+  would misread that 403 as a failed check. SeaweedFS's S3 gateway has no dedicated
+  `/healthz`/`/status` route usable for this (see [seaweedfs#8243](https://github.com/seaweedfs/seaweedfs/issues/8243)).
 
 ## Alternatives considered
 
@@ -35,5 +61,6 @@ configuration (image tag, credentials and bucket) gets pinned in T13, which upda
 ## Related
 
 - [ADR 0002: DuckDB + delta-rs](0002-duckdb-and-delta-rs-before-spark.md) — what's stored here.
+- [ADR 0007: Ephemeral per-PR environments](0007-ephemeral-per-pr-environments.md) — what runs this compose file, and when.
 - [Medallion architecture](../concepts/medallion.md)
 - [Phase 1](../phases/phase-1.md)

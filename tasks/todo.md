@@ -254,14 +254,14 @@
 **Description:** Bring up S3-compatible storage with a single command, in isolated environments that get created and torn down (ADR 0007).
 
 **Acceptance criteria:**
-- [ ] `docker-compose.yml` with SeaweedFS (pinned tag), a healthcheck, and a `lakehouse` bucket created on startup.
-- [ ] No fixed `container_name`, and the host port configurable via a variable, so several projects (`-p <name>`) can coexist.
-- [ ] Credentials only from `.env`; ADR 0003 updated with the final configuration, and ADR 0007 created.
-- [ ] `make poc-up` / `make poc-down` (`up -d --wait` and `down -v` with a project name).
+- [x] `docker-compose.yml` with SeaweedFS (pinned tag), a healthcheck, and a `lakehouse` bucket created on startup.
+- [x] No fixed `container_name`, and the host port configurable via a variable, so several projects (`-p <name>`) can coexist.
+- [x] Credentials only from `.env`; ADR 0003 updated with the final configuration, and ADR 0007 created.
+- [x] `make poc-up` / `make poc-down` (`up -d --wait` and `down -v` with a project name).
 
 **Verification:**
-- [ ] `docker compose up -d` → the service is `healthy`; writing and reading a test object works.
-- [ ] Two projects running at the same time don't collide; after `make poc-down` no containers or volumes from the project remain.
+- [x] `docker compose up -d` → the service is `healthy`; writing and reading a test object works.
+- [x] Two projects running at the same time don't collide; after `make poc-down` no containers or volumes from the project remain.
 
 **Dependencies:** T5 · **Files:** `docker-compose.yml`, `.env.example`, `Makefile` · **Size:** S
 
