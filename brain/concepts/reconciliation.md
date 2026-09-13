@@ -23,6 +23,10 @@ Reconciliation is integral, at three levels:
 - It's OCR's safety net (T11b): one misread digit on a scanned page breaks the balance.
 - With real PDFs, local tests (`pytest -m real_pdf`) show only pass/fail and the differences,
   never the extracted values.
+- The statement-level check is exercised against a fictional PDF, never a real one:
+  `tests/fixtures/synthetic_pdfs.py` (T10) builds one with a coherent opening balance +
+  Σ movements = closing balance by default, and a `reconciles=False` (or an explicit
+  `closing_balance`) variant to test the failure path.
 
 This is the personal version of the reconciliation and validation methodologies used in data
 migrations.

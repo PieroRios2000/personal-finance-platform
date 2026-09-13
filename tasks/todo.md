@@ -116,14 +116,14 @@
 **Description:** pydantic models shared across all banks, per user and per account (ADR 0005 and 0009).
 
 **Acceptance criteria:**
-- [ ] `Transaction` (`user_id`, bank, `account_id`, last 4 of the account, date, description, `Decimal` amount to 2 places, PEN/USD currency, file sha).
-- [ ] `Statement` (`user_id`, bank, `account_id`, last 4, period, opening/closing balances, declared totals, transactions).
-- [ ] `hash_account(bank, number)`: HMAC-SHA256 with the `PFP_ACCOUNT_KEY` secret; a clear error if the key is missing. `PFP_ACCOUNT_KEY` and `PFP_USER` in `.env.example` and SETUP.md, including how to generate and back up the key.
-- [ ] `normalize_description()` is stable (trim, uppercase, no filler codes).
-- [ ] ADR 0005 and ADR 0009 written in `brain/decisions/`.
+- [x] `Transaction` (`user_id`, bank, `account_id`, last 4 of the account, date, description, `Decimal` amount to 2 places, PEN/USD currency, file sha).
+- [x] `Statement` (`user_id`, bank, `account_id`, last 4, period, opening/closing balances, declared totals, transactions).
+- [x] `hash_account(bank, number)`: HMAC-SHA256 with the `PFP_ACCOUNT_KEY` secret; a clear error if the key is missing. `PFP_ACCOUNT_KEY` and `PFP_USER` in `.env.example` and SETUP.md, including how to generate and back up the key.
+- [x] `normalize_description()` is stable (trim, uppercase, no filler codes).
+- [x] ADR 0005 and ADR 0009 written in `brain/decisions/`.
 
 **Verification:**
-- [ ] TDD tests: invalid amounts, unknown currency and a full account number are rejected; same bank and number → same `account_id`; a different bank or key → a different one.
+- [x] TDD tests: invalid amounts, unknown currency and a full account number are rejected; same bank and number → same `account_id`; a different bank or key → a different one.
 
 **Dependencies:** T5 · **Files:** `ingestion/schema.py`, `tests/test_schema.py`, `.env.example`, `SETUP.md` · **Size:** M · **Skill:** test-driven-development
 
@@ -132,11 +132,11 @@
 **Description:** SHA-256 of the PDF's content, so the same file never gets reprocessed.
 
 **Acceptance criteria:**
-- [ ] `file_sha256(path)` using `hashlib.file_digest` (streaming, stdlib).
-- [ ] The same content under a different name → the same hash.
+- [x] `file_sha256(path)` using `hashlib.file_digest` (streaming, stdlib).
+- [x] The same content under a different name → the same hash.
 
 **Verification:**
-- [ ] Tests with temporary files.
+- [x] Tests with temporary files.
 
 **Dependencies:** T5 · **Files:** `ingestion/dedup.py`, `tests/test_dedup.py` · **Size:** XS
 
@@ -172,11 +172,15 @@
 **Description:** Generate a fake PDF with BCP's layout inside the tests (no binary files in Git).
 
 **Acceptance criteria:**
-- [ ] A generator (fpdf2, dev dependency) that produces a fictional BCP statement with coherent totals.
-- [ ] A pytest fixture that creates it in `tmp_path`.
+- [x] A generator (fpdf2, dev dependency) that produces a fictional BCP statement with coherent totals.
+- [x] A pytest fixture that creates it in `tmp_path`.
 
 **Verification:**
-- [ ] T9's dump on the synthetic PDF matches the real one structurally.
+- [ ] T9's dump on the synthetic PDF matches the real one structurally. No masked dump of a
+      real statement was available this session, so this is checked only against a plausible,
+      well-formed shape (headers unmasked, amounts/dates masked, columns aligned) plus an
+      automated test — see the PR for the actual dump. Full comparison stays open until Piero
+      shares T9's dump of a real statement (before or during T11).
 
 **Dependencies:** T9 · **Files:** `tests/fixtures/synthetic_pdfs.py`, `tests/conftest.py` · **Size:** S
 
