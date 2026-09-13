@@ -1,1 +1,1 @@
-"""Lakehouse: escritura en Delta Lake y registro de archivos ingeridos."""
+"""Lakehouse: writes to Delta Lake and registers ingested files."""

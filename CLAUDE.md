@@ -75,8 +75,6 @@ The full list is in `tasks/plan.md` and the PR template. In short:
 ## Known issues
 
 - `gh` 2.46: `gh pr edit` fails → `gh api --method PATCH repos/PieroRios2000/personal-finance-platform/pulls/<n> -f body=...`
-- `gh` 2.46: `gh run view --log` and `--log-failed` come back empty →
-  `gh api repos/PieroRios2000/personal-finance-platform/actions/jobs/<job_id>/logs`
 - `git push` sometimes fails with "Authentication failed" (Windows Credential Manager):
   retry once, and never print credentials.
 - `uv` or `pre-commit` not found → `export PATH="$HOME/.local/bin:$PATH"`.
