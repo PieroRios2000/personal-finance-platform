@@ -196,9 +196,12 @@ jobs:
         run: |
           git fetch origin "$BASE_REF"
           git checkout "origin/$BASE_REF" -- ingestion lakehouse
+      # 10 rounds, not pytest-benchmark's default 5: two runs of the *same*
+      # code came out 17% apart at 5 rounds and ~3% apart at 10, and a 20%
+      # gate on a number that noisy would be a coin toss.
       - name: measure the base branch
         continue-on-error: true
-        run: uv run pytest -m benchmark --benchmark-save=base -q
+        run: uv run pytest -m benchmark -q --benchmark-min-rounds=10 --benchmark-save=base
       # Always, so a failed base measurement can never leave the comparison
       # measuring the base branch against itself.
       - name: restore this change's code
@@ -208,13 +211,15 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          uv run pytest -m benchmark -q \
+          uv run pytest -m benchmark -q --benchmark-min-rounds=10 \
             --benchmark-compare --benchmark-compare-fail=mean:20% \
             | tee benchmarks.log && status=0 || status=$?
           {
             echo "### benchmarks (base vs this change)"
             echo '```'
-            tail -n 25 benchmarks.log
+            # The comparison table and any "Performance has regressed" line come
+            # first; what follows a regression is pytest-benchmark's own traceback.
+            head -n 40 benchmarks.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
