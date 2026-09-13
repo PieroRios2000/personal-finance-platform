@@ -145,11 +145,11 @@
 **Description:** Verify that what's extracted matches what the PDF declares.
 
 **Acceptance criteria:**
-- [ ] `reconcile(statement)`: opening balance + Σ amounts == closing balance, plus the charge/credit totals when present.
-- [ ] `ReconciliationError` with the expected value, the actual one, and the difference.
+- [x] `reconcile(statement)`: opening balance + Σ amounts == closing balance, plus the charge/credit totals when present.
+- [x] `ReconciliationError` with the expected value, the actual one, and the difference.
 
 **Verification:**
-- [ ] Tests: an exact match, a 0.01 mismatch, a statement with no transactions.
+- [x] Tests: an exact match, a 0.01 mismatch, a statement with no transactions.
 
 **Dependencies:** T6 · **Files:** `ingestion/reconciliation.py`, `tests/test_reconciliation.py` · **Size:** S · **Skill:** test-driven-development
 
@@ -189,12 +189,12 @@
 **Description:** Turn a BCP PDF into a reconciled `Statement`.
 
 **Acceptance criteria:**
-- [ ] `parsers/base.py` (a `detect` + `parse` protocol) and `parsers/bcp.py` with pdfplumber; unlocking with pikepdf.
-- [ ] Bank, account number and period come from the PDF's content, never the file name; the full number only lives in memory to compute `account_id`.
-- [ ] The synthetic parser reconciles; `real_pdf` tests (deselected by default) reconcile against your PDFs.
+- [x] `parsers/base.py` (a `detect` + `parse` protocol) and `parsers/bcp.py` with pdfplumber; unlocking with pikepdf.
+- [x] Bank, account number and period come from the PDF's content, never the file name; the full number only lives in memory to compute `account_id`.
+- [x] The synthetic parser reconciles; `real_pdf` tests (deselected by default) reconcile against your PDFs.
 
 **Verification:**
-- [ ] `uv run pytest` green; `uv run pytest -m real_pdf` green on your machine.
+- [x] `uv run pytest` green; `uv run pytest -m real_pdf` green on your machine (pending: needs your real PDFs + `BCP_PDF_PASSWORD`, skips gracefully without them — see the BCP parser brain note).
 
 **Dependencies:** T6, T8, T10 · **Files:** `ingestion/parsers/{__init__,base,bcp}.py`, `tests/parsers/test_bcp.py` · **Size:** M · **Skill:** test-driven-development
 
@@ -203,12 +203,12 @@
 **Description:** Some PDFs are scanned; when a page has no text layer, get its text via OCR.
 
 **Acceptance criteria:**
-- [ ] `ingestion/ocr.py`: if a page's `extract_text()` comes back empty, render it at 300 dpi (pdfplumber) and read it with Tesseract in Spanish.
-- [ ] Parsers receive the text without knowing whether it came from OCR; reconciliation catches read errors.
-- [ ] CI installs Tesseract and tests against a rasterized synthetic PDF.
+- [x] `ingestion/ocr.py`: if a page's `extract_text()` comes back empty, render it at 300 dpi (pdfplumber) and read it with Tesseract in Spanish.
+- [x] Parsers receive the text without knowing whether it came from OCR; reconciliation catches read errors.
+- [x] CI installs Tesseract and tests against a rasterized synthetic PDF.
 
 **Verification:**
-- [ ] `uv run pytest -m real_pdf` reconciles the real scanned PDF on your machine.
+- [ ] `uv run pytest -m real_pdf` reconciles the real scanned PDF on your machine. (Verified end to end against a synthetic scanned page; needs your real scanned PDF to close out.)
 
 **Dependencies:** T9, T11 · **Files:** `ingestion/ocr.py`, `tests/test_ocr.py`, `.github/workflows/ci.yml` · **Size:** M · **Skill:** source-driven-development
 
@@ -217,12 +217,12 @@
 **Description:** Detect a PDF's bank from its content and expose `pfp parse <pdf>`.
 
 **Acceptance criteria:**
-- [ ] `dispatcher.py` picks the parser via `detect` (content, not the file name); a clear error if no parser recognizes it.
-- [ ] An argparse CLI (`[project.scripts] pfp`): `--user` (defaulting to `PFP_USER`); prints a summary (bank, last 4, period) and the reconciliation result.
+- [x] `dispatcher.py` picks the parser via `detect` (content, not the file name); a clear error if no parser recognizes it.
+- [x] An argparse CLI (`[project.scripts] pfp`): `--user` (defaulting to `PFP_USER`); prints a summary (bank, last 4, period) and the reconciliation result.
 
 **Verification:**
-- [ ] `uv run pfp parse <real BCP pdf>` shows the summary and "reconciliation OK".
-- [ ] The same synthetic PDF under an arbitrary name gives the same result.
+- [ ] `uv run pfp parse <real BCP pdf>` shows the summary and "reconciliation OK". (Verified against a synthetic PDF; needs your real PDF + `BCP_PDF_PASSWORD` to close out.)
+- [x] The same synthetic PDF under an arbitrary name gives the same result.
 
 **Dependencies:** T7, T11 · **Files:** `ingestion/dispatcher.py`, `ingestion/cli.py`, tests · **Size:** S
 
@@ -231,14 +231,15 @@
 **Description:** Process a folder of PDFs under any name: detect duplicates by content and file each one in its standard place by user, bank, account and period (ADR 0009).
 
 **Acceptance criteria:**
-- [ ] `pfp organize --user <u>` walks `~/finance-data/inbox/<u>/` (a configurable path). For each PDF: hash it (T7); if the user already has it, move it to `_duplicates/`; otherwise read the bank, account and period from its content (T12) and move it to `raw/<u>/<bank>/<last4>-<id6>/<start>_<end>.pdf`.
-- [ ] Anything unreadable (unknown bank, no account or period, wrong password) goes to `_needs_review/`, with a report saying why and what to do.
-- [ ] The same account and period with different content (a regenerated PDF) → saved as `_v2` with a warning. A PDF holding several accounts → `<bank>/_multi-account/`.
-- [ ] Never deletes a file. The report shows, per account (bank and last 4), which periods are archived and which months are missing.
+- [x] `pfp organize --user <u>` walks `~/finance-data/inbox/<u>/` (a configurable path). For each PDF: hash it (T7); if the user already has it, move it to `_duplicates/`; otherwise read the bank, account and period from its content (T12) and move it to `raw/<u>/<bank>/<last4>-<id6>/<start>_<end>.pdf`. Duplicate detection is scoped to what a persistent registry isn't needed for yet — see the PR and `brain/components/inbox-organizer.md`.
+- [x] Anything unreadable (unknown bank, no account or period, wrong password) goes to `_needs_review/`, with a report saying why and what to do.
+- [x] The same account and period with different content (a regenerated PDF) → saved as `_v2` with a warning. Climbs to `_v3` etc. if needed.
+- [ ] A PDF holding several accounts → `<bank>/_multi-account/`. **Not implemented**: today's single-account `bcp.parse()` (T11) can't signal "there was a second account", so there's nothing to trigger this path with — see the PR and the brain note for the full explanation.
+- [x] Never deletes a file. The report shows, per account (bank and last 4), which periods are archived and which months are missing.
 
 **Verification:**
-- [ ] Three synthetic PDFs sharing a name (`EECC.pdf`, `EECC (1).pdf`, `EECC (2).pdf`) from three different accounts end up in three different folders; a repeat lands in `_duplicates/` and an unreadable one in `_needs_review/`.
-- [ ] On your machine, with your real PDFs in the inbox, the report classifies all of them without showing full numbers or amounts.
+- [x] Three synthetic PDFs sharing a name (`EECC.pdf`, `EECC (1).pdf`, `EECC (2).pdf`) from three different accounts end up in three different folders; a repeat lands in `_duplicates/` and an unreadable one in `_needs_review/`.
+- [ ] On your machine, with your real PDFs in the inbox, the report classifies all of them without showing full numbers or amounts. **Piero's step**: `uv run pfp organize --user piero` (uses the default `~/finance-data/inbox/piero/` and `~/finance-data/raw/piero/`).
 
 **Dependencies:** T6, T7, T12 · **Files:** `ingestion/organizer.py`, `ingestion/cli.py`, tests · **Size:** M · **Skill:** test-driven-development
 
@@ -254,14 +255,14 @@
 **Description:** Bring up S3-compatible storage with a single command, in isolated environments that get created and torn down (ADR 0007).
 
 **Acceptance criteria:**
-- [ ] `docker-compose.yml` with SeaweedFS (pinned tag), a healthcheck, and a `lakehouse` bucket created on startup.
-- [ ] No fixed `container_name`, and the host port configurable via a variable, so several projects (`-p <name>`) can coexist.
-- [ ] Credentials only from `.env`; ADR 0003 updated with the final configuration, and ADR 0007 created.
-- [ ] `make poc-up` / `make poc-down` (`up -d --wait` and `down -v` with a project name).
+- [x] `docker-compose.yml` with SeaweedFS (pinned tag), a healthcheck, and a `lakehouse` bucket created on startup.
+- [x] No fixed `container_name`, and the host port configurable via a variable, so several projects (`-p <name>`) can coexist.
+- [x] Credentials only from `.env`; ADR 0003 updated with the final configuration, and ADR 0007 created.
+- [x] `make poc-up` / `make poc-down` (`up -d --wait` and `down -v` with a project name).
 
 **Verification:**
-- [ ] `docker compose up -d` → the service is `healthy`; writing and reading a test object works.
-- [ ] Two projects running at the same time don't collide; after `make poc-down` no containers or volumes from the project remain.
+- [x] `docker compose up -d` → the service is `healthy`; writing and reading a test object works.
+- [x] Two projects running at the same time don't collide; after `make poc-down` no containers or volumes from the project remain.
 
 **Dependencies:** T5 · **Files:** `docker-compose.yml`, `.env.example`, `Makefile` · **Size:** S
 

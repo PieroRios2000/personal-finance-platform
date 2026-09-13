@@ -6,7 +6,18 @@ dependencies = [
     "pdfplumber>=0.11.10",
     "pikepdf>=10.13.0.post1",
     "pydantic>=2.13.5",
+    "pytesseract>=0.3.13",
 ]
+
+[project.scripts]
+pfp = "ingestion.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ingestion", "lakehouse", "scripts"]
 
 [dependency-groups]
 dev = [
@@ -27,9 +38,20 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.mypy]
 strict = true
 
+# pytesseract ships no type stubs or py.typed marker (T11b); no types-pytesseract
+# package exists on PyPI either, so this is the standard mypy escape hatch for one
+# untyped third-party import, scoped to that module only.
+[[tool.mypy.overrides]]
+module = "pytesseract"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "-m 'not real_pdf'"
+markers = [
+    "real_pdf: runs against the owner's real PDFs; deselected by default (ADR 0004). Run with `pytest -m real_pdf`.",
+]
 
 [tool.coverage.run]
 source = ["ingestion", "lakehouse", "scripts"]

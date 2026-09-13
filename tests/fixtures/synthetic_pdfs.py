@@ -12,6 +12,7 @@ from datetime import date
 from decimal import Decimal
 
 from fpdf import FPDF
+from PIL import Image, ImageDraw, ImageFont
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,7 @@ def bcp_statement_pdf(
     movements: Sequence[Movement] = DEFAULT_MOVEMENTS,
     closing_balance: Decimal | None = None,
     reconciles: bool = True,
+    account_number: str = _ACCOUNT_NUMBER,
 ) -> bytes:
     """Render a fictional, one-page BCP-style statement as PDF bytes.
 
@@ -72,6 +74,9 @@ def bcp_statement_pdf(
     the printed closing balance, simulating a statement that fails reconciliation.
     Pass an explicit `closing_balance` to control the printed value directly
     (takes precedence over `reconciles`).
+
+    Pass `account_number` to render a different (still obviously fake) account,
+    e.g. to build several statements that a test can tell apart by account (T12b).
     """
     rows: list[tuple[Movement, Decimal]] = []
     running = opening_balance
@@ -95,7 +100,7 @@ def bcp_statement_pdf(
     pdf.set_font("Helvetica", size=9)
 
     pdf.text(40, 50, "ESTADO DE CUENTA")
-    pdf.text(40, 65, f"CUENTA NRO. {_ACCOUNT_NUMBER}")
+    pdf.text(40, 65, f"CUENTA NRO. {account_number}")
     pdf.text(40, 80, f"PERIODO DEL {period_start:%d/%m/%Y} AL {period_end:%d/%m/%Y}")
     pdf.text(40, 100, f"SALDO ANTERIOR {_money(opening_balance)}")
 
@@ -115,5 +120,123 @@ def bcp_statement_pdf(
         pdf.text(460, row_y, _money(balance))
 
     pdf.text(40, row_y + 20, f"SALDO ACTUAL {_money(printed_closing)}")
+
+    return bytes(pdf.output())
+
+
+# Arbitrary scale for the rasterized table image below (T11b); only needs to be
+# self-consistent within that one image, since the OCR fallback recovers
+# point-space positions from whatever pixels-per-point ratio the *page* (not this
+# source image) was actually rendered at — see ingestion/ocr.py.
+_SCAN_PX_PER_PT = 4
+_SCAN_FONT_SIZE = 32
+
+
+def _garble(amount: str) -> str:
+    """Change the last digit of `amount`, deterministically, standing in for a
+    misread character an OCR pass could plausibly produce (T11b)."""
+    digits = [c for c in amount if c.isdigit()]
+    target = digits[-1]
+    replacement = "1" if target != "1" else "2"
+    index = amount.rindex(target)
+    return amount[:index] + replacement + amount[index + 1 :]
+
+
+def _table_image(
+    rows: Sequence[tuple[Movement, Decimal]],
+    page_w: float,
+    page_h: float,
+    *,
+    garble_charge: bool,
+) -> Image.Image:
+    """Render the FECHA/DESCRIPCION/CARGO/ABONO/SALDO table as one raster image
+    sized to exactly cover a page, simulating a scanned page with no text layer.
+    """
+    image = Image.new(
+        "RGB",
+        (round(page_w * _SCAN_PX_PER_PT), round(page_h * _SCAN_PX_PER_PT)),
+        "white",
+    )
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default(size=_SCAN_FONT_SIZE)
+
+    def put(x: float, y: float, text: str) -> None:
+        pixel_xy = (x * _SCAN_PX_PER_PT, y * _SCAN_PX_PER_PT)
+        draw.text(pixel_xy, text, fill="black", font=font)
+
+    header_y = 120
+    for x, header in _COLUMNS:
+        put(x, header_y, header)
+
+    row_y = header_y
+    garbled = False
+    for movement, balance in rows:
+        row_y += 15
+        charge = _money(-movement.amount) if movement.amount < 0 else ""
+        credit = _money(movement.amount) if movement.amount > 0 else ""
+        if garble_charge and charge and not garbled:
+            charge = _garble(charge)
+            garbled = True
+        put(40, row_y, f"{movement.when:%d/%m}")
+        put(100, row_y, movement.description)
+        put(280, row_y, charge)
+        put(350, row_y, credit)
+        put(460, row_y, _money(balance))
+
+    return image
+
+
+def bcp_scanned_statement_pdf(
+    *,
+    opening_balance: Decimal = Decimal("1000.00"),
+    movements: Sequence[Movement] = DEFAULT_MOVEMENTS,
+    closing_balance: Decimal | None = None,
+    reconciles: bool = True,
+    garble_amount: bool = False,
+) -> bytes:
+    """Render the same fictional BCP statement as `bcp_statement_pdf`, but with
+    the transaction table on its own page, as a rasterized image with no text
+    layer, simulating a scanned page (T11b).
+
+    Page 1 carries the account/period/balance summary as normal vector text:
+    `bcp.py` reads those with a regex over `extract_text()`, which the OCR
+    fallback doesn't cover — only `extract_words()` does. Page 2 is the scanned
+    table; it's only readable through that OCR fallback, so a test parsing this
+    fixture successfully exercises it end to end.
+
+    `garble_amount=True` renders one CARGO amount with one digit changed from
+    what page 1's declared balances assume, standing in for a misread character
+    that `reconcile()` (not this fixture) must catch as `ReconciliationError`.
+    """
+    rows: list[tuple[Movement, Decimal]] = []
+    running = opening_balance
+    for movement in movements:
+        running += movement.amount
+        rows.append((movement, running))
+    computed_closing = running
+
+    if closing_balance is not None:
+        printed_closing = closing_balance
+    elif reconciles:
+        printed_closing = computed_closing
+    else:
+        printed_closing = computed_closing + _BROKEN_DRIFT
+
+    dates = [movement.when for movement, _ in rows] or [date.today()]
+    period_start, period_end = min(dates), max(dates)
+
+    pdf = FPDF(unit="pt")
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=9)
+    pdf.text(40, 50, "ESTADO DE CUENTA")
+    pdf.text(40, 65, f"CUENTA NRO. {_ACCOUNT_NUMBER}")
+    pdf.text(40, 80, f"PERIODO DEL {period_start:%d/%m/%Y} AL {period_end:%d/%m/%Y}")
+    pdf.text(40, 100, f"SALDO ANTERIOR {_money(opening_balance)}")
+    pdf.text(40, 115, f"SALDO ACTUAL {_money(printed_closing)}")
+
+    pdf.add_page()
+    page_w, page_h = pdf.w, pdf.h
+    image = _table_image(rows, page_w, page_h, garble_charge=garble_amount)
+    pdf.image(image, x=0, y=0, w=page_w)
 
     return bytes(pdf.output())
