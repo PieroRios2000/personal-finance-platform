@@ -310,11 +310,11 @@ def test_replace_statement_only_touches_the_given_users_rows(
     assert sorted(statements.column("user_id").to_pylist()) == ["ana", "piero"]
 
 
-def test_transaction_rows_is_empty_on_a_fresh_lake() -> None:
-    assert bronze.transaction_rows("piero", VALID_SHA256) == []
+def test_transactions_for_file_is_empty_on_a_fresh_lake() -> None:
+    assert bronze.transactions_for_file("piero", VALID_SHA256) == []
 
 
-def test_transaction_rows_returns_only_the_given_files_rows(lakehouse: Path) -> None:
+def test_transactions_for_file_returns_only_that_files_rows(lakehouse: Path) -> None:
     """What `pfp backfill --dry-run` compares a fresh parse against (T14c):
     date, description and amount for one file, and nothing else's."""
     other_sha256 = hashlib.sha256(b"another statement").hexdigest()
@@ -338,7 +338,7 @@ def test_transaction_rows_returns_only_the_given_files_rows(lakehouse: Path) -> 
         other_sha256,
     )
 
-    assert bronze.transaction_rows("piero", VALID_SHA256) == [
+    assert bronze.transactions_for_file("piero", VALID_SHA256) == [
         (date(2026, 1, 15), "TEST MOVEMENT", Decimal("-25.50"))
     ]
 

@@ -123,7 +123,9 @@ def is_ingested(user_id: str, file_sha256: str) -> bool:
     return file_sha256 in table.column("file_sha256").to_pylist()
 
 
-def transaction_rows(user_id: str, file_sha256: str) -> list[tuple[date, str, Decimal]]:
+def transactions_for_file(
+    user_id: str, file_sha256: str
+) -> list[tuple[date, str, Decimal]]:
     """Every transaction bronze currently holds for one file, as sorted
     `(date, description, amount)` tuples.
 
