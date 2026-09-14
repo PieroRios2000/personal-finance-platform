@@ -168,6 +168,17 @@ def test_identical_databases_report_no_changes(base_db: Path, pr_db: Path) -> No
     assert "no changes" in data_diff.render_markdown(diffs).lower()
 
 
+def test_no_models_on_either_side_is_not_reported_as_no_changes() -> None:
+    """An empty `diffs` list (neither side built anything into the schema --
+    e.g. both dbt builds failed before creating a single model) must not read
+    as "no changes": nothing was actually compared, which is a very different,
+    and more worrying, situation than a real, clean comparison."""
+    markdown = data_diff.render_markdown([]).lower()
+
+    assert "no changes" not in markdown
+    assert "no models" in markdown
+
+
 def test_render_markdown_reports_a_real_difference(base_db: Path, pr_db: Path) -> None:
     _seed(
         base_db,
