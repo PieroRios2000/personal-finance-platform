@@ -51,7 +51,7 @@ date or an amount wrong while the balances still add up.
 | Layer | Status |
 |---|---|
 | PDF parsing & reconciliation (BCP) | ✅ Calibrated against real statements — see [below](#built-the-hard-way) |
-| PDF parsing & reconciliation (Scotiabank) | 🚧 In progress |
+| PDF parsing & reconciliation (Scotiabank) | 🚧 Built, PR open — pending real-data validation |
 | OCR fallback for scanned pages | ✅ |
 | Multi-user, multi-account inbox → archive pipeline | ✅ |
 | Bronze (Delta Lake on S3) | ✅ Write, idempotent re-ingest, backfill/replace |
@@ -96,6 +96,13 @@ end to end. The full story, fix by fix, is in [`brain/components/bcp-parser.md`]
   a deleted test, a relaxed config), not just for failing it outright.
 - **Idempotent by design** — re-ingesting the same file twice adds zero rows; a `--dry-run`
   backfill shows exactly what a parser fix would change before it changes anything.
+
+## Exploring the data
+
+`dbt build`'s own output, `dbt/pfp.duckdb`, is a real on-disk DuckDB database — it opens
+directly in [DBeaver](https://dbeaver.io/) (or any DuckDB-aware SQL client), silver with zero
+setup and bronze's raw Delta tables with a one-time DuckDB persistent-secret step. Exact
+commands: **[SETUP.md §7](SETUP.md#7-browsing-the-lake-in-dbeaver)**.
 
 ## Getting started
 

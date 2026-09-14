@@ -17,12 +17,15 @@ and written to bronze; dbt builds silver with tests, and CI validates every PR. 
 | B — Ingestion | T6–T12b | T6 schema (#30, fix #32) · T7 file hash (#28) · T8 reconciliation (#34) · T9 inspector (#16) · T10 synthetic fixture (#29) · T11 BCP parser · T12 dispatcher/CLI · T11b OCR fallback (#38) · T12b inbox organizer (#39): all done |
 | C — Lakehouse | T13–T15 | T13 local S3 (SeaweedFS) · T14 bronze writer · T14c bronze backfill · T15 benchmarks + impact-based CI: all done |
 | D — Transformation | T16, T17, T17b | T16 dbt silver done; T17 ephemeral integration environment done; T17b pending |
-| E — Second bank and close | T18, T18b, T19 | Pending |
+| E — Second bank and close | T18, T18b, T19 | T18 Scotiabank parser: built, pending real-data validation · T18b, T19 pending |
 
 Also integrated: [SETUP.md](../../SETUP.md) with environment setup (#10), the ephemeral
 environments and impact-based CI plan (#12), [CLAUDE.md](../../CLAUDE.md) with the rules for
 agents, the PR template and PROJECT.md kept current (#15), and the multi-user, multi-account,
-integral reconciliation plan (#19).
+integral reconciliation plan (#19). Local visualization: `dbt/pfp.duckdb` (T16's own build
+artifact) opens directly in DBeaver, silver with zero setup and bronze with a one-time DuckDB
+persistent-secret-and-views setup — [SETUP.md §7](../../SETUP.md#7-browsing-the-lake-in-dbeaver),
+[dbt silver](../components/dbt-silver.md).
 
 ## Components
 
@@ -34,10 +37,11 @@ integral reconciliation plan (#19).
 - [Masked layout inspector](../components/layout-inspector.md) — built (T9).
 - [Quality bar](../components/quality-bar.md) — built (T4).
 - [BCP parser](../components/bcp-parser.md) — built (T11), provisional column layout pending a real masked dump.
-- [Dispatcher and CLI](../components/cli.md) — built (T12, T12b, T14, T14c): `pfp parse`, `pfp organize`, `pfp ingest`, `pfp backfill`; one bank registered so far.
+- [Dispatcher and CLI](../components/cli.md) — built (T12, T12b, T14, T14c, T18): `pfp parse`, `pfp organize`, `pfp ingest`, `pfp backfill`; two banks registered, BCP and Scotiabank.
 - [Inbox organizer](../components/inbox-organizer.md) — built (T12b).
 - [Lakehouse](../components/lakehouse.md) — built (T14, T14c): bronze in Delta, partitioned by `user_id`, with a backfill that replaces a file's rows.
 - [dbt silver](../components/dbt-silver.md) — built (T16): bronze read through `delta_scan()`, `silver.transactions`, and continuity reconciliation across statement periods.
+- [Scotiabank parser](../components/scotiabank-parser.md) — built (T18): credit-card statement, one `Statement` per currency, found by the dispatcher's password-fallback pass; pending real-data validation.
 
 ## Decisions
 
@@ -54,6 +58,7 @@ integral reconciliation plan (#19).
 | 0009 | Several users and accounts; PDF content rules over the file name | Written in T6 |
 | 0010 | A bronze backfill replaces a file's rows, it doesn't version them | [ADR 0010](../decisions/0010-bronze-backfill-replaces-not-versions.md) |
 | 0011 | `delta_scan()` as a dbt source, on an on-disk DuckDB | [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-source.md) |
+| 0012 | Scotiabank found by password fallback; `parse()` returns `list[Statement]` project-wide | [ADR 0012](../decisions/0012-scotiabank-password-fallback-detection.md) |
 | 0013 | dbt state comparison via a base-ref worktree | [ADR 0013](../decisions/0013-dbt-state-comparison-via-a-base-ref-worktree.md) |
 
 ## Concepts

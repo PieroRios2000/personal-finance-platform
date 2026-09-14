@@ -72,6 +72,12 @@ uv run sqlfluff lint dbt/models
 duckdb dbt/pfp.duckdb -c "select count(*) from silver.transactions"   # optional
 ```
 
+`dbt/pfp.duckdb` is a real on-disk DuckDB database, so it opens directly in any DuckDB-aware
+SQL client — DBeaver included, with a built-in driver. `silver.*` shows up with zero extra
+setup; seeing `bronze.*` there too needs a one-time DuckDB persistent-secret-and-views setup,
+since dbt only reads bronze through `delta_scan()` at build time and never materializes it into
+this file. Exact commands in [SETUP.md §7](../../SETUP.md#7-browsing-the-lake-in-dbeaver).
+
 - [`tests/test_delta_scan_integration.py`](../../tests/test_delta_scan_integration.py) is the
   de-risking test `tasks/plan.md`'s risk log asks for: DuckDB reading bronze's Delta tables off
   local S3, kept as a test so the path stays proven as versions move. Drop `ENDPOINT`,

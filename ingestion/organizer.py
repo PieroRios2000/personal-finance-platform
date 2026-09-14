@@ -27,14 +27,15 @@ copies arrive in separate inbox passes before either is processed) is **not** ca
 here — T14 closes that gap.
 
 **Multi-account PDFs.** ADR 0009 and `tasks/plan.md` call out a bank statement that
-covers more than one account, to be filed under `<bank>/_multi-account/`. Detecting
-that case is out of reach today: `ingestion.parsers.bcp.parse()` (T11) returns
-exactly one `Statement` per call — it reads the *first* "CUENTA NRO." it finds and
-has no way to report "there was also a second one". `_multi-account/` isn't wired up
-here: adding it now would be a dead branch this parser can never exercise, not a
-placeholder worth keeping. It becomes reachable once a parser can either return
-several statements for one PDF or at least flag "more than one account" — see the
-brain note and this task's PR for the full explanation.
+covers more than one account, to be filed under `<bank>/_multi-account/`. Still out
+of reach, even now that `parse()` returns a *list* of statements (T18, ADR 0012):
+every parser reads one account per file and gives every `Statement` it emits that
+same account — Scotiabank's list is one statement per *currency* of one card, not
+one per account. Neither parser can report "there was also a second account", so
+`_multi-account/` stays unwired: adding it now would be a dead branch no parser can
+exercise, not a placeholder worth keeping. It becomes reachable the day a parser
+emits statements with two different `account_id`s for one file — see the brain note
+and this task's PR for the full explanation.
 """
 
 import os
@@ -63,9 +64,16 @@ _PERIOD_PREFIX = re.compile(r"^(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})")
 class ArchivedItem:
     """One PDF successfully filed into the archive.
 
-    Carries the already-parsed `statement` and its `sha256` (T14) so a caller
-    like `pfp ingest` can write it to bronze without re-opening, re-decrypting
+    Carries the already-parsed `statements` and its `sha256` (T14) so a caller
+    like `pfp ingest` can write them to bronze without re-opening, re-decrypting
     and re-parsing a file `organize()` already did all of that for.
+
+    `statements` is a list because one PDF can hold several (T18: a Scotiabank
+    credit-card statement splits into one per currency). The file still gets a
+    single archive destination, taken from the first one: every parser derives
+    the bank, account and period once per *file* and gives every `Statement` it
+    emits the same values, so they can't disagree — unreachable by construction
+    rather than checked here.
     """
 
     bank: str
@@ -75,7 +83,7 @@ class ArchivedItem:
     dest: Path
     version: int  # 1 for the first copy of this account/period; 2+ if regenerated
     sha256: str
-    statement: Statement
+    statements: list[Statement]
 
 
 @dataclass(frozen=True)
@@ -248,7 +256,7 @@ def organize(
 
         password = os.environ.get(entry.password_env, "")
         try:
-            statement = entry.parse(
+            statements = entry.parse(
                 pdf, user_id=user_id, file_sha256=digest, password=password
             )
         except pikepdf.PasswordError:
@@ -274,6 +282,10 @@ def organize(
             )
             continue
 
+        # Where the file goes is a property of the file, not of each statement
+        # it holds: they all carry the same bank, account and period (see
+        # `ArchivedItem`), so the first one decides for all of them.
+        statement = statements[0]
         id6 = statement.account_id[:6]
         account_dir = archive / statement.bank / f"{statement.account_last4}-{id6}"
         base_name = f"{statement.period_start}_{statement.period_end}"
@@ -309,7 +321,7 @@ def organize(
                 dest=dest_path,
                 version=version,
                 sha256=digest,
-                statement=statement,
+                statements=statements,
             )
         )
 

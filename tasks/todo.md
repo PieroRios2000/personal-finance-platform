@@ -389,12 +389,12 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 **Description:** A second bank: proves the parser and dispatcher design scales.
 
 **Acceptance criteria:**
-- [ ] A masked layout (T9), a synthetic fixture, and `parsers/scotiabank.py` registered in the dispatcher.
-- [ ] Like T11: bank, account and period come from the PDF's content, and the inbox (T12b) files its PDFs.
-- [ ] Synthetic tests in CI and `real_pdf` locally both reconcile.
+- [x] A masked layout (T9), a synthetic fixture, and `parsers/scotiabank.py` registered in the dispatcher. No byte-prefix signature exists for this bank (unlike BCP's `$BOP$`), so it's registered with `detect=None` and found by a new password-fallback pass instead (see `brain/decisions/0012-scotiabank-password-fallback-detection.md`).
+- [x] Bank, account and period come from the PDF's content (the unmasked 8-digit client/account code, not the always-masked card number); the inbox (T12b) files its PDFs via `organizer.py`, extended for a file that can hold more than one `Statement`.
+- [x] Synthetic tests in CI reconcile. `real_pdf` (pending: needs your real Scotiabank PDF + `SCOTIABANK_PDF_PASSWORD`, skips gracefully without them — see the Scotiabank parser brain note for what's confirmed vs. inferred).
 
 **Verification:**
-- [ ] `uv run pfp ingest <real Scotiabank pdf>` writes to bronze, and `dbt build` includes it in silver.
+- [ ] `uv run pfp ingest <real Scotiabank pdf>` writes to bronze, and `dbt build` includes it in silver. (pending: real-data validation is yours to run — ADR 0004 — likely to need a follow-up fix round the way T11's BCP parser did).
 
 **Dependencies:** T11b, T12, T14 · **Files:** `ingestion/parsers/scotiabank.py`, `tests/fixtures/…`, `tests/parsers/test_scotiabank.py` · **Size:** M · **Skill:** test-driven-development
 
@@ -426,6 +426,29 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 - [ ] Clone the repo into a clean folder and follow the README through to `dbt build` with no missing steps.
 
 **Dependencies:** T17b, T18b · **Files:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Size:** S
+
+### T19b: Obsidian vault for the brain — `docs/obsidian-brain-vault`
+
+**Description:** A graphical way to browse `brain/` — its cross-links (ADRs, components, concepts,
+phases) as a navigable graph, not just the Mermaid map in `brain/README.md`. Deferred, not part
+of the Phase 1 close checklist: nice-to-have, not a blocker.
+
+**Acceptance criteria:**
+- [ ] `brain/` opens as an Obsidian vault with no broken links: confirm its existing relative
+  markdown links (`[ADR 0009](../decisions/...)`) resolve in Obsidian's graph/backlinks view as-is
+  (Obsidian follows standard markdown links, not only `[[wikilinks]]`), fixing any that don't.
+- [ ] `.obsidian/` (personal, per-machine view state — panes, graph layout, theme) is gitignored,
+  never committed.
+- [ ] `SETUP.md` gets a short optional section: open `brain/` (or the repo root) as a vault, and
+  the Windows UNC path to this WSL2 checkout (`\\wsl.localhost\<distro>\...`) for Obsidian
+  running on the Windows side.
+
+**Verification:**
+- [ ] Opening the vault shows every ADR, component and concept note connected in the graph view;
+  no note appears fully isolated unless it genuinely has no cross-links yet.
+
+**Dependencies:** none (brain/ already exists) · **Files:** `.gitignore`, `SETUP.md` ·
+**Size:** S · **Skill:** documentation-and-adrs
 
 ### ✅ Final checkpoint
 - [ ] All criteria met · [ ] integral reconciliation green (statement, continuity and between accounts) · [ ] `develop → main` release PR "Phase 1 — Foundation" · [ ] merged by Piero

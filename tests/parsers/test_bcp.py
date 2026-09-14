@@ -57,8 +57,18 @@ def test_detect_rejects_a_non_pdf_file(tmp_path: Path) -> None:
     assert bcp.detect(path) is False
 
 
+def test_parse_returns_a_list_holding_exactly_one_statement(bcp_pdf: Path) -> None:
+    """`parse()` returns `list[Statement]` for every bank (T18): a BCP account
+    statement covers one account in one currency, so its list always holds
+    exactly one entry. Every other test in this file unpacks that list."""
+    statements = bcp.parse(bcp_pdf, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert isinstance(statements, list)
+    assert len(statements) == 1
+
+
 def test_parse_returns_a_reconciled_statement(bcp_pdf: Path) -> None:
-    statement = bcp.parse(bcp_pdf, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(bcp_pdf, user_id="piero", file_sha256=FILE_SHA256)
 
     assert statement.user_id == "piero"
     assert statement.bank == "BCP"
@@ -74,7 +84,7 @@ def test_parse_returns_a_reconciled_statement(bcp_pdf: Path) -> None:
 
 
 def test_parse_extracts_charges_and_credits_with_the_right_sign(bcp_pdf: Path) -> None:
-    statement = bcp.parse(bcp_pdf, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(bcp_pdf, user_id="piero", file_sha256=FILE_SHA256)
 
     by_amount = {t.amount: t for t in statement.transactions}
     assert by_amount[Decimal("-120.50")].description == "COMPRA TIENDA FICTICIA"
@@ -87,7 +97,7 @@ def test_parse_works_on_a_pdf_with_the_real_byte_prefix(tmp_path: Path) -> None:
     path = tmp_path / "real-shaped.pdf"
     path.write_bytes(b"$BOP$" + bcp_statement_pdf())
 
-    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
     assert len(statement.transactions) == 4
 
@@ -97,7 +107,7 @@ def test_parse_unlocks_an_encrypted_pdf_with_the_right_password(tmp_path: Path) 
     with pikepdf.open(io.BytesIO(bcp_statement_pdf())) as plain:
         plain.save(path, encryption=pikepdf.Encryption(owner="x", user="synthetic-key"))
 
-    statement = bcp.parse(
+    [statement] = bcp.parse(
         path, user_id="piero", file_sha256=FILE_SHA256, password="synthetic-key"
     )
 
@@ -124,7 +134,7 @@ def test_parse_infers_the_year_when_the_period_crosses_new_year(tmp_path: Path) 
         bcp_statement_pdf(opening_balance=Decimal("500.00"), movements=movements)
     )
 
-    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
     dates = sorted(t.date for t in statement.transactions)
     assert dates == [date(2025, 12, 29), date(2026, 1, 3)]
@@ -139,7 +149,7 @@ def test_parse_reads_the_real_layout_without_nro_or_periodo_labels(
     path = tmp_path / "real-layout.pdf"
     path.write_bytes(bcp_real_layout_statement_pdf(account_number="123-45678901-2-34"))
 
-    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
     assert statement.account_id == hash_account("BCP", "123-45678901-2-34")
     assert statement.account_last4 == last4_of("123-45678901-2-34")
@@ -149,7 +159,7 @@ def test_parse_reads_a_two_digit_year_period(tmp_path: Path) -> None:
     path = tmp_path / "real-layout.pdf"
     path.write_bytes(bcp_real_layout_statement_pdf())
 
-    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
     assert statement.period_start == date(2026, 1, 5)
     assert statement.period_end == date(2026, 1, 28)
@@ -164,7 +174,7 @@ def test_parse_reads_ddmmm_transaction_dates_using_the_value_date_column(
     path = tmp_path / "real-layout.pdf"
     path.write_bytes(bcp_real_layout_statement_pdf())
 
-    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
     dates = sorted(t.date for t in statement.transactions)
     assert dates == [
@@ -190,7 +200,7 @@ def test_parse_reads_a_description_that_starts_left_of_its_own_header(
     path = tmp_path / "misaligned-description.pdf"
     path.write_bytes(bcp_real_layout_statement_pdf(row_description_x=180))
 
-    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
     assert len(statement.transactions) == len(DEFAULT_MOVEMENTS)
     by_amount = {t.amount: t for t in statement.transactions}
@@ -215,7 +225,7 @@ def test_parse_ignores_a_literal_zero_printed_alongside_a_real_amount(
     path = tmp_path / "zero-and-real.pdf"
     path.write_bytes(bcp_real_layout_statement_pdf(zero_and_real_row=Decimal("75.00")))
 
-    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
     assert len(statement.transactions) == len(DEFAULT_MOVEMENTS) + 1
     extra = next(t for t in statement.transactions if t.amount == Decimal("75.00"))
@@ -245,7 +255,7 @@ def test_parse_extracts_charges_and_credits_on_the_real_layout(
     path = tmp_path / "real-layout.pdf"
     path.write_bytes(bcp_real_layout_statement_pdf())
 
-    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
     by_amount = {t.amount: t for t in statement.transactions}
     assert by_amount[Decimal("-120.50")].description == "COMPRA TIENDA FICTICIA"
@@ -263,7 +273,7 @@ def test_parse_finds_a_closing_balance_under_a_bare_saldo_label(
     path = tmp_path / "real-layout.pdf"
     path.write_bytes(bcp_real_layout_statement_pdf())
 
-    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
     expected_closing = Decimal("1000.00") + sum(
         (movement.amount for movement in DEFAULT_MOVEMENTS), Decimal("0.00")
@@ -327,7 +337,7 @@ def test_parse_keeps_rows_from_different_pages_separate(tmp_path: Path) -> None:
     path = tmp_path / "multi-page.pdf"
     path.write_bytes(bytes(pdf.output()))
 
-    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
     assert len(statement.transactions) == 2
     by_amount = {t.amount: t for t in statement.transactions}
@@ -387,7 +397,7 @@ def test_parses_and_reconciles_a_real_bcp_statement() -> None:
     if not password:
         pytest.skip("BCP_PDF_PASSWORD is not set (see .env)")
 
-    statement = bcp.parse(
+    [statement] = bcp.parse(
         candidate, user_id="piero", file_sha256="0" * 64, password=password
     )
 
