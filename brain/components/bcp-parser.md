@@ -103,6 +103,13 @@ where it was drawn) and both ends of the fallback through `bcp.parse()`: a state
 transaction table lives only on a scanned page reconciles correctly, and one with a garbled
 amount on that scanned page raises `ReconciliationError` instead of being silently accepted.
 
+## Account kind (T18a)
+
+Every `Statement` this parser builds gets `account_kind="asset"`: a BCP checking account's
+balance is money on hand, never debt owed. Hardcoded here, not read from the PDF — see
+[ADR 0014](../decisions/0014-account-kind-asset-or-liability.md) for why, and for how it
+reaches `silver.transactions` for T18b's transfer matching.
+
 ## How to use it and how to verify it
 
 ```python
@@ -123,6 +130,7 @@ from a harmful one. It never asserts or prints an extracted value (ADR 0004).
 
 ## Related
 
+- [ADR 0014: Account kind (asset/liability)](../decisions/0014-account-kind-asset-or-liability.md) — why this parser hardcodes `account_kind="asset"`.
 - [ADR 0004: Real PDFs](../decisions/0004-real-pdfs-never-leave-your-machine.md) — why the real-PDF test only checks pass/fail.
 - [Quality bar](quality-bar.md) — the exceptions process this component uses.
 - [Reconciliation](../concepts/reconciliation.md) — `parse()` calls `reconcile()` before returning.

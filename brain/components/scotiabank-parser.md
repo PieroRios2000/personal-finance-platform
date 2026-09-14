@@ -102,6 +102,15 @@ real-data rounds. It has not been run against Piero's real PDF; only he can do t
 using the same masked-dump-and-fix loop BCP went through — see
 [`test_scotiabank.py`](../../tests/parsers/test_scotiabank.py)'s `real_pdf`-marked test.
 
+## Account kind (T18a)
+
+Every `Statement` this parser builds — including both currency statements from one file —
+gets `account_kind="liability"`: a credit-card balance is debt owed, the opposite kind of
+thing from BCP's checking-account balance. Hardcoded here, not read from the PDF; see
+[ADR 0014](../decisions/0014-account-kind-asset-or-liability.md), including why the join that
+carries this into `silver.transactions` had to be written with this parser's
+one-file-two-statements shape specifically in mind.
+
 ## How to use it and how to verify it
 
 ```python
@@ -125,6 +134,7 @@ value (ADR 0004).
 
 ## Related
 
+- [ADR 0014: Account kind (asset/liability)](../decisions/0014-account-kind-asset-or-liability.md) — why this parser hardcodes `account_kind="liability"`.
 - [ADR 0012: Password-fallback detection and `list[Statement]`](../decisions/0012-scotiabank-password-fallback-detection.md)
 - [ADR 0004: Real PDFs](../decisions/0004-real-pdfs-never-leave-your-machine.md) — why the real-PDF test only checks pass/fail.
 - [BCP parser](bcp-parser.md) — the position/shape-based parsing lesson this parser applies from the start, and the sibling parser's own real-data calibration history.
