@@ -383,12 +383,12 @@
 **Description:** A second bank: proves the parser and dispatcher design scales.
 
 **Acceptance criteria:**
-- [ ] A masked layout (T9), a synthetic fixture, and `parsers/scotiabank.py` registered in the dispatcher.
-- [ ] Like T11: bank, account and period come from the PDF's content, and the inbox (T12b) files its PDFs.
-- [ ] Synthetic tests in CI and `real_pdf` locally both reconcile.
+- [x] A masked layout (T9), a synthetic fixture, and `parsers/scotiabank.py` registered in the dispatcher. No byte-prefix signature exists for this bank (unlike BCP's `$BOP$`), so it's registered with `detect=None` and found by a new password-fallback pass instead (see `brain/decisions/0011-scotiabank-password-fallback-detection.md`).
+- [x] Bank, account and period come from the PDF's content (the unmasked 8-digit client/account code, not the always-masked card number); the inbox (T12b) files its PDFs via `organizer.py`, extended for a file that can hold more than one `Statement`.
+- [x] Synthetic tests in CI reconcile. `real_pdf` (pending: needs your real Scotiabank PDF + `SCOTIABANK_PDF_PASSWORD`, skips gracefully without them — see the Scotiabank parser brain note for what's confirmed vs. inferred).
 
 **Verification:**
-- [ ] `uv run pfp ingest <real Scotiabank pdf>` writes to bronze, and `dbt build` includes it in silver.
+- [ ] `uv run pfp ingest <real Scotiabank pdf>` writes to bronze, and `dbt build` includes it in silver. (pending: real-data validation is yours to run — ADR 0004 — likely to need a follow-up fix round the way T11's BCP parser did).
 
 **Dependencies:** T11b, T12, T14 · **Files:** `ingestion/parsers/scotiabank.py`, `tests/fixtures/…`, `tests/parsers/test_scotiabank.py` · **Size:** M · **Skill:** test-driven-development
 

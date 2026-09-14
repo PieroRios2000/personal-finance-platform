@@ -16,8 +16,8 @@ and written to bronze; dbt builds silver with tests, and CI validates every PR. 
 | A — Repo foundation | T1 guards (#8) · T2 Python project (#10) · T3a brain (#14) · T3b CLAUDE.md (#15) · T4 CONSTRAINTS (#17, fixes in #21) · T5 CI quality gates (#26) | T1–T5 done |
 | B — Ingestion | T6–T12b | T6 schema (#30, fix #32) · T7 file hash (#28) · T8 reconciliation (#34) · T9 inspector (#16) · T10 synthetic fixture (#29) · T11 BCP parser · T12 dispatcher/CLI · T11b OCR fallback (#38) · T12b inbox organizer (#39): all done |
 | C — Lakehouse | T13–T15 | T13 local S3 (SeaweedFS) · T14 bronze writer · T14c bronze backfill · T15 benchmarks + impact-based CI: all done |
-| D — Transformation | T16, T17, T17b | Pending |
-| E — Second bank and close | T18, T18b, T19 | Pending |
+| D — Transformation | T16, T17, T17b | T16 dbt silver: done · T17, T17b pending |
+| E — Second bank and close | T18, T18b, T19 | T18 Scotiabank parser: built, pending real-data validation · T18b, T19 pending |
 
 Also integrated: [SETUP.md](../../SETUP.md) with environment setup (#10), the ephemeral
 environments and impact-based CI plan (#12), [CLAUDE.md](../../CLAUDE.md) with the rules for
