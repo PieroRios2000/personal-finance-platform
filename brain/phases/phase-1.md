@@ -33,9 +33,11 @@ integral reconciliation plan (#19).
 - [Masked layout inspector](../components/layout-inspector.md) — built (T9).
 - [Quality bar](../components/quality-bar.md) — built (T4).
 - [BCP parser](../components/bcp-parser.md) — built (T11), provisional column layout pending a real masked dump.
-- [Dispatcher and CLI](../components/cli.md) — built (T12, T12b, T14, T14c): `pfp parse`, `pfp organize`, `pfp ingest`, `pfp backfill`; one bank registered so far.
+- [Dispatcher and CLI](../components/cli.md) — built (T12, T12b, T14, T14c, T18): `pfp parse`, `pfp organize`, `pfp ingest`, `pfp backfill`; two banks registered, BCP and Scotiabank.
 - [Inbox organizer](../components/inbox-organizer.md) — built (T12b).
 - [Lakehouse](../components/lakehouse.md) — built (T14, T14c): bronze in Delta, partitioned by `user_id`, with a backfill that replaces a file's rows.
+- [dbt silver](../components/dbt-silver.md) — built (T16): bronze read through `delta_scan()`, `silver.transactions`, and continuity reconciliation across statement periods.
+- [Scotiabank parser](../components/scotiabank-parser.md) — built (T18): credit-card statement, one `Statement` per currency, found by the dispatcher's password-fallback pass; pending real-data validation.
 
 ## Decisions
 
@@ -51,6 +53,8 @@ integral reconciliation plan (#19).
 | 0008 | Impact-based CI | [ADR 0008](../decisions/0008-impact-based-ci.md) |
 | 0009 | Several users and accounts; PDF content rules over the file name | Written in T6 |
 | 0010 | A bronze backfill replaces a file's rows, it doesn't version them | [ADR 0010](../decisions/0010-bronze-backfill-replaces-not-versions.md) |
+| 0011 | `delta_scan()` as a dbt source, on an on-disk DuckDB | [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-source.md) |
+| 0012 | Scotiabank found by password fallback; `parse()` returns `list[Statement]` project-wide | [ADR 0012](../decisions/0012-scotiabank-password-fallback-detection.md) |
 
 ## Concepts
 

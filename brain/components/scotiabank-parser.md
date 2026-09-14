@@ -16,9 +16,9 @@ dispatcher/parser design (T11, T12) scales beyond BCP.
 
 | Piece | What it does |
 |---|---|
-| [`ingestion/parsers/base.py`](../../ingestion/parsers/base.py) | `detect` is now optional; a bank with no cheap byte signature registers with `detect=None` (ADR 0011) |
+| [`ingestion/parsers/base.py`](../../ingestion/parsers/base.py) | `detect` is now optional; a bank with no cheap byte signature registers with `detect=None` (ADR 0012) |
 | [`ingestion/parsers/scotiabank.py`](../../ingestion/parsers/scotiabank.py) | No `detect()` at all — found by `ingestion.dispatcher`'s password-fallback pass instead. `parse()` unlocks with pikepdf, reads words with pdfplumber, and builds a `list[Statement]` |
-| [`ingestion/dispatcher.py`](../../ingestion/dispatcher.py) | Two-pass detection (ADR 0011): every fast, password-free `detect()` first, then a fallback pass that tries decrypting each remaining parser's file with its own `password_env` |
+| [`ingestion/dispatcher.py`](../../ingestion/dispatcher.py) | Two-pass detection (ADR 0012): every fast, password-free `detect()` first, then a fallback pass that tries decrypting each remaining parser's file with its own `password_env` |
 | [`tests/parsers/test_scotiabank.py`](../../tests/parsers/test_scotiabank.py) | Dual-currency split, debt sign convention, value-date column, account/card extraction, Total-mismatch detection, multi-page row isolation, single-currency statements, and one `real_pdf`-marked test |
 
 ## A bank with no byte signature, and a statement that isn't one account
@@ -30,7 +30,7 @@ rounds after the fact — see [BCP parser](bcp-parser.md)):
 - **No `$BOP$`-style byte prefix.** A real Scotiabank PDF's raw bytes start with a plain
   `%PDF-`, indistinguishable from any other PDF without opening it. Detecting **is** decrypting
   for this bank — there's no cheaper question to ask first. See
-  [ADR 0011](../decisions/0011-scotiabank-password-fallback-detection.md).
+  [ADR 0012](../decisions/0012-scotiabank-password-fallback-detection.md).
 - **It's a credit card, not a checking account**, and it carries **two currencies at once**
   (Soles and Dólares) as two independent, separately-reconciled columns. `Statement` holds one
   `opening_balance`/`closing_balance`, not one per currency, so `parse()` returns a `list`, one
@@ -125,7 +125,7 @@ value (ADR 0004).
 
 ## Related
 
-- [ADR 0011: Password-fallback detection and `list[Statement]`](../decisions/0011-scotiabank-password-fallback-detection.md)
+- [ADR 0012: Password-fallback detection and `list[Statement]`](../decisions/0012-scotiabank-password-fallback-detection.md)
 - [ADR 0004: Real PDFs](../decisions/0004-real-pdfs-never-leave-your-machine.md) — why the real-PDF test only checks pass/fail.
 - [BCP parser](bcp-parser.md) — the position/shape-based parsing lesson this parser applies from the start, and the sibling parser's own real-data calibration history.
 - [Quality bar](quality-bar.md) — the exceptions process this component uses.

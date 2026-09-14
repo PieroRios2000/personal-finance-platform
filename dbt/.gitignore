@@ -1,0 +1,5 @@
+target/
+dbt_packages/
+logs/
+# dbt writes an anonymous-usage id here on first run; it is per-machine, not project state.
+.user.yml

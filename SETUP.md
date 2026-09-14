@@ -106,6 +106,10 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | pytesseract | 0.3.13 | runtime | OCR (Spanish) for scanned pages with no text layer |
 | deltalake | 1.6.3 | runtime | Write and read bronze's Delta tables (T14, ADR 0006) |
 | pyarrow | 25.0.1 | runtime | Explicit table schemas for Delta writes (T14, ADR 0006) |
+| dbt-duckdb | 1.11.0 (dbt-core 1.12.4) | runtime | Builds silver from bronze (T16, ADR 0011). Runtime, not dev: `dbt build` is a step of the platform's own flow, not a check |
+| duckdb | 1.5.5 | runtime | The engine dbt runs on; reads Delta off S3 with `delta_scan()` (T16, ADR 0002) |
+| sqlfluff | 4.3.0 | dev | Lints the dbt project's SQL (T16) |
+| sqlfluff-templater-dbt | 4.3.0 | dev | Lets sqlfluff compile the dbt project, so it lints the real `delta_scan(...)` SQL |
 | fpdf2 | 2.8.8 | dev | Generate synthetic PDFs inside the tests |
 | pytest | 9.1.1 | dev | Tests |
 | pytest-cov | 7.1.0 | dev | Coverage |
@@ -131,6 +135,37 @@ tesseract --list-langs              # should include "spa"
 ```
 
 All green = the environment is ready.
+
+## 6. Building silver with dbt (T16)
+
+`make check-task` doesn't cover this: dbt reads bronze's Delta tables straight off local S3, so
+it needs SeaweedFS running and `.env` exported into the shell. `profiles.yml` lives inside the
+project directory, and dbt only searches `--profiles-dir`, `DBT_PROFILES_DIR`, the working
+directory and `~/.dbt` — so both flags are needed, from the repository root:
+
+```bash
+make poc-up                          # local S3 (leave it running)
+set -a && source .env && set +a      # LAKEHOUSE_URI + the AWS_* values dbt reads
+
+uv run dbt build --project-dir dbt --profiles-dir dbt   # silver + its tests
+uv run sqlfluff lint dbt/models                         # SQL style
+uv run pytest -m integration                            # the S3-backed tests, deselected by default
+```
+
+`dbt build` writes `dbt/pfp.duckdb` (gitignored), so the built tables can be inspected
+afterwards: `duckdb dbt/pfp.duckdb -c "select count(*) from silver.transactions"`. Set
+`PFP_DUCKDB_PATH` to put that file somewhere else.
+
+`sqlfluff` uses the **dbt** templater, so it compiles the project and needs the same
+environment variables `dbt build` does; without them it fails to connect rather than linting a
+placeholder. Its configuration is `[tool.sqlfluff.*]` in `pyproject.toml` (sqlfluff refuses to
+take `templater` from a config file in a subdirectory of the working directory).
+
+Two things to expect: the continuity test fails on a lake whose statement history has holes —
+that is the point, it names the periods you never archived (see
+[reconciliation](brain/concepts/reconciliation.md)) — and `dbt build` reads whatever
+`LAKEHOUSE_URI` points at, so pointing it at a prefix (`LAKEHOUSE_URI=s3://lakehouse/scratch`)
+is how you try things out without touching your real bronze.
 
 ## Reviewing CI
 

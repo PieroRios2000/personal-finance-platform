@@ -327,15 +327,21 @@
 **Description:** A dbt-duckdb project reading bronze (Delta on S3) and producing silver with tests.
 
 **Acceptance criteria:**
-- [ ] A minimal `delta_scan` read test against local S3, before any modeling.
-- [ ] `bronze.transactions` and `bronze.statements` sources, `silver/transactions` model (types, normalized description, currency, account).
-- [ ] dbt tests (not_null, accepted_values for currency), a continuity test (a period's closing balance = the next period's opening balance, per user and account), and sqlfluff config.
+- [x] A minimal `delta_scan` read test against local S3, before any modeling (`tests/test_delta_scan_integration.py`).
+- [x] `bronze.transactions` and `bronze.statements` sources, `silver/transactions` model (types, normalized description, currency, account).
+- [x] dbt tests (not_null, accepted_values for currency), a continuity test (a period's closing balance = the next period's opening balance, per user and account), and sqlfluff config.
 
 **Verification:**
-- [ ] `uv run dbt build` and `uv run sqlfluff lint dbt/models` green locally.
-- [ ] A synthetic statement missing between two periods fails the continuity test.
+- [x] `uv run dbt build` and `uv run sqlfluff lint dbt/models` green locally.
+- [x] A synthetic statement missing between two periods fails the continuity test (`tests/test_dbt_silver_integration.py`, red then green).
 
 **Dependencies:** T14 · **Files:** `dbt/**`, `pyproject.toml` · **Size:** M · **Skill:** source-driven-development
+
+**Notes:** both `dbt build` and `sqlfluff lint` need `--project-dir dbt --profiles-dir dbt` and
+the `.env` values exported (SETUP.md §6). Design calls in
+[ADR 0011](../brain/decisions/0011-delta-scan-as-a-dbt-source.md): a source is a `delta_scan()`
+call via dbt-duckdb's `external_location`, DuckDB is on disk (`dbt/pfp.duckdb`), and sqlfluff's
+config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 
 ### T17: Ephemeral integration environment — `ci/ephemeral-integration`
 
@@ -383,7 +389,7 @@
 **Description:** A second bank: proves the parser and dispatcher design scales.
 
 **Acceptance criteria:**
-- [x] A masked layout (T9), a synthetic fixture, and `parsers/scotiabank.py` registered in the dispatcher. No byte-prefix signature exists for this bank (unlike BCP's `$BOP$`), so it's registered with `detect=None` and found by a new password-fallback pass instead (see `brain/decisions/0011-scotiabank-password-fallback-detection.md`).
+- [x] A masked layout (T9), a synthetic fixture, and `parsers/scotiabank.py` registered in the dispatcher. No byte-prefix signature exists for this bank (unlike BCP's `$BOP$`), so it's registered with `detect=None` and found by a new password-fallback pass instead (see `brain/decisions/0012-scotiabank-password-fallback-detection.md`).
 - [x] Bank, account and period come from the PDF's content (the unmasked 8-digit client/account code, not the always-masked card number); the inbox (T12b) files its PDFs via `organizer.py`, extended for a file that can hold more than one `Statement`.
 - [x] Synthetic tests in CI reconcile. `real_pdf` (pending: needs your real Scotiabank PDF + `SCOTIABANK_PDF_PASSWORD`, skips gracefully without them — see the Scotiabank parser brain note for what's confirmed vs. inferred).
 

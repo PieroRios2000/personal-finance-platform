@@ -5,7 +5,7 @@ status: accepted
 date: 2026-09-13
 ---
 
-# ADR 0011: A second bank without a byte signature, and one PDF producing several statements
+# ADR 0012: A second bank without a byte signature, and one PDF producing several statements
 
 ## Context
 
