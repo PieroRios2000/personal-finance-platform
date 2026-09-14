@@ -22,7 +22,10 @@ and written to bronze; dbt builds silver with tests, and CI validates every PR. 
 Also integrated: [SETUP.md](../../SETUP.md) with environment setup (#10), the ephemeral
 environments and impact-based CI plan (#12), [CLAUDE.md](../../CLAUDE.md) with the rules for
 agents, the PR template and PROJECT.md kept current (#15), and the multi-user, multi-account,
-integral reconciliation plan (#19).
+integral reconciliation plan (#19). Local visualization: `dbt/pfp.duckdb` (T16's own build
+artifact) opens directly in DBeaver, silver with zero setup and bronze with a one-time DuckDB
+persistent-secret-and-views setup — [SETUP.md §7](../../SETUP.md#7-browsing-the-lake-in-dbeaver),
+[dbt silver](../components/dbt-silver.md).
 
 ## Components
 
