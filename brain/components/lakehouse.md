@@ -94,4 +94,6 @@ uv run pfp backfill --user piero --dry-run   # what re-parsing the archive would
 - [CLI](cli.md) — `pfp ingest` and `pfp backfill`, the only callers of `write_statement()`,
   `is_ingested()`, `replace_statement()` and `transactions_for_file()`.
 - [Inbox organizer](inbox-organizer.md) — produces the `ArchivedItem`s `pfp ingest` writes.
+- [dbt silver](dbt-silver.md) — reads these Delta tables through `delta_scan()`; also where
+  browsing bronze in DBeaver is documented, since it's the same on-disk DuckDB file dbt builds.
 - [Phase 1](../phases/phase-1.md)
