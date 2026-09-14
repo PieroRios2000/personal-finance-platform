@@ -100,6 +100,7 @@ def test_duckdb_delta_scan_reads_bronze_from_local_s3(user_id: str) -> None:
         opening_balance=Decimal("100.00"),
         closing_balance=Decimal("74.50"),
         account_kind="asset",
+        currency="PEN",
         transactions=[
             Transaction(
                 user_id=user_id,

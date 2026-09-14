@@ -37,6 +37,7 @@ def _statement(*, user_id: str = "piero", **overrides: Any) -> Statement:
         "opening_balance": Decimal("100.00"),
         "closing_balance": Decimal("74.50"),
         "account_kind": "asset",
+        "currency": "PEN",
         "transactions": [
             Transaction(
                 user_id=user_id,

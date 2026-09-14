@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from ingestion.schema import Statement, Transaction
+from ingestion.schema import AccountKind, Currency, Statement, Transaction
 from lakehouse.storage import storage_options, table_uri
 
 pytestmark = pytest.mark.integration
@@ -93,16 +93,27 @@ def _write(
     period_end: date,
     opening_balance: str,
     movement: str,
+    *,
+    bank: str = _BANK,
+    account_id: str = _ACCOUNT_ID,
+    account_kind: AccountKind = "asset",
+    currency: Currency = "PEN",
 ) -> None:
     """Write one synthetic statement to the test lake, reconciled by construction.
 
     A `movement` of zero means a period with no transactions at all, which is what
     a dormant month looks like; `Transaction` rejects a zero amount (ADR 0005).
+
+    `bank`/`account_id`/`account_kind`/`currency` default to the shared BCP
+    fixture every other test in this file uses; T18c's Scotiabank dual-currency
+    tests override them to write a second currency's statement for the very
+    same account and period.
     """
     from lakehouse import bronze
 
     file_sha256 = hashlib.sha256(
-        f"{period_start}:{opening_balance}:{movement}".encode()
+        f"{bank}:{account_id}:{currency}:{period_start}:{opening_balance}:"
+        f"{movement}".encode()
     ).hexdigest()
     amount = Decimal(movement)
     transactions = []
@@ -110,26 +121,27 @@ def _write(
         transactions.append(
             Transaction(
                 user_id=_USER_ID,
-                bank=_BANK,
-                account_id=_ACCOUNT_ID,
+                bank=bank,
+                account_id=account_id,
                 account_last4=_LAST4,
                 date=period_start,
                 description="  compra pos....visa  ",
                 amount=amount,
-                currency="PEN",
+                currency=currency,
                 source_file_sha256=file_sha256,
             )
         )
     statement = Statement(
         user_id=_USER_ID,
-        bank=_BANK,
-        account_id=_ACCOUNT_ID,
+        bank=bank,
+        account_id=account_id,
         account_last4=_LAST4,
         period_start=period_start,
         period_end=period_end,
         opening_balance=Decimal(opening_balance),
         closing_balance=Decimal(opening_balance) + amount,
-        account_kind="asset",
+        account_kind=account_kind,
+        currency=currency,
         transactions=transactions,
     )
     bronze.write_statement(statement, file_sha256)

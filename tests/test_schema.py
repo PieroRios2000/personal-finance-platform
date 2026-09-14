@@ -177,7 +177,10 @@ def test_statement_accepts_a_pen_currency() -> None:
 
 
 def test_statement_accepts_a_usd_currency() -> None:
-    statement = Statement(**_statement_kwargs(currency="USD"))
+    usd_transaction = Transaction(**_transaction_kwargs(currency="USD"))
+    statement = Statement(
+        **_statement_kwargs(currency="USD", transactions=[usd_transaction])
+    )
     assert statement.currency == "USD"
 
 
