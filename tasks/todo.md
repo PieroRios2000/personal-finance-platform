@@ -505,18 +505,20 @@ phases) as a navigable graph, not just the Mermaid map in `brain/README.md`. Def
 of the Phase 1 close checklist: nice-to-have, not a blocker.
 
 **Acceptance criteria:**
-- [ ] `brain/` opens as an Obsidian vault with no broken links: confirm its existing relative
-  markdown links (`[ADR 0009](../decisions/...)`) resolve in Obsidian's graph/backlinks view as-is
-  (Obsidian follows standard markdown links, not only `[[wikilinks]]`), fixing any that don't.
-- [ ] `.obsidian/` (personal, per-machine view state — panes, graph layout, theme) is gitignored,
-  never committed.
-- [ ] `SETUP.md` gets a short optional section: open `brain/` (or the repo root) as a vault, and
-  the Windows UNC path to this WSL2 checkout (`\\wsl.localhost\<distro>\...`) for Obsidian
-  running on the Windows side.
+- [x] `brain/` opens as an Obsidian vault with no broken links: confirmed with a link-checker
+  script over every relative markdown link in `brain/**/*.md` — none broken (Obsidian follows
+  standard markdown links, not only `[[wikilinks]]`, so no rework was needed).
+- [x] `.obsidian/` (personal, per-machine view state — panes, graph layout, theme) is
+  gitignored, never committed (was already in `.gitignore`; confirmed with `git check-ignore`).
+- [x] `SETUP.md` §8 added: the exact steps, and the Windows UNC path pattern
+  (`\\wsl.localhost\<distro>\...`) for Obsidian running on the Windows side.
 
 **Verification:**
 - [ ] Opening the vault shows every ADR, component and concept note connected in the graph view;
-  no note appears fully isolated unless it genuinely has no cross-links yet.
+  no note appears fully isolated unless it genuinely has no cross-links yet. (pending: the same
+  link-checker found the three files under `brain/_templates/` as the only isolated ones —
+  intentional, blank starting points with no content to link; the actual graph *rendering* is
+  Piero's own step, on his own Obsidian install.)
 
 **Dependencies:** none (brain/ already exists) · **Files:** `.gitignore`, `SETUP.md` ·
 **Size:** S · **Skill:** documentation-and-adrs
