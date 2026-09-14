@@ -61,10 +61,9 @@ max_line_length = 100
 project_dir = "dbt"
 profiles_dir = "dbt"
 
-[tool.sqlfluff.indentation]
-indented_ctes = false
-indented_joins = false
-
+# Only the capitalisation policies are set: sqlfluff's default is "consistent",
+# which accepts whichever style a new file happens to start with. Everything else
+# (indentation, layout) keeps sqlfluff's defaults.
 [tool.sqlfluff.rules.capitalisation.keywords]
 capitalisation_policy = "lower"
 

@@ -6,9 +6,8 @@ name: personal_finance_platform
 version: "0.1.0"
 profile: personal_finance_platform
 
-model-paths: ["models"]
-test-paths: ["tests"]
-clean-targets: ["target", "dbt_packages"]
+# No `model-paths`, `test-paths` or `clean-targets`: `models/`, `tests/` and
+# `target/` are dbt's own defaults, and restating them adds nothing to read.
 
 models:
   personal_finance_platform:
