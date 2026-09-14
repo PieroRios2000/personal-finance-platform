@@ -367,13 +367,13 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 **Description:** Show what changes in the data on every PR: the same ephemeral run against the base branch and against the PR's, compared.
 
 **Acceptance criteria:**
-- [ ] The job runs T17's flow for the base commit and for the PR's, with the same synthetic data in separate locations (a lake prefix and a DuckDB file per run).
-- [ ] `scripts/data_diff.py` compares the models built in the run using DuckDB: rows per model, columns and types, and differing rows (`EXCEPT` both ways, with a limited sample).
-- [ ] Results in Markdown in the job summary (`$GITHUB_STEP_SUMMARY`); warn mode, doesn't block.
+- [x] The job runs T17's flow for the base commit and for the PR's, with the same synthetic data in separate locations (a lake prefix and a DuckDB file per run). (pending: the `pr-data-diff` job itself — bringing up SeaweedFS, the checkout-swap, two real `pfp ingest` + `dbt build` runs — needs a live GitHub Actions PR run to confirm; locally verified piece by piece: the checkout-swap idiom is `benchmarks`' and `ephemeral-integration`'s own already-proven pattern, and `scripts/data_diff.py` itself is verified below.)
+- [x] `scripts/data_diff.py` compares the models built in the run using DuckDB: rows per model, columns and types, and differing rows (`EXCEPT` both ways, with a limited sample). (verified locally, both by `tests/test_data_diff.py` and by running the CLI for real against two hand-built `.duckdb` files with differing rows, an added column and a missing model — see the PR's Verification section.)
+- [x] Results in Markdown in the job summary (`$GITHUB_STEP_SUMMARY`); warn mode, doesn't block. (the job carries `continue-on-error: true` and is not in the branch ruleset's required checks — verifiable by reading `.github/workflows/ci.yml`. pending: the actual `$GITHUB_STEP_SUMMARY` rendering on a real run needs a live GitHub Actions PR run to confirm.)
 
 **Verification:**
-- [ ] TDD tests for the script with two small DuckDB databases.
-- [ ] A PR that changes a silver model shows the difference; one with no model changes shows "no changes".
+- [x] TDD tests for the script with two small DuckDB databases. (`tests/test_data_diff.py`, 11 tests, failing before `scripts/data_diff.py` existed and passing after — see the PR.)
+- [x] A PR that changes a silver model shows the difference; one with no model changes shows "no changes". (verified locally: `scripts/data_diff.py` run for real against two hand-built `.duckdb` files reports the row/column/sample difference correctly, and reports "No changes" when the two files are identical. pending: an actual PR triggering this through the live `pr-data-diff` job needs a live GitHub Actions PR run to confirm.)
 
 **Dependencies:** T17 · **Files:** `scripts/data_diff.py`, `tests/test_data_diff.py`, `.github/workflows/ci.yml` · **Size:** M · **Skill:** test-driven-development
 
@@ -452,6 +452,38 @@ checking and a credit product).
 
 **Dependencies:** T16, T18, T18a · **Files:** `dbt/models/silver/**`, tests · **Size:** M · **Skill:** test-driven-development
 
+### T18c: Currency-aware statement continuity — `fix/statement-continuity-currency`
+
+**Description:** `dbt/tests/assert_statement_continuity.sql` (T16) fails on any real Scotiabank
+statement with both Soles and Dólares activity in the same period — found 2026-09-14 while
+verifying T18a's PR by actually running `dbt build` against synthetic BCP + dual-currency
+Scotiabank data for the first time (T17's own synthetic seeding never included Scotiabank, so
+nothing had exercised this combination through `dbt build` before). Root cause: Scotiabank
+writes *two* `bronze.statements` rows for one real statement — one per currency (ADR 0012) —
+both sharing the same `account_id` and the same `period_start`/`period_end`. The test's
+`lag() ... partition by user_id, account_id order by period_start` sees two same-period rows
+for that account and hits its own documented "two statements covering the same period"
+failure mode, which is correct for an actual duplicate but a false positive here. `Statement`
+has no `currency` field to partition by instead — only `Transaction` does.
+
+**Acceptance criteria:**
+- [ ] `Statement` gains a `currency: Currency` field (mirrors `account_kind`, T18a's own
+  precedent: hardcoded per parser call — BCP always `"PEN"`; Scotiabank sets it per the
+  statement it's building, since it already produces one `Statement` per currency).
+- [ ] `lakehouse/bronze.py`'s `bronze/statements` pyarrow schema carries it through.
+- [ ] `assert_statement_continuity.sql`'s window functions partition by
+  `user_id, account_id, currency` instead of just `user_id, account_id`, so two
+  same-period, different-currency statements no longer collide.
+
+**Verification:**
+- [ ] A new integration or dbt-build test: synthetic BCP (single currency) plus a synthetic
+  Scotiabank statement with both PEN and USD activity in the same period both ingest and
+  `dbt build` passes with no continuity error.
+- [ ] A genuine duplicate (two statements, same account, same currency, same period) still
+  fails the test — the false-positive fix must not weaken the real check.
+
+**Dependencies:** T16, T18 · **Files:** `ingestion/schema.py`, `ingestion/parsers/{bcp,scotiabank}.py`, `lakehouse/bronze.py`, `dbt/tests/assert_statement_continuity.sql`, tests · **Size:** S · **Skill:** debugging-and-error-recovery
+
 ### T19: Phase close — `docs/phase-1-close`
 
 **Description:** Leave the phase presentable and turn on blocking for the numeric rules.
@@ -464,7 +496,7 @@ checking and a credit product).
 **Verification:**
 - [ ] Clone the repo into a clean folder and follow the README through to `dbt build` with no missing steps.
 
-**Dependencies:** T17b, T18b · **Files:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Size:** S
+**Dependencies:** T17b, T18b, T18c · **Files:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Size:** S
 
 ### T19b: Obsidian vault for the brain — `docs/obsidian-brain-vault`
 

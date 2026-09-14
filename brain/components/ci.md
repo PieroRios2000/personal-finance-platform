@@ -2,14 +2,16 @@
 type: component
 phase: 1
 status: in-progress
-task: T5, T15, T17
+task: T5, T15, T17, T17b
 ---
 
 # CI
 
 Automated GitHub Actions checks on every PR. Branch policy, quality gates, impact-based
-benchmarks and the ephemeral per-PR environment are built; T17b's base-vs-PR data diff is
-still open (details in the [plan](../../tasks/plan.md)).
+benchmarks, the ephemeral per-PR environment and the base-vs-PR data diff are all built
+(details in the [plan](../../tasks/plan.md)); what's left across all of them is a live
+GitHub Actions PR run to confirm the wiring itself, since this session can't trigger one
+(see each piece's own pending notes in `tasks/todo.md`).
 
 ## Pieces
 
@@ -21,7 +23,7 @@ still open (details in the [plan](../../tasks/plan.md)).
 | `benchmarks` job (T15) | Built | Measures the base branch and the PR on the same runner (only `ingestion/` and `lakehouse/` swapped between the two runs), `--benchmark-compare-fail=mean:20%`; warns until 2026-09-26 |
 | `ephemeral-integration` job (T17, [ADR 0007](../decisions/0007-ephemeral-per-pr-environments.md)) | Built | Local S3 up under a per-run project name, the synthetic fixture ingested twice (idempotency), `dbt build` (impact-narrowed per ADR 0008), `sqlfluff lint`, the `integration`-marked tests, then always torn down; logs and dbt's artifacts saved first |
 | `make poc` (T17) | Built | The same flow, once, locally, against Piero's real PDFs; prints only pass/fail and reconciliation *counts* (ADR 0004) |
-| T17b base-vs-PR data diff | Planned | Same run against base and PR compared with `scripts/data_diff.py`, published to the job summary |
+| `pr-data-diff` job (T17b, [ADR 0014](../decisions/0014-pr-data-diff-shared-instance-full-build.md)) | Built | Ingest + `dbt build` run twice against the base branch's commit and the PR's, isolated by a `LAKEHOUSE_URI` prefix and a `PFP_DUCKDB_PATH` on one shared SeaweedFS instance; [`scripts/data_diff.py`](../../scripts/data_diff.py) diffs the two `.duckdb` files and posts Markdown to the job summary. Warn-only, gated on the same `integration` output as `ephemeral-integration` but runs in parallel with it |
 
 ## Details that must not break
 
@@ -62,6 +64,14 @@ still open (details in the [plan](../../tasks/plan.md)).
   `assert_statement_continuity`) isn't dbt's idea of a descendant, so a narrowed build can
   miss it — bounded the same way ADR 0008 bounds every other miss, by the push-to-`develop`
   and weekly full run.
+- `pr-data-diff` (T17b, ADR 0014) shares its `LAKEHOUSE_URI` bucket and SeaweedFS instance
+  between the two runs it needs — isolation is a URI prefix (`pr-diff-base` / `pr-diff-pr`)
+  and a `PFP_DUCKDB_PATH`, not a second `docker compose -p` — and always runs a **full**
+  `dbt build` on both sides, never `DBT_SELECT`'s `state:modified+`: that narrowing only
+  makes sense against a persisted target, and both runs here start from an empty `.duckdb`
+  file. It carries `continue-on-error: true` at the **job** level and is never added to the
+  ruleset's required checks, so a real base-vs-PR difference — or even a broken base-branch
+  build — can never block a merge the way `ephemeral-integration` itself does.
 
 ## How to use it and how to verify it
 
@@ -71,7 +81,11 @@ still open (details in the [plan](../../tasks/plan.md)).
 run's `docker compose logs`, `dbt/target/run_results.json` and `dbt/logs/dbt.log` are on the
 run's **Artifacts** panel (`ephemeral-integration-logs`, kept 3 days). Locally, the same flow
 against real data is `make poc` (`make poc-up` first if you want to poke at the environment
-afterwards instead of it tearing itself down).
+afterwards instead of it tearing itself down). For `pr-data-diff`: its comparison is on the
+run's own **Summary** tab, not a separate artifact; `scripts/data_diff.py` itself can be run
+directly against any two `.duckdb` files (`uv run python -m scripts.data_diff --base
+BASE.duckdb --pr PR.duckdb`), which is also how `tests/test_data_diff.py` exercises it,
+against two small hand-built files, without a live SeaweedFS or dbt build.
 
 ## Related
 
@@ -83,4 +97,7 @@ afterwards instead of it tearing itself down).
   and what stops the map from hiding a real failure.
 - [ADR 0013: dbt state comparison via a base-ref worktree](../decisions/0013-dbt-state-comparison-via-a-base-ref-worktree.md)
   — how the narrowed `dbt build` gets a manifest to compare against.
+- [ADR 0014: pr-data-diff isolates by URI prefix, not by environment, and always builds in full](../decisions/0014-pr-data-diff-shared-instance-full-build.md)
+  — why the two runs share one SeaweedFS instance, and why the narrowing ADR 0013 built
+  doesn't apply here.
 - [Phase 1](../phases/phase-1.md)

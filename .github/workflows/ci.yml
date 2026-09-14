@@ -335,3 +335,125 @@ jobs:
       - name: tear down the ephemeral environment
         if: always()
         run: docker compose -p "$COMPOSE_PROJECT" down -v
+
+  # T17b: what dbt build actually *produces* differs between the base branch
+  # and the PR, not just whether it succeeds -- the same gap ADR 0007's own
+  # "Compare" bullet calls out. Runs ingest + dbt build twice against the same
+  # SeaweedFS instance, isolated by a LAKEHOUSE_URI prefix and a
+  # PFP_DUCKDB_PATH per run (ADR 0014), then diffs the two DuckDB files with
+  # scripts/data_diff.py. Gated on the same `integration` output as
+  # ephemeral-integration (same paths can change the data), and runs in
+  # parallel with it, not after: the two jobs build into entirely separate
+  # places, so there is nothing to wait for.
+  #
+  # Always a full `dbt build`, never DBT_SELECT's state:modified+: that
+  # narrowing compares against a *persisted* target from a previous run, and
+  # every run here starts from a brand new, empty DuckDB file -- selecting
+  # only "what changed" against nothing already built would just leave most
+  # models missing on one or both sides, not a meaningful comparison.
+  #
+  # Warn-only (T17b): job-level continue-on-error, and never added to the
+  # ruleset's required checks (brain/components/ci.md) -- a real difference
+  # between base and PR is expected and informative, and a broken base-branch
+  # build shouldn't block a PR that never touched it either.
+  pr-data-diff:
+    name: pr-data-diff
+    needs: changes
+    if: needs.changes.outputs.integration == 'true'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE_PROJECT: pfp-pr-diff-${{ github.event.pull_request.number || github.run_id }}
+      AWS_ENDPOINT_URL: http://localhost:8333
+      AWS_ACCESS_KEY_ID: pfp-ci-dummy-key
+      AWS_SECRET_ACCESS_KEY: pfp-ci-dummy-secret
+      AWS_REGION: us-east-1
+      PFP_ACCOUNT_KEY: pfp-ci-dummy-account-key-0000000000000000
+      PFP_USER: ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - run: uv sync --locked
+
+      - name: bring up the ephemeral environment
+        run: |
+          docker compose -p "$COMPOSE_PROJECT" up -d --wait seaweedfs
+          docker compose -p "$COMPOSE_PROJECT" run --rm bucket-init
+
+      # ingestion/lakehouse: same idiom as the benchmarks job (T15), swap the
+      # base ref's code in over the PR's -- safe there because Python only
+      # ever executes what's reachable from an import, so a file the PR added
+      # and base doesn't have just sits on disk, unused, once dispatcher.py
+      # etc. are swapped back to their base versions.
+      #
+      # dbt/ is deliberately NOT swapped the same way: `git checkout <ref> --
+      # dbt` only overwrites/creates paths <ref> has, it never deletes a path
+      # the PR added that base doesn't -- and unlike Python's import graph,
+      # dbt discovers every model by scanning models/ on disk, so a model file
+      # the PR added would stay right there and get built into the "base"
+      # run too, exactly the case this job most needs to catch. A worktree
+      # instead (ADR 0013's own established pattern, same reasoning) always
+      # contains exactly what the base ref has, nothing more.
+      - name: check out the base branch's code
+        run: |
+          git fetch origin "$PFP_BASE_REF"
+          git checkout "origin/$PFP_BASE_REF" -- ingestion lakehouse
+          git worktree add --detach /tmp/pfp-diff-base-ref "origin/$PFP_BASE_REF"
+
+      # continue-on-error so a broken base branch still lets the PR's own run
+      # and the restore step happen: a failed base build is itself worth
+      # surfacing in the log, not worth losing the rest of the job over.
+      #
+      # --profiles-dir stays the PR's own dbt/ (connection config, not
+      # modeling -- same call ADR 0013 makes for the same reason).
+      - name: base run (ingest + dbt build)
+        continue-on-error: true
+        env:
+          LAKEHOUSE_URI: s3://lakehouse/pr-diff-base
+          PFP_DUCKDB_PATH: /tmp/pfp-ci-diff-base.duckdb
+          PFP_INBOX_ROOT: /tmp/pfp-ci-diff-base-inbox
+          PFP_ARCHIVE_ROOT: /tmp/pfp-ci-diff-base-archive
+        run: |
+          uv run python -m scripts.seed_synthetic_inbox \
+            --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
+          uv run pfp ingest --user "$PFP_USER" \
+            --inbox-root "$PFP_INBOX_ROOT" --archive-root "$PFP_ARCHIVE_ROOT"
+          uv run dbt build --project-dir /tmp/pfp-diff-base-ref/dbt --profiles-dir dbt
+
+      # Always, so a failed base checkout or build can never leave this job
+      # diffing the PR's own code against itself. Only ingestion/lakehouse
+      # need restoring -- dbt/ was never swapped in place, it was built from
+      # the worktree above.
+      - name: restore the PR's code
+        if: always()
+        run: git checkout HEAD -- ingestion lakehouse
+
+      - name: PR run (ingest + dbt build)
+        continue-on-error: true
+        env:
+          LAKEHOUSE_URI: s3://lakehouse/pr-diff-pr
+          PFP_DUCKDB_PATH: /tmp/pfp-ci-diff-pr.duckdb
+          PFP_INBOX_ROOT: /tmp/pfp-ci-diff-pr-inbox
+          PFP_ARCHIVE_ROOT: /tmp/pfp-ci-diff-pr-archive
+        run: |
+          uv run python -m scripts.seed_synthetic_inbox \
+            --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
+          uv run pfp ingest --user "$PFP_USER" \
+            --inbox-root "$PFP_INBOX_ROOT" --archive-root "$PFP_ARCHIVE_ROOT"
+          uv run dbt build --project-dir dbt --profiles-dir dbt
+
+      - name: base-vs-PR data diff
+        run: |
+          uv run python -m scripts.data_diff \
+            --base /tmp/pfp-ci-diff-base.duckdb --pr /tmp/pfp-ci-diff-pr.duckdb \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: tear down the ephemeral environment
+        if: always()
+        run: docker compose -p "$COMPOSE_PROJECT" down -v
