@@ -21,7 +21,7 @@ class _Parser(NamedTuple):
     bank: str
     password_env: str
     detect: Callable[[Path], bool]
-    parse: Callable[..., Statement]
+    parse: Callable[..., list[Statement]]
 
 
 _PARSERS: tuple[_Parser, ...] = (
@@ -46,8 +46,8 @@ def detect(path: Path) -> _Parser:
 
 def parse(
     path: Path, *, user_id: str, file_sha256: str, password: str = ""
-) -> Statement:
-    """Detect `path`'s bank and parse it into a reconciled `Statement`."""
+) -> list[Statement]:
+    """Detect `path`'s bank and parse it into reconciled `Statement`s."""
     parser = detect(path)
     return parser.parse(
         path, user_id=user_id, file_sha256=file_sha256, password=password
