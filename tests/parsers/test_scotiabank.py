@@ -66,6 +66,22 @@ def test_parse_marks_every_statement_as_a_liability_account(tmp_path: Path) -> N
     assert all(statement.account_kind == "liability" for statement in statements)
 
 
+def test_parse_sets_each_statements_own_currency(tmp_path: Path) -> None:
+    """T18c: parse() builds one Statement per currency in a loop -- each one
+    must carry that same loop's own currency, not a hardcoded constant (BCP's
+    "PEN" wouldn't be true here, since this parser also produces "USD"
+    statements)."""
+    path = tmp_path / "statement.pdf"
+    path.write_bytes(scotiabank_statement_pdf())
+
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    by_currency = {s.currency: s for s in statements}
+    assert set(by_currency) == {"PEN", "USD"}
+    for currency, statement in by_currency.items():
+        assert all(t.currency == currency for t in statement.transactions)
+
+
 def test_parse_reads_the_debt_sign_convention(tmp_path: Path) -> None:
     """A charge has no suffix and adds to debt (positive); a payment ends in
     "-" and reduces it (negative) — the opposite of BCP's convention, since

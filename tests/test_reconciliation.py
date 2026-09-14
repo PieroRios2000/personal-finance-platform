@@ -25,6 +25,7 @@ def _statement(**overrides: Any) -> Statement:
         "opening_balance": Decimal("100.00"),
         "closing_balance": Decimal("100.00"),
         "account_kind": "asset",
+        "currency": "PEN",
         "transactions": [],
     }
     kwargs.update(overrides)

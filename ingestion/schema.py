@@ -21,6 +21,12 @@ In short:
   It lives on `Statement`, not `Transaction` — a bank's product type doesn't vary per
   statement, the same reasoning `opening_balance`/`closing_balance` already follow.
   See ADR 0015.
+- `Statement.currency` says which of the two currencies a whole statement period is
+  in. A Scotiabank credit-card statement is two independent ledgers (ADR 0012), so
+  `ingestion/parsers/scotiabank.py` builds one `Statement` per currency that has
+  activity; BCP is Soles-only, so it always sets `"PEN"`. Every transaction in a
+  statement must share its `currency` — enforced by the same consistency check that
+  already requires them to share `user_id`/`bank`/`account_id`. See ADR 0016.
 """
 
 import hashlib
@@ -160,6 +166,7 @@ class Statement(BaseModel):
     declared_charges_total: Decimal | None = None
     declared_credits_total: Decimal | None = None
     account_kind: AccountKind
+    currency: Currency
     transactions: list[Transaction] = Field(default_factory=list)
 
     @field_validator(
@@ -179,13 +186,19 @@ class Statement(BaseModel):
         if self.period_end < self.period_start:
             raise ValueError("period_end cannot be before period_start")
         for transaction in self.transactions:
-            if (transaction.user_id, transaction.bank, transaction.account_id) != (
+            if (
+                transaction.user_id,
+                transaction.bank,
+                transaction.account_id,
+                transaction.currency,
+            ) != (
                 self.user_id,
                 self.bank,
                 self.account_id,
+                self.currency,
             ):
                 raise ValueError(
                     "every transaction in a statement must belong to the "
-                    "same user, bank and account as the statement"
+                    "same user, bank, account and currency as the statement"
                 )
         return self

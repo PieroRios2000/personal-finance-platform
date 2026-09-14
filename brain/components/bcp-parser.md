@@ -110,6 +110,15 @@ balance is money on hand, never debt owed. Hardcoded here, not read from the PDF
 [ADR 0015](../decisions/0015-account-kind-asset-or-liability.md) for why, and for how it
 reaches `silver.transactions` for T18b's transfer matching.
 
+## Currency (T18c)
+
+Every `Statement` this parser builds also gets `currency="PEN"`: BCP is Soles-only, confirmed
+from this module's own docstring ("a BCP account statement covers one account in one currency")
+— every `Transaction` built here was already hardcoded to `"PEN"`. See
+[ADR 0016](../decisions/0016-currency-aware-statement-continuity.md) for why the field exists
+on `Statement` at all (the continuity test needed it to stop a false positive on Scotiabank's
+dual-currency statements) and why BCP's own case is this simple.
+
 ## How to use it and how to verify it
 
 ```python
@@ -131,6 +140,7 @@ from a harmful one. It never asserts or prints an extracted value (ADR 0004).
 ## Related
 
 - [ADR 0015: Account kind (asset/liability)](../decisions/0015-account-kind-asset-or-liability.md) — why this parser hardcodes `account_kind="asset"`.
+- [ADR 0016: Currency-aware statement continuity](../decisions/0016-currency-aware-statement-continuity.md) — why this parser hardcodes `currency="PEN"`.
 - [ADR 0004: Real PDFs](../decisions/0004-real-pdfs-never-leave-your-machine.md) — why the real-PDF test only checks pass/fail.
 - [Quality bar](quality-bar.md) — the exceptions process this component uses.
 - [Reconciliation](../concepts/reconciliation.md) — `parse()` calls `reconcile()` before returning.

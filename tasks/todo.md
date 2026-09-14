@@ -467,20 +467,28 @@ failure mode, which is correct for an actual duplicate but a false positive here
 has no `currency` field to partition by instead — only `Transaction` does.
 
 **Acceptance criteria:**
-- [ ] `Statement` gains a `currency: Currency` field (mirrors `account_kind`, T18a's own
+- [x] `Statement` gains a `currency: Currency` field (mirrors `account_kind`, T18a's own
   precedent: hardcoded per parser call — BCP always `"PEN"`; Scotiabank sets it per the
   statement it's building, since it already produces one `Statement` per currency).
-- [ ] `lakehouse/bronze.py`'s `bronze/statements` pyarrow schema carries it through.
-- [ ] `assert_statement_continuity.sql`'s window functions partition by
+- [x] `lakehouse/bronze.py`'s `bronze/statements` pyarrow schema carries it through.
+- [x] `assert_statement_continuity.sql`'s window functions partition by
   `user_id, account_id, currency` instead of just `user_id, account_id`, so two
   same-period, different-currency statements no longer collide.
 
 **Verification:**
-- [ ] A new integration or dbt-build test: synthetic BCP (single currency) plus a synthetic
+- [x] A new integration or dbt-build test: synthetic BCP (single currency) plus a synthetic
   Scotiabank statement with both PEN and USD activity in the same period both ingest and
-  `dbt build` passes with no continuity error.
-- [ ] A genuine duplicate (two statements, same account, same currency, same period) still
-  fails the test — the false-positive fix must not weaken the real check.
+  `dbt build` passes with no continuity error. Live-verified against an isolated local
+  SeaweedFS (`docker compose -p pfp-poc-t18c`, its own project name and host port, distinct
+  from the `pfp-poc` instance already running under another session at the time, which was
+  left untouched): reproduced the exact reported failure
+  (`Got 1 result, configured to fail if != 0`) before the SQL fix, green after it.
+- [x] A genuine duplicate (two statements, same account, same currency, same period) still
+  fails the test — the false-positive fix must not weaken the real check. Live-verified the
+  same way; `tests/test_dbt_silver_integration.py`'s full 7-test suite passes
+  (`7 passed in 108.08s`). (pending: only run against synthetic fixtures in an isolated,
+  throwaway lake prefix — Piero's own real Scotiabank data, once he runs `dbt build` against
+  it himself, is the final confirmation this session can't produce.)
 
 **Dependencies:** T16, T18 · **Files:** `ingestion/schema.py`, `ingestion/parsers/{bcp,scotiabank}.py`, `lakehouse/bronze.py`, `dbt/tests/assert_statement_continuity.sql`, tests · **Size:** S · **Skill:** debugging-and-error-recovery
 
