@@ -195,6 +195,30 @@ def test_silver_normalizes_the_description(lake: str, tmp_path: Path) -> None:
     assert descriptions == [("COMPRA POS VISA",)]
 
 
+def test_silver_carries_account_kind_without_duplicating_rows(
+    lake: str, tmp_path: Path
+) -> None:
+    """T18a: account_kind lives on bronze.statements, not bronze.transactions,
+    and this one account gets three statement rows here (one per period) --
+    exactly the shape that would fan a naive join out into duplicates. 3
+    transactions written, 3 rows must come back, each "asset" (these are all
+    BCP fixtures), never 9."""
+    for period in (_JANUARY, _FEBRUARY, _MARCH):
+        _write(*period)
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    import duckdb
+
+    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+        rows = connection.execute(
+            "select account_kind from silver.transactions"
+        ).fetchall()
+
+    assert rows == [("asset",), ("asset",), ("asset",)]
+
+
 def test_a_missing_month_fails_the_continuity_test(lake: str, tmp_path: Path) -> None:
     """The proof T16 asks for: a gap between two archived periods is an error."""
     _write(*_JANUARY)

@@ -19,4 +19,6 @@ sources:
       - name: statements
         description: >
           One row per ingested statement period, with the balances and totals the
-          PDF itself declares. The continuity test reads this table.
+          PDF itself declares, and `account_kind` (`asset`/`liability`, ADR 0014) --
+          what that account's balance represents. The continuity test reads this
+          table; `silver.transactions` joins it on `account_id` for `account_kind`.
