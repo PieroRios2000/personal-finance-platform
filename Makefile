@@ -5,7 +5,7 @@
 
 BASE ?= origin/develop
 
-.PHONY: check-fast check-task check-full poc-up poc-down
+.PHONY: check-fast check-task check-full poc poc-up poc-down
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -35,3 +35,15 @@ poc-up:
 
 poc-down:
 	docker compose -p pfp-poc down -v
+
+# The same flow as CI's ephemeral-integration job (T17, ADR 0007), but against
+# Piero's own real PDFs instead of the synthetic fixture, and only once, locally.
+# scripts/poc.py never prints a raw pfp/dbt line, only the ones that are
+# amount-free by construction (see its own docstring) -- the point is a report
+# ADR 0004 allows, not a debugging transcript. Always tears the environment
+# down, success or failure, the same way CI's `if: always()` does.
+poc:
+	$(MAKE) poc-up
+	@trap '$(MAKE) poc-down' EXIT; \
+	set -a && . .env && set +a && \
+	uv run python -m scripts.poc
