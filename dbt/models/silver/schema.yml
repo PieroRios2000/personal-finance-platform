@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: transactions
+    description: >
+      Silver: one row per bank movement, typed and with its description
+      re-normalized. Built from `bronze.transactions` (T16).
+    columns:
+      - name: user_id
+        description: Who the movement belongs to (ADR 0009). Bronze's partition column.
+        data_tests:
+          - not_null
+      - name: bank
+        description: The bank the statement came from, e.g. BCP.
+        data_tests:
+          - not_null
+      - name: account_id
+        description: HMAC-SHA256 of the bank and the full account number (ADR 0005).
+        data_tests:
+          - not_null
+      - name: account_last4
+        description: The last 4 digits of the account number; the only part ever stored.
+        data_tests:
+          - not_null
+      - name: date
+        description: The date the bank posted the movement.
+        data_tests:
+          - not_null
+      - name: description
+        description: The movement's description, re-normalized (upper case, single spaces).
+        data_tests:
+          - not_null
+      - name: amount
+        description: Signed DECIMAL(18, 2); negative is a charge, positive a credit.
+        data_tests:
+          - not_null
+      - name: currency
+        description: The two currencies this project handles (`ingestion.schema.Currency`).
+        data_tests:
+          - not_null
+          # `arguments:` rather than a top-level `values:`: dbt-core 1.10.5+
+          # deprecated the older form (MissingArgumentsPropertyInGenericTest).
+          - accepted_values:
+              arguments:
+                values: ["PEN", "USD"]
+      - name: source_file_sha256
+        description: sha256 of the PDF this movement was parsed from (T7); never its name.
+        data_tests:
+          - not_null
+      - name: ingested_at
+        description: When bronze wrote this row. Not null, but not a business key.
+        data_tests:
+          - not_null

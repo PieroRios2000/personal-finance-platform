@@ -1,0 +1,22 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: >
+      Append-only Delta tables written by `lakehouse/bronze.py` (T14), partitioned
+      by `user_id` (ADR 0009) and located by `LAKEHOUSE_URI` (ADR 0006).
+    meta:
+      # dbt-duckdb resolves a source to whatever `external_location` says, and it
+      # accepts a function call, not just a path — so `delta_scan()` is the whole
+      # mechanism: no pre-hook, no staged view, no `dbt-duckdb` plugin. `{name}`
+      # is filled in with each table's name below (str.format), while `{{ }}` is
+      # rendered by dbt first. See ADR 0011.
+      # https://github.com/duckdb/dbt-duckdb#reading-from-external-files
+      external_location: "delta_scan('{{ env_var('LAKEHOUSE_URI').rstrip('/') }}/bronze/{name}')"
+    tables:
+      - name: transactions
+        description: One row per bank movement, as parsed and reconciled from a statement PDF.
+      - name: statements
+        description: >
+          One row per ingested statement period, with the balances and totals the
+          PDF itself declares. The continuity test reads this table.

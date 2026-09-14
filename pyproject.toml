@@ -3,7 +3,9 @@ name = "personal-finance-platform"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "dbt-duckdb>=1.11.0",
     "deltalake>=1.6.3",
+    "duckdb>=1.5.5",
     "pdfplumber>=0.11.10",
     "pikepdf>=10.13.0.post1",
     "pyarrow>=25.0.1",
@@ -33,10 +35,49 @@ dev = [
     "pytest-benchmark>=5.3.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.7",
+    "sqlfluff>=4.3.0",
+    "sqlfluff-templater-dbt>=4.3.0",
 ]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+# sqlfluff for the dbt project's SQL (T16). It lives here rather than in a
+# `dbt/.sqlfluff` because sqlfluff refuses to take `templater` from a config file
+# in a subdirectory of the working directory ("Templater cannot be set in a
+# .sqlfluff file in a subdirectory of the current working directory"), and
+# because every other tool in this repo is configured from this one file.
+# Run from the repository root: `uv run sqlfluff lint dbt/models`.
+[tool.sqlfluff.core]
+# The dbt templater, not the plain jinja one, so `source()` resolves to the real
+# `delta_scan(...)` expression dbt-duckdb generates and the linter sees the SQL
+# DuckDB will actually run. It needs the same environment variables `dbt build`
+# does (see `dbt/profiles.yml`).
+templater = "dbt"
+dialect = "duckdb"
+max_line_length = 100
+
+[tool.sqlfluff.templater.dbt]
+project_dir = "dbt"
+profiles_dir = "dbt"
+
+# Only the capitalisation policies are set: sqlfluff's default is "consistent",
+# which accepts whichever style a new file happens to start with. Everything else
+# (indentation, layout) keeps sqlfluff's defaults.
+[tool.sqlfluff.rules.capitalisation.keywords]
+capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.capitalisation.functions]
+extended_capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.capitalisation.identifiers]
+extended_capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.capitalisation.literals]
+capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.capitalisation.types]
+extended_capitalisation_policy = "lower"
 
 [tool.mypy]
 strict = true
