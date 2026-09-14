@@ -26,6 +26,12 @@ otherwise collide on one key.
   existing silver rows via the MERGE, not skips them as already-present or duplicates them.
 - [ ] `brain/concepts/business-key.md`'s "Open question" section is updated to reflect the
   resolution, not left contradicting the code.
+- [ ] A new dbt test, per account per statement period: `sum(silver.transactions.amount)`
+  for that period equals `bronze.statements.closing_balance - opening_balance` for the
+  matching statement. This is the same arithmetic `ingestion/reconciliation.py` (T8) already
+  checks once in Python at parse time — re-checked here at the model layer specifically to
+  catch anything this task's own MERGE gets wrong (a silently dropped or duplicated row) that
+  a check upstream of the MERGE never would.
 
 **Verification:**
 - [ ] Two synthetic transactions, same date/amount/description/account, in one statement:
@@ -36,10 +42,13 @@ otherwise collide on one key.
   the *old* description is gone from silver, not duplicated alongside the new one.
 - [ ] `dbt build` a second time with no bronze changes: 0 rows inserted or updated (dbt's own
   incremental run results confirm this, not just "it didn't error").
+- [ ] The new balance-reconciliation test: passes on a normal synthetic fixture; fails when a
+  synthetic MERGE scenario is deliberately broken (a row dropped on purpose) — proving the
+  test actually catches what it's meant to, not just that it runs.
 
 **Dependencies:** T19 (Phase 1 closed) · **Files:** `dbt/models/silver/transactions.sql`,
-`dbt/models/silver/schema.yml`, `brain/concepts/business-key.md`, tests · **Size:** M ·
-**Skill:** test-driven-development
+`dbt/models/silver/schema.yml`, `dbt/tests/`, `brain/concepts/business-key.md`, tests ·
+**Size:** M · **Skill:** test-driven-development
 
 ### T21: Dagster orchestration — `feat/dagster-orchestration`
 
@@ -106,7 +115,20 @@ feature pipeline actually wants, not silver's flat table.
 - [ ] `dim_date`, `dim_account` (carries `account_kind`, T18a, and `bank`), `dim_user`,
   `dim_bank`: each with a clear grain, stated in its own `schema.yml` description.
 - [ ] `fact_transactions`: one row per business key (T20), foreign keys into every dimension
-  above, `amount`/`currency`/`date` as measures/degenerate attributes.
+  above, `amount`/`currency`/`date` as measures/degenerate attributes. `currency` is never
+  collapsed or converted — every currency-sliced query stays sliced (no FX, Piero's explicit
+  call, `tasks/plan-phase2.md`'s architecture decisions).
+- [ ] `fact_transactions` gains `flow_type`: `ingreso` / `egreso` / `pago`, derived from
+  `account_kind` (T18a) + `amount`'s sign, not each bank's own raw sign convention directly —
+  `asset`+positive -> `ingreso`, `asset`+negative -> `egreso`, `liability`+positive (a charge)
+  -> `egreso`, `liability`+negative (a payment/credit) -> `pago` (its own bucket, not folded
+  into `ingreso` — usually a transfer from the user's own other account, already flagged by
+  `is_internal_transfer` from T18b, or a refund; genuinely ambiguous which, so it isn't
+  counted as income either way). Every spend/income aggregate in this task's own verification
+  filters `is_internal_transfer = false`, so a credit-card payment funded by a same-user
+  transfer is never double-counted as an expense on one side and silently untouched on the
+  other. `flow_type` is direction only — it doesn't anticipate or touch Phase 3's
+  `dim_category`.
 - [ ] No `dim_category` yet — Phase 3's, not built ahead of the model that fills it (see
   `tasks/plan-phase2.md`'s architecture decisions for why).
 - [ ] `dim_account`'s grain confirmed (one row per `account_id` ever seen, no SCD — see
@@ -119,6 +141,11 @@ feature pipeline actually wants, not silver's flat table.
   (dbt `relationships` tests on every FK, not just `not_null`).
 - [ ] A synthetic query joining `fact_transactions` to all four dimensions produces a
   believable answer (e.g. "spend by bank by month") — run for real, not just modeled.
+- [ ] A synthetic scenario with one BCP checking account and one Scotiabank credit card, and a
+  transfer between them (T18b): summed `egreso` across both accounts, filtered to
+  `is_internal_transfer = false`, matches the expected total by hand — proving `flow_type`
+  gives a coherent cross-bank answer despite BCP and Scotiabank's opposite raw sign
+  conventions, and that the transfer itself doesn't inflate it.
 
 **Dependencies:** T20 · **Files:** `dbt/models/gold/**`, tests · **Size:** M · **Skill:**
 test-driven-development

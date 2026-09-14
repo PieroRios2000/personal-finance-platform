@@ -18,7 +18,12 @@ closes the gaps PROJECT.md calls "the most important gap for data-leadership rol
   drives a dbt `MERGE`, and this phase resolves that note's own open question (two legitimate
   same-day, same-amount, same-merchant purchases colliding on one key).
 - **Gold**: a star schema (`fact_transactions` + dimensions) — the shape a BI tool or a
-  Phase 3 ML feature pipeline actually wants, not silver's flat table.
+  Phase 3 ML feature pipeline actually wants, not silver's flat table. Every currency stays
+  separate (no FX conversion, ever — Piero's explicit call), and direction is standardized to
+  `ingreso`/`egreso`/`pago` per account kind, not each bank's own raw sign convention.
+- **Ingestion correctness as a model-layer test, not just a Python-level check**: each
+  statement's own declared balance delta re-verifies T20's incremental MERGE output, catching
+  anything the MERGE gets wrong that T8's existing per-parse reconciliation never would.
 - **Quality and observability**: Elementary, as a dbt package — anomaly detection and
   column-level lineage with no infrastructure of its own.
 - **Catalog and lineage**: OpenMetadata, ingesting from dbt's own manifest and DuckDB's
@@ -52,6 +57,9 @@ collided on a number more than once).
 | Business-key collision (T3a's open question) | An occurrence number, scoped to *one source file*: `row_number() over (partition by business_key order by <the row's position in that PDF>)` appended to the key | The concept note itself already named this as "one option"; two identical-looking purchases in the *same* statement are legitimately different rows, but the same purchase appearing in two different (possibly regenerated) PDFs of the *same* period should still collide — scoping the tiebreak to one file, not globally, is what keeps both true |
 | Incremental strategy | dbt `materialized='incremental'`, `incremental_strategy='merge'`, `unique_key` = the business key above | DuckDB supports `merge` natively (unlike some warehouses needing `delete+insert`); avoids a full silver rebuild every run, the actual Phase 2 ask |
 | Gold shape | Star schema: `fact_transactions` (one row per business key) + `dim_date`, `dim_account`, `dim_user`, `dim_bank` | PROJECT.md's own "fact_transactions + dimensions"; no `dim_category` yet — that dimension is Phase 3's, and shipping an empty/placeholder one now would just be schema speculation ahead of the model that fills it |
+| Currency | **No FX conversion, ever.** Every currency-aware view (gold included) stays partitioned by `currency`; PEN and USD are never summed into one number | Piero's explicit call (2026-09-14): an FX rate is one more moving, external input this project would have to source and keep current, for a number (a blended "net worth") nobody asked for. Accounts, and a credit card's debt specifically, already read cleanest kept separate by currency — that separation is a feature, not a gap to paper over |
+| Flow direction (`flow_type`) | A derived column on `fact_transactions`: `ingreso` / `egreso` / `pago`, computed from `account_kind` (T18a) + sign — never the bank's own raw sign convention directly. `asset` + positive -> `ingreso`; `asset` + negative -> `egreso`; `liability` + positive (a charge) -> `egreso`; `liability` + negative (a payment/credit) -> `pago`, kept distinct from `ingreso` | Piero's own framing (2026-09-14): BCP and Scotiabank's opposite sign conventions (T18a) mean summing raw `amount` across a checking account and a credit card gives a number with no coherent meaning. A `pago` on a liability account is usually a transfer from the user's own other account (already flagged separately by `is_internal_transfer`, T18b) or a refund — genuinely ambiguous which, so it gets its own bucket rather than being forced into `ingreso` and inflating "income." `flow_type` is direction, not merchant category — doesn't touch or anticipate Phase 3's `dim_category` |
+| Ingestion correctness, at the model layer | A dbt test compares each account's summed `silver.transactions` amounts per statement period against that same statement's own declared opening/closing balance delta (`bronze.statements`) | Piero's own framing (2026-09-14): `ingestion/reconciliation.py` already checks this once, in Python, at parse time (T8) — but T20's MERGE is new code with its own chance to silently drop or duplicate a row. Re-checking the same arithmetic at the model layer, from the data that's actually in the lake, catches what the MERGE gets wrong that a Python-level check upstream of it never would |
 | Quality/observability | **Elementary** (chosen 2026-09-14, over Great Expectations) | Runs as a dbt package, no separate service — fits a local, zero-cost install the way GX's own separate validation layer wouldn't; dbt-native anomaly detection and column-level lineage |
 | Catalog/lineage | **OpenMetadata** (chosen 2026-09-14, over DataHub) | Lighter of the two, still real column-level lineage; DataHub is more extensible but needs platform-engineering time this is a one-person install. Even so: needs 6 GiB+ RAM, Postgres/MySQL and Elasticsearch — see Risks, this is the phase's one real resource risk and gets its own checkpoint before the rest of the phase depends on it |
 
@@ -114,6 +122,15 @@ See [`tasks/todo-phase2.md`](todo-phase2.md) for full acceptance criteria per ta
 4. **Business-key collision:** resolved via a per-file occurrence number (see Architecture
    decisions above) — carries forward T3a's own tracked open question rather than leaving it
    open into Phase 2.
+5. **No FX conversion, anywhere:** currencies (and a credit card's debt) stay separated, never
+   blended into one number. Considered and explicitly rejected — see Architecture decisions.
+6. **`flow_type`, not raw sign:** `fact_transactions` gets an `account_kind`-aware `ingreso` /
+   `egreso` / `pago` column, so spend/income analysis doesn't depend on knowing each bank's own
+   sign convention. See Architecture decisions for the exact mapping and why `pago` is its own
+   bucket rather than folded into `ingreso`.
+7. **Balance totals double as an ingestion-correctness test**, not just a display number — a
+   dbt test re-checks T20's MERGE output against each statement's own declared balance delta,
+   promoting T8's existing Python-level reconciliation check into a model-layer one too.
 
 ## Open questions
 
