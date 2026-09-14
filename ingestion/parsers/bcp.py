@@ -429,6 +429,10 @@ def parse(
         period_end=period_end,
         opening_balance=opening_balance,
         closing_balance=closing_balance,
+        # BCP is a checking account: its balance is money on hand, not debt
+        # owed. A constant, not read from the PDF — a bank's own product
+        # type doesn't vary per statement (T18a, ADR 0014).
+        account_kind="asset",
         transactions=transactions,
     )
     reconcile(statement)
