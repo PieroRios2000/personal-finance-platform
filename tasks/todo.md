@@ -467,20 +467,28 @@ failure mode, which is correct for an actual duplicate but a false positive here
 has no `currency` field to partition by instead — only `Transaction` does.
 
 **Acceptance criteria:**
-- [ ] `Statement` gains a `currency: Currency` field (mirrors `account_kind`, T18a's own
+- [x] `Statement` gains a `currency: Currency` field (mirrors `account_kind`, T18a's own
   precedent: hardcoded per parser call — BCP always `"PEN"`; Scotiabank sets it per the
   statement it's building, since it already produces one `Statement` per currency).
-- [ ] `lakehouse/bronze.py`'s `bronze/statements` pyarrow schema carries it through.
-- [ ] `assert_statement_continuity.sql`'s window functions partition by
+- [x] `lakehouse/bronze.py`'s `bronze/statements` pyarrow schema carries it through.
+- [x] `assert_statement_continuity.sql`'s window functions partition by
   `user_id, account_id, currency` instead of just `user_id, account_id`, so two
   same-period, different-currency statements no longer collide.
 
 **Verification:**
-- [ ] A new integration or dbt-build test: synthetic BCP (single currency) plus a synthetic
+- [x] A new integration or dbt-build test: synthetic BCP (single currency) plus a synthetic
   Scotiabank statement with both PEN and USD activity in the same period both ingest and
-  `dbt build` passes with no continuity error.
-- [ ] A genuine duplicate (two statements, same account, same currency, same period) still
-  fails the test — the false-positive fix must not weaken the real check.
+  `dbt build` passes with no continuity error. Live-verified against an isolated local
+  SeaweedFS (`docker compose -p pfp-poc-t18c`, its own project name and host port, distinct
+  from the `pfp-poc` instance already running under another session at the time, which was
+  left untouched): reproduced the exact reported failure
+  (`Got 1 result, configured to fail if != 0`) before the SQL fix, green after it.
+- [x] A genuine duplicate (two statements, same account, same currency, same period) still
+  fails the test — the false-positive fix must not weaken the real check. Live-verified the
+  same way; `tests/test_dbt_silver_integration.py`'s full 7-test suite passes
+  (`7 passed in 108.08s`). (pending: only run against synthetic fixtures in an isolated,
+  throwaway lake prefix — Piero's own real Scotiabank data, once he runs `dbt build` against
+  it himself, is the final confirmation this session can't produce.)
 
 **Dependencies:** T16, T18 · **Files:** `ingestion/schema.py`, `ingestion/parsers/{bcp,scotiabank}.py`, `lakehouse/bronze.py`, `dbt/tests/assert_statement_continuity.sql`, tests · **Size:** S · **Skill:** debugging-and-error-recovery
 
@@ -505,18 +513,20 @@ phases) as a navigable graph, not just the Mermaid map in `brain/README.md`. Def
 of the Phase 1 close checklist: nice-to-have, not a blocker.
 
 **Acceptance criteria:**
-- [ ] `brain/` opens as an Obsidian vault with no broken links: confirm its existing relative
-  markdown links (`[ADR 0009](../decisions/...)`) resolve in Obsidian's graph/backlinks view as-is
-  (Obsidian follows standard markdown links, not only `[[wikilinks]]`), fixing any that don't.
-- [ ] `.obsidian/` (personal, per-machine view state — panes, graph layout, theme) is gitignored,
-  never committed.
-- [ ] `SETUP.md` gets a short optional section: open `brain/` (or the repo root) as a vault, and
-  the Windows UNC path to this WSL2 checkout (`\\wsl.localhost\<distro>\...`) for Obsidian
-  running on the Windows side.
+- [x] `brain/` opens as an Obsidian vault with no broken links: confirmed with a link-checker
+  script over every relative markdown link in `brain/**/*.md` — none broken (Obsidian follows
+  standard markdown links, not only `[[wikilinks]]`, so no rework was needed).
+- [x] `.obsidian/` (personal, per-machine view state — panes, graph layout, theme) is
+  gitignored, never committed (was already in `.gitignore`; confirmed with `git check-ignore`).
+- [x] `SETUP.md` §8 added: the exact steps, and the Windows UNC path pattern
+  (`\\wsl.localhost\<distro>\...`) for Obsidian running on the Windows side.
 
 **Verification:**
 - [ ] Opening the vault shows every ADR, component and concept note connected in the graph view;
-  no note appears fully isolated unless it genuinely has no cross-links yet.
+  no note appears fully isolated unless it genuinely has no cross-links yet. (pending: the same
+  link-checker found the three files under `brain/_templates/` as the only isolated ones —
+  intentional, blank starting points with no content to link; the actual graph *rendering* is
+  Piero's own step, on his own Obsidian install.)
 
 **Dependencies:** none (brain/ already exists) · **Files:** `.gitignore`, `SETUP.md` ·
 **Size:** S · **Skill:** documentation-and-adrs

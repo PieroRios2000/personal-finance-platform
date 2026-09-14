@@ -37,6 +37,7 @@ def _statement(*, user_id: str = "piero", **overrides: Any) -> Statement:
         "opening_balance": Decimal("100.00"),
         "closing_balance": Decimal("74.50"),
         "account_kind": "asset",
+        "currency": "PEN",
         "transactions": [
             Transaction(
                 user_id=user_id,
@@ -190,6 +191,33 @@ def test_write_statement_carries_account_kind_into_bronze_statements(
         str(lakehouse / "bronze" / "transactions")
     ).to_pyarrow_table()
     assert "account_kind" not in transactions.column_names
+
+
+def test_write_statement_carries_currency_into_bronze_statements(
+    lakehouse: Path,
+) -> None:
+    """T18c: bronze/statements needs its own currency column to partition the
+    continuity test by -- unlike account_kind, bronze/transactions already has
+    one (Transaction always has), so this only adds it to statements."""
+    from deltalake import DeltaTable
+
+    usd_transaction = Transaction(
+        user_id="piero",
+        bank="BCP",
+        account_id=VALID_ACCOUNT_ID,
+        account_last4="1234",
+        date=date(2026, 1, 15),
+        description="TEST MOVEMENT",
+        amount=Decimal("-25.50"),
+        currency="USD",
+        source_file_sha256=VALID_SHA256,
+    )
+    bronze.write_statement(
+        _statement(currency="USD", transactions=[usd_transaction]), VALID_SHA256
+    )
+
+    table = DeltaTable(str(lakehouse / "bronze" / "statements")).to_pyarrow_table()
+    assert table.to_pylist()[0]["currency"] == "USD"
 
 
 def test_write_statement_never_stores_a_file_name(lakehouse: Path) -> None:

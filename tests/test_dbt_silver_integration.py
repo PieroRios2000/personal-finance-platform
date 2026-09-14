@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from ingestion.schema import Statement, Transaction
+from ingestion.schema import AccountKind, Currency, Statement, Transaction
 from lakehouse.storage import storage_options, table_uri
 
 pytestmark = pytest.mark.integration
@@ -33,6 +33,9 @@ _TEST_LAKE_SUFFIX = "_t16_dbt_tests"
 _BANK = "BCP"
 _LAST4 = "9999"
 _ACCOUNT_ID = hashlib.sha256(b"t16-dbt-tests-account").hexdigest()
+_SCOTIABANK_ACCOUNT_ID = hashlib.sha256(
+    b"t18c-dbt-tests-scotiabank-account"
+).hexdigest()
 _USER_ID = "t16-dbt-tests"
 
 _REQUIRED_ENV = (
@@ -93,43 +96,60 @@ def _write(
     period_end: date,
     opening_balance: str,
     movement: str,
+    *,
+    bank: str = _BANK,
+    account_id: str = _ACCOUNT_ID,
+    account_kind: AccountKind = "asset",
+    currency: Currency = "PEN",
+    file_sha256: str | None = None,
 ) -> None:
     """Write one synthetic statement to the test lake, reconciled by construction.
 
     A `movement` of zero means a period with no transactions at all, which is what
     a dormant month looks like; `Transaction` rejects a zero amount (ADR 0005).
+
+    `bank`/`account_id`/`account_kind`/`currency` default to the shared BCP
+    fixture every other test in this file uses; T18c's Scotiabank dual-currency
+    tests override them to write a second currency's statement for the very
+    same account and period. `file_sha256` defaults to one derived from this
+    call's own arguments, but a caller can pass the same value to two calls to
+    mirror how `ingestion/cli.py` actually ingests a Scotiabank PDF: one file,
+    `parser.parse()` returns one `Statement` per currency, and every one of them
+    is written with that single file's own sha256, never a per-currency one.
     """
     from lakehouse import bronze
 
-    file_sha256 = hashlib.sha256(
-        f"{period_start}:{opening_balance}:{movement}".encode()
-    ).hexdigest()
+    if file_sha256 is None:
+        file_sha256 = hashlib.sha256(
+            f"{period_start}:{opening_balance}:{movement}".encode()
+        ).hexdigest()
     amount = Decimal(movement)
     transactions = []
     if amount != 0:
         transactions.append(
             Transaction(
                 user_id=_USER_ID,
-                bank=_BANK,
-                account_id=_ACCOUNT_ID,
+                bank=bank,
+                account_id=account_id,
                 account_last4=_LAST4,
                 date=period_start,
                 description="  compra pos....visa  ",
                 amount=amount,
-                currency="PEN",
+                currency=currency,
                 source_file_sha256=file_sha256,
             )
         )
     statement = Statement(
         user_id=_USER_ID,
-        bank=_BANK,
-        account_id=_ACCOUNT_ID,
+        bank=bank,
+        account_id=account_id,
         account_last4=_LAST4,
         period_start=period_start,
         period_end=period_end,
         opening_balance=Decimal(opening_balance),
         closing_balance=Decimal(opening_balance) + amount,
-        account_kind="asset",
+        account_kind=account_kind,
+        currency=currency,
         transactions=transactions,
     )
     bronze.write_statement(statement, file_sha256)
@@ -254,3 +274,68 @@ def test_a_missing_month_that_nets_to_zero_still_fails(
     fixed = _dbt_build(tmp_path)
 
     assert fixed.returncode == 0, fixed.stdout
+
+
+def test_dbt_build_passes_with_scotiabank_dual_currency_same_period_statements(
+    lake: str, tmp_path: Path
+) -> None:
+    """T18c: the exact false positive that broke dbt build -- Scotiabank
+    writes two bronze.statements rows for one real statement, one per
+    currency (ADR 0012), sharing account_id and period_start/period_end.
+    Before the partition-by-currency fix, the continuity test's lag() saw
+    these two same-period rows as a genuine duplicated period and failed.
+    A separate BCP (single-currency) statement is written alongside it,
+    matching the acceptance criteria's own scenario -- a different account
+    entirely, so it doesn't interact with the Scotiabank pair's continuity."""
+    _write(*_JANUARY)
+
+    # One real PDF, one sha256, shared across both currency Statements it
+    # yields -- the same file_sha256 ingestion/cli.py passes to every
+    # bronze.write_statement() call for one parsed file.
+    scotiabank_file_sha256 = hashlib.sha256(
+        b"scotiabank-january-both-currencies"
+    ).hexdigest()
+    _write(
+        date(2026, 1, 1),
+        date(2026, 1, 31),
+        "500.00",
+        "50.00",
+        bank="Scotiabank",
+        account_id=_SCOTIABANK_ACCOUNT_ID,
+        account_kind="liability",
+        currency="PEN",
+        file_sha256=scotiabank_file_sha256,
+    )
+    _write(
+        date(2026, 1, 1),
+        date(2026, 1, 31),
+        "0.00",
+        "25.50",
+        bank="Scotiabank",
+        account_id=_SCOTIABANK_ACCOUNT_ID,
+        account_kind="liability",
+        currency="USD",
+        file_sha256=scotiabank_file_sha256,
+    )
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_a_genuine_duplicate_period_still_fails_the_continuity_test(
+    lake: str, tmp_path: Path
+) -> None:
+    """The false-positive fix must not weaken the real check documented at the
+    top of assert_statement_continuity.sql: two statements for the same
+    account, the same currency and the same period (e.g. the bank
+    regenerating a PDF with different bytes, past T7's file-level dedup) is
+    still a genuine duplicate and must still fail -- partitioning by currency
+    only tells apart two statements that are *supposed* to coexist."""
+    _write(*_JANUARY)
+    _write(*_JANUARY)  # same account_id, same currency, same period: a real dup
+
+    failed = _dbt_build(tmp_path)
+
+    assert failed.returncode != 0, failed.stdout
+    assert "assert_statement_continuity" in failed.stdout

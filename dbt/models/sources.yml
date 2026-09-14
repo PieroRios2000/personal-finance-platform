@@ -19,6 +19,10 @@ sources:
       - name: statements
         description: >
           One row per ingested statement period, with the balances and totals the
-          PDF itself declares, and `account_kind` (`asset`/`liability`, ADR 0015) --
-          what that account's balance represents. The continuity test reads this
-          table; `silver.transactions` joins it on `account_id` for `account_kind`.
+          PDF itself declares, `account_kind` (`asset`/`liability`, ADR 0015) --
+          what that account's balance represents -- and `currency` (`PEN`/`USD`,
+          ADR 0016). A single Scotiabank statement writes two rows here sharing
+          `account_id` and `period_start`/`period_end`, one per currency (ADR
+          0012), so the continuity test partitions by `currency` too, not just
+          `user_id`/`account_id`. `silver.transactions` joins this table on
+          `account_id` for `account_kind`.

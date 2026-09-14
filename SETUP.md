@@ -233,6 +233,30 @@ further per-connection setup. Re-run only the `duckdb dbt/pfp.duckdb -c "CREATE 
 VIEW ..."` block if the bucket or table names ever change — the secret only needs creating
 once. Querying `bronze.*` still needs `make poc-up` running, same as `dbt build` does.
 
+## 8. Browsing the brain in Obsidian
+
+`brain/README.md` already says this works; this section is the exact steps. `brain/` is
+plain Markdown with relative links between notes (`[ADR 0009](../decisions/...)`), which
+Obsidian's graph and backlinks views resolve natively — not only `[[wikilinks]]` — so opening
+it as a vault needs no rework of the notes themselves.
+
+1. Install [Obsidian](https://obsidian.md/) on Windows.
+2. *Open folder as vault* → since this repo lives inside WSL2, point it at the Windows UNC
+   path, not a Linux path Windows can't see directly:
+
+   ```
+   \\wsl.localhost\<distro>\home\<user>\projects\personal-finance-platform\brain
+   ```
+
+   (`<distro>` and `<user>` are yours — `wslpath -w <path>` from inside WSL prints the exact
+   UNC path for any file or folder if you're unsure.)
+3. Open the graph view (the icon in the left ribbon, or `Ctrl+G`): every ADR, component and
+   concept note shows up connected. The three files under `brain/_templates/` appear isolated
+   on purpose — they're blank starting points to copy, not notes with content to link.
+
+`.obsidian/` (Obsidian's own per-machine view state — panes, graph layout, theme) is already
+gitignored; it's never something to commit.
+
 ## Reviewing CI
 
 Every PR runs `.github/workflows/ci.yml`: `lint-types`, `tests`, `security`, `architecture`

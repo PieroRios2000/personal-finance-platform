@@ -51,13 +51,17 @@ date or an amount wrong while the balances still add up.
 | Layer | Status |
 |---|---|
 | PDF parsing & reconciliation (BCP) | ✅ Calibrated against real statements — see [below](#built-the-hard-way) |
-| PDF parsing & reconciliation (Scotiabank) | 🚧 Built, PR open — pending real-data validation |
+| PDF parsing & reconciliation (Scotiabank) | ✅ Built — pending real-data validation (dual-currency credit card, opposite sign convention from BCP, handled explicitly) |
+| Account kind (asset vs. liability) | ✅ Threaded through parsers → bronze → silver, so cross-bank analysis never assumes one sign convention |
 | OCR fallback for scanned pages | ✅ |
 | Multi-user, multi-account inbox → archive pipeline | ✅ |
 | Bronze (Delta Lake on S3) | ✅ Write, idempotent re-ingest, backfill/replace |
 | Silver (dbt) | ✅ Typed model + cross-statement continuity tests |
 | CI: lint, types, tests, security, architecture contracts | ✅ Required on every PR |
 | CI: impact-based performance benchmarking | ✅ Runs only when a change can affect it |
+| CI: ephemeral per-PR environment (real S3, real `dbt build`) | ✅ Spins up, ingests, builds, tears down — nothing left behind |
+| CI: base-vs-PR data diff | ✅ Every PR shows what the data itself would change, not just whether tests pass |
+| Local exploration: DBeaver + Obsidian | ✅ The same DuckDB file dbt builds opens directly in DBeaver; `brain/` opens as an Obsidian vault, graph view included — see [SETUP.md](SETUP.md) |
 | Orchestration, gold, ML, dashboard | Later phases — see [PROJECT.md](PROJECT.md) |
 
 Every decision behind these is written down as an ADR, not just implemented and forgotten —
@@ -99,10 +103,15 @@ end to end. The full story, fix by fix, is in [`brain/components/bcp-parser.md`]
 
 ## Exploring the data
 
-`dbt build`'s own output, `dbt/pfp.duckdb`, is a real on-disk DuckDB database — it opens
-directly in [DBeaver](https://dbeaver.io/) (or any DuckDB-aware SQL client), silver with zero
-setup and bronze's raw Delta tables with a one-time DuckDB persistent-secret step. Exact
-commands: **[SETUP.md §7](SETUP.md#7-browsing-the-lake-in-dbeaver)**.
+**The data:** `dbt build`'s own output, `dbt/pfp.duckdb`, is a real on-disk DuckDB database —
+it opens directly in [DBeaver](https://dbeaver.io/) (or any DuckDB-aware SQL client), silver
+with zero setup and bronze's raw Delta tables with a one-time DuckDB persistent-secret step.
+Exact commands: **[SETUP.md §7](SETUP.md#7-browsing-the-lake-in-dbeaver)**.
+
+**The architecture itself:** [`brain/`](brain/README.md) is plain Markdown with relative
+links between notes, so it opens directly as an [Obsidian](https://obsidian.md/) vault —
+every ADR, component and concept connected in a real graph, not just the Mermaid map on
+GitHub. Steps: **[SETUP.md §8](SETUP.md#8-browsing-the-brain-in-obsidian)**.
 
 ## Getting started
 

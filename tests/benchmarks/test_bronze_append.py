@@ -40,6 +40,7 @@ def _statement() -> Statement:
         opening_balance=Decimal("1000.00"),
         closing_balance=Decimal("1000.00") + ROWS * Decimal("1.50"),
         account_kind="asset",
+        currency="PEN",
         transactions=[
             Transaction(
                 user_id=USER_ID,

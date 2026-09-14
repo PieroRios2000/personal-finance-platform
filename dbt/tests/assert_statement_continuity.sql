@@ -20,6 +20,14 @@
 -- start the day after the first one ends). That is the intended reading: a bank
 -- that regenerates a period's PDF with different bytes gets past T7's file-level
 -- dedup, and a duplicated period is exactly as wrong as a missing one.
+--
+-- Partitioned by currency too (T18c), not just user_id/account_id: a Scotiabank
+-- statement is two independent ledgers billed as one account (ADR 0012), so it
+-- writes two rows sharing account_id and period_start/period_end -- one for
+-- Soles, one for Dolares. Without currency in the partition key those two
+-- legitimate rows look exactly like the genuine-duplicate-period case above and
+-- fail this test as a false positive; partitioning by currency as well still
+-- catches a real duplicate, since a real duplicate repeats currency too.
 
 with ordered as (
 
@@ -29,10 +37,10 @@ with ordered as (
         period_start,
         opening_balance,
         lag(period_end) over (
-            partition by user_id, account_id order by period_start
+            partition by user_id, account_id, currency order by period_start
         ) as previous_period_end,
         lag(closing_balance) over (
-            partition by user_id, account_id order by period_start
+            partition by user_id, account_id, currency order by period_start
         ) as previous_closing_balance
     from {{ source('bronze', 'statements') }}
 
