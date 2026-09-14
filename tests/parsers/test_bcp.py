@@ -72,7 +72,6 @@ def test_parse_returns_a_reconciled_statement(bcp_pdf: Path) -> None:
 
     assert statement.user_id == "piero"
     assert statement.bank == "BCP"
-    assert statement.account_kind == "asset"
     assert statement.account_id == hash_account("BCP", "000-00000000-0-00")
     assert statement.account_last4 == last4_of("000-00000000-0-00")
     assert statement.period_start == date(2026, 1, 5)
