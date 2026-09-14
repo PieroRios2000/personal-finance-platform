@@ -410,20 +410,28 @@ this over a dbt-side bank-name lookup table (fragile — breaks the moment one b
 checking and a credit product).
 
 **Acceptance criteria:**
-- [ ] `Statement` gains `account_kind: Literal["asset", "liability"]` (`ingestion/schema.py`).
-- [ ] `bcp.py` sets `"asset"`; `scotiabank.py` sets `"liability"` — hardcoded per parser, not
+- [x] `Statement` gains `account_kind: Literal["asset", "liability"]` (`ingestion/schema.py`).
+- [x] `bcp.py` sets `"asset"`; `scotiabank.py` sets `"liability"` — hardcoded per parser, not
   inferred from the PDF (a bank's own product type doesn't vary per statement).
-- [ ] `lakehouse/bronze.py`'s `statements` table (not `transactions`, which has no
+- [x] `lakehouse/bronze.py`'s `statements` table (not `transactions`, which has no
   balance/kind concept) carries it through; `dbt/models/sources.yml` and
-  `dbt/models/silver/transactions.sql` expose it (a transaction's own account_kind, joined or
-  carried from its statement) for T18b to read.
-- [ ] ADR written: the two-value, hardcoded-per-parser design, and why a bank-name lookup in
-  dbt was rejected.
+  `dbt/models/silver/transactions.sql` expose it (joined from `bronze.statements` on a
+  deduplicated `account_id`, see ADR 0014) for T18b to read.
+- [x] ADR written (0014): the two-value, hardcoded-per-parser design, and why a bank-name lookup
+  in dbt was rejected.
 
 **Verification:**
-- [ ] Existing BCP/Scotiabank synthetic fixtures and tests still pass with the new field;
+- [x] Existing BCP/Scotiabank synthetic fixtures and tests still pass with the new field;
   a new test asserts each parser's own `account_kind`.
-- [ ] `dbt build` shows the column reaching silver.
+- [ ] `dbt build` shows the column reaching silver. (pending: no live SeaweedFS was reachable
+  from this session — the harness blocked materializing the running container's S3 credentials
+  into `.env`/the shell as a "credential materialization" action, even though they're local-only
+  dev creds. Verified statically instead: `sqlfluff lint dbt/models` and
+  `dbt compile --project-dir dbt --profiles-dir dbt` both pass against placeholder env vars, and
+  a new integration test, `test_silver_carries_account_kind_without_duplicating_rows` in
+  `tests/test_dbt_silver_integration.py`, is written and ready for `make poc-up` +
+  `pytest -m integration` on a machine/session that can reach it — Piero or CI should run it for
+  real before merging.)
 
 **Dependencies:** T18 · **Files:** `ingestion/schema.py`, `ingestion/parsers/{bcp,scotiabank}.py`, `lakehouse/bronze.py`, `dbt/models/**` · **Size:** S · **Skill:** test-driven-development
 
