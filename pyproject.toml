@@ -42,6 +42,44 @@ dev = [
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 
+# sqlfluff for the dbt project's SQL (T16). It lives here rather than in a
+# `dbt/.sqlfluff` because sqlfluff refuses to take `templater` from a config file
+# in a subdirectory of the working directory ("Templater cannot be set in a
+# .sqlfluff file in a subdirectory of the current working directory"), and
+# because every other tool in this repo is configured from this one file.
+# Run from the repository root: `uv run sqlfluff lint dbt/models`.
+[tool.sqlfluff.core]
+# The dbt templater, not the plain jinja one, so `source()` resolves to the real
+# `delta_scan(...)` expression dbt-duckdb generates and the linter sees the SQL
+# DuckDB will actually run. It needs the same environment variables `dbt build`
+# does (see `dbt/profiles.yml`).
+templater = "dbt"
+dialect = "duckdb"
+max_line_length = 100
+
+[tool.sqlfluff.templater.dbt]
+project_dir = "dbt"
+profiles_dir = "dbt"
+
+[tool.sqlfluff.indentation]
+indented_ctes = false
+indented_joins = false
+
+[tool.sqlfluff.rules.capitalisation.keywords]
+capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.capitalisation.functions]
+extended_capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.capitalisation.identifiers]
+extended_capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.capitalisation.literals]
+capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.capitalisation.types]
+extended_capitalisation_policy = "lower"
+
 [tool.mypy]
 strict = true
 

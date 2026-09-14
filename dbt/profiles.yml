@@ -1,0 +1,38 @@
+# dbt-duckdb connection (T16, ADR 0011). Lives in the project directory, so every
+# command needs `--profiles-dir dbt` as well as `--project-dir dbt`.
+#
+# Everything environment-specific comes from `.env` (see `.env.example`), the same
+# variables `lakehouse/storage.py` reads, so dbt and the writer always point at the
+# same lake. No value is defaulted except AWS_REGION: a missing credential should
+# fail loudly here, exactly as it does in `storage_options()` (ADR 0006).
+
+personal_finance_platform:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      # On disk, not `:memory:`: the built silver tables survive the run, so they
+      # can be inspected (`duckdb dbt/pfp.duckdb`) and compared between runs
+      # (T17b's data diff needs a DuckDB file per run). `*.duckdb` is gitignored.
+      path: "{{ env_var('PFP_DUCKDB_PATH', 'dbt/pfp.duckdb') }}"
+      schema: silver
+      threads: 4
+      extensions:
+        - httpfs
+        - delta
+      # DuckDB's Secrets Manager, `PROVIDER config`, is what lets `delta_scan()`
+      # reach a non-AWS, plain-HTTP S3 endpoint like SeaweedFS. ENDPOINT takes
+      # host:port with no scheme; URL_STYLE 'path' mirrors delta-rs's
+      # aws_virtual_hosted_style_request=false (ADR 0006). Without these three
+      # options DuckDB silently talks to real AWS — see
+      # tests/test_delta_scan_integration.py.
+      # https://duckdb.org/docs/stable/core_extensions/httpfs/s3api
+      secrets:
+        - type: s3
+          provider: config
+          key_id: "{{ env_var('AWS_ACCESS_KEY_ID') }}"
+          secret: "{{ env_var('AWS_SECRET_ACCESS_KEY') }}"
+          region: "{{ env_var('AWS_REGION', 'us-east-1') }}"
+          endpoint: "{{ env_var('AWS_ENDPOINT_URL').split('://') | last }}"
+          url_style: path
+          use_ssl: "{{ 'true' if env_var('AWS_ENDPOINT_URL').startswith('https') else 'false' }}"

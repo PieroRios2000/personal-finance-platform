@@ -1,0 +1,18 @@
+# dbt project: bronze (Delta on S3) -> silver (T16, ADR 0002, ADR 0011).
+# Run from the repository root:
+#   uv run dbt build --project-dir dbt --profiles-dir dbt
+
+name: personal_finance_platform
+version: "0.1.0"
+profile: personal_finance_platform
+
+model-paths: ["models"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  personal_finance_platform:
+    # Tables, not views: silver is read repeatedly (dbt tests, T17b's base-vs-PR
+    # data diff, and ad-hoc queries), and a view would re-scan Delta on S3 every
+    # time. The volume is thousands of rows, so a full rebuild is cheap.
+    +materialized: table
