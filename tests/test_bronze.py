@@ -36,6 +36,7 @@ def _statement(*, user_id: str = "piero", **overrides: Any) -> Statement:
         "period_end": date(2026, 1, 31),
         "opening_balance": Decimal("100.00"),
         "closing_balance": Decimal("74.50"),
+        "account_kind": "asset",
         "transactions": [
             Transaction(
                 user_id=user_id,
@@ -170,6 +171,25 @@ def test_write_statement_adds_one_row_to_bronze_statements(lakehouse: Path) -> N
     assert row["opening_balance"] == Decimal("100.00")
     assert row["closing_balance"] == Decimal("74.50")
     assert row["period_start"] == date(2026, 1, 1)
+
+
+def test_write_statement_carries_account_kind_into_bronze_statements(
+    lakehouse: Path,
+) -> None:
+    """T18a: account_kind lives on Statement, not Transaction (an account's
+    kind doesn't vary per movement), so only bronze/statements needs it --
+    bronze/transactions has no balance/kind concept at all."""
+    from deltalake import DeltaTable
+
+    bronze.write_statement(_statement(account_kind="liability"), VALID_SHA256)
+
+    table = DeltaTable(str(lakehouse / "bronze" / "statements")).to_pyarrow_table()
+    assert table.to_pylist()[0]["account_kind"] == "liability"
+
+    transactions = DeltaTable(
+        str(lakehouse / "bronze" / "transactions")
+    ).to_pyarrow_table()
+    assert "account_kind" not in transactions.column_names
 
 
 def test_write_statement_never_stores_a_file_name(lakehouse: Path) -> None:

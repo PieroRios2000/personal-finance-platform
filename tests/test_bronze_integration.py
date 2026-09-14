@@ -67,6 +67,7 @@ def test_write_statement_round_trips_through_real_s3(user_id: str) -> None:
         period_end=date(2026, 1, 31),
         opening_balance=Decimal("100.00"),
         closing_balance=Decimal("74.50"),
+        account_kind="asset",
         transactions=[
             Transaction(
                 user_id=user_id,

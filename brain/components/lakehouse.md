@@ -48,6 +48,16 @@ transaction), so a crash mid-replace can leave a file with rows missing; re-runn
 `pfp backfill` fixes it, since the archived PDF is what the rows are derived from. Delta's log
 keeps the previous rows readable by time travel (`DeltaTable(uri, version=n)`) until a `VACUUM`.
 
+## account_kind (T18a)
+
+`bronze/statements`' pyarrow schema carries `account_kind` (`"asset"`/`"liability"`) alongside
+`opening_balance`/`closing_balance`, following the same fixed-schema pattern; `bronze/transactions`
+deliberately does not — it has no balance/kind concept at all, and `account_kind` is a
+Statement-level fact, not a per-transaction one. `dbt/models/silver/transactions.sql` joins it
+back onto each transaction from `bronze.statements`, rather than it being duplicated into every
+transaction row bronze-side. Full reasoning, including why the join key is `account_id` alone
+(deduplicated), in [ADR 0015](../decisions/0015-account-kind-asset-or-liability.md).
+
 ## A real bug found while building this
 
 pyarrow's `Table.from_pylist()` infers a `decimal128` precision from each batch's own values.
@@ -91,6 +101,8 @@ uv run pfp backfill --user piero --dry-run   # what re-parsing the archive would
   the `user_id` partitioning this component relies on.
 - [ADR 0010: A backfill replaces a file's rows](../decisions/0010-bronze-backfill-replaces-not-versions.md) —
   why `replace_statement()` deletes instead of versioning.
+- [ADR 0015: Account kind (asset/liability)](../decisions/0015-account-kind-asset-or-liability.md) —
+  `account_kind` on `bronze/statements`, and why not on `bronze/transactions`.
 - [CLI](cli.md) — `pfp ingest` and `pfp backfill`, the only callers of `write_statement()`,
   `is_ingested()`, `replace_statement()` and `transactions_for_file()`.
 - [Inbox organizer](inbox-organizer.md) — produces the `ArchivedItem`s `pfp ingest` writes.

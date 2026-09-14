@@ -39,6 +39,7 @@ def _statement() -> Statement:
         period_end=date(2026, 1, 31),
         opening_balance=Decimal("1000.00"),
         closing_balance=Decimal("1000.00") + ROWS * Decimal("1.50"),
+        account_kind="asset",
         transactions=[
             Transaction(
                 user_id=USER_ID,

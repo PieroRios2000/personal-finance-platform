@@ -445,6 +445,11 @@ def parse(
             period_end=period_end,
             opening_balance=opening_balance,
             closing_balance=closing_balance,
+            # A Scotiabank statement is always a credit card: its balance is
+            # debt owed, never money on hand -- true for every currency this
+            # loop builds a Statement for, not just the one shown above
+            # (T18a, ADR 0015).
+            account_kind="liability",
             transactions=transactions,
         )
         reconcile(statement)

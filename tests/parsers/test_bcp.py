@@ -83,6 +83,14 @@ def test_parse_returns_a_reconciled_statement(bcp_pdf: Path) -> None:
         assert transaction.currency == "PEN"
 
 
+def test_parse_marks_every_statement_as_an_asset_account(bcp_pdf: Path) -> None:
+    """A BCP checking account's balance is money on hand (T18a): hardcoded
+    per parser, since a bank's own product type doesn't vary per statement."""
+    [statement] = bcp.parse(bcp_pdf, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert statement.account_kind == "asset"
+
+
 def test_parse_extracts_charges_and_credits_with_the_right_sign(bcp_pdf: Path) -> None:
     [statement] = bcp.parse(bcp_pdf, user_id="piero", file_sha256=FILE_SHA256)
 

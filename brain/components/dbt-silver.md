@@ -18,8 +18,8 @@ checked. Design decisions in [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-so
 |---|---|
 | [`dbt/profiles.yml`](../../dbt/profiles.yml) | The DuckDB connection: on-disk database (`PFP_DUCKDB_PATH`, default `dbt/pfp.duckdb`), schema `silver`, the `httpfs` and `delta` extensions, and the `TYPE s3 / PROVIDER config` secret that lets DuckDB reach SeaweedFS (`ENDPOINT`, `URL_STYLE 'path'`, `USE_SSL false`). Every value comes from the same `.env` variables `lakehouse/storage.py` reads |
 | [`dbt/models/sources.yml`](../../dbt/models/sources.yml) | `bronze.transactions` and `bronze.statements`, declared as one `external_location` f-string: `delta_scan('<LAKEHOUSE_URI>/bronze/{name}')` |
-| [`dbt/models/silver/transactions.sql`](../../dbt/models/silver/transactions.sql) | `silver.transactions`: bronze's columns with the description re-normalized. Materialized as a table |
-| [`dbt/models/silver/schema.yml`](../../dbt/models/silver/schema.yml) | `not_null` on every column, and `accepted_values` on `currency` (`PEN`, `USD`, matching `ingestion.schema.Currency`) |
+| [`dbt/models/silver/transactions.sql`](../../dbt/models/silver/transactions.sql) | `silver.transactions`: bronze's columns with the description re-normalized, plus `account_kind` joined in from `bronze.statements` (T18a). Materialized as a table |
+| [`dbt/models/silver/schema.yml`](../../dbt/models/silver/schema.yml) | `not_null` on every column, `accepted_values` on `currency` (`PEN`, `USD`) and `account_kind` (`asset`, `liability`), matching `ingestion.schema.Currency`/`AccountKind` |
 | [`dbt/tests/assert_statement_continuity.sql`](../../dbt/tests/assert_statement_continuity.sql) | The continuity test: a period's closing balance is the next period's opening balance, and the periods are contiguous, per user and account |
 | `[tool.sqlfluff.*]` in [`pyproject.toml`](../../pyproject.toml) | sqlfluff with the **dbt** templater and the `duckdb` dialect, so the linter sees the `delta_scan(...)` expression dbt actually compiles |
 
@@ -40,6 +40,17 @@ checked. Design decisions in [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-so
   is the one piece of duplication in the component, and it is deliberate.
 - **No columns that nothing asked for.** No surrogate key, no derived category, no `is_expense`
   flag. `is_internal_transfer` arrives in T18b, with the model that can populate it.
+- **`account_kind` is joined in from `bronze.statements` (T18a), not duplicated bronze-side.**
+  What an account's balance represents (`asset`: money on hand, `liability`: debt owed) is a
+  `Statement`-level fact set once per parser, not a `Transaction` one — see
+  [ADR 0015](../decisions/0015-account-kind-asset-or-liability.md) for the field's own design.
+  The join deduplicates `bronze.statements` down to one row per `account_id` first
+  (`group by account_id`, `max(account_kind)`), because a single account can have several
+  statement rows — one per period, and Scotiabank writes one per *currency* for the very same
+  file — and joining on `account_id` without collapsing that first would fan every one of that
+  account's transactions out into duplicate silver rows. It's a `left join`, so a transaction
+  whose account has no matching statement surfaces as a loud `not_null` test failure
+  (`dbt/models/silver/schema.yml`) instead of silently vanishing from an inner join.
 
 ## Continuity: the rule this component adds
 
@@ -94,6 +105,8 @@ this file. Exact commands in [SETUP.md §7](../../SETUP.md#7-browsing-the-lake-i
 
 ## Related
 
+- [ADR 0015: Account kind (asset/liability)](../decisions/0015-account-kind-asset-or-liability.md) —
+  the `account_kinds` join described above, in full.
 - [ADR 0011: `delta_scan()` as a dbt source](../decisions/0011-delta-scan-as-a-dbt-source.md) —
   every design call here, with the alternatives.
 - [ADR 0002: DuckDB + delta-rs before Spark](../decisions/0002-duckdb-and-delta-rs-before-spark.md)
