@@ -48,6 +48,19 @@ implementation started:
   connections: every comparison — row counts, a column/type diff, a bounded `EXCEPT`-both-
   ways sample — is then one ordinary cross-catalog SQL query DuckDB already supports, with
   no data copied between connections and no second process.
+- **The base branch's code gets onto disk two different ways, on purpose.** `ingestion/` and
+  `lakehouse/` swap in place (`git checkout origin/$PFP_BASE_REF -- ingestion lakehouse`,
+  `benchmarks`' own idiom, T15): safe there, since Python only executes what's reachable from
+  an import, so a file the PR added and base doesn't have just sits on disk unused once
+  `dispatcher.py` etc. are swapped back. `dbt/` instead comes from a detached worktree
+  (`git worktree add --detach /tmp/pfp-diff-base-ref origin/$PFP_BASE_REF`), exactly ADR
+  0013's own pattern: `git checkout <ref> -- dbt` only overwrites or *creates* paths `<ref>`
+  has, it never *deletes* a path the PR added that base doesn't — harmless for Python's
+  import graph, but a real bug for dbt, which discovers every model by scanning `models/` on
+  disk. A model file the PR added would stay in place under a plain checkout swap and get
+  built into the "base" run too, silently defeating the exact case this job most needs to
+  catch (a new model reported as "unchanged" instead of "new"). A worktree always contains
+  exactly what the base ref has, nothing more.
 
 ## Alternatives considered
 
@@ -69,6 +82,13 @@ implementation started:
   in a third job consuming both as artifacts: the same round-trip cost ADR 0013 already
   rejected for the `dbt parse` manifest, for a build that takes longer, not less time, to
   serialize through artifacts than to just run twice in one job.
+- **A plain `git checkout origin/$PFP_BASE_REF -- ingestion lakehouse dbt` for all three
+  directories**, matching `benchmarks`' idiom exactly: the first version of this job did
+  exactly this, and a code-review pass on the diff caught the bug described in the Decision
+  above before this PR was reviewed by Piero — a model the PR added would stay on disk and
+  get built into the "base" run too. Fixed by moving `dbt/` to a worktree; `ingestion/` and
+  `lakehouse/` keep the checkout-swap, since the failure mode is specific to how dbt discovers
+  models, not to the swap mechanism itself.
 
 ## Consequences
 
