@@ -297,9 +297,14 @@ def _assign_columns(line: list[Word], columns: dict[str, float]) -> dict[str, st
 
 def parse(
     path: Path, *, user_id: str, file_sha256: str, password: str = ""
-) -> Statement:
+) -> list[Statement]:
     """Parse the BCP PDF at `path` into a `Statement`, reconciled against its own
     declared totals. Raises `ReconciliationError` if the numbers don't add up.
+
+    Returns a one-element list: a BCP account statement covers one account in
+    one currency, so there's only ever one `Statement` in it. The list is the
+    shared `BankParser.parse()` contract (T18), which exists for a bank whose
+    single PDF really does hold several statements.
     """
     with pikepdf.open(path, password=password) as pdf:
         decrypted = io.BytesIO()
@@ -427,4 +432,4 @@ def parse(
         transactions=transactions,
     )
     reconcile(statement)
-    return statement
+    return [statement]
