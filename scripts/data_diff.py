@@ -236,6 +236,18 @@ def render_markdown(diffs: list[ModelDiff]) -> str:
     """The base-vs-PR comparison as Markdown for `$GITHUB_STEP_SUMMARY`."""
     lines = ["### data-diff: base vs. PR (T17b)", ""]
 
+    # Distinct from "no changes": an empty `diffs` means neither side's dbt
+    # build put a single model in the schema (e.g. both runs failed before
+    # building anything), so nothing was actually compared -- `not any(...)`
+    # over an empty list is vacuously True, and reporting that as "No
+    # changes" would misrepresent a broken run as a clean one.
+    if not diffs:
+        lines.append(
+            "No models found on either side -- nothing was compared "
+            "(check the ingest/dbt build steps above)."
+        )
+        return "\n".join(lines) + "\n"
+
     if not any(d.has_changes for d in diffs):
         lines.append(
             "No changes: every model has the same row counts, columns and rows."
