@@ -25,7 +25,9 @@ agents, the PR template and PROJECT.md kept current (#15), and the multi-user, m
 integral reconciliation plan (#19). Local visualization: `dbt/pfp.duckdb` (T16's own build
 artifact) opens directly in DBeaver, silver with zero setup and bronze with a one-time DuckDB
 persistent-secret-and-views setup — [SETUP.md §7](../../SETUP.md#7-browsing-the-lake-in-dbeaver),
-[dbt silver](../components/dbt-silver.md).
+[dbt silver](../components/dbt-silver.md). T19b (brain in Obsidian): confirmed with a
+link-checker that every relative link in `brain/**/*.md` resolves and nothing is unexpectedly
+isolated — steps in [SETUP.md §8](../../SETUP.md#8-browsing-the-brain-in-obsidian).
 
 ## Components
 
