@@ -26,7 +26,7 @@ could not even open the two databases (matches `scripts/floor_guard.py`'s
 import argparse
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import duckdb
@@ -63,8 +63,8 @@ class ModelDiff:
     pr_rows: int | None
     columns: ColumnDiff
     sample_columns: tuple[str, ...] = ()
-    sample_only_in_base: tuple[tuple[object, ...], ...] = field(default_factory=tuple)
-    sample_only_in_pr: tuple[tuple[object, ...], ...] = field(default_factory=tuple)
+    sample_only_in_base: tuple[tuple[object, ...], ...] = ()
+    sample_only_in_pr: tuple[tuple[object, ...], ...] = ()
 
     @property
     def has_changes(self) -> bool:
@@ -277,9 +277,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--pr", type=Path, required=True, help="PR's .duckdb file")
     parser.add_argument(
-        "--schema", default=DEFAULT_SCHEMA, help=f"default: {DEFAULT_SCHEMA}"
-    )
-    parser.add_argument(
         "--sample-limit",
         type=int,
         default=DEFAULT_SAMPLE_LIMIT,
@@ -296,7 +293,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
-    diffs = diff_all(con, args.schema, sample_limit=args.sample_limit)
+    diffs = diff_all(con, sample_limit=args.sample_limit)
     print(render_markdown(diffs))
     return 0
 
