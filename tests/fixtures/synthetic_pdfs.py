@@ -353,6 +353,131 @@ def bcp_real_layout_statement_pdf(
     return bytes(pdf.output())
 
 
+_SCOTIABANK_ACCOUNT_CODE = "00000000"
+_SCOTIABANK_CARD_MASKED = "0000-0000-****-0000"
+
+
+@dataclass(frozen=True)
+class ScotiabankMovement:
+    """One fictional credit-card movement.
+
+    `amount` is signed for a *debt* balance, the opposite convention from
+    `Movement` above: positive for a charge/consumo (increases what's owed),
+    negative for a payment/pago (decreases it) — mirroring the real statement's
+    own trailing "-" on a payment row, which `scotiabank.py` reads as a sign,
+    not a hyphen. `currency` picks which of the statement's two columns
+    (Soles/Dólares) the row prints under.
+    """
+
+    when: date
+    description: str
+    currency: str  # "PEN" or "USD"
+    amount: Decimal
+
+
+DEFAULT_SCOTIABANK_MOVEMENTS: tuple[ScotiabankMovement, ...] = (
+    ScotiabankMovement(
+        date(2026, 1, 5), "COMPRA TIENDA FICTICIA", "PEN", Decimal("150.00")
+    ),
+    ScotiabankMovement(
+        date(2026, 1, 12), "PAGO TARJETA FICTICIO", "PEN", Decimal("-100.00")
+    ),
+    ScotiabankMovement(
+        date(2026, 1, 20), "COMPRA ONLINE FICTICIA", "USD", Decimal("25.50")
+    ),
+)
+
+_SCOTIA_HEADER_Y = 100
+_SCOTIA_CURRENCY_HEADER_Y = 110  # 10pt below: a separate _group_lines line
+_SCOTIA_FECHA_PROC_X = 40
+_SCOTIA_FECHA_VALOR_X = 140
+_SCOTIA_DESCRIPTION_X = 240
+_SCOTIA_SOLES_X = 451
+_SCOTIA_DOLARES_X = 520
+
+
+def _scotia_money(amount: Decimal) -> str:
+    text = f"{abs(amount):,.2f}"
+    return f"{text}-" if amount < 0 else text
+
+
+def scotiabank_statement_pdf(
+    *,
+    opening_pen: Decimal | None = Decimal("500.00"),
+    opening_usd: Decimal | None = Decimal("0.00"),
+    movements: Sequence[ScotiabankMovement] = DEFAULT_SCOTIABANK_MOVEMENTS,
+    account_code: str = _SCOTIABANK_ACCOUNT_CODE,
+    reconciles: bool = True,
+) -> bytes:
+    """Render a fictional, one-page Scotiabank credit-card statement.
+
+    Matches the real layout confirmed from a masked dump (T9, T18): no
+    "CUENTA NRO."/"PERIODO" adjacency the way BCP has, a two-line header
+    (FECHA x2 + DESCRIPCION, then SOLES/DOLARES on the *next* line), a
+    DD-MM-YYYY period, DD/MM/YY row dates (two columns, only the second one
+    used, same "value date wins" rule as BCP), a bare 8-digit account code
+    (no adjacent label — found by shape) sitting next to a card number the
+    bank itself already masks (`0000-0000-****-0000`, present as realistic
+    noise the parser must *not* mistake for the account code), "Saldo
+    Anterior" with one amount per currency, and a debt balance: a charge has
+    no suffix, a payment ends in "-".
+
+    By default the statement reconciles: for each currency, opening + that
+    currency's own movements equals what `Total` (this fixture's one page)
+    declares. `reconciles=False` breaks Soles' total by a fixed, non-zero
+    drift, the same "keep the per-row math honest, only the printed summary
+    lies" contract `bcp_statement_pdf(reconciles=False)` uses.
+    """
+    pen_moves = [m for m in movements if m.currency == "PEN"]
+    usd_moves = [m for m in movements if m.currency == "USD"]
+    pen_total = sum((m.amount for m in pen_moves), Decimal("0.00"))
+    usd_total = sum((m.amount for m in usd_moves), Decimal("0.00"))
+    printed_pen_total = pen_total + (_BROKEN_DRIFT if not reconciles else Decimal("0"))
+
+    dates = [m.when for m in movements] or [date.today()]
+    period_start, period_end = min(dates), max(dates)
+
+    pdf = FPDF(unit="pt")
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=9)
+
+    pdf.text(40, 20, account_code)
+    pdf.text(140, 20, _SCOTIABANK_CARD_MASKED)
+    pdf.text(
+        40,
+        50,
+        f"PERIODO DE TARJETA DEL {period_start:%d-%m-%Y} AL {period_end:%d-%m-%Y}",
+    )
+    pdf.text(40, 70, "SALDO ANTERIOR")
+    if opening_pen is not None:
+        pdf.text(_SCOTIA_SOLES_X, 70, _scotia_money(opening_pen))
+    if opening_usd is not None:
+        pdf.text(_SCOTIA_DOLARES_X, 70, _scotia_money(opening_usd))
+
+    pdf.text(_SCOTIA_FECHA_PROC_X, _SCOTIA_HEADER_Y, "Fecha")
+    pdf.text(_SCOTIA_FECHA_VALOR_X, _SCOTIA_HEADER_Y, "Fecha")
+    pdf.text(_SCOTIA_DESCRIPTION_X, _SCOTIA_HEADER_Y, "Descripción")
+    pdf.text(_SCOTIA_SOLES_X, _SCOTIA_CURRENCY_HEADER_Y, "Soles")
+    pdf.text(_SCOTIA_DOLARES_X, _SCOTIA_CURRENCY_HEADER_Y, "Dólares")
+
+    row_y = _SCOTIA_CURRENCY_HEADER_Y
+    for movement in movements:
+        row_y += 15
+        proc_date = movement.when.replace(day=max(1, movement.when.day - 1))
+        pdf.text(_SCOTIA_FECHA_PROC_X, row_y, f"{proc_date:%d/%m/%y}")
+        pdf.text(_SCOTIA_FECHA_VALOR_X, row_y, f"{movement.when:%d/%m/%y}")
+        pdf.text(_SCOTIA_DESCRIPTION_X, row_y, movement.description)
+        amount_x = _SCOTIA_SOLES_X if movement.currency == "PEN" else _SCOTIA_DOLARES_X
+        pdf.text(amount_x, row_y, _scotia_money(movement.amount))
+
+    row_y += 20
+    pdf.text(40, row_y, "Total")
+    pdf.text(_SCOTIA_SOLES_X, row_y, _scotia_money(printed_pen_total))
+    pdf.text(_SCOTIA_DOLARES_X, row_y, _scotia_money(usd_total))
+
+    return bytes(pdf.output())
+
+
 def bcp_scanned_statement_pdf(
     *,
     opening_balance: Decimal = Decimal("1000.00"),
