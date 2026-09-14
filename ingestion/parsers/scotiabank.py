@@ -450,6 +450,11 @@ def parse(
             # loop builds a Statement for, not just the one shown above
             # (T18a, ADR 0015).
             account_kind="liability",
+            # Each Statement this loop builds is this iteration's own
+            # currency, not a hardcoded constant -- unlike BCP, a Scotiabank
+            # PDF carries both currencies and parse() returns one Statement
+            # per currency that has activity (T18c, ADR 0016).
+            currency=currency,
             transactions=transactions,
         )
         reconcile(statement)
