@@ -54,7 +54,7 @@ integral reconciliation plan (#19).
 | 0009 | Several users and accounts; PDF content rules over the file name | Written in T6 |
 | 0010 | A bronze backfill replaces a file's rows, it doesn't version them | [ADR 0010](../decisions/0010-bronze-backfill-replaces-not-versions.md) |
 | 0011 | `delta_scan()` as a dbt source, on an on-disk DuckDB | [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-source.md) |
-| 0012 | dbt state comparison via a base-ref worktree | [ADR 0012](../decisions/0012-dbt-state-comparison-via-a-base-ref-worktree.md) |
+| 0013 | dbt state comparison via a base-ref worktree | [ADR 0013](../decisions/0013-dbt-state-comparison-via-a-base-ref-worktree.md) |
 
 ## Concepts
 

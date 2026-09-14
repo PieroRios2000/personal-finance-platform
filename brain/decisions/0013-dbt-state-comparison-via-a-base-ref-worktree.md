@@ -5,7 +5,7 @@ status: accepted
 date: 2026-09-14
 ---
 
-# ADR 0012: dbt state comparison via a base-ref worktree, in the same job
+# ADR 0013: dbt state comparison via a base-ref worktree, in the same job
 
 ## Context
 

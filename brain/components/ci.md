@@ -57,7 +57,7 @@ still open (details in the [plan](../../tasks/plan.md)).
 - When `changes` narrows `dbt_select` to `state:modified+`, the job checks out the base ref
   into a second worktree (`git worktree add --detach`) and runs `dbt parse` there to produce
   the comparison manifest, entirely inside the same job — see
-  [ADR 0012](../decisions/0012-dbt-state-comparison-via-a-base-ref-worktree.md) for why, and
+  [ADR 0013](../decisions/0013-dbt-state-comparison-via-a-base-ref-worktree.md) for why, and
   its known limit: a *singular* dbt test with no `ref()` to the model it checks (like
   `assert_statement_continuity`) isn't dbt's idea of a descendant, so a narrowed build can
   miss it — bounded the same way ADR 0008 bounds every other miss, by the push-to-`develop`
@@ -81,6 +81,6 @@ afterwards instead of it tearing itself down).
   — why the environment exists and is always torn down.
 - [ADR 0008: Impact-based CI](../decisions/0008-impact-based-ci.md) — why expensive jobs skip,
   and what stops the map from hiding a real failure.
-- [ADR 0012: dbt state comparison via a base-ref worktree](../decisions/0012-dbt-state-comparison-via-a-base-ref-worktree.md)
+- [ADR 0013: dbt state comparison via a base-ref worktree](../decisions/0013-dbt-state-comparison-via-a-base-ref-worktree.md)
   — how the narrowed `dbt build` gets a manifest to compare against.
 - [Phase 1](../phases/phase-1.md)
