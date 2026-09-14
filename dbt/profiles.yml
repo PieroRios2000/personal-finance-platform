@@ -33,6 +33,6 @@ personal_finance_platform:
           key_id: "{{ env_var('AWS_ACCESS_KEY_ID') }}"
           secret: "{{ env_var('AWS_SECRET_ACCESS_KEY') }}"
           region: "{{ env_var('AWS_REGION', 'us-east-1') }}"
-          endpoint: "{{ env_var('AWS_ENDPOINT_URL').split('://') | last }}"
+          endpoint: "{{ env_var('AWS_ENDPOINT_URL').rstrip('/').split('://') | last }}"
           url_style: path
           use_ssl: "{{ 'true' if env_var('AWS_ENDPOINT_URL').startswith('https') else 'false' }}"

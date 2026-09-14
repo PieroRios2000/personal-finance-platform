@@ -15,6 +15,11 @@
 -- A singular test, not a generic one: it is one query about one relation, and
 -- there is nothing to parametrize. Severity is dbt's default, `error`, so a gap
 -- fails `dbt build` instead of warning.
+--
+-- Two statements covering the same period also fail it (the second one does not
+-- start the day after the first one ends). That is the intended reading: a bank
+-- that regenerates a period's PDF with different bytes gets past T7's file-level
+-- dedup, and a duplicated period is exactly as wrong as a missing one.
 
 with ordered as (
 
