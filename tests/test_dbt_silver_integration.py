@@ -101,6 +101,7 @@ def _write(
     account_id: str = _ACCOUNT_ID,
     account_kind: AccountKind = "asset",
     currency: Currency = "PEN",
+    file_sha256: str | None = None,
 ) -> None:
     """Write one synthetic statement to the test lake, reconciled by construction.
 
@@ -110,14 +111,18 @@ def _write(
     `bank`/`account_id`/`account_kind`/`currency` default to the shared BCP
     fixture every other test in this file uses; T18c's Scotiabank dual-currency
     tests override them to write a second currency's statement for the very
-    same account and period.
+    same account and period. `file_sha256` defaults to one derived from this
+    call's own arguments, but a caller can pass the same value to two calls to
+    mirror how `ingestion/cli.py` actually ingests a Scotiabank PDF: one file,
+    `parser.parse()` returns one `Statement` per currency, and every one of them
+    is written with that single file's own sha256, never a per-currency one.
     """
     from lakehouse import bronze
 
-    file_sha256 = hashlib.sha256(
-        f"{bank}:{account_id}:{currency}:{period_start}:{opening_balance}:"
-        f"{movement}".encode()
-    ).hexdigest()
+    if file_sha256 is None:
+        file_sha256 = hashlib.sha256(
+            f"{period_start}:{opening_balance}:{movement}".encode()
+        ).hexdigest()
     amount = Decimal(movement)
     transactions = []
     if amount != 0:
@@ -284,6 +289,12 @@ def test_dbt_build_passes_with_scotiabank_dual_currency_same_period_statements(
     entirely, so it doesn't interact with the Scotiabank pair's continuity."""
     _write(*_JANUARY)
 
+    # One real PDF, one sha256, shared across both currency Statements it
+    # yields -- the same file_sha256 ingestion/cli.py passes to every
+    # bronze.write_statement() call for one parsed file.
+    scotiabank_file_sha256 = hashlib.sha256(
+        b"scotiabank-january-both-currencies"
+    ).hexdigest()
     _write(
         date(2026, 1, 1),
         date(2026, 1, 31),
@@ -293,6 +304,7 @@ def test_dbt_build_passes_with_scotiabank_dual_currency_same_period_statements(
         account_id=_SCOTIABANK_ACCOUNT_ID,
         account_kind="liability",
         currency="PEN",
+        file_sha256=scotiabank_file_sha256,
     )
     _write(
         date(2026, 1, 1),
@@ -303,6 +315,7 @@ def test_dbt_build_passes_with_scotiabank_dual_currency_same_period_statements(
         account_id=_SCOTIABANK_ACCOUNT_ID,
         account_kind="liability",
         currency="USD",
+        file_sha256=scotiabank_file_sha256,
     )
 
     result = _dbt_build(tmp_path)
