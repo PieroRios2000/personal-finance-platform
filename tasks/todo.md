@@ -427,5 +427,28 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 
 **Dependencies:** T17b, T18b · **Files:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Size:** S
 
+### T19b: Obsidian vault for the brain — `docs/obsidian-brain-vault`
+
+**Description:** A graphical way to browse `brain/` — its cross-links (ADRs, components, concepts,
+phases) as a navigable graph, not just the Mermaid map in `brain/README.md`. Deferred, not part
+of the Phase 1 close checklist: nice-to-have, not a blocker.
+
+**Acceptance criteria:**
+- [ ] `brain/` opens as an Obsidian vault with no broken links: confirm its existing relative
+  markdown links (`[ADR 0009](../decisions/...)`) resolve in Obsidian's graph/backlinks view as-is
+  (Obsidian follows standard markdown links, not only `[[wikilinks]]`), fixing any that don't.
+- [ ] `.obsidian/` (personal, per-machine view state — panes, graph layout, theme) is gitignored,
+  never committed.
+- [ ] `SETUP.md` gets a short optional section: open `brain/` (or the repo root) as a vault, and
+  the Windows UNC path to this WSL2 checkout (`\\wsl.localhost\<distro>\...`) for Obsidian
+  running on the Windows side.
+
+**Verification:**
+- [ ] Opening the vault shows every ADR, component and concept note connected in the graph view;
+  no note appears fully isolated unless it genuinely has no cross-links yet.
+
+**Dependencies:** none (brain/ already exists) · **Files:** `.gitignore`, `SETUP.md` ·
+**Size:** S · **Skill:** documentation-and-adrs
+
 ### ✅ Final checkpoint
 - [ ] All criteria met · [ ] integral reconciliation green (statement, continuity and between accounts) · [ ] `develop → main` release PR "Phase 1 — Foundation" · [ ] merged by Piero
