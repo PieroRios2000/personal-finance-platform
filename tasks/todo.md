@@ -413,6 +413,38 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 
 **Dependencies:** T16, T18 · **Files:** `dbt/models/silver/**`, tests · **Size:** M · **Skill:** test-driven-development
 
+### T18c: Currency-aware statement continuity — `fix/statement-continuity-currency`
+
+**Description:** `dbt/tests/assert_statement_continuity.sql` (T16) fails on any real Scotiabank
+statement with both Soles and Dólares activity in the same period — found 2026-09-14 while
+verifying T18a's PR by actually running `dbt build` against synthetic BCP + dual-currency
+Scotiabank data for the first time (T17's own synthetic seeding never included Scotiabank, so
+nothing had exercised this combination through `dbt build` before). Root cause: Scotiabank
+writes *two* `bronze.statements` rows for one real statement — one per currency (ADR 0012) —
+both sharing the same `account_id` and the same `period_start`/`period_end`. The test's
+`lag() ... partition by user_id, account_id order by period_start` sees two same-period rows
+for that account and hits its own documented "two statements covering the same period"
+failure mode, which is correct for an actual duplicate but a false positive here. `Statement`
+has no `currency` field to partition by instead — only `Transaction` does.
+
+**Acceptance criteria:**
+- [ ] `Statement` gains a `currency: Currency` field (mirrors `account_kind`, T18a's own
+  precedent: hardcoded per parser call — BCP always `"PEN"`; Scotiabank sets it per the
+  statement it's building, since it already produces one `Statement` per currency).
+- [ ] `lakehouse/bronze.py`'s `bronze/statements` pyarrow schema carries it through.
+- [ ] `assert_statement_continuity.sql`'s window functions partition by
+  `user_id, account_id, currency` instead of just `user_id, account_id`, so two
+  same-period, different-currency statements no longer collide.
+
+**Verification:**
+- [ ] A new integration or dbt-build test: synthetic BCP (single currency) plus a synthetic
+  Scotiabank statement with both PEN and USD activity in the same period both ingest and
+  `dbt build` passes with no continuity error.
+- [ ] A genuine duplicate (two statements, same account, same currency, same period) still
+  fails the test — the false-positive fix must not weaken the real check.
+
+**Dependencies:** T16, T18 · **Files:** `ingestion/schema.py`, `ingestion/parsers/{bcp,scotiabank}.py`, `lakehouse/bronze.py`, `dbt/tests/assert_statement_continuity.sql`, tests · **Size:** S · **Skill:** debugging-and-error-recovery
+
 ### T19: Phase close — `docs/phase-1-close`
 
 **Description:** Leave the phase presentable and turn on blocking for the numeric rules.
@@ -425,7 +457,7 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 **Verification:**
 - [ ] Clone the repo into a clean folder and follow the README through to `dbt build` with no missing steps.
 
-**Dependencies:** T17b, T18b · **Files:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Size:** S
+**Dependencies:** T17b, T18b, T18c · **Files:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Size:** S
 
 ### T19b: Obsidian vault for the brain — `docs/obsidian-brain-vault`
 
