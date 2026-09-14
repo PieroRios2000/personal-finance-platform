@@ -433,6 +433,11 @@ def parse(
         # owed. A constant, not read from the PDF — a bank's own product
         # type doesn't vary per statement (T18a, ADR 0015).
         account_kind="asset",
+        # BCP is Soles-only: every transaction built above is already hardcoded
+        # to currency="PEN" (this parser's module docstring: "a BCP account
+        # statement covers one account in one currency"), so the statement
+        # itself is too (T18c, ADR 0016).
+        currency="PEN",
         transactions=transactions,
     )
     reconcile(statement)
