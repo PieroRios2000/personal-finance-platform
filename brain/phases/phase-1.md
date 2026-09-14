@@ -16,7 +16,7 @@ and written to bronze; dbt builds silver with tests, and CI validates every PR. 
 | A — Repo foundation | T1 guards (#8) · T2 Python project (#10) · T3a brain (#14) · T3b CLAUDE.md (#15) · T4 CONSTRAINTS (#17, fixes in #21) · T5 CI quality gates (#26) | T1–T5 done |
 | B — Ingestion | T6–T12b | T6 schema (#30, fix #32) · T7 file hash (#28) · T8 reconciliation (#34) · T9 inspector (#16) · T10 synthetic fixture (#29) · T11 BCP parser · T12 dispatcher/CLI · T11b OCR fallback (#38) · T12b inbox organizer (#39): all done |
 | C — Lakehouse | T13–T15 | T13 local S3 (SeaweedFS) · T14 bronze writer · T14c bronze backfill · T15 benchmarks + impact-based CI: all done |
-| D — Transformation | T16, T17, T17b | Pending |
+| D — Transformation | T16, T17, T17b | T16 dbt silver done; T17, T17b pending |
 | E — Second bank and close | T18, T18b, T19 | Pending |
 
 Also integrated: [SETUP.md](../../SETUP.md) with environment setup (#10), the ephemeral
@@ -36,6 +36,7 @@ integral reconciliation plan (#19).
 - [Dispatcher and CLI](../components/cli.md) — built (T12, T12b, T14, T14c): `pfp parse`, `pfp organize`, `pfp ingest`, `pfp backfill`; one bank registered so far.
 - [Inbox organizer](../components/inbox-organizer.md) — built (T12b).
 - [Lakehouse](../components/lakehouse.md) — built (T14, T14c): bronze in Delta, partitioned by `user_id`, with a backfill that replaces a file's rows.
+- [dbt silver](../components/dbt-silver.md) — built (T16): bronze read through `delta_scan()`, `silver.transactions`, and continuity reconciliation across statement periods.
 
 ## Decisions
 
@@ -51,6 +52,7 @@ integral reconciliation plan (#19).
 | 0008 | Impact-based CI | [ADR 0008](../decisions/0008-impact-based-ci.md) |
 | 0009 | Several users and accounts; PDF content rules over the file name | Written in T6 |
 | 0010 | A bronze backfill replaces a file's rows, it doesn't version them | [ADR 0010](../decisions/0010-bronze-backfill-replaces-not-versions.md) |
+| 0011 | `delta_scan()` as a dbt source, on an on-disk DuckDB | [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-source.md) |
 
 ## Concepts
 
