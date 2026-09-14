@@ -167,6 +167,19 @@ that is the point, it names the periods you never archived (see
 `LAKEHOUSE_URI` points at, so pointing it at a prefix (`LAKEHOUSE_URI=s3://lakehouse/scratch`)
 is how you try things out without touching your real bronze.
 
+### `make poc`: the whole flow against your real PDFs (T17)
+
+`make poc` runs the same flow as CI's `ephemeral-integration` job (ADR 0007) — `poc-up`,
+`pfp ingest`, `dbt build` — but once, locally, against your own real inbox instead of the
+synthetic fixture, and tears the environment down when it's done, success or failure. Unlike
+every command above, its own output is deliberately narrow: only pass/fail and reconciliation
+*counts* ever get printed (ADR 0004 — never a real balance, account number or description);
+see `scripts/poc.py`'s docstring for exactly which lines that is and why.
+
+```bash
+make poc   # brings its own environment up and down; no need for poc-up first
+```
+
 ## 7. Browsing the lake in DBeaver
 
 `dbt/pfp.duckdb` (section 6) is a real on-disk DuckDB database, so any DuckDB-aware SQL client
@@ -224,7 +237,8 @@ once. Querying `bronze.*` still needs `make poc-up` running, same as `dbt build`
 
 Every PR runs `.github/workflows/ci.yml`: `lint-types`, `tests`, `security`, `architecture`
 and `floor-guard`, plus `changes` and — only when `changes` says the PR affects them —
-`benchmarks` (T15, ADR 0008). From the terminal:
+`benchmarks` (T15) and `ephemeral-integration` (T17, ADR 0007 and ADR 0008). From the
+terminal:
 
 ```bash
 gh pr checks <n>                     # pass/fail per job for PR <n>

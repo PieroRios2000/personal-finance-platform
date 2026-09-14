@@ -45,6 +45,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       benchmarks: ${{ steps.impact.outputs.benchmarks }}
+      integration: ${{ steps.impact.outputs.integration }}
+      dbt_select: ${{ steps.impact.outputs.dbt_select }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -57,7 +59,11 @@ jobs:
             git diff --name-only "origin/$PFP_BASE_REF...HEAD" \
               | python3 scripts/ci_impact.py >> "$GITHUB_OUTPUT"
           else
-            echo "benchmarks=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "benchmarks=true"
+              echo "integration=true"
+              echo "dbt_select=all"
+            } >> "$GITHUB_OUTPUT"
           fi
           {
             echo "### changes (ADR 0008)"
@@ -227,3 +233,105 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
+
+  # The ephemeral environment (T17, ADR 0007): local S3 up, the synthetic
+  # fixture ingested twice (idempotency: the second run adds 0 rows), dbt build
+  # (impact-narrowed per ADR 0008), sqlfluff, and the integration-marked tests
+  # that only ever run here (CONSTRAINTS.md's exceptions table). Always torn
+  # down, logs saved first so a failure stays reviewable once it's gone.
+  ephemeral-integration:
+    name: ephemeral-integration
+    needs: changes
+    if: needs.changes.outputs.integration == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # No secrets (ADR 0007): SeaweedFS's identity here is a fixed, local-only,
+    # non-real value -- the same shape as every developer's own .env, just
+    # hardcoded so this job runs the same way on a PR from a fork.
+    env:
+      COMPOSE_PROJECT: pfp-pr-${{ github.event.pull_request.number || github.run_id }}
+      LAKEHOUSE_URI: s3://lakehouse
+      AWS_ENDPOINT_URL: http://localhost:8333
+      AWS_ACCESS_KEY_ID: pfp-ci-dummy-key
+      AWS_SECRET_ACCESS_KEY: pfp-ci-dummy-secret
+      AWS_REGION: us-east-1
+      PFP_ACCOUNT_KEY: pfp-ci-dummy-account-key-0000000000000000
+      PFP_USER: ci
+      PFP_INBOX_ROOT: /tmp/pfp-ci-inbox
+      PFP_ARCHIVE_ROOT: /tmp/pfp-ci-archive
+      DBT_SELECT: ${{ needs.changes.outputs.dbt_select }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - run: uv sync --locked
+
+      - name: bring up the ephemeral environment
+        run: |
+          docker compose -p "$COMPOSE_PROJECT" up -d --wait seaweedfs
+          docker compose -p "$COMPOSE_PROJECT" run --rm bucket-init
+
+      # Twice: the second pfp ingest must add 0 new rows to bronze, proving
+      # ingestion is idempotent against the real platform, not a mock of it.
+      # organize() (T12b) always moves a processed file out of the inbox, so
+      # the fixture is re-seeded (byte-identical) before each run.
+      - name: ingest the synthetic fixture (first pass)
+        run: |
+          uv run python -m scripts.seed_synthetic_inbox \
+            --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
+          uv run pfp ingest --user "$PFP_USER" \
+            --inbox-root "$PFP_INBOX_ROOT" --archive-root "$PFP_ARCHIVE_ROOT" \
+            | tee /tmp/pfp-ci-ingest-1.log
+      - name: ingest the synthetic fixture again (must add 0 rows)
+        run: |
+          uv run python -m scripts.seed_synthetic_inbox \
+            --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
+          uv run pfp ingest --user "$PFP_USER" \
+            --inbox-root "$PFP_INBOX_ROOT" --archive-root "$PFP_ARCHIVE_ROOT" \
+            | tee /tmp/pfp-ci-ingest-2.log
+          grep -q "Bronze: 0 statement(s) written" /tmp/pfp-ci-ingest-2.log
+
+      # ADR 0008: a change confined to dbt/ builds only what it touched and its
+      # descendants, compared against a manifest parsed from the base branch;
+      # anything else (a parser, bronze, a dependency) builds everything, since
+      # no state comparison can see what those change in the data.
+      - name: dbt build
+        run: |
+          if [ "$DBT_SELECT" = "state:modified+" ]; then
+            git fetch origin "$PFP_BASE_REF"
+            git worktree add --detach /tmp/pfp-base-ref "origin/$PFP_BASE_REF"
+            uv run dbt parse --project-dir /tmp/pfp-base-ref/dbt --profiles-dir dbt \
+              --target-path /tmp/pfp-base-manifest
+            uv run dbt build --project-dir dbt --profiles-dir dbt \
+              --select "state:modified+" --state /tmp/pfp-base-manifest
+          else
+            uv run dbt build --project-dir dbt --profiles-dir dbt
+          fi
+      - run: uv run sqlfluff lint dbt/models
+      - run: uv run pytest -m integration
+
+      - name: save logs and dbt artifacts
+        if: always()
+        run: |
+          mkdir -p /tmp/pfp-ci-artifacts
+          docker compose -p "$COMPOSE_PROJECT" logs --no-color \
+            > /tmp/pfp-ci-artifacts/docker-compose.log 2>&1 || true
+          cp dbt/target/run_results.json /tmp/pfp-ci-artifacts/ 2>/dev/null || true
+          cp dbt/logs/dbt.log /tmp/pfp-ci-artifacts/ 2>/dev/null || true
+          cp /tmp/pfp-ci-ingest-1.log /tmp/pfp-ci-ingest-2.log /tmp/pfp-ci-artifacts/ \
+            2>/dev/null || true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: ephemeral-integration-logs
+          path: /tmp/pfp-ci-artifacts
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: tear down the ephemeral environment
+        if: always()
+        run: docker compose -p "$COMPOSE_PROJECT" down -v

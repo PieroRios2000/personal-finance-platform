@@ -348,17 +348,17 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 **Description:** On every PR, create the temporary platform, ingest synthetic data, run dbt, and tear it down (ADR 0007). The same thing locally with your real PDFs.
 
 **Acceptance criteria:**
-- [ ] CI job: `docker compose -p pfp-pr-<n> up -d --wait` → `pfp ingest` the synthetic fixture twice (the second adds 0 rows) → `dbt build` → `sqlfluff lint` → `down -v` with `if: always()`.
-- [ ] Impact-based (ADR 0008): the environment only spins up if `ingestion/`, `lakehouse/`, `dbt/` or the dependencies change; `dbt parse` on the base commit generates the manifest, and the PR builds `@state:modified`; if `ingestion/` or `lakehouse/` change, a full `dbt build`.
-- [ ] `integration` tests run in this job; no secrets, with `timeout-minutes`.
-- [ ] Before tearing down, save `docker compose logs` and dbt's artifacts (`target/run_results.json`, `logs/dbt.log`) as a job artifact (`if: always()`, short retention), so a failure can still be reviewed once the environment is gone.
-- [ ] `make poc`: the same flow locally with your real PDFs; prints only pass/fail and reconciliation differences, and tears the environment down at the end.
+- [x] CI job: `docker compose -p pfp-pr-<n> up -d --wait` → `pfp ingest` the synthetic fixture twice (the second adds 0 rows) → `dbt build` → `sqlfluff lint` → `down -v` with `if: always()`. (pending: verified by running every step of this exact sequence locally against a live SeaweedFS with the job's own env values — the `ephemeral-integration` job itself needs a live GitHub Actions PR run to confirm, which this session cannot trigger.)
+- [x] Impact-based (ADR 0008): the environment only spins up if `ingestion/`, `lakehouse/`, `dbt/` or the dependencies change; `dbt parse` on the base commit generates the manifest, and the PR builds `state:modified+` (ADR 0013); if `ingestion/` or `lakehouse/` change, a full `dbt build`.
+- [x] `integration` tests run in this job; no secrets, with `timeout-minutes`.
+- [x] Before tearing down, save `docker compose logs` and dbt's artifacts (`target/run_results.json`, `logs/dbt.log`) as a job artifact (`if: always()`, short retention), so a failure can still be reviewed once the environment is gone. (pending: the files themselves were verified locally; the `actions/upload-artifact` step needs a live GitHub Actions run to confirm.)
+- [ ] `make poc`: the same flow locally with your real PDFs; prints only pass/fail and reconciliation differences, and tears the environment down at the end. **Piero's step**: this session must never read your real PDFs or `.env` (ADR 0004); the redaction logic that keeps real amounts out of `make poc`'s own output is unit-tested (`tests/test_poc.py`).
 
 **Verification:**
-- [ ] The job is green; breaking a dbt test on purpose turns it red (and gets discarded).
-- [ ] Once the job finishes, green or red, no containers or volumes from the project remain.
-- [ ] `make poc` green on your machine and leaves nothing behind.
-- [ ] A PR that changes a silver model only builds that model, its descendants, and the ancestors needed (visible in dbt's log).
+- [ ] The job is green; breaking a dbt test on purpose turns it red (and gets discarded). (pending: needs a live GitHub Actions PR run; the underlying mechanism — `dbt build` failing on a broken continuity test — is proven locally by `tests/test_dbt_silver_integration.py`, which passed for real against local S3 in this session.)
+- [x] Once the job finishes, green or red, no containers or volumes from the project remain. (verified locally, both after a clean run and after an interrupted one.)
+- [ ] `make poc` green on your machine and leaves nothing behind. **Piero's step** (real PDFs, see above).
+- [x] A PR that changes a silver model only builds that model, its descendants, and the ancestors needed (visible in dbt's log). (verified locally: `dbt build --select state:modified+ --state <base-manifest>` selected 0 nodes with no dbt diff, and exactly `silver.transactions` plus its 11 generic tests after editing `transactions.sql` — see ADR 0013's "Consequences" for the one known gap, a singular test with no `ref()` to the model.)
 
 **Dependencies:** T15, T16 · **Files:** `.github/workflows/ci.yml`, `Makefile` · **Size:** M · **Skill:** ci-cd-and-automation
 
