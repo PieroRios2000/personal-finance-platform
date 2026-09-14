@@ -91,6 +91,15 @@ def test_parse_marks_every_statement_as_an_asset_account(bcp_pdf: Path) -> None:
     assert statement.account_kind == "asset"
 
 
+def test_parse_marks_every_statement_as_pen_currency(bcp_pdf: Path) -> None:
+    """BCP is a Soles-only checking account (T18c): hardcoded per parser, the
+    same reasoning account_kind already follows -- a bank's own product
+    doesn't vary per statement."""
+    [statement] = bcp.parse(bcp_pdf, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert statement.currency == "PEN"
+
+
 def test_parse_extracts_charges_and_credits_with_the_right_sign(bcp_pdf: Path) -> None:
     [statement] = bcp.parse(bcp_pdf, user_id="piero", file_sha256=FILE_SHA256)
 
