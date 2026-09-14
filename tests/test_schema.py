@@ -51,6 +51,7 @@ def _statement_kwargs(**overrides: Any) -> dict[str, Any]:
         "declared_charges_total": Decimal("25.50"),
         "declared_credits_total": Decimal("0.00"),
         "account_kind": "asset",
+        "currency": "PEN",
         "transactions": [Transaction(**_transaction_kwargs())],
     }
     kwargs.update(overrides)
@@ -168,6 +169,38 @@ def test_transaction_has_no_account_kind_field() -> None:
     # vary per transaction, the same reasoning opening_balance/closing_balance
     # already live only on Statement).
     assert "account_kind" not in Transaction.model_fields
+
+
+def test_statement_accepts_a_pen_currency() -> None:
+    statement = Statement(**_statement_kwargs(currency="PEN"))
+    assert statement.currency == "PEN"
+
+
+def test_statement_accepts_a_usd_currency() -> None:
+    statement = Statement(**_statement_kwargs(currency="USD"))
+    assert statement.currency == "USD"
+
+
+def test_statement_rejects_an_unrecognized_currency() -> None:
+    with pytest.raises(ValidationError):
+        Statement(**_statement_kwargs(currency="EUR"))
+
+
+def test_statement_requires_currency() -> None:
+    kwargs = _statement_kwargs()
+    del kwargs["currency"]
+    with pytest.raises(ValidationError):
+        Statement(**kwargs)
+
+
+def test_statement_rejects_a_transaction_with_a_different_currency() -> None:
+    # T18c: Statement.currency exists precisely because a Scotiabank
+    # statement only ever holds transactions of its own currency -- a
+    # mismatch here would mean that invariant broke somewhere upstream, so
+    # it fails loudly the same way a wrong user/bank/account already does.
+    mismatched = Transaction(**_transaction_kwargs(currency="USD"))
+    with pytest.raises(ValidationError):
+        Statement(**_statement_kwargs(currency="PEN", transactions=[mismatched]))
 
 
 # --- hash_account ----------------------------------------------------------
