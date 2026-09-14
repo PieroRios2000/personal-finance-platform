@@ -85,6 +85,9 @@ def test_pdfs_sharing_a_display_name_from_different_accounts_land_apart(
     for item in report.archived:
         assert item.dest.exists()
         assert item.bank == "BCP"
+        # One archived file carries every Statement its parse produced (T18);
+        # a BCP statement always produces exactly one.
+        assert len(item.statements) == 1
     assert not report.duplicates
     assert not report.needs_review
 
