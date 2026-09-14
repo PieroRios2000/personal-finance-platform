@@ -167,11 +167,78 @@ that is the point, it names the periods you never archived (see
 `LAKEHOUSE_URI` points at, so pointing it at a prefix (`LAKEHOUSE_URI=s3://lakehouse/scratch`)
 is how you try things out without touching your real bronze.
 
+### `make poc`: the whole flow against your real PDFs (T17)
+
+`make poc` runs the same flow as CI's `ephemeral-integration` job (ADR 0007) — `poc-up`,
+`pfp ingest`, `dbt build` — but once, locally, against your own real inbox instead of the
+synthetic fixture, and tears the environment down when it's done, success or failure. Unlike
+every command above, its own output is deliberately narrow: only pass/fail and reconciliation
+*counts* ever get printed (ADR 0004 — never a real balance, account number or description);
+see `scripts/poc.py`'s docstring for exactly which lines that is and why.
+
+```bash
+make poc   # brings its own environment up and down; no need for poc-up first
+```
+
+## 7. Browsing the lake in DBeaver
+
+`dbt/pfp.duckdb` (section 6) is a real on-disk DuckDB database, so any DuckDB-aware SQL client
+can open it directly — DBeaver has a built-in driver for it. The commands below also use the
+standalone `duckdb` CLI (not the same as the `duckdb` Python package `uv sync` already
+installs): `curl https://install.duckdb.org | sh` if `which duckdb` comes back empty.
+
+**Silver only, zero extra setup**, after at least one `dbt build`:
+
+1. DBeaver → *Database* → *New Database Connection* → search **DuckDB** → Next.
+2. *Path*: browse to this repo's `dbt/pfp.duckdb`.
+3. *Test Connection* → DBeaver offers to download the DuckDB JDBC driver from Maven → Download.
+4. Finish. `silver.transactions` shows up in the Database Navigator.
+
+**Bronze too** (the raw Delta tables on SeaweedFS S3) needs a one-time setup, since dbt only
+*reads* bronze through `delta_scan()` at build time — it never materializes it into
+`pfp.duckdb`. Run this once, from the repository root, with SeaweedFS up and `.env` exported
+(same prerequisites as section 6):
+
+```bash
+make poc-up
+set -a && source .env && set +a
+ENDPOINT_HOST=$(echo "$AWS_ENDPOINT_URL" | sed -E 's#^[a-z]+://##; s#/$##')
+
+duckdb dbt/pfp.duckdb <<SQL
+INSTALL httpfs; LOAD httpfs;
+
+CREATE PERSISTENT SECRET lakehouse (
+    TYPE s3,
+    PROVIDER config,
+    KEY_ID '$AWS_ACCESS_KEY_ID',
+    SECRET '$AWS_SECRET_ACCESS_KEY',
+    REGION '${AWS_REGION:-us-east-1}',
+    ENDPOINT '$ENDPOINT_HOST',
+    URL_STYLE 'path',
+    USE_SSL false
+);
+
+CREATE SCHEMA IF NOT EXISTS bronze;
+CREATE OR REPLACE VIEW bronze.transactions   AS SELECT * FROM delta_scan('s3://lakehouse/bronze/transactions');
+CREATE OR REPLACE VIEW bronze.statements     AS SELECT * FROM delta_scan('s3://lakehouse/bronze/statements');
+CREATE OR REPLACE VIEW bronze.ingested_files AS SELECT * FROM delta_scan('s3://lakehouse/bronze/ingested_files');
+SQL
+```
+
+`CREATE PERSISTENT SECRET` writes to `~/.duckdb/stored_secrets` (unencrypted — this is local
+SeaweedFS, not real AWS credentials) and loads automatically into **every** DuckDB
+connection on this machine from then on, DBeaver included; the views live inside
+`pfp.duckdb` itself, so they show up in the Database Navigator next to `silver.*` with no
+further per-connection setup. Re-run only the `duckdb dbt/pfp.duckdb -c "CREATE OR REPLACE
+VIEW ..."` block if the bucket or table names ever change — the secret only needs creating
+once. Querying `bronze.*` still needs `make poc-up` running, same as `dbt build` does.
+
 ## Reviewing CI
 
 Every PR runs `.github/workflows/ci.yml`: `lint-types`, `tests`, `security`, `architecture`
 and `floor-guard`, plus `changes` and — only when `changes` says the PR affects them —
-`benchmarks` (T15, ADR 0008). From the terminal:
+`benchmarks` (T15) and `ephemeral-integration` (T17, ADR 0007 and ADR 0008). From the
+terminal:
 
 ```bash
 gh pr checks <n>                     # pass/fail per job for PR <n>

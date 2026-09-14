@@ -54,6 +54,7 @@ _STATEMENTS_SCHEMA = pa.schema(
         ("closing_balance", _MONEY),
         ("declared_charges_total", _MONEY),
         ("declared_credits_total", _MONEY),
+        ("account_kind", pa.string()),
         ("file_sha256", pa.string()),
         ("ingested_at", pa.timestamp("us", tz="UTC")),
     ]
@@ -204,6 +205,7 @@ def write_statement(statement: Statement, file_sha256: str) -> None:
         "closing_balance": statement.closing_balance,
         "declared_charges_total": statement.declared_charges_total,
         "declared_credits_total": statement.declared_credits_total,
+        "account_kind": statement.account_kind,
         "file_sha256": file_sha256,
         "ingested_at": ingested_at,
     }

@@ -1,0 +1,115 @@
+"""Tests for scripts.poc (T17, ADR 0007's `make poc`).
+
+The property that matters here is privacy, not orchestration: `pfp ingest`'s own
+report is amount-free by construction *except* for a "needs review" entry whose
+reason carries `ReconciliationError`'s real expected/actual balances
+(`ingestion/reconciliation.py`). These tests prove the two filters this script
+uses to build its report never let one of those lines through, and that the
+overall pass/fail wiring is sane -- never the real `pfp`/`dbt` subprocesses,
+which is what `make poc` itself (against Piero's real inbox) is for.
+"""
+
+import subprocess
+from collections.abc import Sequence
+from typing import Any
+
+import pytest
+
+from scripts.poc import _safe_dbt_lines, _safe_ingest_lines, main
+
+_LEAKY_INGEST_REPORT = """Inbox: /home/piero/finance-data/inbox/piero
+Archived: 1  Duplicates: 0  Needs review: 1
+
+Archived:
+  BCP ...1234: 2026-01-01 to 2026-01-31 -> \
+/home/piero/finance-data/raw/piero/BCP/1234-abcdef/2026-01-01_2026-01-31.pdf
+
+Needs review (moved to _needs_review/, nothing deleted):
+  #1 (sha256 deadbeef00...): the statement did not reconcile: closing balance: \
+expected 1000.00, got 974.50 (difference -25.50)
+
+Bronze: 1 statement(s) written, 0 already ingested"""
+
+_DBT_BUILD_OUTPUT = """1 of 13 START test assert_statement_continuity .......... [RUN]
+1 of 13 FAIL 1 assert_statement_continuity .................. [FAIL 1 in 0.40s]
+Done. PASS=12 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=13"""
+
+
+def test_ingest_filter_keeps_only_the_two_amount_free_summary_lines() -> None:
+    safe = _safe_ingest_lines(_LEAKY_INGEST_REPORT)
+
+    assert safe == [
+        "Archived: 1  Duplicates: 0  Needs review: 1",
+        "Bronze: 1 statement(s) written, 0 already ingested",
+    ]
+
+
+@pytest.mark.parametrize("leaked", ["974.50", "1000.00", "-25.50", "deadbeef00"])
+def test_ingest_filter_never_lets_a_reconciliation_difference_through(
+    leaked: str,
+) -> None:
+    assert not any(leaked in line for line in _safe_ingest_lines(_LEAKY_INGEST_REPORT))
+
+
+def test_dbt_filter_keeps_the_summary_and_failing_test_names_only() -> None:
+    safe = _safe_dbt_lines(_DBT_BUILD_OUTPUT)
+
+    assert safe == [
+        "1 of 13 FAIL 1 assert_statement_continuity .................. "
+        "[FAIL 1 in 0.40s]",
+        "Done. PASS=12 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=13",
+    ]
+
+
+def test_dbt_filter_drops_ordinary_start_and_pass_noise() -> None:
+    assert _safe_dbt_lines("1 of 13 START test x .......... [RUN]") == []
+    assert _safe_dbt_lines("1 of 13 PASS x .......... [PASS in 0.01s]") == []
+
+
+def test_main_fails_clearly_without_pfp_user(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("PFP_USER", raising=False)
+
+    def _unexpected_call(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("subprocess.run must not be called without PFP_USER")
+
+    monkeypatch.setattr(subprocess, "run", _unexpected_call)
+
+    assert main() == 2
+    assert "PFP_USER" in capsys.readouterr().err
+
+
+def _fake_run(ingest_returncode: int, dbt_returncode: int) -> Any:
+    def run(cmd: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if cmd[2] == "pfp":
+            return subprocess.CompletedProcess(
+                cmd, ingest_returncode, stdout=_LEAKY_INGEST_REPORT, stderr=""
+            )
+        return subprocess.CompletedProcess(
+            cmd, dbt_returncode, stdout=_DBT_BUILD_OUTPUT, stderr=""
+        )
+
+    return run
+
+
+def test_main_reports_pass_when_both_steps_succeed(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.setattr(subprocess, "run", _fake_run(0, 0))
+
+    assert main() == 0
+    out = capsys.readouterr().out
+    assert "poc: PASS" in out
+    assert "974.50" not in out
+
+
+def test_main_reports_fail_when_dbt_build_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.setattr(subprocess, "run", _fake_run(0, 1))
+
+    assert main() == 1
+    assert "poc: FAIL" in capsys.readouterr().out

@@ -50,6 +50,7 @@ def _statement_kwargs(**overrides: Any) -> dict[str, Any]:
         "closing_balance": Decimal("74.50"),
         "declared_charges_total": Decimal("25.50"),
         "declared_credits_total": Decimal("0.00"),
+        "account_kind": "asset",
         "transactions": [Transaction(**_transaction_kwargs())],
     }
     kwargs.update(overrides)
@@ -138,6 +139,35 @@ def test_statement_rejects_a_transaction_from_a_different_account() -> None:
     mismatched = Transaction(**_transaction_kwargs(account_id=other_account_id))
     with pytest.raises(ValidationError):
         Statement(**_statement_kwargs(transactions=[mismatched]))
+
+
+def test_statement_accepts_an_asset_account_kind() -> None:
+    statement = Statement(**_statement_kwargs(account_kind="asset"))
+    assert statement.account_kind == "asset"
+
+
+def test_statement_accepts_a_liability_account_kind() -> None:
+    statement = Statement(**_statement_kwargs(account_kind="liability"))
+    assert statement.account_kind == "liability"
+
+
+def test_statement_rejects_an_unrecognized_account_kind() -> None:
+    with pytest.raises(ValidationError):
+        Statement(**_statement_kwargs(account_kind="checking"))
+
+
+def test_statement_requires_account_kind() -> None:
+    kwargs = _statement_kwargs()
+    del kwargs["account_kind"]
+    with pytest.raises(ValidationError):
+        Statement(**kwargs)
+
+
+def test_transaction_has_no_account_kind_field() -> None:
+    # account_kind is a Statement-level concept (an account's kind doesn't
+    # vary per transaction, the same reasoning opening_balance/closing_balance
+    # already live only on Statement).
+    assert "account_kind" not in Transaction.model_fields
 
 
 # --- hash_account ----------------------------------------------------------

@@ -57,7 +57,7 @@ def _run_parse(args: argparse.Namespace) -> int:
 
     password = os.environ.get(entry.password_env, "")
     try:
-        statement = entry.parse(
+        statements = entry.parse(
             path,
             user_id=user_id,
             file_sha256=file_sha256(path),
@@ -79,11 +79,19 @@ def _run_parse(args: argparse.Namespace) -> int:
         print(f"error: could not parse the statement: {error}", file=sys.stderr)
         return 1
 
-    print(f"Bank: {statement.bank}")
-    print(f"Account: ...{statement.account_last4}")
-    print(f"Period: {statement.period_start} to {statement.period_end}")
-    print(f"Transactions: {len(statement.transactions)}")
-    print("Reconciliation: OK")
+    # One PDF can hold several statements (T18: one per currency); the
+    # "Statement N of M" line only shows up when there really is more than one,
+    # so a single-statement bank's output is unchanged.
+    for number, statement in enumerate(statements, start=1):
+        if len(statements) > 1:
+            if number > 1:
+                print()
+            print(f"Statement {number} of {len(statements)}")
+        print(f"Bank: {statement.bank}")
+        print(f"Account: ...{statement.account_last4}")
+        print(f"Period: {statement.period_start} to {statement.period_end}")
+        print(f"Transactions: {len(statement.transactions)}")
+        print("Reconciliation: OK")
     return 0
 
 
@@ -125,14 +133,20 @@ def _run_ingest(args: argparse.Namespace) -> int:
         return 1
     print(report.render())
 
+    # `written` counts statements and `skipped` counts files: a file is either
+    # skipped whole or written whole, but one file can carry several statements
+    # (T18). `write_statement()` registers the file in `ingested_files` only
+    # once (T14c), so calling it per statement with the same sha256 appends
+    # every statement's rows while registering that file exactly once.
     written = 0
     skipped = 0
     for item in report.archived:
         if bronze.is_ingested(user_id, item.sha256):
             skipped += 1
             continue
-        bronze.write_statement(item.statement, item.sha256)
-        written += 1
+        for statement in item.statements:
+            bronze.write_statement(statement, item.sha256)
+            written += 1
 
     print()
     print(f"Bronze: {written} statement(s) written, {skipped} already ingested")
@@ -230,7 +244,7 @@ def _run_backfill(args: argparse.Namespace) -> int:
 
         password = os.environ.get(entry.password_env, "")
         try:
-            statement = entry.parse(
+            statements = entry.parse(
                 pdf, user_id=user_id, file_sha256=digest, password=password
             )
         except MissingAccountKeyError as error:
@@ -249,9 +263,12 @@ def _run_backfill(args: argparse.Namespace) -> int:
             failures.append((digest, f"could not parse the statement: {error}"))
             continue
 
+        # Bronze stores rows per *file*, so a file's statements are compared and
+        # replaced together, not one by one.
         in_bronze = bronze.transactions_for_file(user_id, digest)
         fresh = sorted(
             (transaction.date, transaction.description, transaction.amount)
+            for statement in statements
             for transaction in statement.transactions
         )
         verdict = (
@@ -259,14 +276,22 @@ def _run_backfill(args: argparse.Namespace) -> int:
             if in_bronze == fresh
             else "dates, descriptions or amounts differ"
         )
+        first = statements[0]
         replaced.append(
-            f"  {statement.bank} ...{statement.account_last4} "
-            f"{statement.period_start} to {statement.period_end} "
+            f"  {first.bank} ...{first.account_last4} "
+            f"{first.period_start} to {first.period_end} "
             f"(sha256 {digest[:8]}...): "
             f"{len(in_bronze)} -> {len(fresh)} transaction(s), {verdict}"
         )
         if not args.dry_run:
-            bronze.replace_statement(statement, digest)
+            # Only the first call may replace: `replace_statement()` starts by
+            # deleting every row this file already has in bronze, so calling it
+            # again for the second statement would wipe the first one's
+            # freshly written rows. The rest are plain appends onto the now
+            # empty slate.
+            bronze.replace_statement(first, digest)
+            for statement in statements[1:]:
+                bronze.write_statement(statement, digest)
 
     print(
         _backfill_report(

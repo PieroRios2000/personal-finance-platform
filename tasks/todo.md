@@ -348,17 +348,17 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 **Description:** On every PR, create the temporary platform, ingest synthetic data, run dbt, and tear it down (ADR 0007). The same thing locally with your real PDFs.
 
 **Acceptance criteria:**
-- [ ] CI job: `docker compose -p pfp-pr-<n> up -d --wait` → `pfp ingest` the synthetic fixture twice (the second adds 0 rows) → `dbt build` → `sqlfluff lint` → `down -v` with `if: always()`.
-- [ ] Impact-based (ADR 0008): the environment only spins up if `ingestion/`, `lakehouse/`, `dbt/` or the dependencies change; `dbt parse` on the base commit generates the manifest, and the PR builds `@state:modified`; if `ingestion/` or `lakehouse/` change, a full `dbt build`.
-- [ ] `integration` tests run in this job; no secrets, with `timeout-minutes`.
-- [ ] Before tearing down, save `docker compose logs` and dbt's artifacts (`target/run_results.json`, `logs/dbt.log`) as a job artifact (`if: always()`, short retention), so a failure can still be reviewed once the environment is gone.
-- [ ] `make poc`: the same flow locally with your real PDFs; prints only pass/fail and reconciliation differences, and tears the environment down at the end.
+- [x] CI job: `docker compose -p pfp-pr-<n> up -d --wait` → `pfp ingest` the synthetic fixture twice (the second adds 0 rows) → `dbt build` → `sqlfluff lint` → `down -v` with `if: always()`. (pending: verified by running every step of this exact sequence locally against a live SeaweedFS with the job's own env values — the `ephemeral-integration` job itself needs a live GitHub Actions PR run to confirm, which this session cannot trigger.)
+- [x] Impact-based (ADR 0008): the environment only spins up if `ingestion/`, `lakehouse/`, `dbt/` or the dependencies change; `dbt parse` on the base commit generates the manifest, and the PR builds `state:modified+` (ADR 0013); if `ingestion/` or `lakehouse/` change, a full `dbt build`.
+- [x] `integration` tests run in this job; no secrets, with `timeout-minutes`.
+- [x] Before tearing down, save `docker compose logs` and dbt's artifacts (`target/run_results.json`, `logs/dbt.log`) as a job artifact (`if: always()`, short retention), so a failure can still be reviewed once the environment is gone. (pending: the files themselves were verified locally; the `actions/upload-artifact` step needs a live GitHub Actions run to confirm.)
+- [ ] `make poc`: the same flow locally with your real PDFs; prints only pass/fail and reconciliation differences, and tears the environment down at the end. **Piero's step**: this session must never read your real PDFs or `.env` (ADR 0004); the redaction logic that keeps real amounts out of `make poc`'s own output is unit-tested (`tests/test_poc.py`).
 
 **Verification:**
-- [ ] The job is green; breaking a dbt test on purpose turns it red (and gets discarded).
-- [ ] Once the job finishes, green or red, no containers or volumes from the project remain.
-- [ ] `make poc` green on your machine and leaves nothing behind.
-- [ ] A PR that changes a silver model only builds that model, its descendants, and the ancestors needed (visible in dbt's log).
+- [ ] The job is green; breaking a dbt test on purpose turns it red (and gets discarded). (pending: needs a live GitHub Actions PR run; the underlying mechanism — `dbt build` failing on a broken continuity test — is proven locally by `tests/test_dbt_silver_integration.py`, which passed for real against local S3 in this session.)
+- [x] Once the job finishes, green or red, no containers or volumes from the project remain. (verified locally, both after a clean run and after an interrupted one.)
+- [ ] `make poc` green on your machine and leaves nothing behind. **Piero's step** (real PDFs, see above).
+- [x] A PR that changes a silver model only builds that model, its descendants, and the ancestors needed (visible in dbt's log). (verified locally: `dbt build --select state:modified+ --state <base-manifest>` selected 0 nodes with no dbt diff, and exactly `silver.transactions` plus its 11 generic tests after editing `transactions.sql` — see ADR 0013's "Consequences" for the one known gap, a singular test with no `ref()` to the model.)
 
 **Dependencies:** T15, T16 · **Files:** `.github/workflows/ci.yml`, `Makefile` · **Size:** M · **Skill:** ci-cd-and-automation
 
@@ -367,13 +367,13 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 **Description:** Show what changes in the data on every PR: the same ephemeral run against the base branch and against the PR's, compared.
 
 **Acceptance criteria:**
-- [ ] The job runs T17's flow for the base commit and for the PR's, with the same synthetic data in separate locations (a lake prefix and a DuckDB file per run).
-- [ ] `scripts/data_diff.py` compares the models built in the run using DuckDB: rows per model, columns and types, and differing rows (`EXCEPT` both ways, with a limited sample).
-- [ ] Results in Markdown in the job summary (`$GITHUB_STEP_SUMMARY`); warn mode, doesn't block.
+- [x] The job runs T17's flow for the base commit and for the PR's, with the same synthetic data in separate locations (a lake prefix and a DuckDB file per run). (pending: the `pr-data-diff` job itself — bringing up SeaweedFS, the checkout-swap, two real `pfp ingest` + `dbt build` runs — needs a live GitHub Actions PR run to confirm; locally verified piece by piece: the checkout-swap idiom is `benchmarks`' and `ephemeral-integration`'s own already-proven pattern, and `scripts/data_diff.py` itself is verified below.)
+- [x] `scripts/data_diff.py` compares the models built in the run using DuckDB: rows per model, columns and types, and differing rows (`EXCEPT` both ways, with a limited sample). (verified locally, both by `tests/test_data_diff.py` and by running the CLI for real against two hand-built `.duckdb` files with differing rows, an added column and a missing model — see the PR's Verification section.)
+- [x] Results in Markdown in the job summary (`$GITHUB_STEP_SUMMARY`); warn mode, doesn't block. (the job carries `continue-on-error: true` and is not in the branch ruleset's required checks — verifiable by reading `.github/workflows/ci.yml`. pending: the actual `$GITHUB_STEP_SUMMARY` rendering on a real run needs a live GitHub Actions PR run to confirm.)
 
 **Verification:**
-- [ ] TDD tests for the script with two small DuckDB databases.
-- [ ] A PR that changes a silver model shows the difference; one with no model changes shows "no changes".
+- [x] TDD tests for the script with two small DuckDB databases. (`tests/test_data_diff.py`, 11 tests, failing before `scripts/data_diff.py` existed and passing after — see the PR.)
+- [x] A PR that changes a silver model shows the difference; one with no model changes shows "no changes". (verified locally: `scripts/data_diff.py` run for real against two hand-built `.duckdb` files reports the row/column/sample difference correctly, and reports "No changes" when the two files are identical. pending: an actual PR triggering this through the live `pr-data-diff` job needs a live GitHub Actions PR run to confirm.)
 
 **Dependencies:** T17 · **Files:** `scripts/data_diff.py`, `tests/test_data_diff.py`, `.github/workflows/ci.yml` · **Size:** M · **Skill:** test-driven-development
 
@@ -389,14 +389,51 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 **Description:** A second bank: proves the parser and dispatcher design scales.
 
 **Acceptance criteria:**
-- [ ] A masked layout (T9), a synthetic fixture, and `parsers/scotiabank.py` registered in the dispatcher.
-- [ ] Like T11: bank, account and period come from the PDF's content, and the inbox (T12b) files its PDFs.
-- [ ] Synthetic tests in CI and `real_pdf` locally both reconcile.
+- [x] A masked layout (T9), a synthetic fixture, and `parsers/scotiabank.py` registered in the dispatcher. No byte-prefix signature exists for this bank (unlike BCP's `$BOP$`), so it's registered with `detect=None` and found by a new password-fallback pass instead (see `brain/decisions/0012-scotiabank-password-fallback-detection.md`).
+- [x] Bank, account and period come from the PDF's content (the unmasked 8-digit client/account code, not the always-masked card number); the inbox (T12b) files its PDFs via `organizer.py`, extended for a file that can hold more than one `Statement`.
+- [x] Synthetic tests in CI reconcile. `real_pdf` (pending: needs your real Scotiabank PDF + `SCOTIABANK_PDF_PASSWORD`, skips gracefully without them — see the Scotiabank parser brain note for what's confirmed vs. inferred).
 
 **Verification:**
-- [ ] `uv run pfp ingest <real Scotiabank pdf>` writes to bronze, and `dbt build` includes it in silver.
+- [ ] `uv run pfp ingest <real Scotiabank pdf>` writes to bronze, and `dbt build` includes it in silver. (pending: real-data validation is yours to run — ADR 0004 — likely to need a follow-up fix round the way T11's BCP parser did).
 
 **Dependencies:** T11b, T12, T14 · **Files:** `ingestion/parsers/scotiabank.py`, `tests/fixtures/…`, `tests/parsers/test_scotiabank.py` · **Size:** M · **Skill:** test-driven-development
+
+### T18a: Account kind (asset/liability) in the schema — `feat/account-kind`
+
+**Description:** BCP (checking) and Scotiabank (credit card) use opposite sign conventions —
+BCP's negative amount means money left the account, Scotiabank's negative amount means a
+payment that *reduces* debt. A real transfer from a checking account to pay down a credit
+card is therefore the same sign on both sides, not opposite: T18b's matching needs to know
+which kind of account each side is to tell a same-account-kind transfer (opposite signs) from
+a checking-to-credit-card one (same sign). Surfaced by Piero before T18b started, choosing
+this over a dbt-side bank-name lookup table (fragile — breaks the moment one bank has both a
+checking and a credit product).
+
+**Acceptance criteria:**
+- [x] `Statement` gains `account_kind: Literal["asset", "liability"]` (`ingestion/schema.py`).
+- [x] `bcp.py` sets `"asset"`; `scotiabank.py` sets `"liability"` — hardcoded per parser, not
+  inferred from the PDF (a bank's own product type doesn't vary per statement).
+- [x] `lakehouse/bronze.py`'s `statements` table (not `transactions`, which has no
+  balance/kind concept) carries it through; `dbt/models/sources.yml` and
+  `dbt/models/silver/transactions.sql` expose it (joined from `bronze.statements` on a
+  deduplicated `account_id`, see ADR 0015) for T18b to read.
+- [x] ADR written (0015): the two-value, hardcoded-per-parser design, and why a bank-name lookup
+  in dbt was rejected.
+
+**Verification:**
+- [x] Existing BCP/Scotiabank synthetic fixtures and tests still pass with the new field;
+  a new test asserts each parser's own `account_kind`.
+- [ ] `dbt build` shows the column reaching silver. (pending: no live SeaweedFS was reachable
+  from this session — the harness blocked materializing the running container's S3 credentials
+  into `.env`/the shell as a "credential materialization" action, even though they're local-only
+  dev creds. Verified statically instead: `sqlfluff lint dbt/models` and
+  `dbt compile --project-dir dbt --profiles-dir dbt` both pass against placeholder env vars, and
+  a new integration test, `test_silver_carries_account_kind_without_duplicating_rows` in
+  `tests/test_dbt_silver_integration.py`, is written and ready for `make poc-up` +
+  `pytest -m integration` on a machine/session that can reach it — Piero or CI should run it for
+  real before merging.)
+
+**Dependencies:** T18 · **Files:** `ingestion/schema.py`, `ingestion/parsers/{bcp,scotiabank}.py`, `lakehouse/bronze.py`, `dbt/models/**` · **Size:** S · **Skill:** test-driven-development
 
 ### T18b: Inter-account reconciliation — `feat/inter-account-reconciliation`
 
@@ -404,14 +441,48 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 
 **Acceptance criteria:**
 - [ ] A dbt model `silver/internal_transfers`: matches an outflow and an inflow from the same user, on different accounts, in the same currency, for the same amount (configurable tolerance, default 0), within N days or fewer (default 3). Every movement is in at most one pair.
+- [ ] Sign matching is `account_kind`-aware (T18a): two `asset` accounts (or two `liability` accounts) match on opposite signs; an `asset`-to-`liability` pair (paying down a card from checking) matches on the *same* sign, since a checking outflow and a debt-reducing payment are both negative.
 - [ ] `silver/transactions` flags `is_internal_transfer`; unmatched candidates land in `silver/unmatched_transfers` for review, never dropped.
 - [ ] Cross-currency transfers stay out of this task and show up as unmatched.
 
 **Verification:**
 - [ ] With synthetic BCP and Scotiabank data and a transfer between them, it comes back matched; removing the inflow makes it show up in `unmatched_transfers`.
+- [ ] A same-account-kind transfer (two synthetic BCP accounts, opposite-sign case) also matches, proving both branches of the sign logic.
 - [ ] `make poc` against your real PDFs shows only how many matched and how many didn't, with no amounts.
 
-**Dependencies:** T16, T18 · **Files:** `dbt/models/silver/**`, tests · **Size:** M · **Skill:** test-driven-development
+**Dependencies:** T16, T18, T18a · **Files:** `dbt/models/silver/**`, tests · **Size:** M · **Skill:** test-driven-development
+
+### T18c: Currency-aware statement continuity — `fix/statement-continuity-currency`
+
+**Description:** `dbt/tests/assert_statement_continuity.sql` (T16) fails on any real Scotiabank
+statement with both Soles and Dólares activity in the same period — found 2026-09-14 while
+verifying T18a's PR by actually running `dbt build` against synthetic BCP + dual-currency
+Scotiabank data for the first time (T17's own synthetic seeding never included Scotiabank, so
+nothing had exercised this combination through `dbt build` before). Root cause: Scotiabank
+writes *two* `bronze.statements` rows for one real statement — one per currency (ADR 0012) —
+both sharing the same `account_id` and the same `period_start`/`period_end`. The test's
+`lag() ... partition by user_id, account_id order by period_start` sees two same-period rows
+for that account and hits its own documented "two statements covering the same period"
+failure mode, which is correct for an actual duplicate but a false positive here. `Statement`
+has no `currency` field to partition by instead — only `Transaction` does.
+
+**Acceptance criteria:**
+- [ ] `Statement` gains a `currency: Currency` field (mirrors `account_kind`, T18a's own
+  precedent: hardcoded per parser call — BCP always `"PEN"`; Scotiabank sets it per the
+  statement it's building, since it already produces one `Statement` per currency).
+- [ ] `lakehouse/bronze.py`'s `bronze/statements` pyarrow schema carries it through.
+- [ ] `assert_statement_continuity.sql`'s window functions partition by
+  `user_id, account_id, currency` instead of just `user_id, account_id`, so two
+  same-period, different-currency statements no longer collide.
+
+**Verification:**
+- [ ] A new integration or dbt-build test: synthetic BCP (single currency) plus a synthetic
+  Scotiabank statement with both PEN and USD activity in the same period both ingest and
+  `dbt build` passes with no continuity error.
+- [ ] A genuine duplicate (two statements, same account, same currency, same period) still
+  fails the test — the false-positive fix must not weaken the real check.
+
+**Dependencies:** T16, T18 · **Files:** `ingestion/schema.py`, `ingestion/parsers/{bcp,scotiabank}.py`, `lakehouse/bronze.py`, `dbt/tests/assert_statement_continuity.sql`, tests · **Size:** S · **Skill:** debugging-and-error-recovery
 
 ### T19: Phase close — `docs/phase-1-close`
 
@@ -425,7 +496,30 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 **Verification:**
 - [ ] Clone the repo into a clean folder and follow the README through to `dbt build` with no missing steps.
 
-**Dependencies:** T17b, T18b · **Files:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Size:** S
+**Dependencies:** T17b, T18b, T18c · **Files:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Size:** S
+
+### T19b: Obsidian vault for the brain — `docs/obsidian-brain-vault`
+
+**Description:** A graphical way to browse `brain/` — its cross-links (ADRs, components, concepts,
+phases) as a navigable graph, not just the Mermaid map in `brain/README.md`. Deferred, not part
+of the Phase 1 close checklist: nice-to-have, not a blocker.
+
+**Acceptance criteria:**
+- [ ] `brain/` opens as an Obsidian vault with no broken links: confirm its existing relative
+  markdown links (`[ADR 0009](../decisions/...)`) resolve in Obsidian's graph/backlinks view as-is
+  (Obsidian follows standard markdown links, not only `[[wikilinks]]`), fixing any that don't.
+- [ ] `.obsidian/` (personal, per-machine view state — panes, graph layout, theme) is gitignored,
+  never committed.
+- [ ] `SETUP.md` gets a short optional section: open `brain/` (or the repo root) as a vault, and
+  the Windows UNC path to this WSL2 checkout (`\\wsl.localhost\<distro>\...`) for Obsidian
+  running on the Windows side.
+
+**Verification:**
+- [ ] Opening the vault shows every ADR, component and concept note connected in the graph view;
+  no note appears fully isolated unless it genuinely has no cross-links yet.
+
+**Dependencies:** none (brain/ already exists) · **Files:** `.gitignore`, `SETUP.md` ·
+**Size:** S · **Skill:** documentation-and-adrs
 
 ### ✅ Final checkpoint
 - [ ] All criteria met · [ ] integral reconciliation green (statement, continuity and between accounts) · [ ] `develop → main` release PR "Phase 1 — Foundation" · [ ] merged by Piero

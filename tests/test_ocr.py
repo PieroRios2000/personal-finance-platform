@@ -115,7 +115,7 @@ def test_bcp_parse_reconciles_a_statement_with_a_scanned_transaction_page(
     path = tmp_path / "scanned-bcp-statement.pdf"
     path.write_bytes(bcp_scanned_statement_pdf())
 
-    statement = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+    [statement] = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
     assert statement.opening_balance == Decimal("1000.00")
     assert len(statement.transactions) == 4

@@ -13,18 +13,46 @@
 -- are idempotent: a no-op for a correctly written row, a repair for anything
 -- else. Keep the two in step -- collapse runs of padding characters, collapse
 -- whitespace, trim, upper case.
+--
+-- account_kind (T18a, ADR 0014) lives on bronze.statements, not
+-- bronze.transactions -- an account's kind doesn't vary per movement, the same
+-- reason opening_balance/closing_balance never made it to bronze.transactions
+-- either. account_kinds below collapses statements down to one row per
+-- account_id before the join: a single account can have many statements (one
+-- per period, and Scotiabank writes one per currency for the very same
+-- period), and joining transactions to bronze.statements directly on
+-- account_id would fan every one of its transactions out into as many
+-- duplicate rows as that account has statements. account_kind is a constant
+-- per account in practice (set once per parser, keyed off the bank baked into
+-- account_id's own hash), so `max()` never has more than one real value to
+-- pick from -- it exists to make the join's cardinality safe by construction,
+-- not to arbitrate a genuine disagreement.
+
+with account_kinds as (
+
+    select
+        account_id,
+        max(account_kind) as account_kind
+    from {{ source('bronze', 'statements') }}
+    group by account_id
+
+)
 
 select
-    user_id,
-    bank,
-    account_id,
-    account_last4,
-    date,
-    amount,
-    currency,
-    source_file_sha256,
-    ingested_at,
+    bronze_transactions.user_id,
+    bronze_transactions.bank,
+    bronze_transactions.account_id,
+    bronze_transactions.account_last4,
+    bronze_transactions.date,
+    bronze_transactions.amount,
+    bronze_transactions.currency,
+    bronze_transactions.source_file_sha256,
+    bronze_transactions.ingested_at,
+    account_kinds.account_kind,
     upper(trim(regexp_replace(
-        regexp_replace(description, '[.\-_*#]{2,}', ' ', 'g'), '\s+', ' ', 'g'
+        regexp_replace(bronze_transactions.description, '[.\-_*#]{2,}', ' ', 'g'),
+        '\s+', ' ', 'g'
     ))) as description
-from {{ source('bronze', 'transactions') }}
+from {{ source('bronze', 'transactions') }} as bronze_transactions
+left join account_kinds
+    on bronze_transactions.account_id = account_kinds.account_id

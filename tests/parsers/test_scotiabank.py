@@ -1,0 +1,323 @@
+"""Tests for ingestion.parsers.scotiabank (T18).
+
+No real Scotiabank PDF is used anywhere here (ADR 0004): every fixture is built
+by `tests.fixtures.synthetic_pdfs.scotiabank_statement_pdf`, calibrated against a
+masked layout dump the owner reviewed himself.
+"""
+
+import hashlib
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+
+import pytest
+
+from ingestion.parsers import scotiabank
+from ingestion.schema import hash_account
+from tests.fixtures.synthetic_pdfs import (
+    DEFAULT_SCOTIABANK_MOVEMENTS,
+    ScotiabankMovement,
+    scotiabank_statement_pdf,
+)
+
+FILE_SHA256 = hashlib.sha256(
+    b"whatever bytes; only used as an opaque id here"
+).hexdigest()
+
+
+@pytest.fixture(autouse=True)
+def account_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PFP_ACCOUNT_KEY", "test-key")
+
+
+def test_parse_splits_soles_and_dolares_into_separate_statements(
+    tmp_path: Path,
+) -> None:
+    """The point of T18's list[Statement] return: one card, two currencies,
+    each independently reconciled, since Statement holds one opening/closing
+    balance, not one per currency."""
+    path = tmp_path / "statement.pdf"
+    path.write_bytes(scotiabank_statement_pdf())
+
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    by_currency = {s.transactions[0].currency: s for s in statements}
+    assert set(by_currency) == {"PEN", "USD"}
+    pen, usd = by_currency["PEN"], by_currency["USD"]
+    assert pen.opening_balance == Decimal("500.00")
+    assert pen.closing_balance == Decimal("550.00")
+    assert len(pen.transactions) == 2
+    assert usd.opening_balance == Decimal("0.00")
+    assert usd.closing_balance == Decimal("25.50")
+    assert len(usd.transactions) == 1
+
+
+def test_parse_marks_every_statement_as_a_liability_account(tmp_path: Path) -> None:
+    """A credit-card balance is debt owed, not money on hand (T18a) — the
+    opposite kind of thing from BCP's checking account. Every currency's
+    Statement is still the same credit-card account, so all of them get
+    "liability", hardcoded per parser like BCP's "asset"."""
+    path = tmp_path / "statement.pdf"
+    path.write_bytes(scotiabank_statement_pdf())
+
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert len(statements) > 1  # proves this isn't vacuously true for one
+    assert all(statement.account_kind == "liability" for statement in statements)
+
+
+def test_parse_reads_the_debt_sign_convention(tmp_path: Path) -> None:
+    """A charge has no suffix and adds to debt (positive); a payment ends in
+    "-" and reduces it (negative) — the opposite of BCP's convention, since
+    this balance is money owed, not money on hand."""
+    path = tmp_path / "statement.pdf"
+    path.write_bytes(scotiabank_statement_pdf())
+
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    by_amount = {t.amount: t for s in statements for t in s.transactions}
+    assert by_amount[Decimal("150.00")].description == "COMPRA TIENDA FICTICIA"
+    assert by_amount[Decimal("-100.00")].description == "PAGO TARJETA FICTICIO"
+
+
+def test_parse_uses_the_value_date_not_the_processing_date(tmp_path: Path) -> None:
+    """The header has FECHA twice (processing date, then value date); the
+    fixture gives them different values, proving the second column wins —
+    same situation and fix as bcp.py's own two FECHA columns."""
+    path = tmp_path / "statement.pdf"
+    path.write_bytes(scotiabank_statement_pdf())
+
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    dates = sorted(t.date for s in statements for t in s.transactions)
+    assert dates == [date(2026, 1, 5), date(2026, 1, 12), date(2026, 1, 20)]
+
+
+def test_parse_reads_the_account_code_and_masked_card_last4(tmp_path: Path) -> None:
+    """account_id comes from the bare 8-digit code (owner-confirmed stable
+    client identifier); account_last4 from the bank's own masked card number
+    (9999-9999-****-9999) — the full card number is never printed at all."""
+    path = tmp_path / "statement.pdf"
+    path.write_bytes(scotiabank_statement_pdf(account_code="12345678"))
+
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    for statement in statements:
+        assert statement.account_id == hash_account("Scotiabank", "12345678")
+        assert statement.account_last4 == "0000"  # the fixture's masked card
+
+
+def test_parse_reads_a_dashed_period(tmp_path: Path) -> None:
+    path = tmp_path / "statement.pdf"
+    path.write_bytes(scotiabank_statement_pdf())
+
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    for statement in statements:
+        assert statement.period_start == date(2026, 1, 5)
+        assert statement.period_end == date(2026, 1, 20)
+
+
+def test_parse_rejects_a_currency_whose_total_does_not_add_up(
+    tmp_path: Path,
+) -> None:
+    """`closing_balance` is *computed* here (opening + this parser's own
+    transaction sum — see the module docstring on why no independently
+    declared one was identifiable), so `reconcile()` itself can never
+    disagree with it: the two sides of that check are built from the same
+    formula. What actually catches a broken statement is the `Total`
+    cross-check, which fires first — a plain `ValueError`, not
+    `ReconciliationError`. `test_parse_reports_a_mismatched_declared_total`
+    covers the same failure built by hand; this one proves the fixture's own
+    `reconciles=False` (mirroring `bcp_statement_pdf`'s contract) reaches it
+    too."""
+    path = tmp_path / "broken.pdf"
+    path.write_bytes(scotiabank_statement_pdf(reconciles=False))
+
+    with pytest.raises(ValueError, match="does not match the sum"):
+        scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+
+def test_parse_reports_a_mismatched_declared_total(tmp_path: Path) -> None:
+    """The per-page "Total" line is this parser's one independent cross-check
+    (no separate declared closing balance was ever identified — see the
+    module docstring): a fixture whose own per-row math is internally
+    consistent but whose printed Total doesn't match it must still fail,
+    loudly, not silently."""
+    from fpdf import FPDF
+
+    pdf = FPDF(unit="pt")
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=9)
+    pdf.text(40, 20, "00000000")
+    pdf.text(140, 20, "0000-0000-****-0000")
+    pdf.text(40, 50, "PERIODO DE TARJETA DEL 05-01-2026 AL 05-01-2026")
+    pdf.text(40, 70, "SALDO ANTERIOR")
+    pdf.text(451, 70, "500.00")
+    pdf.text(520, 70, "0.00")
+    pdf.text(40, 100, "Fecha")
+    pdf.text(140, 100, "Fecha")
+    pdf.text(240, 100, "Descripción")
+    pdf.text(451, 110, "Soles")
+    pdf.text(520, 110, "Dólares")
+    pdf.text(40, 130, "04/01/26")
+    pdf.text(140, 130, "05/01/26")
+    pdf.text(240, 130, "COMPRA FICTICIA")
+    pdf.text(451, 130, "150.00")
+    pdf.text(40, 150, "Total")
+    pdf.text(451, 150, "999.99")  # doesn't match the one 150.00 charge above
+    path = tmp_path / "bad-total.pdf"
+    path.write_bytes(bytes(pdf.output()))
+
+    with pytest.raises(ValueError, match="does not match the sum"):
+        scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+
+def test_parse_reports_a_missing_header_or_account_cleanly(tmp_path: Path) -> None:
+    from fpdf import FPDF
+
+    pdf = FPDF(unit="pt")
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=9)
+    pdf.text(40, 40, "nothing recognizable here")
+    path = tmp_path / "empty.pdf"
+    path.write_bytes(bytes(pdf.output()))
+
+    with pytest.raises(ValueError):
+        scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+
+def test_parse_keeps_rows_from_different_pages_separate(tmp_path: Path) -> None:
+    """Two pages, a transaction row at the identical y on each, different
+    dates/descriptions/amounts on each: the exact collision that corrupted a
+    real 4-page BCP statement (T18's PR) when lines were once grouped across
+    the whole document instead of per page. Built the same way that bug's own
+    regression test was, so this parser never repeats it."""
+    from fpdf import FPDF
+
+    pdf = FPDF(unit="pt")
+    for page_number in (1, 2):
+        pdf.add_page()
+        pdf.set_font("Helvetica", size=9)
+        pdf.text(40, 20, "00000000")
+        pdf.text(140, 20, "0000-0000-****-0000")
+        pdf.text(40, 50, "PERIODO DE TARJETA DEL 05-01-2026 AL 12-01-2026")
+        pdf.text(40, 70, "SALDO ANTERIOR")
+        pdf.text(451, 70, "500.00")
+        pdf.text(520, 70, "0.00")
+        pdf.text(40, 100, "Fecha")
+        pdf.text(140, 100, "Fecha")
+        pdf.text(240, 100, "Descripción")
+        pdf.text(451, 110, "Soles")
+        pdf.text(520, 110, "Dólares")
+        # Same y (130) on both pages: the exact collision under test.
+        if page_number == 1:
+            pdf.text(40, 130, "04/01/26")
+            pdf.text(140, 130, "05/01/26")
+            pdf.text(240, 130, "PAGE ONE FICTICIA")
+            pdf.text(451, 130, "50.00")
+        else:
+            pdf.text(40, 130, "11/01/26")
+            pdf.text(140, 130, "12/01/26")
+            pdf.text(240, 130, "PAGE TWO FICTICIA")
+            pdf.text(451, 130, "80.00")
+    path = tmp_path / "multi-page.pdf"
+    path.write_bytes(bytes(pdf.output()))
+
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    pen = next(s for s in statements if s.transactions[0].currency == "PEN")
+    assert len(pen.transactions) == 2
+    by_amount = {t.amount: t for t in pen.transactions}
+    assert by_amount[Decimal("50.00")].description == "PAGE ONE FICTICIA"
+    assert by_amount[Decimal("50.00")].date == date(2026, 1, 5)
+    assert by_amount[Decimal("80.00")].description == "PAGE TWO FICTICIA"
+    assert by_amount[Decimal("80.00")].date == date(2026, 1, 12)
+
+
+def test_parse_omits_a_currency_with_no_activity(tmp_path: Path) -> None:
+    """Only Soles activity in this fixture (the default USD opening balance is
+    0.00 with no transactions): a currency with neither an opening balance
+    entry nor any transactions shouldn't produce an empty Statement."""
+    movements = (
+        ScotiabankMovement(
+            date(2026, 1, 5), "COMPRA UNICA FICTICIA", "PEN", Decimal("50.00")
+        ),
+    )
+    path = tmp_path / "one-currency.pdf"
+    path.write_bytes(scotiabank_statement_pdf(movements=movements, opening_usd=None))
+
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert len(statements) == 1
+    assert statements[0].transactions[0].currency == "PEN"
+
+
+def test_parse_gives_the_same_result_under_an_arbitrary_file_name(
+    tmp_path: Path,
+) -> None:
+    content = scotiabank_statement_pdf()
+    normal = tmp_path / "statement.pdf"
+    odd = tmp_path / "EECC (3).pdf"
+    normal.write_bytes(content)
+    odd.write_bytes(content)
+
+    a = scotiabank.parse(normal, user_id="piero", file_sha256=FILE_SHA256)
+    b = scotiabank.parse(odd, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert [s.account_id for s in a] == [s.account_id for s in b]
+
+
+@pytest.mark.real_pdf
+def test_parses_and_reconciles_a_real_scotiabank_statement() -> None:
+    """Runs only on the owner's machine, against his own real PDF.
+
+    Never asserts or prints an extracted value (ADR 0004): a successful
+    `parse()` already proves detection, decryption, extraction and
+    reconciliation all worked for every currency the statement carries, since
+    `parse()` raises `ReconciliationError` on any mismatch. This parser has
+    not been run against a real file yet — see brain/components/
+    scotiabank-parser.md for what's confirmed vs. inferred.
+    """
+    import os
+
+    from ingestion import dispatcher
+
+    search_roots = [
+        Path.home() / "finance-data" / "inbox",
+        Path.home() / "finance-data" / "raw",
+    ]
+    password = os.environ.get("SCOTIABANK_PDF_PASSWORD")
+    if not password:
+        pytest.skip("SCOTIABANK_PDF_PASSWORD is not set (see .env)")
+
+    candidate = None
+    for root in search_roots:
+        if not root.exists():
+            continue
+        for candidate_path in root.rglob("*.pdf"):
+            try:
+                entry = dispatcher.detect(candidate_path)
+            except dispatcher.UnrecognizedBankError:
+                continue
+            if entry.bank == "Scotiabank":
+                candidate = candidate_path
+                break
+        if candidate:
+            break
+    if candidate is None:
+        pytest.skip("no real Scotiabank PDF found under ~/finance-data/{inbox,raw}")
+
+    statements = scotiabank.parse(
+        candidate, user_id="piero", file_sha256="0" * 64, password=password
+    )
+
+    assert all(s.bank == "Scotiabank" for s in statements)
+
+
+def test_default_movements_cover_both_currencies() -> None:
+    """A fixture-quality guard: if DEFAULT_SCOTIABANK_MOVEMENTS ever stopped
+    including both currencies, several tests above would quietly start
+    testing less than they claim to."""
+    currencies = {m.currency for m in DEFAULT_SCOTIABANK_MOVEMENTS}
+    assert currencies == {"PEN", "USD"}
