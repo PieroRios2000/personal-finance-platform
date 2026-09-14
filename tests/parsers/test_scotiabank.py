@@ -52,6 +52,20 @@ def test_parse_splits_soles_and_dolares_into_separate_statements(
     assert len(usd.transactions) == 1
 
 
+def test_parse_marks_every_statement_as_a_liability_account(tmp_path: Path) -> None:
+    """A credit-card balance is debt owed, not money on hand (T18a) — the
+    opposite kind of thing from BCP's checking account. Every currency's
+    Statement is still the same credit-card account, so all of them get
+    "liability", hardcoded per parser like BCP's "asset"."""
+    path = tmp_path / "statement.pdf"
+    path.write_bytes(scotiabank_statement_pdf())
+
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert len(statements) > 1  # proves this isn't vacuously true for one
+    assert all(statement.account_kind == "liability" for statement in statements)
+
+
 def test_parse_reads_the_debt_sign_convention(tmp_path: Path) -> None:
     """A charge has no suffix and adds to debt (positive); a payment ends in
     "-" and reduces it (negative) — the opposite of BCP's convention, since
