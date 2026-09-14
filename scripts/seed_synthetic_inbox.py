@@ -54,7 +54,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     # `pfp ingest` needs to see to prove idempotent.
     cache = args.inbox_root / ".synthetic-statement-cache.pdf"
     if not cache.exists():
-        cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_bytes(_BOP_PREFIX + bcp_statement_pdf())
 
     (inbox / _FILENAME).write_bytes(cache.read_bytes())
