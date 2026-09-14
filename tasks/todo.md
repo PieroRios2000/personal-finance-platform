@@ -398,20 +398,51 @@ config is in `pyproject.toml`. CI does not run dbt yet — that is T17's job.
 
 **Dependencies:** T11b, T12, T14 · **Files:** `ingestion/parsers/scotiabank.py`, `tests/fixtures/…`, `tests/parsers/test_scotiabank.py` · **Size:** M · **Skill:** test-driven-development
 
+### T18a: Account kind (asset/liability) in the schema — `feat/account-kind`
+
+**Description:** BCP (checking) and Scotiabank (credit card) use opposite sign conventions —
+BCP's negative amount means money left the account, Scotiabank's negative amount means a
+payment that *reduces* debt. A real transfer from a checking account to pay down a credit
+card is therefore the same sign on both sides, not opposite: T18b's matching needs to know
+which kind of account each side is to tell a same-account-kind transfer (opposite signs) from
+a checking-to-credit-card one (same sign). Surfaced by Piero before T18b started, choosing
+this over a dbt-side bank-name lookup table (fragile — breaks the moment one bank has both a
+checking and a credit product).
+
+**Acceptance criteria:**
+- [ ] `Statement` gains `account_kind: Literal["asset", "liability"]` (`ingestion/schema.py`).
+- [ ] `bcp.py` sets `"asset"`; `scotiabank.py` sets `"liability"` — hardcoded per parser, not
+  inferred from the PDF (a bank's own product type doesn't vary per statement).
+- [ ] `lakehouse/bronze.py`'s `statements` table (not `transactions`, which has no
+  balance/kind concept) carries it through; `dbt/models/sources.yml` and
+  `dbt/models/silver/transactions.sql` expose it (a transaction's own account_kind, joined or
+  carried from its statement) for T18b to read.
+- [ ] ADR written: the two-value, hardcoded-per-parser design, and why a bank-name lookup in
+  dbt was rejected.
+
+**Verification:**
+- [ ] Existing BCP/Scotiabank synthetic fixtures and tests still pass with the new field;
+  a new test asserts each parser's own `account_kind`.
+- [ ] `dbt build` shows the column reaching silver.
+
+**Dependencies:** T18 · **Files:** `ingestion/schema.py`, `ingestion/parsers/{bcp,scotiabank}.py`, `lakehouse/bronze.py`, `dbt/models/**` · **Size:** S · **Skill:** test-driven-development
+
 ### T18b: Inter-account reconciliation — `feat/inter-account-reconciliation`
 
 **Description:** Match transfers between accounts of the same user, so they never count as an expense or income, and flag the ones with no counterpart (ADR 0009).
 
 **Acceptance criteria:**
 - [ ] A dbt model `silver/internal_transfers`: matches an outflow and an inflow from the same user, on different accounts, in the same currency, for the same amount (configurable tolerance, default 0), within N days or fewer (default 3). Every movement is in at most one pair.
+- [ ] Sign matching is `account_kind`-aware (T18a): two `asset` accounts (or two `liability` accounts) match on opposite signs; an `asset`-to-`liability` pair (paying down a card from checking) matches on the *same* sign, since a checking outflow and a debt-reducing payment are both negative.
 - [ ] `silver/transactions` flags `is_internal_transfer`; unmatched candidates land in `silver/unmatched_transfers` for review, never dropped.
 - [ ] Cross-currency transfers stay out of this task and show up as unmatched.
 
 **Verification:**
 - [ ] With synthetic BCP and Scotiabank data and a transfer between them, it comes back matched; removing the inflow makes it show up in `unmatched_transfers`.
+- [ ] A same-account-kind transfer (two synthetic BCP accounts, opposite-sign case) also matches, proving both branches of the sign logic.
 - [ ] `make poc` against your real PDFs shows only how many matched and how many didn't, with no amounts.
 
-**Dependencies:** T16, T18 · **Files:** `dbt/models/silver/**`, tests · **Size:** M · **Skill:** test-driven-development
+**Dependencies:** T16, T18, T18a · **Files:** `dbt/models/silver/**`, tests · **Size:** M · **Skill:** test-driven-development
 
 ### T19: Phase close — `docs/phase-1-close`
 
