@@ -58,6 +58,17 @@ back onto each transaction from `bronze.statements`, rather than it being duplic
 transaction row bronze-side. Full reasoning, including why the join key is `account_id` alone
 (deduplicated), in [ADR 0015](../decisions/0015-account-kind-asset-or-liability.md).
 
+## Currency (T18c)
+
+`bronze/statements`' pyarrow schema also carries `currency` (`"PEN"`/`"USD"`), alongside
+`account_kind` and the balances, same fixed-schema pattern. Unlike `account_kind`,
+`bronze/transactions` already had a `currency` column of its own (`Transaction.currency`, since
+T6) — this only adds the column `bronze/statements` was missing, so the continuity test has
+something to partition by per currency instead of colliding Scotiabank's two same-period,
+different-currency rows for one account. Full reasoning in
+[ADR 0016](../decisions/0016-currency-aware-statement-continuity.md), including why it is
+*not* additionally joined into `silver.transactions` the way `account_kind` is.
+
 ## A real bug found while building this
 
 pyarrow's `Table.from_pylist()` infers a `decimal128` precision from each batch's own values.
@@ -103,6 +114,8 @@ uv run pfp backfill --user piero --dry-run   # what re-parsing the archive would
   why `replace_statement()` deletes instead of versioning.
 - [ADR 0015: Account kind (asset/liability)](../decisions/0015-account-kind-asset-or-liability.md) —
   `account_kind` on `bronze/statements`, and why not on `bronze/transactions`.
+- [ADR 0016: Currency-aware statement continuity](../decisions/0016-currency-aware-statement-continuity.md) —
+  `currency` on `bronze/statements`, the false positive it fixes in the continuity test.
 - [CLI](cli.md) — `pfp ingest` and `pfp backfill`, the only callers of `write_statement()`,
   `is_ingested()`, `replace_statement()` and `transactions_for_file()`.
 - [Inbox organizer](inbox-organizer.md) — produces the `ArchivedItem`s `pfp ingest` writes.

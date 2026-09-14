@@ -111,6 +111,16 @@ thing from BCP's checking-account balance. Hardcoded here, not read from the PDF
 carries this into `silver.transactions` had to be written with this parser's
 one-file-two-statements shape specifically in mind.
 
+## Currency, and the false positive it caused (T18c)
+
+Each `Statement` this parser's loop builds gets that same iteration's own `currency` (`"PEN"` or
+`"USD"`), not a hardcoded constant — the one parser where a constant would be wrong, since a
+single file produces both. This is also *why* `Statement` needed a `currency` field at all:
+Piero found, by actually running `dbt build` against synthetic dual-currency Scotiabank data,
+that the continuity test read this parser's two same-period, different-currency
+`bronze.statements` rows as a genuine duplicated period and failed. Full root cause and the
+partition-by-currency fix in [ADR 0016](../decisions/0016-currency-aware-statement-continuity.md).
+
 ## How to use it and how to verify it
 
 ```python
@@ -135,6 +145,7 @@ value (ADR 0004).
 ## Related
 
 - [ADR 0015: Account kind (asset/liability)](../decisions/0015-account-kind-asset-or-liability.md) — why this parser hardcodes `account_kind="liability"`.
+- [ADR 0016: Currency-aware statement continuity](../decisions/0016-currency-aware-statement-continuity.md) — why this parser's dual-currency shape needed `Statement.currency`, and the false positive it caused before the fix.
 - [ADR 0012: Password-fallback detection and `list[Statement]`](../decisions/0012-scotiabank-password-fallback-detection.md)
 - [ADR 0004: Real PDFs](../decisions/0004-real-pdfs-never-leave-your-machine.md) — why the real-PDF test only checks pass/fail.
 - [BCP parser](bcp-parser.md) — the position/shape-based parsing lesson this parser applies from the start, and the sibling parser's own real-data calibration history.

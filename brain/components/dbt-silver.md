@@ -20,7 +20,7 @@ checked. Design decisions in [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-so
 | [`dbt/models/sources.yml`](../../dbt/models/sources.yml) | `bronze.transactions` and `bronze.statements`, declared as one `external_location` f-string: `delta_scan('<LAKEHOUSE_URI>/bronze/{name}')` |
 | [`dbt/models/silver/transactions.sql`](../../dbt/models/silver/transactions.sql) | `silver.transactions`: bronze's columns with the description re-normalized, plus `account_kind` joined in from `bronze.statements` (T18a). Materialized as a table |
 | [`dbt/models/silver/schema.yml`](../../dbt/models/silver/schema.yml) | `not_null` on every column, `accepted_values` on `currency` (`PEN`, `USD`) and `account_kind` (`asset`, `liability`), matching `ingestion.schema.Currency`/`AccountKind` |
-| [`dbt/tests/assert_statement_continuity.sql`](../../dbt/tests/assert_statement_continuity.sql) | The continuity test: a period's closing balance is the next period's opening balance, and the periods are contiguous, per user and account |
+| [`dbt/tests/assert_statement_continuity.sql`](../../dbt/tests/assert_statement_continuity.sql) | The continuity test: a period's closing balance is the next period's opening balance, and the periods are contiguous, per user, account and currency (T18c) |
 | `[tool.sqlfluff.*]` in [`pyproject.toml`](../../pyproject.toml) | sqlfluff with the **dbt** templater and the `duckdb` dialect, so the linter sees the `delta_scan(...)` expression dbt actually compiles |
 
 ## What silver adds, and what it deliberately does not
@@ -70,6 +70,20 @@ It is a singular test, not a generic one: one query about one relation, with not
 parametrize. It reads the bronze source rather than a silver model because the question is
 which statements were ingested at all, and silver adds nothing to a statement's balances.
 
+**Partitioned by `currency` too, not just `user_id`/`account_id` (T18c).** A Scotiabank
+statement writes two `bronze.statements` rows for one real statement — one per currency (ADR
+0012), sharing `account_id` and `period_start`/`period_end` — which the test's own "two
+statements covering the same period" check (intended for a genuine duplicate, e.g. a bank
+regenerating a PDF) couldn't tell apart from this legitimate case, since it had no currency
+signal to rule it out with. Found by actually running `dbt build` against synthetic
+dual-currency Scotiabank data for the first time; fixed by adding `currency` to `Statement`
+(mirroring `account_kind`'s own precedent) and to both `lag()` window functions' `partition by`.
+A genuine duplicate — same account, same currency, same period — still fails: it still shares
+every column in the now-wider partition key. Full reasoning in
+[ADR 0016](../decisions/0016-currency-aware-statement-continuity.md), including why `currency`
+is *not* additionally joined into `silver.transactions` the way `account_kind` is (it's already
+there, via `Transaction.currency`, since before this task).
+
 ## How to use it and how to verify it
 
 Needs SeaweedFS up and `.env` exported; `profiles.yml` lives in the project directory, so both
@@ -97,14 +111,19 @@ this file. Exact commands in [SETUP.md §7](../../SETUP.md#7-browsing-the-lake-i
 - [`tests/test_dbt_silver_integration.py`](../../tests/test_dbt_silver_integration.py) seeds
   synthetic statements into `<LAKEHOUSE_URI>/_t16_dbt_tests` (never the real `bronze/` prefix),
   runs `dbt build` against exactly that data, and checks the result — including the
-  missing-month scenario failing and then passing once the gap is filled. A dedicated prefix is
-  what makes it deterministic: the continuity test spans every statement in the lake, so it
-  cannot be asserted against a lake that also holds real, partially archived periods.
+  missing-month scenario failing and then passing once the gap is filled, a dual-currency
+  Scotiabank statement passing (T18c: the exact false positive that used to fail), and a genuine
+  same-account/same-currency/same-period duplicate still failing. A dedicated prefix is what
+  makes it deterministic: the continuity test spans every statement in the lake, so it cannot be
+  asserted against a lake that also holds real, partially archived periods.
 - Both are `integration`-marked and deselected by default (`pytest -m integration`), like T14's
   bronze test; see CONSTRAINTS.md's exceptions table.
 
 ## Related
 
+- [ADR 0016: Currency-aware statement continuity](../decisions/0016-currency-aware-statement-continuity.md) —
+  the false positive found running `dbt build` against dual-currency Scotiabank data, and the
+  partition-by-currency fix, in full.
 - [ADR 0015: Account kind (asset/liability)](../decisions/0015-account-kind-asset-or-liability.md) —
   the `account_kinds` join described above, in full.
 - [ADR 0011: `delta_scan()` as a dbt source](../decisions/0011-delta-scan-as-a-dbt-source.md) —
