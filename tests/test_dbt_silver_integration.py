@@ -33,6 +33,9 @@ _TEST_LAKE_SUFFIX = "_t16_dbt_tests"
 _BANK = "BCP"
 _LAST4 = "9999"
 _ACCOUNT_ID = hashlib.sha256(b"t16-dbt-tests-account").hexdigest()
+_SCOTIABANK_ACCOUNT_ID = hashlib.sha256(
+    b"t18c-dbt-tests-scotiabank-account"
+).hexdigest()
 _USER_ID = "t16-dbt-tests"
 
 _REQUIRED_ENV = (
@@ -266,3 +269,60 @@ def test_a_missing_month_that_nets_to_zero_still_fails(
     fixed = _dbt_build(tmp_path)
 
     assert fixed.returncode == 0, fixed.stdout
+
+
+def test_dbt_build_passes_with_scotiabank_dual_currency_same_period_statements(
+    lake: str, tmp_path: Path
+) -> None:
+    """T18c: the exact false positive that broke dbt build -- Scotiabank
+    writes two bronze.statements rows for one real statement, one per
+    currency (ADR 0012), sharing account_id and period_start/period_end.
+    Before the partition-by-currency fix, the continuity test's lag() saw
+    these two same-period rows as a genuine duplicated period and failed.
+    A separate BCP (single-currency) statement is written alongside it,
+    matching the acceptance criteria's own scenario -- a different account
+    entirely, so it doesn't interact with the Scotiabank pair's continuity."""
+    _write(*_JANUARY)
+
+    _write(
+        date(2026, 1, 1),
+        date(2026, 1, 31),
+        "500.00",
+        "50.00",
+        bank="Scotiabank",
+        account_id=_SCOTIABANK_ACCOUNT_ID,
+        account_kind="liability",
+        currency="PEN",
+    )
+    _write(
+        date(2026, 1, 1),
+        date(2026, 1, 31),
+        "0.00",
+        "25.50",
+        bank="Scotiabank",
+        account_id=_SCOTIABANK_ACCOUNT_ID,
+        account_kind="liability",
+        currency="USD",
+    )
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_a_genuine_duplicate_period_still_fails_the_continuity_test(
+    lake: str, tmp_path: Path
+) -> None:
+    """The false-positive fix must not weaken the real check documented at the
+    top of assert_statement_continuity.sql: two statements for the same
+    account, the same currency and the same period (e.g. the bank
+    regenerating a PDF with different bytes, past T7's file-level dedup) is
+    still a genuine duplicate and must still fail -- partitioning by currency
+    only tells apart two statements that are *supposed* to coexist."""
+    _write(*_JANUARY)
+    _write(*_JANUARY)  # same account_id, same currency, same period: a real dup
+
+    failed = _dbt_build(tmp_path)
+
+    assert failed.returncode != 0, failed.stdout
+    assert "assert_statement_continuity" in failed.stdout
