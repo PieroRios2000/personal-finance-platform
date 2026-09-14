@@ -386,17 +386,32 @@ jobs:
           docker compose -p "$COMPOSE_PROJECT" up -d --wait seaweedfs
           docker compose -p "$COMPOSE_PROJECT" run --rm bucket-init
 
-      # Same idiom as the benchmarks job (T15): swap the base ref's pipeline
-      # code in over the PR's. dbt joins ingestion/lakehouse here -- the base
-      # branch's own models are exactly what this diff needs to build against.
+      # ingestion/lakehouse: same idiom as the benchmarks job (T15), swap the
+      # base ref's code in over the PR's -- safe there because Python only
+      # ever executes what's reachable from an import, so a file the PR added
+      # and base doesn't have just sits on disk, unused, once dispatcher.py
+      # etc. are swapped back to their base versions.
+      #
+      # dbt/ is deliberately NOT swapped the same way: `git checkout <ref> --
+      # dbt` only overwrites/creates paths <ref> has, it never deletes a path
+      # the PR added that base doesn't -- and unlike Python's import graph,
+      # dbt discovers every model by scanning models/ on disk, so a model file
+      # the PR added would stay right there and get built into the "base"
+      # run too, exactly the case this job most needs to catch. A worktree
+      # instead (ADR 0013's own established pattern, same reasoning) always
+      # contains exactly what the base ref has, nothing more.
       - name: check out the base branch's code
         run: |
           git fetch origin "$PFP_BASE_REF"
-          git checkout "origin/$PFP_BASE_REF" -- ingestion lakehouse dbt
+          git checkout "origin/$PFP_BASE_REF" -- ingestion lakehouse
+          git worktree add --detach /tmp/pfp-diff-base-ref "origin/$PFP_BASE_REF"
 
       # continue-on-error so a broken base branch still lets the PR's own run
       # and the restore step happen: a failed base build is itself worth
       # surfacing in the log, not worth losing the rest of the job over.
+      #
+      # --profiles-dir stays the PR's own dbt/ (connection config, not
+      # modeling -- same call ADR 0013 makes for the same reason).
       - name: base run (ingest + dbt build)
         continue-on-error: true
         env:
@@ -409,13 +424,15 @@ jobs:
             --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
           uv run pfp ingest --user "$PFP_USER" \
             --inbox-root "$PFP_INBOX_ROOT" --archive-root "$PFP_ARCHIVE_ROOT"
-          uv run dbt build --project-dir dbt --profiles-dir dbt
+          uv run dbt build --project-dir /tmp/pfp-diff-base-ref/dbt --profiles-dir dbt
 
       # Always, so a failed base checkout or build can never leave this job
-      # diffing the PR's own code against itself.
+      # diffing the PR's own code against itself. Only ingestion/lakehouse
+      # need restoring -- dbt/ was never swapped in place, it was built from
+      # the worktree above.
       - name: restore the PR's code
         if: always()
-        run: git checkout HEAD -- ingestion lakehouse dbt
+        run: git checkout HEAD -- ingestion lakehouse
 
       - name: PR run (ingest + dbt build)
         continue-on-error: true
