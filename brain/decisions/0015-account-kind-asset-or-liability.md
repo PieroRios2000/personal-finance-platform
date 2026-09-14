@@ -5,7 +5,7 @@ status: accepted
 date: 2026-09-14
 ---
 
-# ADR 0014: `account_kind` (`asset`/`liability`) on `Statement`, joined into silver
+# ADR 0015: `account_kind` (`asset`/`liability`) on `Statement`, joined into silver
 
 ## Context
 

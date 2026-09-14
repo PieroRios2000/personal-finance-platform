@@ -416,8 +416,8 @@ checking and a credit product).
 - [x] `lakehouse/bronze.py`'s `statements` table (not `transactions`, which has no
   balance/kind concept) carries it through; `dbt/models/sources.yml` and
   `dbt/models/silver/transactions.sql` expose it (joined from `bronze.statements` on a
-  deduplicated `account_id`, see ADR 0014) for T18b to read.
-- [x] ADR written (0014): the two-value, hardcoded-per-parser design, and why a bank-name lookup
+  deduplicated `account_id`, see ADR 0015) for T18b to read.
+- [x] ADR written (0015): the two-value, hardcoded-per-parser design, and why a bank-name lookup
   in dbt was rejected.
 
 **Verification:**

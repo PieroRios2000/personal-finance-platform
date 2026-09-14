@@ -61,7 +61,7 @@ persistent-secret-and-views setup — [SETUP.md §7](../../SETUP.md#7-browsing-t
 | 0011 | `delta_scan()` as a dbt source, on an on-disk DuckDB | [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-source.md) |
 | 0012 | Scotiabank found by password fallback; `parse()` returns `list[Statement]` project-wide | [ADR 0012](../decisions/0012-scotiabank-password-fallback-detection.md) |
 | 0013 | dbt state comparison via a base-ref worktree | [ADR 0013](../decisions/0013-dbt-state-comparison-via-a-base-ref-worktree.md) |
-| 0014 | `account_kind` (asset/liability) on `Statement`, joined into silver | [ADR 0014](../decisions/0014-account-kind-asset-or-liability.md) |
+| 0015 | `account_kind` (asset/liability) on `Statement`, joined into silver | [ADR 0015](../decisions/0015-account-kind-asset-or-liability.md) |
 
 ## Concepts
 

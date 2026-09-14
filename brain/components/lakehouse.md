@@ -56,7 +56,7 @@ deliberately does not — it has no balance/kind concept at all, and `account_ki
 Statement-level fact, not a per-transaction one. `dbt/models/silver/transactions.sql` joins it
 back onto each transaction from `bronze.statements`, rather than it being duplicated into every
 transaction row bronze-side. Full reasoning, including why the join key is `account_id` alone
-(deduplicated), in [ADR 0014](../decisions/0014-account-kind-asset-or-liability.md).
+(deduplicated), in [ADR 0015](../decisions/0015-account-kind-asset-or-liability.md).
 
 ## A real bug found while building this
 
@@ -101,7 +101,7 @@ uv run pfp backfill --user piero --dry-run   # what re-parsing the archive would
   the `user_id` partitioning this component relies on.
 - [ADR 0010: A backfill replaces a file's rows](../decisions/0010-bronze-backfill-replaces-not-versions.md) —
   why `replace_statement()` deletes instead of versioning.
-- [ADR 0014: Account kind (asset/liability)](../decisions/0014-account-kind-asset-or-liability.md) —
+- [ADR 0015: Account kind (asset/liability)](../decisions/0015-account-kind-asset-or-liability.md) —
   `account_kind` on `bronze/statements`, and why not on `bronze/transactions`.
 - [CLI](cli.md) — `pfp ingest` and `pfp backfill`, the only callers of `write_statement()`,
   `is_ingested()`, `replace_statement()` and `transactions_for_file()`.

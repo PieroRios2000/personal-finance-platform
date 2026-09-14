@@ -20,7 +20,7 @@ In short:
   money on hand (BCP checking), `"liability"` for debt owed (Scotiabank credit card).
   It lives on `Statement`, not `Transaction` — a bank's product type doesn't vary per
   statement, the same reasoning `opening_balance`/`closing_balance` already follow.
-  See ADR 0014.
+  See ADR 0015.
 """
 
 import hashlib

@@ -43,7 +43,7 @@ checked. Design decisions in [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-so
 - **`account_kind` is joined in from `bronze.statements` (T18a), not duplicated bronze-side.**
   What an account's balance represents (`asset`: money on hand, `liability`: debt owed) is a
   `Statement`-level fact set once per parser, not a `Transaction` one — see
-  [ADR 0014](../decisions/0014-account-kind-asset-or-liability.md) for the field's own design.
+  [ADR 0015](../decisions/0015-account-kind-asset-or-liability.md) for the field's own design.
   The join deduplicates `bronze.statements` down to one row per `account_id` first
   (`group by account_id`, `max(account_kind)`), because a single account can have several
   statement rows — one per period, and Scotiabank writes one per *currency* for the very same
@@ -105,7 +105,7 @@ this file. Exact commands in [SETUP.md §7](../../SETUP.md#7-browsing-the-lake-i
 
 ## Related
 
-- [ADR 0014: Account kind (asset/liability)](../decisions/0014-account-kind-asset-or-liability.md) —
+- [ADR 0015: Account kind (asset/liability)](../decisions/0015-account-kind-asset-or-liability.md) —
   the `account_kinds` join described above, in full.
 - [ADR 0011: `delta_scan()` as a dbt source](../decisions/0011-delta-scan-as-a-dbt-source.md) —
   every design call here, with the alternatives.

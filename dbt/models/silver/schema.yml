@@ -55,7 +55,7 @@ models:
         description: >
           What this transaction's account balance represents: `asset` for money on
           hand (e.g. BCP checking), `liability` for debt owed (e.g. a Scotiabank
-          credit card). Carried in from `bronze.statements` (ADR 0014), since it's a
+          credit card). Carried in from `bronze.statements` (ADR 0015), since it's a
           Statement-level fact, not a per-transaction one. `not_null` here also
           doubles as the check that every account's transactions matched exactly
           one statement row -- a left join with no match would surface as null,
