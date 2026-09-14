@@ -16,6 +16,11 @@ In short:
   bank statement almost always signals a parsing bug, not real data.
 - `currency` is restricted to the two currencies this project handles
   (`PEN`, `USD`); anything else is rejected at validation time.
+- `Statement.account_kind` says what an account's balance *represents*: `"asset"` for
+  money on hand (BCP checking), `"liability"` for debt owed (Scotiabank credit card).
+  It lives on `Statement`, not `Transaction` — a bank's product type doesn't vary per
+  statement, the same reasoning `opening_balance`/`closing_balance` already follow.
+  See ADR 0014.
 """
 
 import hashlib
@@ -29,6 +34,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Currency = Literal["PEN", "USD"]
+AccountKind = Literal["asset", "liability"]
 
 # A sha256 hexdigest; account_id is one too, being an HMAC-SHA256.
 _SHA256_HEX_PATTERN = r"^[0-9a-f]{64}$"
@@ -153,6 +159,7 @@ class Statement(BaseModel):
     closing_balance: Decimal
     declared_charges_total: Decimal | None = None
     declared_credits_total: Decimal | None = None
+    account_kind: AccountKind
     transactions: list[Transaction] = Field(default_factory=list)
 
     @field_validator(

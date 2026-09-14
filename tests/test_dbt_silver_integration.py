@@ -129,6 +129,7 @@ def _write(
         period_end=period_end,
         opening_balance=Decimal(opening_balance),
         closing_balance=Decimal(opening_balance) + amount,
+        account_kind="asset",
         transactions=transactions,
     )
     bronze.write_statement(statement, file_sha256)
