@@ -11,11 +11,18 @@ which is what `make poc` itself (against Piero's real inbox) is for.
 
 import subprocess
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
+import duckdb
 import pytest
 
-from scripts.poc import _safe_dbt_lines, _safe_ingest_lines, main
+from scripts.poc import (
+    _safe_dbt_lines,
+    _safe_ingest_lines,
+    _transfer_match_summary,
+    main,
+)
 
 _LEAKY_INGEST_REPORT = """Inbox: /home/piero/finance-data/inbox/piero
 Archived: 1  Duplicates: 0  Needs review: 1
@@ -113,3 +120,56 @@ def test_main_reports_fail_when_dbt_build_fails(
 
     assert main() == 1
     assert "poc: FAIL" in capsys.readouterr().out
+
+
+def _seed_transfer_tables(duckdb_path: Path, *, matched: int, unmatched: int) -> None:
+    """A minimal on-disk duckdb file shaped like dbt's own build output (T18b):
+    a `silver` schema with `internal_transfers`/`unmatched_transfers` tables,
+    `matched`/`unmatched` rows each -- only their row counts matter here, so
+    their columns carry no real data."""
+    with duckdb.connect(str(duckdb_path)) as connection:
+        connection.execute("create schema silver")
+        connection.execute("create table silver.internal_transfers (id int)")
+        connection.execute("create table silver.unmatched_transfers (id int)")
+        for i in range(matched):
+            connection.execute("insert into silver.internal_transfers values (?)", [i])
+        for i in range(unmatched):
+            connection.execute("insert into silver.unmatched_transfers values (?)", [i])
+
+
+def test_transfer_match_summary_reports_counts_only(tmp_path: Path) -> None:
+    duckdb_path = tmp_path / "pfp.duckdb"
+    _seed_transfer_tables(duckdb_path, matched=3, unmatched=2)
+
+    summary = _transfer_match_summary(str(duckdb_path))
+
+    assert summary == "Internal transfers: 3 matched pair(s), 2 unmatched candidate(s)"
+
+
+def test_main_prints_the_transfer_summary_when_dbt_build_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
+    _seed_transfer_tables(tmp_path / "pfp.duckdb", matched=1, unmatched=4)
+    monkeypatch.setattr(subprocess, "run", _fake_run(0, 0))
+
+    assert main() == 0
+    out = capsys.readouterr().out
+    assert "Internal transfers: 1 matched pair(s), 4 unmatched candidate(s)" in out
+
+
+def test_main_does_not_query_transfer_tables_when_dbt_build_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """No dbt build means silver's tables may not exist or may be stale --
+    querying them here would be misleading at best, an unhandled error at
+    worst."""
+    monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.setenv("PFP_DUCKDB_PATH", "/nonexistent/pfp.duckdb")
+    monkeypatch.setattr(subprocess, "run", _fake_run(0, 1))
+
+    assert main() == 1
+    assert "Internal transfers:" not in capsys.readouterr().out
