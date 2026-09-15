@@ -15,3 +15,10 @@ models:
     # data diff, and ad-hoc queries), and a view would re-scan Delta on S3 every
     # time. The volume is thousands of rows, so a full rebuild is cheap.
     +materialized: table
+
+# T18b: internal-transfer matching tolerances, both overridable per run with
+# `--vars '{internal_transfer_day_window_days: 5}'`. The defaults match the
+# acceptance criteria: exact amount, within 3 days.
+vars:
+  internal_transfer_day_window_days: 3
+  internal_transfer_amount_tolerance: 0

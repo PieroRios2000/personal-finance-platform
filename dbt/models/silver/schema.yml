@@ -65,3 +65,133 @@ models:
           - accepted_values:
               arguments:
                 values: ["asset", "liability"]
+      - name: is_internal_transfer
+        description: >
+          True for a movement matched to a transfer between two accounts of the
+          same user (T18b, ADR 0017) -- never counted as an expense or income.
+          Left join to `internal_transfer_matches` plus `coalesce(..., false)`:
+          every transaction either is or isn't a transfer, with no null state.
+        data_tests:
+          - not_null
+
+  - name: internal_transfer_matches
+    description: >
+      T18b: one row per bronze.transactions row, with whether it's a plausible
+      transfer candidate and, if matched, which other movement it paired with.
+      The single shared computation `internal_transfers` and
+      `unmatched_transfers` are both built from -- see its own docstring for
+      the full matching algorithm and the account_kind-aware sign rule
+      (ADR 0015).
+    columns:
+      - name: movement_id
+        description: >
+          A content-based identity for the underlying bronze.transactions row
+          (md5 of every column except `ingested_at`; see the `movement_id`
+          macro) -- bronze/transactions has no surrogate key of its own.
+        data_tests:
+          - not_null
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: account_id
+        data_tests:
+          - not_null
+      - name: date
+        data_tests:
+          - not_null
+      - name: amount
+        data_tests:
+          - not_null
+      - name: currency
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["PEN", "USD"]
+      - name: account_kind
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["asset", "liability"]
+      - name: is_transfer_candidate
+        description: >
+          True if this movement is within the amount/date-window neighborhood
+          of at least one other account's row (any currency) under the
+          account_kind-aware sign rule -- whether or not it ended up matched.
+        data_tests:
+          - not_null
+      - name: is_internal_transfer
+        description: True if this movement found a same-currency mutual match.
+        data_tests:
+          - not_null
+
+  - name: internal_transfers
+    description: >
+      T18b: one row per matched transfer pair, both legs' own details plus
+      `day_diff`/`amount_diff`. Reshapes `internal_transfer_matches` from one
+      row per movement to one row per pair -- no matching logic of its own.
+      `assert_internal_transfers_are_one_to_one.sql` proves no movement_id
+      appears across more than one row here.
+    columns:
+      - name: first_leg_movement_id
+        data_tests:
+          - not_null
+          - unique
+      - name: second_leg_movement_id
+        data_tests:
+          - not_null
+          - unique
+      - name: currency
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["PEN", "USD"]
+      - name: day_diff
+        description: Whole days between the two legs' own dates.
+        data_tests:
+          - not_null
+      - name: amount_diff
+        description: >
+          How far the two legs are from an exact match under the
+          account_kind-aware sign rule; 0 at the default zero tolerance.
+        data_tests:
+          - not_null
+
+  - name: unmatched_transfers
+    description: >
+      T18b: transfer candidates (internal_transfer_matches.is_transfer_candidate)
+      with no mutual match -- for a human to review, never dropped. Includes
+      the unpaired half of a real transfer whose partner hasn't been ingested
+      yet, and cross-currency candidates, which are never auto-matched (no FX
+      conversion anywhere in this project) but must still surface here.
+    columns:
+      - name: movement_id
+        data_tests:
+          - not_null
+          - unique
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: account_id
+        data_tests:
+          - not_null
+      - name: date
+        data_tests:
+          - not_null
+      - name: amount
+        data_tests:
+          - not_null
+      - name: currency
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["PEN", "USD"]
+      - name: account_kind
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["asset", "liability"]
