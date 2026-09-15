@@ -27,16 +27,21 @@ import hashlib
 import os
 from collections.abc import Iterator
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from ingestion.schema import AccountKind, Currency
+from ingestion.schema import AccountKind, Currency, Statement, Transaction
+from lakehouse import bronze
 from tests.test_dbt_silver_integration import (
     _ACCOUNT_ID,
+    _BANK,
+    _LAST4,
     _SCOTIABANK_ACCOUNT_ID,
     _TEST_LAKE_SUFFIX,
+    _USER_ID,
     _dbt_build,
     _skip_reason,
     _wipe_test_lake,
@@ -94,6 +99,44 @@ def _movement(
         account_kind=account_kind,
         currency=currency,
     )
+
+
+def _write_duplicate_pair(*, when: date, amount: str) -> None:
+    """Two genuinely identical transactions (same user/account/date/amount/
+    currency/description/source file) in *one* statement -- the exact
+    movement_id-collision scenario ADR 0017 documents as an accepted
+    matching-precision limitation. One statement with two transactions, not
+    two separate `_write()` calls: two statements for the same account and
+    period would trip the pre-existing continuity check (T16) as a genuine
+    duplicate period, a different failure than the one this test targets.
+    """
+    file_sha256 = hashlib.sha256(f"duplicate-pair:{when}:{amount}".encode()).hexdigest()
+    amount_decimal = Decimal(amount)
+    transaction = Transaction(
+        user_id=_USER_ID,
+        bank=_BANK,
+        account_id=_ACCOUNT_ID,
+        account_last4=_LAST4,
+        date=when,
+        description="  compra pos....visa  ",
+        amount=amount_decimal,
+        currency="PEN",
+        source_file_sha256=file_sha256,
+    )
+    statement = Statement(
+        user_id=_USER_ID,
+        bank=_BANK,
+        account_id=_ACCOUNT_ID,
+        account_last4=_LAST4,
+        period_start=when,
+        period_end=when,
+        opening_balance=Decimal("0.00"),
+        closing_balance=amount_decimal * 2,
+        account_kind="asset",
+        currency="PEN",
+        transactions=[transaction, transaction],
+    )
+    bronze.write_statement(statement, file_sha256)
 
 
 def _is_internal_transfer(connection: Any, account_id: str, amount: str) -> bool:
@@ -301,3 +344,29 @@ def test_cross_currency_same_amount_is_not_matched_but_lands_in_unmatched(
         assert _ACCOUNT_ID in unmatched
         assert _SCOTIABANK_ACCOUNT_ID in unmatched
         assert _pair_count(connection) == 0
+
+
+def test_duplicate_bronze_rows_do_not_multiply_silver_transactions_rows(
+    lake: str,
+    tmp_path: Path,
+) -> None:
+    """Code-review finding: two genuinely identical bronze.transactions rows
+    share one movement_id (ADR 0017's own documented, accepted limitation --
+    they can't be told apart for *matching* purposes), but transactions.sql's
+    left join on that shared movement_id must still produce exactly one
+    silver.transactions row per bronze row, never a 2x2 fan-out to 4."""
+    _write_duplicate_pair(when=date(2026, 9, 1), amount="-50.00")
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    import duckdb
+
+    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+        rows = connection.execute(
+            "select is_internal_transfer from silver.transactions "
+            "where account_id = ? and amount = ?",
+            [_ACCOUNT_ID, "-50.00"],
+        ).fetchall()
+        assert len(rows) == 2, f"expected 2 rows (one per bronze row), got {rows}"
+        assert rows == [(False,), (False,)]
