@@ -18,6 +18,11 @@ the handful of lines that are amount-free *by construction*:
 - dbt's final "Done. PASS=.. WARN=.. ERROR=.. SKIP=.. TOTAL=.." line and its
   per-test PASS/FAIL/ERROR lines, which name a test (e.g.
   `assert_statement_continuity`), never a row's data.
+- T18b's own internal-transfer match summary: row *counts* only, from
+  `silver.internal_transfers`/`silver.unmatched_transfers` -- never an amount,
+  account or date, and only ever queried once `dbt build` has actually
+  succeeded (skipping it on a failed build avoids querying tables that may not
+  exist yet, or that hold a stale run's data).
 
 Run via `make poc`, after `make poc-up`: `uv run python -m scripts.poc`.
 """
@@ -25,6 +30,8 @@ Run via `make poc`, after `make poc-up`: `uv run python -m scripts.poc`.
 import os
 import subprocess
 import sys
+
+import duckdb
 
 
 def _safe_ingest_lines(output: str) -> list[str]:
@@ -46,6 +53,23 @@ def _safe_dbt_lines(output: str) -> list[str]:
         for line in output.splitlines()
         if line.startswith("Done.") or " [FAIL" in line or " [ERROR" in line
     ]
+
+
+def _transfer_match_summary(duckdb_path: str) -> str:
+    """T18b: how many internal transfers matched, and how many candidates
+    didn't -- row counts only, never an amount, account or date."""
+    with duckdb.connect(duckdb_path, read_only=True) as connection:
+        matched = connection.execute(
+            "select count(*) from silver.internal_transfers"
+        ).fetchone()
+        unmatched = connection.execute(
+            "select count(*) from silver.unmatched_transfers"
+        ).fetchone()
+    assert matched is not None and unmatched is not None
+    return (
+        f"Internal transfers: {matched[0]} matched pair(s), "
+        f"{unmatched[0]} unmatched candidate(s)"
+    )
 
 
 def main() -> int:
@@ -78,6 +102,10 @@ def main() -> int:
     )
     for line in _safe_dbt_lines(dbt.stdout):
         print(f"  {line}")
+
+    if dbt.returncode == 0:
+        duckdb_path = os.environ.get("PFP_DUCKDB_PATH", "dbt/pfp.duckdb")
+        print(f"  {_transfer_match_summary(duckdb_path)}")
 
     ok = ingest.returncode == 0 and dbt.returncode == 0
     print(f"poc: {'PASS' if ok else 'FAIL'}")
