@@ -73,7 +73,21 @@ with account_kinds as (
 
 tx as (
 
-    select
+    -- `distinct`: two genuinely identical bronze rows (same user/account/
+    -- date/amount/currency/description/source file) share one movement_id
+    -- (the macro's own documented, accepted limitation -- they can't be told
+    -- apart for matching purposes). Every other column selected here is
+    -- already determined by the columns that make up that hash (bank/
+    -- account_last4/account_kind all follow deterministically from
+    -- account_id), so `distinct` collapses true duplicates to exactly one
+    -- row rather than leaving movement_id non-unique in this CTE. That
+    -- uniqueness is what keeps every join against this model downstream
+    -- (transactions.sql, internal_transfers.sql) safe by construction --
+    -- the same "safe by construction, not by assumption" reasoning
+    -- account_kinds' own `group by` above already relies on. Found by a
+    -- code-review pass: without it, transactions.sql's left join on
+    -- movement_id fanned 2 duplicate bronze rows out into 4 silver rows.
+    select distinct
         {{ movement_id('bronze_transactions') }} as movement_id,
         bronze_transactions.user_id,
         bronze_transactions.bank,

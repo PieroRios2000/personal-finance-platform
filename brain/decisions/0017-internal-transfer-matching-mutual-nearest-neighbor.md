@@ -139,6 +139,23 @@ the other way. Full reasoning on why this particular reading was chosen is in th
   `bronze/transactions` has no column that could tell them apart even in principle — no PDF
   row/line number is captured anywhere in this project — so this is a pre-existing gap in the
   bronze schema, not something T18b introduces or could fix on its own.
+  **Found by an independent `code-review` pass to be worse than that framing implied**: without
+  a dedup step, `internal_transfer_matches.sql`'s own output had *two* rows sharing that
+  movement_id (one per underlying bronze row, un-deduplicated) — and `transactions.sql`'s `left
+  join` on `movement_id` isn't a 1:1 join by construction the way `account_kinds`' own join is,
+  so two duplicate bronze rows fanned out to **four** `silver.transactions` rows, silently
+  doubling that account's transaction count and any downstream sum. Fixed with a `select
+  distinct` in `internal_transfer_matches.sql`'s own `tx` CTE — every other selected column is
+  already determined by the columns the hash is built from (`bank`/`account_last4`/
+  `account_kind` all follow from `account_id`), so `distinct` correctly collapses true
+  duplicates to exactly one row, making `movement_id` unique in `internal_transfer_matches` by
+  construction and every downstream join against it (this one, and `internal_transfers.sql`'s
+  own leg self-join) safe without needing its own defensive dedup too. The remaining, genuinely
+  accepted limitation is narrower than first framed: a duplicate pair now surfaces as exactly
+  one row in `internal_transfer_matches`/`unmatched_transfers`/`internal_transfers` (matching or
+  candidacy can't tell the two apart), not two — but `silver.transactions` itself, the table
+  most things read, always keeps the correct one-row-per-bronze-row count, proven by
+  `tests/test_dbt_internal_transfers_integration.py::test_duplicate_bronze_rows_do_not_multiply_silver_transactions_rows`.
 
 ## Related
 
