@@ -36,12 +36,11 @@ select
     leg_2.account_kind as second_leg_account_kind,
     leg_2.source_file_sha256 as second_leg_source_file_sha256,
     leg_1.currency,
-    abs(date_diff('day', leg_1.date, leg_2.date)) as day_diff,
-    case
-        when leg_1.account_kind = leg_2.account_kind
-            then abs(leg_1.amount + leg_2.amount)
-        else abs(leg_1.amount - leg_2.amount)
-    end as amount_diff
+    -- Both already computed once in internal_transfer_matches.sql's own
+    -- candidates CTE, and symmetric between the two legs -- leg_1's copy is
+    -- the pair's one true value, not recomputed here a second time.
+    leg_1.day_diff,
+    leg_1.amount_diff
 from {{ ref('internal_transfer_matches') }} as leg_1
 inner join {{ ref('internal_transfer_matches') }} as leg_2
     on leg_1.matched_movement_id = leg_2.movement_id

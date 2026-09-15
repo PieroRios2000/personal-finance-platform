@@ -132,6 +132,8 @@ best_partner as (
     select
         movement_id,
         candidate_movement_id,
+        amount_diff,
+        day_diff,
         row_number() over (
             partition by movement_id
             order by amount_diff, day_diff, candidate_movement_id
@@ -145,7 +147,13 @@ matched_pairs as (
 
     select
         a.movement_id as first_movement_id,
-        a.candidate_movement_id as second_movement_id
+        a.candidate_movement_id as second_movement_id,
+        -- Symmetric either way (both are abs()-based), so either side's own
+        -- copy is the pair's one true value -- carried through so
+        -- internal_transfers.sql can select it instead of recomputing the
+        -- same case expression a second time.
+        a.amount_diff,
+        a.day_diff
     from best_partner as a
     inner join best_partner as b
         on
@@ -165,12 +173,16 @@ match_lookup as (
 
     select
         first_movement_id as movement_id,
-        second_movement_id as matched_movement_id
+        second_movement_id as matched_movement_id,
+        amount_diff,
+        day_diff
     from matched_pairs
     union all
     select
         second_movement_id as movement_id,
-        first_movement_id as matched_movement_id
+        first_movement_id as matched_movement_id,
+        amount_diff,
+        day_diff
     from matched_pairs
 
 ),
@@ -195,6 +207,8 @@ select
     tx.account_kind,
     tx.source_file_sha256,
     match_lookup.matched_movement_id,
+    match_lookup.amount_diff,
+    match_lookup.day_diff,
     candidate_movement_ids.movement_id is not null as is_transfer_candidate,
     match_lookup.movement_id is not null as is_internal_transfer
 from tx

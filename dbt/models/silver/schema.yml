@@ -125,6 +125,16 @@ models:
         description: True if this movement found a same-currency mutual match.
         data_tests:
           - not_null
+      - name: amount_diff
+        description: >
+          How far this movement and its `matched_movement_id` are from an
+          exact match under the account_kind-aware sign rule; null unless
+          matched. Computed once here; `internal_transfers` reuses it rather
+          than rederiving the same expression.
+      - name: day_diff
+        description: >
+          Whole days between this movement and its `matched_movement_id`;
+          null unless matched.
 
   - name: internal_transfers
     description: >
