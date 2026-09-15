@@ -446,7 +446,7 @@ checking and a credit product).
 - [x] Cross-currency transfers stay out of this task and show up as unmatched.
 
 **Verification:**
-- [x] With synthetic BCP and Scotiabank data and a transfer between them, it comes back matched; a currency-mismatched near-miss (the acceptance criteria's own "removing the inflow" scenario — see ADR 0017's Notes) shows up in `unmatched_transfers` instead.
+- [x] With synthetic BCP and Scotiabank data and a transfer between them, it comes back matched; removing the inflow makes it show up in `unmatched_transfers` instead. (note: verified via a currency-mismatched near-miss, not a fully isolated removal — a movement with *nothing* else in the lake near it is, by design, indistinguishable from an ordinary transaction and correctly does not appear in `unmatched_transfers` either; see ADR 0017's Decision section and this PR's own Notes for the full reasoning.)
 - [x] A same-account-kind transfer (two synthetic BCP accounts, opposite-sign case) also matches, proving both branches of the sign logic.
 - [ ] `make poc` against your real PDFs shows only how many matched and how many didn't, with no amounts. (pending: real-data validation is yours to run, ADR 0004 — this session verified against synthetic data on an isolated local SeaweedFS instance only, never your real lake).
 
