@@ -7,7 +7,7 @@ ingestion, schema validation, medallion modeling, CI/CD, and architectural docum
 
 [![CI](https://github.com/PieroRios2000/personal-finance-platform/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/PieroRios2000/personal-finance-platform/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
-![status](https://img.shields.io/badge/phase%201-foundation-brightgreen)
+![status](https://img.shields.io/badge/phase%201-foundation%20closed-brightgreen)
 
 ## What this is
 
@@ -53,6 +53,8 @@ date or an amount wrong while the balances still add up.
 | PDF parsing & reconciliation (BCP) | ✅ Calibrated against real statements — see [below](#built-the-hard-way) |
 | PDF parsing & reconciliation (Scotiabank) | ✅ Built — pending real-data validation (dual-currency credit card, opposite sign convention from BCP, handled explicitly) |
 | Account kind (asset vs. liability) | ✅ Threaded through parsers → bronze → silver, so cross-bank analysis never assumes one sign convention |
+| Currency-aware statement continuity | ✅ A credit-card statement billed in two currencies at once (Soles + Dólares) is still tracked correctly, period by period |
+| Inter-account transfer matching | ✅ A checking → credit-card payment (opposite sign conventions) and a same-bank transfer both matched correctly; unmatched candidates surfaced for review, never dropped |
 | OCR fallback for scanned pages | ✅ |
 | Multi-user, multi-account inbox → archive pipeline | ✅ |
 | Bronze (Delta Lake on S3) | ✅ Write, idempotent re-ingest, backfill/replace |
