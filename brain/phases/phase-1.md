@@ -17,7 +17,7 @@ and written to bronze; dbt builds silver with tests, and CI validates every PR. 
 | B — Ingestion | T6–T12b | T6 schema (#30, fix #32) · T7 file hash (#28) · T8 reconciliation (#34) · T9 inspector (#16) · T10 synthetic fixture (#29) · T11 BCP parser · T12 dispatcher/CLI · T11b OCR fallback (#38) · T12b inbox organizer (#39): all done |
 | C — Lakehouse | T13–T15 | T13 local S3 (SeaweedFS) · T14 bronze writer · T14c bronze backfill · T15 benchmarks + impact-based CI: all done |
 | D — Transformation | T16, T17, T17b | T16 dbt silver done; T17 ephemeral integration environment done; T17b base-vs-PR data diff done |
-| E — Second bank and close | T18, T18a, T18b, T18c, T19 | T18 Scotiabank parser: built, pending real-data validation · T18a account_kind: built · T18c currency-aware continuity: built · T18b, T19 pending |
+| E — Second bank and close | T18, T18a, T18b, T18c, T19 | T18 Scotiabank parser: built, pending real-data validation · T18a account_kind: built · T18c currency-aware continuity: built · T18b internal-transfer reconciliation: built · T19 pending |
 
 Also integrated: [SETUP.md](../../SETUP.md) with environment setup (#10), the ephemeral
 environments and impact-based CI plan (#12), [CLAUDE.md](../../CLAUDE.md) with the rules for
@@ -47,6 +47,7 @@ isolated — steps in [SETUP.md §8](../../SETUP.md#8-browsing-the-brain-in-obsi
 - [Scotiabank parser](../components/scotiabank-parser.md) — built (T18): credit-card statement, one `Statement` per currency, found by the dispatcher's password-fallback pass; pending real-data validation.
 - [BCP parser](../components/bcp-parser.md) and [Scotiabank parser](../components/scotiabank-parser.md), [Lakehouse](../components/lakehouse.md) and [dbt silver](../components/dbt-silver.md) — extended (T18a): `account_kind` (`asset`/`liability`) on `Statement`, hardcoded per parser, carried through bronze and joined into `silver.transactions` for T18b.
 - [BCP parser](../components/bcp-parser.md), [Scotiabank parser](../components/scotiabank-parser.md), [Lakehouse](../components/lakehouse.md) and [dbt silver](../components/dbt-silver.md) — extended (T18c): `currency` on `Statement`, hardcoded per parser, carried through bronze; the continuity test partitions by it too, fixing a false positive found running `dbt build` against dual-currency Scotiabank data for the first time.
+- [dbt silver](../components/dbt-silver.md) — extended (T18b): `silver.internal_transfer_matches`, `silver.internal_transfers` and `silver.unmatched_transfers`, plus an `is_internal_transfer` flag joined into `silver.transactions` — an account_kind-aware, mutual-nearest-neighbor match between two accounts of the same user, with cross-currency and unpaired candidates surfaced for review instead of dropped.
 
 ## Decisions
 
@@ -68,6 +69,7 @@ isolated — steps in [SETUP.md §8](../../SETUP.md#8-browsing-the-brain-in-obsi
 | 0014 | pr-data-diff: shared instance by URI prefix, always a full build | [ADR 0014](../decisions/0014-pr-data-diff-shared-instance-full-build.md) |
 | 0015 | `account_kind` (asset/liability) on `Statement`, joined into silver | [ADR 0015](../decisions/0015-account-kind-asset-or-liability.md) |
 | 0016 | `currency` on `Statement`; continuity test partitioned by currency too | [ADR 0016](../decisions/0016-currency-aware-statement-continuity.md) |
+| 0017 | Internal-transfer matching: mutual nearest neighbor, currency-relaxed candidacy | [ADR 0017](../decisions/0017-internal-transfer-matching-mutual-nearest-neighbor.md) |
 
 ## Concepts
 

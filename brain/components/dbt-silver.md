@@ -18,9 +18,14 @@ checked. Design decisions in [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-so
 |---|---|
 | [`dbt/profiles.yml`](../../dbt/profiles.yml) | The DuckDB connection: on-disk database (`PFP_DUCKDB_PATH`, default `dbt/pfp.duckdb`), schema `silver`, the `httpfs` and `delta` extensions, and the `TYPE s3 / PROVIDER config` secret that lets DuckDB reach SeaweedFS (`ENDPOINT`, `URL_STYLE 'path'`, `USE_SSL false`). Every value comes from the same `.env` variables `lakehouse/storage.py` reads |
 | [`dbt/models/sources.yml`](../../dbt/models/sources.yml) | `bronze.transactions` and `bronze.statements`, declared as one `external_location` f-string: `delta_scan('<LAKEHOUSE_URI>/bronze/{name}')` |
-| [`dbt/models/silver/transactions.sql`](../../dbt/models/silver/transactions.sql) | `silver.transactions`: bronze's columns with the description re-normalized, plus `account_kind` joined in from `bronze.statements` (T18a). Materialized as a table |
-| [`dbt/models/silver/schema.yml`](../../dbt/models/silver/schema.yml) | `not_null` on every column, `accepted_values` on `currency` (`PEN`, `USD`) and `account_kind` (`asset`, `liability`), matching `ingestion.schema.Currency`/`AccountKind` |
+| [`dbt/models/silver/transactions.sql`](../../dbt/models/silver/transactions.sql) | `silver.transactions`: bronze's columns with the description re-normalized, plus `account_kind` joined in from `bronze.statements` (T18a) and `is_internal_transfer` joined in from `internal_transfer_matches` (T18b). Materialized as a table |
+| [`dbt/models/silver/internal_transfer_matches.sql`](../../dbt/models/silver/internal_transfer_matches.sql) | T18b: one row per `bronze.transactions` row, with whether it's a plausible transfer candidate and, if matched, which other movement it paired with. The single shared computation the two models below and `transactions.sql`'s flag all build on -- see ADR 0017 for the full matching algorithm |
+| [`dbt/models/silver/internal_transfers.sql`](../../dbt/models/silver/internal_transfers.sql) | T18b: `silver.internal_transfers`, one row per matched pair (both legs' own details, `day_diff`, `amount_diff`) |
+| [`dbt/models/silver/unmatched_transfers.sql`](../../dbt/models/silver/unmatched_transfers.sql) | T18b: `silver.unmatched_transfers`, transfer candidates with no mutual match -- for review, never dropped |
+| [`dbt/macros/movement_id.sql`](../../dbt/macros/movement_id.sql) | T18b: a content-based identity (md5 hash) for one `bronze.transactions` row, shared by `internal_transfer_matches.sql` and `transactions.sql` so their two lookups of the same row can never silently drift apart |
+| [`dbt/models/silver/schema.yml`](../../dbt/models/silver/schema.yml) | `not_null` on every column, `accepted_values` on `currency` (`PEN`, `USD`) and `account_kind` (`asset`, `liability`), matching `ingestion.schema.Currency`/`AccountKind`; column docs and tests for the three T18b models too |
 | [`dbt/tests/assert_statement_continuity.sql`](../../dbt/tests/assert_statement_continuity.sql) | The continuity test: a period's closing balance is the next period's opening balance, and the periods are contiguous, per user, account and currency (T18c) |
+| [`dbt/tests/assert_internal_transfers_are_one_to_one.sql`](../../dbt/tests/assert_internal_transfers_are_one_to_one.sql) | T18b: standing proof that no movement appears in more than one matched pair |
 | `[tool.sqlfluff.*]` in [`pyproject.toml`](../../pyproject.toml) | sqlfluff with the **dbt** templater and the `duckdb` dialect, so the linter sees the `delta_scan(...)` expression dbt actually compiles |
 
 ## What silver adds, and what it deliberately does not
@@ -39,7 +44,8 @@ checked. Design decisions in [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-so
   **The SQL and the Python implement the same four rules and have to be kept in step** — this
   is the one piece of duplication in the component, and it is deliberate.
 - **No columns that nothing asked for.** No surrogate key, no derived category, no `is_expense`
-  flag. `is_internal_transfer` arrives in T18b, with the model that can populate it.
+  flag. `is_internal_transfer` (T18b) is the one exception, added because T18b's own acceptance
+  criteria ask for it explicitly -- see "Internal transfers" below.
 - **`account_kind` is joined in from `bronze.statements` (T18a), not duplicated bronze-side.**
   What an account's balance represents (`asset`: money on hand, `liability`: debt owed) is a
   `Statement`-level fact set once per parser, not a `Transaction` one — see
@@ -83,6 +89,39 @@ every column in the now-wider partition key. Full reasoning in
 [ADR 0016](../decisions/0016-currency-aware-statement-continuity.md), including why `currency`
 is *not* additionally joined into `silver.transactions` the way `account_kind` is (it's already
 there, via `Transaction.currency`, since before this task).
+
+## Internal transfers: matching, flagging, and what stays unmatched
+
+T18b matches a real transfer between two accounts of the same user (e.g. paying a Scotiabank
+credit card from a BCP checking account) so it never counts as income or expense, using the
+account_kind-aware sign rule ADR 0015 already decided: two `asset` accounts (or two `liability`
+accounts) match on opposite signs; an `asset`-to-`liability` pair matches on the *same* sign,
+since a checking outflow and a debt-reducing payment are both negative.
+
+All the matching logic lives in exactly one place, `internal_transfer_matches.sql`, which every
+other T18b model builds on:
+
+- **`internal_transfer_matches`** — one row per `bronze.transactions` row, with
+  `is_transfer_candidate` (within the amount/date-window neighborhood of another account's row,
+  any currency) and `is_internal_transfer` (a same-currency *mutual* nearest-neighbor match — see
+  ADR 0017 for why mutual nearest neighbor, not a true maximum-cardinality matching).
+- **`internal_transfers`** — one row per matched pair, both legs' own details plus `day_diff`/
+  `amount_diff`. A thin reshape of `internal_transfer_matches`, no matching logic of its own.
+- **`unmatched_transfers`** — candidates with no mutual match, for a human to review, never
+  dropped: the unpaired half of a real transfer (its counterpart hasn't been ingested, or lost a
+  tie-break to a closer candidate), or a cross-currency near-miss (explicitly out of scope for
+  auto-matching — no FX conversion anywhere in this project — but still surfaced, not silently
+  dropped or silently matched).
+- **`transactions.is_internal_transfer`** — a `left join` back to `internal_transfer_matches`
+  plus `coalesce(..., false)`, so every transaction has a real boolean, never null.
+
+`internal_transfer_matches.sql` reads `bronze.transactions`/`bronze.statements` directly, never
+`ref('transactions')` — the one way `transactions.sql` can join back to it for its own flag
+without creating a dependency cycle (`dbt compile` refuses to build one; confirmed against an
+early draft that tried the other way). A `movement_id` macro
+([`dbt/macros/movement_id.sql`](../../dbt/macros/movement_id.sql), a content hash of every
+`bronze.transactions` column except `ingested_at`) is what lets `internal_transfer_matches.sql`
+and `transactions.sql` agree on one row's identity without bronze having a surrogate key.
 
 ## How to use it and how to verify it
 
