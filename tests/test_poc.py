@@ -101,9 +101,13 @@ def _fake_run(ingest_returncode: int, dbt_returncode: int) -> Any:
 
 
 def test_main_reports_pass_when_both_steps_succeed(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
+    _seed_transfer_tables(tmp_path / "pfp.duckdb", matched=0, unmatched=0)
     monkeypatch.setattr(subprocess, "run", _fake_run(0, 0))
 
     assert main() == 0
