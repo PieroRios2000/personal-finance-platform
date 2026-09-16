@@ -27,6 +27,14 @@
 -- account_id's own hash), so `max()` never has more than one real value to
 -- pick from -- it exists to make the join's cardinality safe by construction,
 -- not to arbitrate a genuine disagreement.
+--
+-- is_internal_transfer (T18b, ADR 0017) is a left join to
+-- internal_transfer_matches.sql on that model's own movement_id -- the
+-- matching logic itself lives there, once, not here. A left join (not inner)
+-- for the same "never silently drop a row" reason account_kinds uses one;
+-- coalesce(..., false) turns "no match found" into a real false rather than
+-- null, since every transaction either is or isn't a transfer, with no third
+-- state to represent.
 
 with account_kinds as (
 
@@ -35,6 +43,15 @@ with account_kinds as (
         max(account_kind) as account_kind
     from {{ source('bronze', 'statements') }}
     group by account_id
+
+),
+
+transfer_matches as (
+
+    select
+        movement_id,
+        is_internal_transfer
+    from {{ ref('internal_transfer_matches') }}
 
 )
 
@@ -49,6 +66,7 @@ select
     bronze_transactions.source_file_sha256,
     bronze_transactions.ingested_at,
     account_kinds.account_kind,
+    coalesce(transfer_matches.is_internal_transfer, false) as is_internal_transfer,
     upper(trim(regexp_replace(
         regexp_replace(bronze_transactions.description, '[.\-_*#]{2,}', ' ', 'g'),
         '\s+', ' ', 'g'
@@ -56,3 +74,5 @@ select
 from {{ source('bronze', 'transactions') }} as bronze_transactions
 left join account_kinds
     on bronze_transactions.account_id = account_kinds.account_id
+left join transfer_matches
+    on transfer_matches.movement_id = {{ movement_id('bronze_transactions') }}
