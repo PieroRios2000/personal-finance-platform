@@ -497,12 +497,18 @@ has no `currency` field to partition by instead — only `Transaction` does.
 **Description:** Leave the phase presentable and turn on blocking for the numeric rules.
 
 **Acceptance criteria:**
-- [ ] README: what this is, a diagram, how to run it, the Azure ↔ open-source equivalence.
-- [ ] Brain kept current (phase-1 closed, Mermaid map, components).
-- [ ] Numeric rules switch to blocking (if 2026-09-26 has passed).
+- [x] README: what this is, a diagram, how to run it, the Azure ↔ open-source equivalence.
+- [x] Brain kept current (phase-1 closed, Mermaid map, components) — `brain/phases/phase-1.md`
+  marked `status: closed`, its own honest "still open" note added (real-data validation,
+  numeric rules).
+- [ ] Numeric rules switch to blocking (if 2026-09-26 has passed). (pending: today is
+  2026-09-15, 11 days before that date — CONSTRAINTS.md's own text sets the date, not this
+  task; flip `continue-on-error` in `.github/workflows/ci.yml` and the `-`/`||true` markers in
+  `Makefile` once it arrives.)
 
 **Verification:**
-- [ ] Clone the repo into a clean folder and follow the README through to `dbt build` with no missing steps.
+- [x] Clone the repo into a clean folder and follow the README through to `dbt build` with no
+  missing steps. Verified for real — see this task's PR for the transcript.
 
 **Dependencies:** T17b, T18b, T18c · **Files:** `README.md`, `brain/**`, `.github/workflows/ci.yml` · **Size:** S
 

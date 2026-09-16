@@ -1,9 +1,10 @@
 ---
 type: phase
 phase: 1
+status: closed
 ---
 
-# Phase 1 — Foundation
+# Phase 1 — Foundation (closed)
 
 A bank statement PDF (BCP or Scotiabank) gets parsed, reconciled, skipped if already ingested,
 and written to bronze; dbt builds silver with tests, and CI validates every PR. Full plan in
@@ -17,7 +18,7 @@ and written to bronze; dbt builds silver with tests, and CI validates every PR. 
 | B — Ingestion | T6–T12b | T6 schema (#30, fix #32) · T7 file hash (#28) · T8 reconciliation (#34) · T9 inspector (#16) · T10 synthetic fixture (#29) · T11 BCP parser · T12 dispatcher/CLI · T11b OCR fallback (#38) · T12b inbox organizer (#39): all done |
 | C — Lakehouse | T13–T15 | T13 local S3 (SeaweedFS) · T14 bronze writer · T14c bronze backfill · T15 benchmarks + impact-based CI: all done |
 | D — Transformation | T16, T17, T17b | T16 dbt silver done; T17 ephemeral integration environment done; T17b base-vs-PR data diff done |
-| E — Second bank and close | T18, T18a, T18b, T18c, T19 | T18 Scotiabank parser: built, pending real-data validation · T18a account_kind: built · T18c currency-aware continuity: built · T18b internal-transfer reconciliation: built · T19 pending |
+| E — Second bank and close | T18, T18a, T18b, T18c, T19 | T18 Scotiabank parser: built, pending real-data validation · T18a account_kind: built · T18c currency-aware continuity: built · T18b internal-transfer reconciliation: built · T19 phase close: done |
 
 Also integrated: [SETUP.md](../../SETUP.md) with environment setup (#10), the ephemeral
 environments and impact-based CI plan (#12), [CLAUDE.md](../../CLAUDE.md) with the rules for
@@ -28,6 +29,19 @@ persistent-secret-and-views setup — [SETUP.md §7](../../SETUP.md#7-browsing-t
 [dbt silver](../components/dbt-silver.md). T19b (brain in Obsidian): confirmed with a
 link-checker that every relative link in `brain/**/*.md` resolves and nothing is unexpectedly
 isolated — steps in [SETUP.md §8](../../SETUP.md#8-browsing-the-brain-in-obsidian).
+
+**Closing this phase (T19, 2026-09-15).** Every task is built, tested (synthetic data) and
+merged. Two things are still honestly open, not glossed over:
+
+- **Real-data validation is Piero's own step** (ADR 0004): the Scotiabank parser, the
+  currency-aware continuity fix and inter-account matching have never run against his actual
+  statements — only synthetic fixtures and, for the pipeline itself, his own real BCP data via
+  `pfp backfill`. `make poc` is how he confirms the rest, whenever he's ready.
+- **The numeric rules (coverage, security, performance, architecture) are still in warn mode**
+  — CONSTRAINTS.md's own switch date is 2026-09-26, which hadn't passed as of this close.
+  Flipping `continue-on-error` off in `.github/workflows/ci.yml` and the `-`/`||true` markers
+  in the `Makefile` is a two-line change once that date arrives; deliberately not done early,
+  since CONSTRAINTS.md's own text is what sets the date, not this note.
 
 ## Components
 
