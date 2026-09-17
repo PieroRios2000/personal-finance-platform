@@ -15,18 +15,20 @@ two legitimate same-day, same-amount, same-merchant purchases in one statement w
 otherwise collide on one key.
 
 **Acceptance criteria:**
-- [ ] `silver.transactions`'s business key is `date + amount + normalized description +
+- [x] `silver.transactions`'s business key is `date + amount + normalized description +
   account_id + occurrence_number`, where `occurrence_number` is a `row_number()` scoped to
   *one source file* (`source_file_sha256`) — two identical-looking rows in the same PDF get
   different numbers; the same purchase re-appearing in a regenerated PDF of the same period
   still collides (intentional — that's a duplicate, not two purchases).
-- [ ] The model is `materialized='incremental'`, `incremental_strategy='merge'`, keyed on that
+- [x] The model is `materialized='incremental'`, `incremental_strategy='merge'`, keyed on that
   business key.
-- [ ] A `pfp backfill` (ADR 0010) re-parse of an already-ingested file correctly *updates* its
-  existing silver rows via the MERGE, not skips them as already-present or duplicates them.
-- [ ] `brain/concepts/business-key.md`'s "Open question" section is updated to reflect the
+- [x] A `pfp backfill` (ADR 0010) re-parse of an already-ingested file correctly *updates* its
+  existing silver rows via the MERGE, not skips them as already-present or duplicates them —
+  via a `pre_hook` that purges a touched file's own existing rows first (ADR 0018; a plain
+  `MERGE` alone can't delete a row whose key stopped appearing in a reprocessed file).
+- [x] `brain/concepts/business-key.md`'s "Open question" section is updated to reflect the
   resolution, not left contradicting the code.
-- [ ] A new dbt test, per account per statement period: `sum(silver.transactions.amount)`
+- [x] A new dbt test, per account per statement period: `sum(silver.transactions.amount)`
   for that period equals `bronze.statements.closing_balance - opening_balance` for the
   matching statement. This is the same arithmetic `ingestion/reconciliation.py` (T8) already
   checks once in Python at parse time — re-checked here at the model layer specifically to
@@ -34,15 +36,17 @@ otherwise collide on one key.
   a check upstream of the MERGE never would.
 
 **Verification:**
-- [ ] Two synthetic transactions, same date/amount/description/account, in one statement:
+- [x] Two synthetic transactions, same date/amount/description/account, in one statement:
   both land in silver as separate rows.
-- [ ] The same statement's bytes re-ingested (T7's file-level dedup) never reaches this model
+- [x] The same statement's bytes re-ingested (T7's file-level dedup) never reaches this model
   a second time — unchanged from Phase 1, confirmed still true after switching to incremental.
-- [ ] A synthetic backfill scenario (change a fixture's description, backfill, dbt build):
+- [x] A synthetic backfill scenario (change a fixture's description, backfill, dbt build):
   the *old* description is gone from silver, not duplicated alongside the new one.
-- [ ] `dbt build` a second time with no bronze changes: 0 rows inserted or updated (dbt's own
-  incremental run results confirm this, not just "it didn't error").
-- [ ] The new balance-reconciliation test: passes on a normal synthetic fixture; fails when a
+- [x] `dbt build` a second time with no bronze changes touches nothing. (note: verified via
+  full-row content-identity of `silver.transactions` before and after, not a dbt-reported
+  rows-affected count — `dbt-duckdb`'s own adapter never reports one, confirmed by reading its
+  `get_response()` source directly rather than assumed.)
+- [x] The new balance-reconciliation test: passes on a normal synthetic fixture; fails when a
   synthetic MERGE scenario is deliberately broken (a row dropped on purpose) — proving the
   test actually catches what it's meant to, not just that it runs.
 

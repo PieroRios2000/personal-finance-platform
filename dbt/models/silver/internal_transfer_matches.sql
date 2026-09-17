@@ -73,20 +73,23 @@ with account_kinds as (
 
 tx as (
 
-    -- `distinct`: two genuinely identical bronze rows (same user/account/
-    -- date/amount/currency/description/source file) share one movement_id
-    -- (the macro's own documented, accepted limitation -- they can't be told
-    -- apart for matching purposes). Every other column selected here is
-    -- already determined by the columns that make up that hash (bank/
-    -- account_last4/account_kind all follow deterministically from
-    -- account_id), so `distinct` collapses true duplicates to exactly one
-    -- row rather than leaving movement_id non-unique in this CTE. That
-    -- uniqueness is what keeps every join against this model downstream
-    -- (transactions.sql, internal_transfers.sql) safe by construction --
-    -- the same "safe by construction, not by assumption" reasoning
-    -- account_kinds' own `group by` above already relies on. Found by a
-    -- code-review pass: without it, transactions.sql's left join on
-    -- movement_id fanned 2 duplicate bronze rows out into 4 silver rows.
+    -- `distinct`: originally required because two genuinely identical bronze
+    -- rows (same user/account/date/amount/currency/description/source file)
+    -- shared one movement_id and needed collapsing to keep this CTE's
+    -- movement_id unique (found by a code-review pass: without it,
+    -- transactions.sql's left join on movement_id fanned 2 duplicate bronze
+    -- rows out into 4 silver rows). T20 resolved that at the source --
+    -- movement_id now includes an occurrence number
+    -- (`dbt/macros/occurrence_number.sql`), so two duplicate bronze rows get
+    -- two distinct movement_ids and `distinct` no longer has anything to
+    -- collapse here. Left in place anyway as harmless defense-in-depth: every
+    -- other column selected here is already determined by the columns that
+    -- make up the hash (bank/account_last4/account_kind all follow
+    -- deterministically from account_id), so `distinct` is a genuine no-op
+    -- now, not a correctness requirement -- the same "safe by construction,
+    -- not by assumption" reasoning account_kinds' own `group by` above
+    -- already relies on. See ADR 0018 for the full T20 reasoning, including
+    -- why fixing this here was a deliberate side effect, not an accident.
     select distinct
         {{ movement_id('bronze_transactions') }} as movement_id,
         bronze_transactions.user_id,
