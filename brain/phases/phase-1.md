@@ -50,7 +50,11 @@ merged. Two things are still honestly open, not glossed over:
 - [CI](../components/ci.md) — in progress: branch policy and quality gates (T5), impact-based
   `changes` and `benchmarks` jobs (T15), the `ephemeral-integration` job plus `make poc` (T17),
   and the `pr-data-diff` job plus `scripts/data_diff.py` (T17b) all done; every job's own
-  wiring still needs a live GitHub Actions PR run to fully confirm.
+  wiring confirmed live now that real PRs have run through it (`ephemeral-integration`
+  genuinely failed and was fixed on PR #68, for instance — see its own pending notes for what
+  that surfaced). `ephemeral-integration-gate` (ADR 0019) added after Piero found the job
+  wasn't actually required by the ruleset; still needs Piero's own ruleset update to take
+  effect (a repository-settings change, not something a PR can make).
 - [Masked layout inspector](../components/layout-inspector.md) — built (T9).
 - [Quality bar](../components/quality-bar.md) — built (T4).
 - [BCP parser](../components/bcp-parser.md) — built (T11), provisional column layout pending a real masked dump.
@@ -84,6 +88,7 @@ merged. Two things are still honestly open, not glossed over:
 | 0015 | `account_kind` (asset/liability) on `Statement`, joined into silver | [ADR 0015](../decisions/0015-account-kind-asset-or-liability.md) |
 | 0016 | `currency` on `Statement`; continuity test partitioned by currency too | [ADR 0016](../decisions/0016-currency-aware-statement-continuity.md) |
 | 0017 | Internal-transfer matching: mutual nearest neighbor, currency-relaxed candidacy | [ADR 0017](../decisions/0017-internal-transfer-matching-mutual-nearest-neighbor.md) |
+| 0019 | `ephemeral-integration` required via an always-run gate job, not directly | [ADR 0019](../decisions/0019-ephemeral-integration-required-via-gate-job.md) |
 
 ## Concepts
 
