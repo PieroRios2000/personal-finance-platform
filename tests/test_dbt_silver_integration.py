@@ -166,22 +166,38 @@ _FEBRUARY_NET_ZERO = (date(2026, 2, 1), date(2026, 2, 28), "900.00", "0.00")
 _MARCH_AFTER_NET_ZERO = (date(2026, 3, 1), date(2026, 3, 31), "900.00", "-50.00")
 
 
-def _dbt_build(tmp_path: Path) -> subprocess.CompletedProcess[str]:
-    """`dbt build` against the seeded test lake, writing its artifacts to tmp_path."""
+def _dbt_build(
+    tmp_path: Path, *, select: str | None = None, exclude: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """`dbt build` against the seeded test lake, writing its artifacts to tmp_path.
+
+    `select`/`exclude` narrow the run to (or away from) one dbt selector
+    (`--select`/`--exclude`), same as running `dbt build --select <select>
+    --exclude <exclude>` by hand -- for a test that needs to isolate one
+    model's own behavior (T20) from an unrelated node elsewhere in the
+    project failing first and, per this project's own dbt version, skipping
+    every other node in the same invocation regardless of the dependency
+    graph (confirmed directly against `manifest.json`'s `child_map`, empty
+    for the singular tests here -- not a real dependency edge)."""
     environment = {**os.environ, "PFP_DUCKDB_PATH": str(tmp_path / "pfp.duckdb")}
+    command = [
+        str(Path(sys.executable).parent / "dbt"),
+        "build",
+        "--project-dir",
+        "dbt",
+        "--profiles-dir",
+        "dbt",
+        "--target-path",
+        str(tmp_path / "target"),
+        "--log-path",
+        str(tmp_path / "logs"),
+    ]
+    if select is not None:
+        command += ["--select", select]
+    if exclude is not None:
+        command += ["--exclude", exclude]
     return subprocess.run(
-        [
-            str(Path(sys.executable).parent / "dbt"),
-            "build",
-            "--project-dir",
-            "dbt",
-            "--profiles-dir",
-            "dbt",
-            "--target-path",
-            str(tmp_path / "target"),
-            "--log-path",
-            str(tmp_path / "logs"),
-        ],
+        command,
         cwd=_REPO_ROOT,
         env=environment,
         capture_output=True,
