@@ -12,9 +12,9 @@ from pathlib import Path
 
 import dagster as dg
 import pytest
-from orchestration.assets.bronze import BronzeIngestConfig, bronze
 
 from ingestion import organizer
+from orchestration.assets.bronze import BronzeIngestConfig, bronze
 from tests.fixtures.synthetic_pdfs import bcp_statement_pdf
 
 
@@ -149,5 +149,12 @@ def test_bronze_asset_second_materialization_writes_nothing_new(
 
     assert second.success
     metadata = second.asset_materializations_for_node("bronze")[0].metadata
+    # organizer.organize() itself catches this case (T12b): the identical
+    # bytes land at the same destination as the file already archived on the
+    # first pass, so it's filed as a duplicate before bronze.is_ingested() is
+    # ever consulted -- `statements_written` is what actually proves nothing
+    # new reached bronze, mirroring CI's own
+    # `grep -q "Bronze: 0 statement(s) written"` check.
+    assert metadata["archived"].value == 0
+    assert metadata["duplicates"].value == 1
     assert metadata["statements_written"].value == 0
-    assert metadata["files_already_ingested"].value == 1
