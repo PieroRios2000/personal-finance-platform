@@ -3,6 +3,8 @@ name = "personal-finance-platform"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "dagster>=1.13.23",
+    "dagster-dbt>=0.29.23",
     "dbt-duckdb>=1.11.0",
     "deltalake>=1.6.3",
     "duckdb>=1.5.5",
