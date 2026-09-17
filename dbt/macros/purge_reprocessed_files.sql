@@ -45,10 +45,10 @@
         from {{ source('bronze', 'transactions') }} as bronze_transactions
         where not exists (
             select 1
-            from {{ this }} as existing
+            from {{ this }} as already_in_silver
             where
-                existing.source_file_sha256 = bronze_transactions.source_file_sha256
-                and existing.ingested_at = bronze_transactions.ingested_at
+                already_in_silver.source_file_sha256 = bronze_transactions.source_file_sha256
+                and already_in_silver.ingested_at = bronze_transactions.ingested_at
         )
     )
 {% endif %}

@@ -116,13 +116,13 @@ new_bronze_transactions as (
         {{ movement_id('bronze_transactions') }} as movement_id
     from {{ source('bronze', 'transactions') }} as bronze_transactions
     {% if is_incremental() %}
-    where not exists (
-        select 1
-        from {{ this }} as existing
-        where
-            existing.source_file_sha256 = bronze_transactions.source_file_sha256
-            and existing.ingested_at = bronze_transactions.ingested_at
-    )
+        where not exists (
+            select 1
+            from {{ this }} as already_in_silver
+            where
+                already_in_silver.source_file_sha256 = bronze_transactions.source_file_sha256
+                and already_in_silver.ingested_at = bronze_transactions.ingested_at
+        )
     {% endif %}
 
 )
