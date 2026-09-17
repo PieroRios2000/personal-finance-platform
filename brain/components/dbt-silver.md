@@ -2,7 +2,7 @@
 type: component
 phase: 1
 status: built
-task: T16
+task: T16, T18a, T18b, T18c, T20
 ---
 
 # dbt silver
@@ -18,14 +18,19 @@ checked. Design decisions in [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-so
 |---|---|
 | [`dbt/profiles.yml`](../../dbt/profiles.yml) | The DuckDB connection: on-disk database (`PFP_DUCKDB_PATH`, default `dbt/pfp.duckdb`), schema `silver`, the `httpfs` and `delta` extensions, and the `TYPE s3 / PROVIDER config` secret that lets DuckDB reach SeaweedFS (`ENDPOINT`, `URL_STYLE 'path'`, `USE_SSL false`). Every value comes from the same `.env` variables `lakehouse/storage.py` reads |
 | [`dbt/models/sources.yml`](../../dbt/models/sources.yml) | `bronze.transactions` and `bronze.statements`, declared as one `external_location` f-string: `delta_scan('<LAKEHOUSE_URI>/bronze/{name}')` |
-| [`dbt/models/silver/transactions.sql`](../../dbt/models/silver/transactions.sql) | `silver.transactions`: bronze's columns with the description re-normalized, plus `account_kind` joined in from `bronze.statements` (T18a) and `is_internal_transfer` joined in from `internal_transfer_matches` (T18b). Materialized as a table |
+| [`dbt/models/silver/transactions.sql`](../../dbt/models/silver/transactions.sql) | `silver.transactions`: bronze's columns with the description re-normalized, plus `account_kind` joined in from `bronze.statements` (T18a), `is_internal_transfer` joined in from `internal_transfer_matches` (T18b), and `occurrence_number` (T20). Incremental (`materialized='incremental'`, `incremental_strategy='merge'`), keyed on the business key — see "Incremental MERGE" below |
+| [`dbt/macros/occurrence_number.sql`](../../dbt/macros/occurrence_number.sql) | T20: a `row_number()`, scoped to one `source_file_sha256`, that disambiguates two otherwise-identical bronze rows — shared by `movement_id.sql` (raw description) and `transactions.sql`'s own business key (normalized description) |
+| [`dbt/macros/purge_reprocessed_files.sql`](../../dbt/macros/purge_reprocessed_files.sql) | T20: `transactions.sql`'s `pre_hook` — deletes a run's touched files' *existing* silver rows before the `MERGE` inserts their fresh ones, so a `pfp backfill` that changes a row's own business key doesn't orphan the old one |
+| [`dbt/macros/normalize_description.sql`](../../dbt/macros/normalize_description.sql) | T20: SQL port of `ingestion.schema.normalize_description()`, shared by `transactions.sql`'s own `description` column and its business-key partition, so the two can't drift apart |
 | [`dbt/models/silver/internal_transfer_matches.sql`](../../dbt/models/silver/internal_transfer_matches.sql) | T18b: one row per `bronze.transactions` row, with whether it's a plausible transfer candidate and, if matched, which other movement it paired with. The single shared computation the two models below and `transactions.sql`'s flag all build on -- see ADR 0017 for the full matching algorithm |
 | [`dbt/models/silver/internal_transfers.sql`](../../dbt/models/silver/internal_transfers.sql) | T18b: `silver.internal_transfers`, one row per matched pair (both legs' own details, `day_diff`, `amount_diff`) |
 | [`dbt/models/silver/unmatched_transfers.sql`](../../dbt/models/silver/unmatched_transfers.sql) | T18b: `silver.unmatched_transfers`, transfer candidates with no mutual match -- for review, never dropped |
-| [`dbt/macros/movement_id.sql`](../../dbt/macros/movement_id.sql) | T18b: a content-based identity (md5 hash) for one `bronze.transactions` row, shared by `internal_transfer_matches.sql` and `transactions.sql` so their two lookups of the same row can never silently drift apart |
-| [`dbt/models/silver/schema.yml`](../../dbt/models/silver/schema.yml) | `not_null` on every column, `accepted_values` on `currency` (`PEN`, `USD`) and `account_kind` (`asset`, `liability`), matching `ingestion.schema.Currency`/`AccountKind`; column docs and tests for the three T18b models too |
+| [`dbt/macros/movement_id.sql`](../../dbt/macros/movement_id.sql) | T18b: a content-based identity (md5 hash) for one `bronze.transactions` row, shared by `internal_transfer_matches.sql` and `transactions.sql` so their two lookups of the same row can never silently drift apart. Extended in T20 to include `occurrence_number`, resolving a limitation it used to document as its own out-of-scope gap |
+| [`dbt/models/silver/schema.yml`](../../dbt/models/silver/schema.yml) | `not_null` on every column, `accepted_values` on `currency` (`PEN`, `USD`) and `account_kind` (`asset`, `liability`), matching `ingestion.schema.Currency`/`AccountKind`; column docs and tests for the T18b and T20 models too |
 | [`dbt/tests/assert_statement_continuity.sql`](../../dbt/tests/assert_statement_continuity.sql) | The continuity test: a period's closing balance is the next period's opening balance, and the periods are contiguous, per user, account and currency (T18c) |
 | [`dbt/tests/assert_internal_transfers_are_one_to_one.sql`](../../dbt/tests/assert_internal_transfers_are_one_to_one.sql) | T18b: standing proof that no movement appears in more than one matched pair |
+| [`dbt/tests/assert_statement_balance_reconciliation.sql`](../../dbt/tests/assert_statement_balance_reconciliation.sql) | T20: re-checks T8's own Python-level balance check at the model layer — per account/period/currency, `sum(silver.transactions.amount)` equals the matching statement's `closing_balance - opening_balance` — specifically to catch what the incremental `MERGE` could get wrong that a check upstream of it never would |
+| [`dbt/tests/assert_transactions_business_key_is_unique.sql`](../../dbt/tests/assert_transactions_business_key_is_unique.sql) | T20: standing proof the `MERGE`'s own `unique_key` is actually unique — dbt's merge strategy doesn't refuse a duplicate-keyed source batch itself, it just matches ambiguously |
 | `[tool.sqlfluff.*]` in [`pyproject.toml`](../../pyproject.toml) | sqlfluff with the **dbt** templater and the `duckdb` dialect, so the linter sees the `delta_scan(...)` expression dbt actually compiles |
 
 ## What silver adds, and what it deliberately does not
@@ -123,6 +128,36 @@ early draft that tried the other way). A `movement_id` macro
 `bronze.transactions` column except `ingested_at`) is what lets `internal_transfer_matches.sql`
 and `transactions.sql` agree on one row's identity without bronze having a surrogate key.
 
+## Incremental MERGE: business key, occurrence number, and backfill (T20)
+
+`silver.transactions` no longer rebuilds from every bronze row on every `dbt build`. It's
+`materialized='incremental'`, `incremental_strategy='merge'`, keyed on the business key
+[`brain/concepts/business-key.md`](../concepts/business-key.md) defines: `account_id`, `date`,
+`amount`, normalized `description`, and `occurrence_number`. The incremental filter — which
+bronze rows this run even looks at — is everything on a first build or `--full-refresh`, or,
+once incremental, only rows whose `(source_file_sha256, ingested_at)` pair isn't already in
+`{{ this }}`; `lakehouse/bronze.py` stamps one `ingested_at` per file, not per row, so a
+touched file's rows are always picked up together.
+
+**Two mechanisms, deliberately kept separate, for two different "the same movement showed up
+again" cases:**
+
+- **A `pfp backfill` (ADR 0010) that changes a row's own business key** (a parser fix
+  correcting a description, say): `transactions.sql`'s own `pre_hook`,
+  `purge_reprocessed_files()`, deletes that file's *existing* silver rows before the `MERGE`
+  inserts the fresh ones — a plain `MERGE` alone can insert a new-keyed row and update a
+  matching one, but it can never *delete* a target row whose key no longer appears in the
+  run's own source data, so without the purge the row's old key would sit in silver forever,
+  orphaned next to the corrected one.
+- **A different file that happens to parse to the same business key** (a bank regenerating a
+  statement PDF with different bytes, past T7's file-level dedup): that file was never in
+  silver before, so the purge has nothing of its own to delete — the `MERGE`'s own
+  `WHEN MATCHED` branch, matching on the business key rather than the file, is what correctly
+  updates that row in place instead.
+
+Full reasoning, including why these stay two mechanisms rather than one, in
+[ADR 0018](../decisions/0018-incremental-merge-business-key-occurrence-number.md).
+
 ## How to use it and how to verify it
 
 Needs SeaweedFS up and `.env` exported; `profiles.yml` lives in the project directory, so both
@@ -155,11 +190,21 @@ this file. Exact commands in [SETUP.md §7](../../SETUP.md#7-browsing-the-lake-i
   same-account/same-currency/same-period duplicate still failing. A dedicated prefix is what
   makes it deterministic: the continuity test spans every statement in the lake, so it cannot be
   asserted against a lake that also holds real, partially archived periods.
-- Both are `integration`-marked and deselected by default (`pytest -m integration`), like T14's
-  bronze test; see CONSTRAINTS.md's exceptions table.
+- [`tests/test_dbt_incremental_merge_integration.py`](../../tests/test_dbt_incremental_merge_integration.py)
+  (T20) proves, against real local S3: two identical transactions in one statement land as two
+  silver rows; a second `dbt build` with no bronze changes touches nothing; a backfilled,
+  corrected description updates the row in place (not both); a backfill of unchanged content
+  doesn't duplicate; a regenerated file with the same business key updates in place at the
+  model level; the new balance-reconciliation test passes normally and fails when a `MERGE`
+  scenario is deliberately broken.
+- All three are `integration`-marked and deselected by default (`pytest -m integration`), like
+  T14's bronze test; see CONSTRAINTS.md's exceptions table.
 
 ## Related
 
+- [ADR 0018: Incremental MERGE, occurrence-number business key](../decisions/0018-incremental-merge-business-key-occurrence-number.md) —
+  the business key, the two backfill/regeneration mechanisms, and `movement_id`'s own
+  extension, in full.
 - [ADR 0016: Currency-aware statement continuity](../decisions/0016-currency-aware-statement-continuity.md) —
   the false positive found running `dbt build` against dual-currency Scotiabank data, and the
   partition-by-currency fix, in full.
@@ -172,4 +217,7 @@ this file. Exact commands in [SETUP.md §7](../../SETUP.md#7-browsing-the-lake-i
 - [Lakehouse](lakehouse.md) — the bronze tables this reads.
 - [Medallion architecture](../concepts/medallion.md) — why silver exists at all.
 - [Reconciliation](../concepts/reconciliation.md) — the continuity level this implements.
+- [Business key](../concepts/business-key.md) — the identity `transactions.sql`'s own `MERGE`
+  is keyed on.
+- [Idempotency](../concepts/idempotency.md)
 - [Phase 1](../phases/phase-1.md)
