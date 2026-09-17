@@ -336,6 +336,35 @@ jobs:
         if: always()
         run: docker compose -p "$COMPOSE_PROJECT" down -v
 
+  # This is the job the branch ruleset actually requires, not
+  # ephemeral-integration itself. GitHub's own docs say a job skipped by a
+  # job-level `if:` should report "success" to a required check -- but as of
+  # this writing there is an open, acknowledged inconsistency where
+  # repository rulesets (not classic branch protection) sometimes see
+  # "skipped" and refuse to treat it as satisfied, leaving an unrelated PR
+  # (one that never touches ingestion/lakehouse/dbt, so ephemeral-integration
+  # never runs at all) blocked forever with no clear reason why. This gate
+  # always runs (`if: always()`, overriding the default "only if needs
+  # succeeded"), reads ephemeral-integration's own real conclusion, and
+  # turns `success` *and* `skipped` into a pass, `failure`/`cancelled` into a
+  # fail -- deliberately not a third-party action for this: the whole fix is
+  # a five-line if statement, not something worth a new dependency.
+  ephemeral-integration-gate:
+    name: ephemeral-integration-gate
+    needs: ephemeral-integration
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: pass through ephemeral-integration's real result
+        run: |
+          result="${{ needs.ephemeral-integration.result }}"
+          echo "ephemeral-integration reported: $result"
+          if [ "$result" = "success" ] || [ "$result" = "skipped" ]; then
+            exit 0
+          fi
+          exit 1
+
   # T17b: what dbt build actually *produces* differs between the base branch
   # and the PR, not just whether it succeeds -- the same gap ADR 0007's own
   # "Compare" bullet calls out. Runs ingest + dbt build twice against the same

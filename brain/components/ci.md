@@ -2,7 +2,7 @@
 type: component
 phase: 1
 status: in-progress
-task: T5, T15, T17, T17b
+task: T5, T15, T17, T17b, T19-follow-up
 ---
 
 # CI
@@ -22,6 +22,7 @@ GitHub Actions PR run to confirm the wiring itself, since this session can't tri
 | `changes` job (T15, T17, [ADR 0008](../decisions/0008-impact-based-ci.md)) | Built | Pipes `git diff --name-only origin/<base>...HEAD` into [`scripts/ci_impact.py`](../../scripts/ci_impact.py) and publishes the affected areas (`benchmarks`, `integration`, `dbt_select`) as job outputs; expensive jobs carry their own `if` |
 | `benchmarks` job (T15) | Built | Measures the base branch and the PR on the same runner (only `ingestion/` and `lakehouse/` swapped between the two runs), `--benchmark-compare-fail=mean:20%`; warns until 2026-09-26 |
 | `ephemeral-integration` job (T17, [ADR 0007](../decisions/0007-ephemeral-per-pr-environments.md)) | Built | Local S3 up under a per-run project name, the synthetic fixture ingested twice (idempotency), `dbt build` (impact-narrowed per ADR 0008), `sqlfluff lint`, the `integration`-marked tests, then always torn down; logs and dbt's artifacts saved first |
+| `ephemeral-integration-gate` job ([ADR 0019](../decisions/0019-ephemeral-integration-required-via-gate-job.md)) | Built | The job the ruleset actually requires — always runs (`if: always()`), turns `ephemeral-integration`'s own `success`/`skipped` conclusion into a pass and `failure`/`cancelled` into a fail, since a ruleset-required check left "skipped" isn't reliably accepted as satisfied |
 | `make poc` (T17) | Built | The same flow, once, locally, against Piero's real PDFs; prints only pass/fail and reconciliation *counts* (ADR 0004) |
 | `pr-data-diff` job (T17b, [ADR 0014](../decisions/0014-pr-data-diff-shared-instance-full-build.md)) | Built | Ingest + `dbt build` run twice against the base branch's commit and the PR's, isolated by a `LAKEHOUSE_URI` prefix and a `PFP_DUCKDB_PATH` on one shared SeaweedFS instance; [`scripts/data_diff.py`](../../scripts/data_diff.py) diffs the two `.duckdb` files and posts Markdown to the job summary. Warn-only, gated on the same `integration` output as `ephemeral-integration` but runs in parallel with it |
 
@@ -29,9 +30,13 @@ GitHub Actions PR run to confirm the wiring itself, since this session can't tri
 
 - `branch-policy` uses `pull_request_target`: it runs the workflow version already in the repo,
   so a PR cannot edit it to approve itself; it never checks out the PR's code or gets any permissions.
-- Never skip a required job with `if`: a skipped job counts as successful even when required.
-  That's why `changes` and `benchmarks` are deliberately **not** required in the ruleset —
-  `benchmarks` skips itself by design (ADR 0008).
+- **A required job's own `if:` should never be able to skip it — GitHub's documented "a
+  skipped job counts as successful even when required" isn't reliably true for repository
+  rulesets (confirmed directly, not assumed; see [ADR 0019](../decisions/0019-ephemeral-integration-required-via-gate-job.md)).**
+  `changes` and `benchmarks` stay unrequired for their own, unrelated reasons (`changes` is
+  purely informational, `benchmarks` is warn-only by design, ADR 0008/CONSTRAINTS.md) — but
+  `ephemeral-integration`, which *should* gate a merge, is required only through
+  `ephemeral-integration-gate`, a wrapper job with no conditional skip path of its own.
 - No `paths` filters on workflows with required checks: they leave the check in "Pending" and
   block the merge. Impact-based skipping is per job (`if: needs.changes.outputs.…`), never
   a workflow-level filter.
@@ -95,6 +100,8 @@ against two small hand-built files, without a live SeaweedFS or dbt build.
   — why the environment exists and is always torn down.
 - [ADR 0008: Impact-based CI](../decisions/0008-impact-based-ci.md) — why expensive jobs skip,
   and what stops the map from hiding a real failure.
+- [ADR 0019: `ephemeral-integration` required via a gate job](../decisions/0019-ephemeral-integration-required-via-gate-job.md)
+  — why the job that actually blocks a merge isn't the impact-gated one directly.
 - [ADR 0013: dbt state comparison via a base-ref worktree](../decisions/0013-dbt-state-comparison-via-a-base-ref-worktree.md)
   — how the narrowed `dbt build` gets a manifest to compare against.
 - [ADR 0014: pr-data-diff isolates by URI prefix, not by environment, and always builds in full](../decisions/0014-pr-data-diff-shared-instance-full-build.md)
