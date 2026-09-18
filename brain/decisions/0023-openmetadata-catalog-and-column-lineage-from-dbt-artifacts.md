@@ -93,7 +93,7 @@ whether it fits there.
 
 ## What column-level lineage covers, and what it doesn't
 
-Verified live for every column of `gold.fact_transactions`, `dim_account`, `dim_date` and
+Verified live, once, by hand (not pinned by a test: `check` asserts only `amount`), for every column of `gold.fact_transactions`, `dim_account`, `dim_date` and
 `silver.transactions`: each traces back to a `bronze.*` column through every model in between,
 including `amount` (`bronze.transactions.amount -> silver.transactions.amount ->
 gold.fact_transactions.amount`), `flow_type` (`bronze.statements.account_kind` +
@@ -117,7 +117,7 @@ gold.fact_transactions.amount`), `flow_type` (`bronze.statements.account_kind` +
 
 - **A custom Python connector (`CustomDatabase` + `sourcePythonClass`)** that yields the
   tables inside the ingestion framework. The "official" extension point, but it can only be
-  exercised inside the container, and 60 lines of REST calls with a unit-testable core do the
+  exercised inside the container, and a small stdlib REST client with a unit-testable core does the
   same job. Worth revisiting if OpenMetadata later ships a DuckDB connector.
 - **Reading the artifacts from SeaweedFS (`dbtConfigType: s3`)** instead of a bind mount:
   another moving part (credentials in the workflow config, artifacts uploaded first) for no
@@ -135,7 +135,7 @@ gold.fact_transactions.amount`), `flow_type` (`bronze.statements.account_kind` +
 - `make om-up`, `make om-sync`, `make om-down` exist; running them needs Docker with enough
   memory, a built lake and `.env` exported (SETUP.md section 10).
 - Adding a new dbt source means adding its pyarrow schema to `bronze_tables()`, or `sync`
-  fails loudly by name instead of registering a table with no columns.
+  exits 2 naming the source instead of registering a table with no columns.
 - `bronze_tables()` imports `lakehouse.bronze`'s private `_TRANSACTIONS_SCHEMA` and
   `_STATEMENTS_SCHEMA`; if bronze gains a public schema registry, switch to it.
 - Open: whether OpenMetadata should also ingest dbt tests, ownership and tags (Phase 3, with

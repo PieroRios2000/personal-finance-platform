@@ -16,7 +16,8 @@
 #   * Named volumes only. Upstream bind-mounts ./docker-volume/db-data-postgres, a
 #     directory the container's postgres user creates: `rm -rf` of it fails with
 #     "Permission denied" after `down -v`. A named volume is removed by `down -v`.
-#   * Only the UI/API port (8585) is published. Upstream also publishes 5432, 9200, 9300,
+#   * Only the UI/API port (8585) is published, bound to 127.0.0.1 (upstream binds
+#     0.0.0.0, which would expose the default admin login to the LAN). Upstream also publishes 5432, 9200, 9300,
 #     8586 and 8080; nothing here needs them from the host, and 5432 in particular
 #     collides with any Postgres already running on the machine.
 #
@@ -90,7 +91,7 @@ services:
     image: docker.getcollate.io/openmetadata/server:2.0.2
     environment: *server-env
     ports:
-      - "${OPENMETADATA_PORT:-8585}:8585"
+      - "127.0.0.1:${OPENMETADATA_PORT:-8585}:8585"
     depends_on:
       elasticsearch:
         condition: service_healthy
