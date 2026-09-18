@@ -165,7 +165,7 @@ jobs:
         run: uv run pip-audit
       - name: bandit (warns until 2026-09-26, see CONSTRAINTS.md)
         continue-on-error: true
-        run: uv run bandit -q -r . -x ./.venv --severity-level high
+        run: uv run bandit -q -r . -x ./.venv,./dbt/dbt_packages --severity-level high
 
   architecture:
     name: architecture
@@ -314,6 +314,18 @@ jobs:
         run: |
           git fetch origin "$PFP_BASE_REF"
           git worktree add --detach /tmp/pfp-base-ref "origin/$PFP_BASE_REF"
+          # T22: this bare `dbt parse` call is a plain dbt-CLI invocation, not
+          # routed through `dagster-dbt`'s own `DbtProject.prepare()` (which
+          # auto-runs `dbt deps --quiet` the first time
+          # `orchestration.assets.dbt_project` is imported, e.g. by the
+          # Dagster materialize steps below or by `pytest` collecting the
+          # `test_dagster_*` modules -- confirmed directly, no separate `dbt
+          # deps` step needed for the main `dbt/` project anywhere in this
+          # job). This worktree gets none of that, so it needs its own
+          # explicit `dbt deps` -- a no-op today (this branch's base,
+          # `develop`, has no dbt/packages.yml yet) and load-bearing once
+          # this PR merges and a later dbt-only PR takes this same path.
+          uv run dbt deps --project-dir /tmp/pfp-base-ref/dbt --profiles-dir dbt
           uv run dbt parse --project-dir /tmp/pfp-base-ref/dbt --profiles-dir dbt \
             --target-path /tmp/pfp-base-manifest
           echo "DBT_STATE_PATH=/tmp/pfp-base-manifest" >> "$GITHUB_ENV"
@@ -367,6 +379,45 @@ jobs:
       - run: uv run sqlfluff lint dbt/models
       - run: uv run pytest -m integration
 
+      # T22 (ADR 0022, CONSTRAINTS.md's warn-then-block pattern): Elementary's
+      # anomaly test already ran once as part of both `dagster asset
+      # materialize` passes above (it's a normal dbt test, `severity: warn`
+      # in dbt/models/silver/schema.yml, so it never failed either of those
+      # steps). This step re-selects just that test on its own, the same
+      # "own labeled step, continue-on-error: true" shape as this file's
+      # other still-warning checks (diff-cover, pip-audit, bandit,
+      # import-linter) -- so an anomaly is visible in its own step/log here,
+      # not only buried inside a much larger materialize log, without yet
+      # blocking the job if `edr`/dbt tooling itself has a bad day.
+      - name: elementary anomaly tests (warn-mode initially, see CONSTRAINTS.md)
+        continue-on-error: true
+        run: |
+          uv run dbt test --project-dir dbt --profiles-dir dbt \
+            --select tag:elementary-tests
+      # `edr report` reads what `dbt build`'s on-run-end hook already wrote
+      # into the `elementary` schema (dbt/dbt_project.yml's `on-run-end`) --
+      # no extra build step. `--config-dir dbt/.edr` opts the generated
+      # report out of Elementary's own anonymous usage tracking (ADR 0004,
+      # ADR 0022): without it, the report embeds a PostHog project key that
+      # would let it phone home when opened in a browser. Warn-mode, same
+      # reasoning as the test step above: this is observability tooling, not
+      # a correctness gate, so a bad `edr` release shouldn't block the job.
+      #
+      # PFP_DUCKDB_PATH must be absolute here: `edr` runs its own internal
+      # dbt project from inside its own installed package directory, not
+      # this repo -- profiles.yml's relative default (`dbt/pfp.duckdb`)
+      # would resolve against *that* directory instead and fail to find the
+      # database `dbt build` just wrote (confirmed directly: reproducible
+      # every time with no override, gone with one).
+      - name: elementary report (warn-mode, see CONSTRAINTS.md)
+        continue-on-error: true
+        env:
+          PFP_DUCKDB_PATH: ${{ github.workspace }}/dbt/pfp.duckdb
+        run: |
+          uv run edr report --project-dir dbt --profiles-dir dbt \
+            --config-dir dbt/.edr --open-browser false \
+            --file-path /tmp/pfp-ci-elementary-report.html
+
       - name: save logs and dbt artifacts
         if: always()
         run: |
@@ -385,6 +436,7 @@ jobs:
           cp /tmp/pfp-ci-dagster-1.log /tmp/pfp-ci-dagster-2.log \
             /tmp/pfp-ci-bronze-count-1.txt /tmp/pfp-ci-bronze-count-2.txt \
             /tmp/pfp-ci-artifacts/ 2>/dev/null || true
+          cp /tmp/pfp-ci-elementary-report.html /tmp/pfp-ci-artifacts/ 2>/dev/null || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -470,6 +522,14 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
       - run: uv sync --locked
+      # T22: this job's own `dbt build` calls below are bare dbt-CLI
+      # invocations, unlike `ephemeral-integration`'s (which goes through
+      # `dagster asset materialize`, and so gets `dbt deps` for free the
+      # first time `orchestration.assets.dbt_project` is imported --
+      # `dagster-dbt`'s own `DbtProject.prepare()`, confirmed directly). This
+      # job never imports that module, so Elementary has to be installed
+      # explicitly before the "PR run" step's own `dbt build` below.
+      - run: uv run dbt deps --project-dir dbt --profiles-dir dbt
 
       - name: bring up the ephemeral environment
         run: |
@@ -495,6 +555,11 @@ jobs:
           git fetch origin "$PFP_BASE_REF"
           git checkout "origin/$PFP_BASE_REF" -- ingestion lakehouse
           git worktree add --detach /tmp/pfp-diff-base-ref "origin/$PFP_BASE_REF"
+          # T22: this worktree is a second, separate checkout with its own
+          # dbt/dbt_packages/, so the "base run" step's own `dbt build`
+          # below needs it installed here too -- a no-op today, before
+          # `develop` carries dbt/packages.yml, and load-bearing once it does.
+          uv run dbt deps --project-dir /tmp/pfp-diff-base-ref/dbt --profiles-dir dbt
 
       # continue-on-error so a broken base branch still lets the PR's own run
       # and the restore step happen: a failed base build is itself worth
