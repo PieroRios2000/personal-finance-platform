@@ -308,25 +308,36 @@ jobs:
       # materialize` doesn't stream a step's own log output to stdout the way a
       # single-asset selection does (confirmed by reproducing it directly), so
       # grepping for it the way the old `pfp ingest`-based check did isn't
-      # reliable through this path. Every command here is piped to `tee`/another
-      # command rather than redirected with `>` on its own: a known,
-      # already-documented `deltalake==1.6.3` bug aborts the process during
-      # shutdown *after* it already printed its output (SETUP.md's known issues,
-      # `brain/components/cli.md`) -- piping (no `pipefail` in this job's shell)
-      # is the same established workaround the pre-T21 `pfp ingest` steps already
-      # relied on, not a new one invented for T21.
+      # reliable through this path.
+      #
+      # `set -o pipefail` around `dagster asset materialize` itself: this job's
+      # default shell has no pipefail, so piping it to `tee` for its own log file
+      # would otherwise let a real materialization failure -- a broken dbt model,
+      # not just this job's own known deltalake quirk below -- report as a passing
+      # step, since `tee`'s exit code (always 0) is what `-e` would see instead.
+      # Turned back off before `scripts.count_bronze_statements`: that one *does*
+      # need the no-pipefail behavior, since a known, already-documented
+      # `deltalake==1.6.3` bug aborts the process during shutdown (exit 134) after
+      # it already printed the right value (SETUP.md's known issues,
+      # `brain/components/ci.md`) -- the same established workaround the pre-T21
+      # `pfp ingest | tee ...` steps already relied on, scoped here to only the one
+      # command that actually needs it, not the whole step.
       - name: materialize the pipeline through Dagster (first pass)
         run: |
           uv run python -m scripts.seed_synthetic_inbox \
             --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
+          set -o pipefail
           uv run dagster asset materialize --select '*' | tee /tmp/pfp-ci-dagster-1.log
+          set +o pipefail
           uv run python -m scripts.count_bronze_statements \
             | tee /tmp/pfp-ci-bronze-count-1.txt
       - name: materialize the pipeline through Dagster again (must add 0 new bronze rows)
         run: |
           uv run python -m scripts.seed_synthetic_inbox \
             --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
+          set -o pipefail
           uv run dagster asset materialize --select '*' | tee /tmp/pfp-ci-dagster-2.log
+          set +o pipefail
           uv run python -m scripts.count_bronze_statements \
             | tee /tmp/pfp-ci-bronze-count-2.txt
           diff /tmp/pfp-ci-bronze-count-1.txt /tmp/pfp-ci-bronze-count-2.txt
@@ -339,10 +350,14 @@ jobs:
           mkdir -p /tmp/pfp-ci-artifacts
           docker compose -p "$COMPOSE_PROJECT" logs --no-color \
             > /tmp/pfp-ci-artifacts/docker-compose.log 2>&1 || true
-          # dagster-dbt runs each dbt invocation in its own dbt/target/dbt_models-*/
-          # subdirectory (T21), never dbt/target/run_results.json directly.
-          find dbt/target -name run_results.json -exec cp {} /tmp/pfp-ci-artifacts/ \; \
-            2>/dev/null || true
+          # dagster-dbt runs each dbt invocation (both materialize passes) in its
+          # own dbt/target/dbt_models-*/ subdirectory (T21), never
+          # dbt/target/run_results.json directly -- named by its own parent
+          # directory so the first pass's file isn't silently overwritten by the
+          # second's.
+          find dbt/target -name run_results.json 2>/dev/null | while read -r f; do
+            cp "$f" "/tmp/pfp-ci-artifacts/run_results-$(basename "$(dirname "$f")").json"
+          done
           cp dbt/logs/dbt.log /tmp/pfp-ci-artifacts/ 2>/dev/null || true
           cp /tmp/pfp-ci-dagster-1.log /tmp/pfp-ci-dagster-2.log \
             /tmp/pfp-ci-bronze-count-1.txt /tmp/pfp-ci-bronze-count-2.txt \
