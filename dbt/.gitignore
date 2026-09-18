@@ -3,3 +3,9 @@ dbt_packages/
 logs/
 # dbt writes an anonymous-usage id here on first run; it is per-machine, not project state.
 .user.yml
+# T22: `edr report`'s own generated output -- a local artifact, not project state
+# (CI uploads its own copy as a workflow artifact instead).
+*.html
+# T22: `dbt deps`' own transient lock file while it resolves packages -- the
+# real, committed lock is package-lock.yml, written once deps finishes.
+package-lock.concurrent-update-lock

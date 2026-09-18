@@ -9,7 +9,7 @@
 personal_finance_platform:
   target: local
   outputs:
-    local:
+    local: &duckdb_output
       type: duckdb
       # On disk, not `:memory:`: the built silver tables survive the run, so they
       # can be inspected (`duckdb dbt/pfp.duckdb`) and compared between runs
@@ -36,3 +36,23 @@ personal_finance_platform:
           endpoint: "{{ env_var('AWS_ENDPOINT_URL').rstrip('/').split('://') | last }}"
           url_style: path
           use_ssl: "{{ 'true' if env_var('AWS_ENDPOINT_URL').startswith('https') else 'false' }}"
+
+# T22: the `elementary-data` CLI (`edr report`/`edr monitor`) runs its own
+# internal dbt project against a connection profile literally named
+# `elementary` -- confirmed directly (`edr report` fails with "Could not find
+# profile named 'elementary'" without this block, even though `dbt build`
+# above already populated every `elementary.*` table it needs). A YAML merge
+# key (`<<: *duckdb_output`) reuses the exact same DuckDB file and S3 secrets
+# as `personal_finance_platform` above, so `edr` reads what `dbt build` just
+# wrote, not a second database or a second copy of this config to keep in
+# sync — only `schema:` differs. `schema: elementary`, not `silver`: `edr`
+# resolves "where do Elementary's own tables live" from *this* profile's own
+# default schema, and `dbt_project.yml`'s `elementary: +schema: "elementary"`
+# is what actually puts them there -- confirmed directly (`edr report` looked
+# for `silver.elementary_test_results` and failed until this matched).
+elementary:
+  target: local
+  outputs:
+    local:
+      <<: *duckdb_output
+      schema: elementary

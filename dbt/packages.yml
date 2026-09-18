@@ -1,0 +1,12 @@
+# Elementary (T22, ADR 0022): dbt-native data quality and observability, chosen over
+# Great Expectations because it's exactly this -- a dbt package with its own models,
+# no separate service (tasks/plan-phase2.md's own Architecture decisions table).
+#
+# Pinned to the exact version, like every other dependency this project locks
+# (`uv.lock`): `dbt deps` has no lockfile of its own, so an unpinned range would let a
+# fresh `dbt deps` silently pick up a newer, untested version. Confirmed compatible
+# with this project's dbt-core (1.12.4, SETUP.md) via hub.getdbt.com's own
+# `require_dbt_version` for this release (">=1.0.0", "<3.0.0").
+packages:
+  - package: elementary-data/elementary
+    version: 0.26.0
