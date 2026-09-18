@@ -18,6 +18,7 @@ if something breaks, fall back to these.
 | pre-commit | 4.6.2 | Security guards and lint before every commit | Start |
 | make | 4.4 | Check shortcuts (`make check-task`) | T4 |
 | Docker Desktop | 4.43.2 (Engine 28.3.2, Compose 2.38) | Local S3 with SeaweedFS | T13 |
+| OpenMetadata stack (optional, `openmetadata/docker-compose.yml`) | OpenMetadata 2.0.2 (server, ingestion, PostgreSQL) + Elasticsearch 9.3.0 | Catalog and column-level lineage over the dbt project (T24). **Needs ~4.6 GiB of RAM at idle (measured: ~4.8 GiB peak while ingesting) and up to ~4.5 of 6 vCPUs while ingesting**, on top of SeaweedFS; the official minimum is 6 GiB and 4 vCPUs given to Docker. ~12 GiB of images. Measured on WSL2 with `memory=11GB processors=6 swap=4GB` in `C:\Users\<you>\.wslconfig` (Docker then sees 14.88 GiB); not measured at 7.4 GiB. Never run by CI | T24 |
 | Tesseract OCR + Spanish language pack | 5.5 | OCR for scanned PDFs | T11b |
 | GitHub CLI (`gh`) | 2.46 | PRs from the terminal | Optional |
 
@@ -326,6 +327,41 @@ this env var — confirmed by reading `dagster`'s own CLI source
 `dagster dev` (the local web UI, not required for CI or `make poc`) does use the
 `pyproject.toml` block, so it needs no extra flag or env var: `uv run dagster dev`.
 
+## 10. Browsing the catalog and lineage in OpenMetadata (T24)
+
+Optional. `openmetadata/docker-compose.yml` runs OpenMetadata 2.0.2 with PostgreSQL and
+Elasticsearch under its own project name (`pfp-om`), ephemeral like the SeaweedFS one
+(ADR 0007): `make om-down` removes every volume. Make sure WSL2 has the memory first
+(requirements table above); after editing `.wslconfig`, run `wsl --shutdown` from PowerShell.
+CI never runs this stack (ADR 0023).
+
+```bash
+make poc-up                          # local S3, as in section 6
+set -a && source .env && set +a
+uv run dbt deps --project-dir dbt --profiles-dir dbt
+uv run dbt build --project-dir dbt --profiles-dir dbt   # or `dagster asset materialize`, section 9
+
+make om-up                           # ~5 minutes to become healthy the first time
+make om-sync                         # docs generate, register tables, ingest, check the lineage
+```
+
+`make om-sync` ends with `OK: 1 column-level path(s) from ...bronze.transactions.amount`, or
+exits 1 if `gold.fact_transactions.amount` no longer traces back to bronze. Then open
+<http://localhost:8585> (login `admin@open-metadata.org` / `admin`, the stack's upstream local
+default) and browse *Explore* -> `pfp_duckdb` -> `gold` -> `fact_transactions` -> *Lineage*,
+with *Column level lineage* on. The same from the API:
+
+```bash
+TOKEN=$(curl -s -X POST localhost:8585/api/v1/users/login -H 'Content-Type: application/json' \
+  -d "{\"email\":\"admin@open-metadata.org\",\"password\":\"$(printf admin | base64)\"}" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "localhost:8585/api/v1/lineage/getLineage?fqn=pfp_duckdb.pfp.gold.fact_transactions&type=table&upstreamDepth=10&downstreamDepth=0"
+```
+
+Re-run `make om-sync` after any `dbt build` that changes models; it is idempotent. `make om-down`
+when done. Elementary's own models are not catalogued and dbt tests are not ingested.
+
 ## Reviewing CI
 
 Every PR runs `.github/workflows/ci.yml`: `lint-types`, `tests`, `security`, `architecture`
@@ -370,3 +406,7 @@ uv run pytest -m benchmark -q --benchmark-min-rounds=10 \
 | Files named `<PdfName>.pdf:Zone.Identifier` appear under `~/finance-data/` | Windows adds them when copying from File Explorer; delete them (`find ~/finance-data -name '*:Zone.Identifier' -delete`) — they're not part of the PDF |
 | `terminate called without an active exception` after a `pfp ingest`/`pfp backfill` run that read bronze, with exit code 134 | The command already did its work and printed its report: this is `deltalake==1.6.3` aborting while the process shuts down, after `main()` returned. Reproducible on this machine with `deltalake` alone (three lines: open a `DeltaTable`, `to_pyarrow_table()`, exit), so it isn't the CLI's doing; `pytest` isn't affected. Noted while building T14c; needs its own fix (a `deltalake` upgrade is the first thing to try) — don't script around a `pfp` exit code until then |
 | `dbt build`/`dbt test` exits non-zero with `Catalog Error: Table with name test_..._elementary_volume_anomalies...__metrics__tmp_... does not exist!`, right after printing `Done. PASS=... WARN=... ERROR=0` | Elementary's own `on-run-end` cleanup of its per-invocation temp tables (`elementary.clean_elementary_temp_tables()`) reproducibly crashes on this stack (dbt-duckdb 1.11.0, elementary 0.26.0) — always *after* every real result is already computed, so it never hides a failure, only dbt's own exit code afterward. `dbt/dbt_project.yml`'s `vars: clean_elementary_temp_tables: false` (T22) already works around it; if you see this anyway, check that var hasn't been reverted |
+| `make om-up` takes ~5 minutes the first time (measured: 4m40s with the images already pulled) | Normal: `up --wait` blocks until every container, including `ingestion` (Airflow, the slowest), reports healthy. Give it the time before assuming a failure |
+| `metadata ingest` logs `Unable to find the node or columns in the catalog file for dbt node: source.personal_finance_platform.bronze.*` (and the `operation.*` on-run-end hooks) | Expected and harmless: dbt's catalog can't see bronze (`delta_scan()` isn't a DuckDB relation) and hooks have no columns. Bronze's tables and columns are registered by `scripts/openmetadata_sync.py` instead; the run still ends `Success %: 100.0` |
+| `make om-sync`'s `check` prints `FAIL: no column-level path ...` and exits 1 | Column lineage stopped short of bronze. Reproduced on purpose by ingesting `dbt/target/manifest.json` as-is instead of the copy `sync` writes to `openmetadata/artifacts/manifest.json` (its `delta_scan(...)` paths aren't tables to OpenMetadata's SQL parser, ADR 0023): re-run `make om-sync`, which regenerates the copy |
+| Upstream's own `docker-compose-postgres.yml` leaves `docker-volume/db-data-postgres` behind and `rm -rf` fails with `Permission denied` | Not applicable to `openmetadata/docker-compose.yml`: it uses named volumes, so `make om-down` (`down -v`) removes everything (checked: no `pfp-om_*` volume left) |

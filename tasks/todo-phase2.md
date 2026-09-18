@@ -211,28 +211,46 @@ manifest and DuckDB's catalog. Chosen over DataHub for a lighter footprint
 first, not assumed.
 
 **Acceptance criteria:**
-- [ ] **First, before anything else in this task:** OpenMetadata's `docker compose` stack
+- [x] **First, before anything else in this task:** OpenMetadata's `docker compose` stack
   (Postgres/MySQL + Elasticsearch/OpenSearch + the OpenMetadata server) actually starts and
   stays healthy on this machine's real WSL2 `.wslconfig` limit, with everything else Phase 1
   already runs (SeaweedFS) also up — measured RAM/CPU noted in the PR, not assumed from the
   vendor's own minimums. If it doesn't fit, stop and bring the shortfall back to Piero before
   building anything on top of it (the fallback — a lighter catalog, or deferring this task past
   phase close — gets decided then, per `tasks/plan-phase2.md`'s risk log).
-- [ ] An ingestion workflow pulls dbt's `manifest.json` + `catalog.json` (dbt's own metadata
+  (Fits. WSL2 `memory=11GB processors=6 swap=4GB` -> Docker sees 14.88 GiB / 6 CPUs (official
+  minimum: 6 GiB / 4 vCPUs). Idle with Piero's SeaweedFS up: ~4.6 GiB of containers. Peak while
+  this task's own ingestion ran: 4.76 GiB and 457 % CPU for the stack, 1.85 GiB / 446 % for the
+  `ingestion` container alone. NOT measured at the previous 7.4 GiB limit. ADR 0023.)
+- [x] An ingestion workflow pulls dbt's `manifest.json` + `catalog.json` (dbt's own metadata
   artifacts, already produced by every `dbt build`) into OpenMetadata: every silver/gold
   model, its columns, and its lineage back through to `bronze.transactions`.
-- [ ] Column-level lineage is real, not table-level only: `fact_transactions.amount` traces
+  (`make om-sync`: 11 tables registered — 2 bronze, 4 silver, 5 gold — and the dbt workflow
+  ended `Errors: 0`, `Success %: 100.0`. `dbt docs generate` gives the artifacts, not
+  `dbt build` alone: `catalog.json` needs a live connection. OpenMetadata 2.0.2 has no DuckDB
+  connector and its dbt workflow doesn't create tables, so `scripts/openmetadata_sync.py`
+  registers them — ADR 0023. Elementary's own models are excluded on purpose.)
+- [x] Column-level lineage is real, not table-level only: `fact_transactions.amount` traces
   back to `bronze.transactions.amount`, through every model in between.
-- [ ] `docker-compose.yml` (or a dedicated `openmetadata/docker-compose.yml`) follows the same
+  (`bronze.transactions.amount -> silver.transactions.amount -> gold.fact_transactions.amount`
+  from the live API. Not achievable as-is: dbt compiles the source to `delta_scan('s3://...')`,
+  which OpenMetadata's SQL parser can't resolve, so the column chain stopped at silver; the
+  ingested manifest copy names the source table instead. Known gap:
+  `silver.transactions.occurrence_number` (a window function) has no column-level upstream.)
+- [x] `docker-compose.yml` (or a dedicated `openmetadata/docker-compose.yml`) follows the same
   ephemeral, project-named, `down -v` pattern as the rest of this repo (ADR 0007) — this is
   optional infrastructure for local exploration, not something CI is expected to run per PR
   given the RAM cost above; note this explicitly rather than silently wiring it into CI.
+  (`openmetadata/docker-compose.yml`, project `pfp-om`, named volumes, `make om-down` = `down -v`
+  and nothing left behind; not referenced from `.github/` — stated in ADR 0023,
+  `brain/components/ci.md` and SETUP.md.)
 
 **Verification:**
-- [ ] Real RAM/CPU measurement pasted into the PR (`docker stats` or equivalent) alongside
-  the `.wslconfig` limit it was measured against.
-- [ ] A screenshot or `curl`'d API response showing `fact_transactions`' real column-level
-  lineage in the running OpenMetadata instance.
+- [x] Real RAM/CPU measurement pasted into the PR (`docker stats` or equivalent) alongside
+  the `.wslconfig` limit it was measured against. (In the PR.)
+- [x] A screenshot or `curl`'d API response showing `fact_transactions`' real column-level
+  lineage in the running OpenMetadata instance. (`curl` of `/api/v1/lineage/getLineage` in
+  the PR; also `make om-sync`'s own `check` step.)
 
 **Dependencies:** T21, T23 · **Files:** `openmetadata/**`, `SETUP.md`, `brain/**` · **Size:** L
 · **Skill:** ci-cd-and-automation
