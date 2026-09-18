@@ -44,3 +44,7 @@ coverage.xml
 
 # Claude Code agent working copies (git worktrees)
 .claude/worktrees/
+
+# OpenMetadata (T24): the dbt artifacts and generated workflow config the ingestion
+# container reads (holds a short-lived admin token) -- written by scripts/openmetadata_sync.py.
+openmetadata/artifacts/
