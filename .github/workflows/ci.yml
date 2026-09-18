@@ -99,15 +99,17 @@ jobs:
     # T21: importing orchestration.assets.dbt_project (several test modules do, for
     # BronzeSourceDbtTranslator/_dbt_build_args, no live S3 needed) triggers a `dbt
     # parse` at import time if no manifest exists yet -- this job's own fresh
-    # checkout never has one. `dbt parse` never connects to S3, but dagster-dbt's
-    # own profile-rendering step still needs profiles.yml's `secrets:` Jinja
-    # (env_var() with no default) to resolve, so these are here even though this
-    # job brings up no SeaweedFS -- same fixed, non-real, local-only values
-    # ephemeral-integration already uses (ADR 0007).
+    # checkout never has one. `dbt parse` never connects to S3, but rendering
+    # profiles.yml's `secrets:` block and models/sources.yml's own `LAKEHOUSE_URI`
+    # reference (both env_var() with no default) still needs these set to
+    # *something*, so they're here even though this job brings up no SeaweedFS --
+    # same fixed, non-real, local-only values ephemeral-integration already uses
+    # (ADR 0007).
     env:
       AWS_ACCESS_KEY_ID: pfp-ci-dummy-key
       AWS_SECRET_ACCESS_KEY: pfp-ci-dummy-secret
       AWS_ENDPOINT_URL: http://localhost:8333
+      LAKEHOUSE_URI: s3://lakehouse
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -213,6 +215,7 @@ jobs:
       AWS_ACCESS_KEY_ID: pfp-ci-dummy-key
       AWS_SECRET_ACCESS_KEY: pfp-ci-dummy-secret
       AWS_ENDPOINT_URL: http://localhost:8333
+      LAKEHOUSE_URI: s3://lakehouse
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -58,19 +58,20 @@ such command to `tee`/another command rather than redirecting alone with `>`, th
 established workaround the pre-T21 `pfp ingest` steps already relied on; see
 [ADR 0021](../decisions/0021-ci-invokes-the-dagster-pipeline.md) and [CI](ci.md).
 
-## Importing `orchestration.assets.dbt_project` needs AWS env vars, even with no live S3
+## Importing `orchestration.assets.dbt_project` needs AWS/LAKEHOUSE_URI env vars, even with no live S3
 
 Several test modules import `BronzeSourceDbtTranslator`/`_dbt_build_args`, which pulls in
 `orchestration/assets/dbt_project.py`'s own import-time `dbt parse` (no manifest exists on a
-fresh checkout). The parse subprocess never connects to S3, but `dagster-dbt`'s own
-profile-rendering step still needs `dbt/profiles.yml`'s `secrets:` Jinja (`env_var()` with no
-default) to resolve -- so `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_ENDPOINT_URL` have to
-be set to *something*, even in a plain `pytest` run with no SeaweedFS. Confirmed as a real CI
-failure (`tests`, exit code 2 at collection, "Env var required but not provided:
-'AWS_ACCESS_KEY_ID'"), not reproducible in every local environment (this machine's own
-already-cached duckdb extensions plausibly take a different path than a genuinely fresh one) --
-CI's `tests` and `benchmarks` jobs (the latter collects every test module too, via `pytest -m
-benchmark`, before filtering by marker) both carry the same three dummy values
+fresh checkout). The parse subprocess never connects to S3, but rendering `dbt/profiles.yml`'s
+`secrets:` block *and* `dbt/models/sources.yml`'s own `LAKEHOUSE_URI` reference (both
+`env_var()` with no default) still needs `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/
+`AWS_ENDPOINT_URL`/`LAKEHOUSE_URI` set to *something*, even in a plain `pytest` run with no
+SeaweedFS. Confirmed as two separate real CI failures, one per missing var (`tests`, exit code
+2 at collection) -- not reproducible in every local environment (this machine's own
+already-cached duckdb extensions plausibly take a different path than a genuinely fresh one),
+so this was found by watching the actual CI run fail, twice, not by local reproduction. CI's
+`tests` and `benchmarks` jobs (the latter collects every test module too, via `pytest -m
+benchmark`, before filtering by marker) both carry the same four dummy values
 `ephemeral-integration` already uses.
 
 ## How to use it and how to verify it
