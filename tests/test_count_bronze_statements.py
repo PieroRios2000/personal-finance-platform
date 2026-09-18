@@ -17,6 +17,7 @@ tests use -- no live SeaweedFS needed.
 from pathlib import Path
 
 import pytest
+
 from scripts.count_bronze_statements import main
 
 
