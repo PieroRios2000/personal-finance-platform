@@ -18,9 +18,9 @@ than joining `tests/test_dbt_silver_integration.py`'s own `integration` mark.
 from typing import Any
 
 import dagster as dg
-from orchestration.assets.dbt_project import BronzeSourceDbtTranslator
 
 from orchestration.assets.bronze import bronze
+from orchestration.assets.dbt_project import BronzeSourceDbtTranslator
 
 
 def _source(table_name: str, source_name: str = "bronze") -> dict[str, Any]:
