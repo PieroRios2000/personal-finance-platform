@@ -1,12 +1,14 @@
 """Tests for the top-level Dagster `Definitions` (T21).
 
 Loading `orchestration.definitions` is what `uv run dagster asset materialize
---select '*'` does first (via `pyproject.toml`'s `[tool.dagster] module_name`,
-see `tests/test_dagster_cli_discovery.py` for that wiring specifically). These
-tests check the shape of the resulting asset graph -- in particular the real
-bronze -> silver dependency edge this task's acceptance criteria ask for --
-without materializing anything (that needs a real or ephemeral lake; see
-`tests/test_dagster_pipeline_integration.py`, `integration`-marked).
+--select '*'` does first (via `DAGSTER_MODULE_NAME`, not `pyproject.toml`'s
+own `[tool.dagster] module_name` block -- see
+`tests/test_dagster_cli_discovery.py` for that wiring specifically, and ADR
+0021 for why). These tests check the shape of the resulting asset graph --
+in particular the real bronze -> silver dependency edge this task's
+acceptance criteria ask for -- without materializing anything (that needs a
+real or ephemeral lake; see `tests/test_dagster_pipeline_integration.py`,
+`integration`-marked).
 """
 
 import dagster as dg
