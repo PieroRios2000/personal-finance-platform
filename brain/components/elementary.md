@@ -33,19 +33,16 @@ decisions table). Design decisions in
     name: elementary_volume_anomalies_silver_transactions
     arguments:
       timestamp_column: "date"
-      time_bucket: { period: day, count: 1 }
-      min_training_set_size: 5
     config:
       severity: warn
 ```
 
-Every default left in place except `min_training_set_size` (Elementary's own default is 7;
-dropped to 5 to match the shortest training window the verification test seeds — a real
-z-score isn't defined below two training points regardless, so this floor was already the
-binding constraint, not a project-specific tuning choice). `severity: warn` is this task's own
-scoping of CONSTRAINTS.md's warn-then-block pattern to a single dbt test config, not a
-CI-level `continue-on-error` — see [ADR 0022](../decisions/0022-elementary-anomaly-detection-and-warn-mode.md)
-for why, and for the CI step that also surfaces it in its own log.
+Every parameter left at Elementary's own default (`min_training_set_size: 7` included — the
+verification test's own 10-day training window comfortably clears it, so there was nothing to
+tune here). `severity: warn` is this task's own scoping of CONSTRAINTS.md's warn-then-block
+pattern to a single dbt test config, not a CI-level `continue-on-error` — see
+[ADR 0022](../decisions/0022-elementary-anomaly-detection-and-warn-mode.md) for why, and for the
+CI step that also surfaces it in its own log.
 
 **`date`, not `ingested_at`.** The bank's own posting date is what a "sudden row-count spike"
 question is actually about (did an unusual number of movements happen on some day), not when

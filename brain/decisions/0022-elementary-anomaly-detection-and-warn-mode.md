@@ -27,11 +27,9 @@ three real problems only found by running this for real against live local S3 (d
 example, and `date` (the bank's own posting date, not `ingested_at`) is what "a sudden spike in
 transactions" actually means to a person reading this project's data, not an artifact of when
 bronze happened to write a row. Every parameter left at Elementary's own default
-(`days_back: 14`, `backfill_days: 2`, `anomaly_sensitivity: 3`) except `min_training_set_size`
-(7 → 5, to match the 10-day training window this task's own verification test seeds — a real
-z-score isn't defined below two training points regardless, so 5 vs. 7 changes nothing about
-what actually gets caught, only how early a still-thin dataset stops silently skipping the
-test).
+(`days_back: 14`, `backfill_days: 2`, `anomaly_sensitivity: 3`, `min_training_set_size: 7`) — the
+verification test's own 10-day training window comfortably clears that default, so there was
+nothing to tune here to make the test meaningful.
 
 **`severity: warn` at the dbt-test level is this task's own "warn-mode," not a CI-level
 `continue-on-error` alone.** The test already runs inside `ephemeral-integration`'s existing,

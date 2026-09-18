@@ -19,7 +19,8 @@ Both scenarios below write one bank account's daily statements: 10 steady
 followed by one "detection" day. The normal scenario's detection day stays in
 that same 4-6 range; the broken scenario's detection day spikes to 40 --
 `elementary.volume_anomalies`' own row-count anomaly detection (severity
-`warn`, `min_training_set_size: 5`) is built to catch exactly this. The
+`warn`, Elementary's own default `min_training_set_size: 7`, comfortably under
+this file's 10-day training window) is built to catch exactly this. The
 detection day is dated *yesterday*, never *today*: Elementary excludes the
 current, not-yet-elapsed calendar day from anomaly detection entirely
 (confirmed empirically -- a spike seeded on `date.today()` never fires,
