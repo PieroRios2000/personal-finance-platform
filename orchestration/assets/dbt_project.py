@@ -19,6 +19,7 @@ real edge (bronze -> silver) matching the actual data flow, not two upstream
 stubs for tables Dagster never separately produces.
 """
 
+import os
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,17 @@ from orchestration.assets.bronze import bronze
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DBT_PROJECT_DIR = _REPO_ROOT / "dbt"
+
+# dbt/profiles.yml's `path` defaults to the *relative* `dbt/pfp.duckdb`, resolved
+# against the dbt CLI subprocess's own cwd -- correct for every existing manual/CI
+# invocation (`uv run dbt build --project-dir dbt --profiles-dir dbt`, always run
+# from the repo root), but `DbtCliResource.cli()` runs that subprocess from
+# `project_dir` itself (`dbt/`), which would double the path to `dbt/dbt/pfp.duckdb`
+# (confirmed by reproducing the crash before adding this). An absolute
+# `PFP_DUCKDB_PATH` sidesteps cwd entirely; `setdefault` so an explicit value (tests'
+# own `tmp_path`-scoped override, `PFP_DUCKDB_PATH` already exported in the shell)
+# always wins.
+os.environ.setdefault("PFP_DUCKDB_PATH", str(_DBT_PROJECT_DIR / "pfp.duckdb"))
 
 dbt_project = DbtProject(project_dir=_DBT_PROJECT_DIR, profiles_dir=_DBT_PROJECT_DIR)
 
@@ -78,6 +90,25 @@ class BronzeSourceDbtTranslator(DagsterDbtTranslator):
         return super().get_asset_key(dbt_resource_props)
 
 
+def _dbt_build_args() -> list[str]:
+    """`dbt build`'s own args, narrowed by `DBT_SELECT`/`DBT_STATE_PATH` when
+    set (ADR 0008's impact-based CI, ADR 0021): the same env vars
+    `.github/workflows/ci.yml`'s `changes` job (`DBT_SELECT`) and its own
+    git-worktree-plus-`dbt parse` step (`DBT_STATE_PATH`, the resulting base
+    manifest) already produce for the pre-T21 bare-subprocess `dbt build`
+    call -- only *where* that selection gets applied moved into Dagster, not
+    how it's computed. `DBT_SELECT` unset or `"all"` (every non-dbt-only
+    change, ADR 0008) is a plain, unnarrowed build."""
+    select = os.environ.get("DBT_SELECT")
+    if not select or select == "all":
+        return ["build"]
+    args = ["build", "--select", select]
+    state_path = os.environ.get("DBT_STATE_PATH")
+    if state_path:
+        args += ["--state", state_path]
+    return args
+
+
 @dbt_assets(
     manifest=dbt_project.manifest_path,
     project=dbt_project,
@@ -86,5 +117,5 @@ class BronzeSourceDbtTranslator(DagsterDbtTranslator):
 def dbt_models(context: dg.AssetExecutionContext, dbt: DbtCliResource) -> Iterator[Any]:
     """Every dbt node in `dbt/models/` as one Dagster multi-asset, built with
     `dbt build` -- the identical command CI and a developer already run by
-    hand."""
-    yield from dbt.cli(["build"], context=context).stream()
+    hand, optionally narrowed by `_dbt_build_args()`."""
+    yield from dbt.cli(_dbt_build_args(), context=context).stream()
