@@ -6,6 +6,8 @@ running server) is what the PR's verification section shows; these tests pin the
 transformations that make it possible, each of which fails without the code under test.
 """
 
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -223,3 +225,84 @@ def test_column_paths_stops_where_the_column_lineage_stops() -> None:
 
 def test_column_paths_returns_nothing_for_an_unrelated_column() -> None:
     assert om.column_paths(_lineage(), "g.t.flow_type") == []
+
+
+class _FakeServer(_FakeClient):
+    """Stands in for `om.OpenMetadata`: records PUTs, serves a canned lineage."""
+
+    lineage: dict[str, Any] = {}
+
+    def __init__(self, host: str) -> None:
+        super().__init__()
+        self.host = host
+
+    def login(self) -> str:
+        return "tok"
+
+    def upstream_lineage(self, table_fqn: str) -> dict[str, Any]:
+        return self.lineage
+
+
+def _write_artifacts(target: Path) -> None:
+    target.mkdir()
+    (target / "manifest.json").write_text(json.dumps(_manifest()))
+    (target / "catalog.json").write_text(json.dumps(_catalog()))
+
+
+def test_sync_writes_the_three_ingestion_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(om, "OpenMetadata", _FakeServer)
+    _write_artifacts(tmp_path / "target")
+    out = tmp_path / "artifacts"
+    assert (
+        om.main(["sync", "--target-path", str(tmp_path / "target"), "--out", str(out)])
+        == 0
+    )
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert "delta_scan" not in manifest["nodes"][_SILVER]["compiled_code"]
+    assert json.loads((out / "catalog.json").read_text()) == _catalog()
+    config = json.loads((out / "dbt-workflow.yaml").read_text())
+    assert config["workflowConfig"]["openMetadataServerConfig"]["securityConfig"] == {
+        "jwtToken": "tok"
+    }
+
+
+def test_sync_without_dbt_artifacts_exits_2(tmp_path: Path) -> None:
+    assert om.main(["sync", "--target-path", str(tmp_path / "missing")]) == 2
+
+
+def _bronze_to_gold_lineage() -> dict[str, Any]:
+    prefix = "pfp_duckdb.pfp."
+    return {
+        "upstreamEdges": {
+            "edge": {
+                "columns": [
+                    {
+                        "fromColumns": [f"{prefix}bronze.transactions.amount"],
+                        "toColumn": f"{prefix}gold.fact_transactions.amount",
+                    }
+                ]
+            }
+        }
+    }
+
+
+def test_check_passes_when_column_lineage_reaches_bronze(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_FakeServer, "lineage", _bronze_to_gold_lineage())
+    monkeypatch.setattr(om, "OpenMetadata", _FakeServer)
+    assert om.main(["check"]) == 0
+
+
+def test_check_fails_when_the_column_chain_stops_short_of_bronze(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lineage = _bronze_to_gold_lineage()
+    lineage["upstreamEdges"]["edge"]["columns"][0]["fromColumns"] = [
+        "pfp_duckdb.pfp.silver.transactions.amount"
+    ]
+    monkeypatch.setattr(_FakeServer, "lineage", lineage)
+    monkeypatch.setattr(om, "OpenMetadata", _FakeServer)
+    assert om.main(["check"]) == 1
