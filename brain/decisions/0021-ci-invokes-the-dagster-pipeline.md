@@ -44,17 +44,29 @@ with `--config-json` forcing `in_process`, so it isn't an executor setting to
 tune around. Comparing real data survives however Dagster's own log-capture
 behavior changes across versions; a stdout-text check would not.
 
-**Every command that reads a bronze Delta table in this job is piped
-(`| tee ...`), never redirected alone (`> file`).** A known, pre-existing
+**`scripts/count_bronze_statements.py` is piped (`| tee ...`), never
+redirected alone (`> file`) — and `set -o pipefail` is turned off for exactly
+that one command, not the whole step.** A known, pre-existing
 `deltalake==1.6.3` bug aborts the process during interpreter shutdown *after*
 it already printed its real output (exit 134 — `SETUP.md`'s known issues,
 [Dispatcher and CLI](../components/cli.md), predates T21). Confirmed this
-job's own `dagster asset materialize`/`scripts.count_bronze_statements`
-invocations hit the exact same bug directly (reproducible, not assumed from
-the CLI's own history), and that piping — this job's shell has no
-`pipefail` — makes the pipeline report the last command's exit code, the
-same accidental-but-load-bearing property the pre-T21 `pfp ingest | tee ...`
-steps already relied on. Not a new workaround invented for T21.
+script hits the exact same bug directly (reproducible, not assumed from the
+CLI's own history) — `dagster asset materialize` itself does not.
+
+An earlier version of this job piped `dagster asset materialize` through
+`tee` too, on the same reasoning — a real regression, caught in review, not
+shipped: this job's shell has no `pipefail` by default (no `shell:` override
+anywhere in the file; GitHub's own documented fallback is `bash -e {0}`), so
+piping *any* command silently discards its own exit code in favor of
+`tee`'s (always 0). For `count_bronze_statements.py` that's exactly the
+intended tolerance. For `dagster asset materialize` it would have meant a
+genuinely broken dbt model could fail on both passes with identical
+(unbuilt) bronze counts, and this job would still go green — the opposite of
+what `ephemeral-integration` exists to catch. Fixed with `set -o
+pipefail`/`set +o pipefail` bracketing only the `dagster asset materialize`
+line; verified directly both ways (a deliberately broken `--select` now
+fails the step, the real pipeline still passes with its log and count both
+captured).
 
 **ADR 0008's impact-based `state:modified+` build selection moves, unchanged
 in what it computes, into an env var `_dbt_build_args()`
@@ -121,7 +133,11 @@ doesn't mention `pyproject.toml` at all.
   `dbt/target/run_results.json` directly: `dagster-dbt` runs each dbt
   invocation in its own per-invocation subdirectory under `dbt/target/`,
   confirmed by inspecting a real run's output, not assumed from
-  `dagster-dbt`'s own docs.
+  `dagster-dbt`'s own docs. Both materialize passes each produce their own
+  such subdirectory, so the copy is named after its own parent directory —
+  an earlier version copied every match to the same flat filename, silently
+  letting the second pass's file overwrite the first's (caught in review,
+  fixed before shipping).
 - A future CI job that reads a bronze Delta table and is not already piped
   through another command needs the same `| tee`-not-`>` treatment this ADR
   documents, until `deltalake` is upgraded past whatever version fixes the
