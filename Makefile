@@ -5,7 +5,7 @@
 
 BASE ?= origin/develop
 
-.PHONY: check-fast check-task check-full poc poc-up poc-down
+.PHONY: check-fast check-task check-full poc poc-up poc-down om-up om-sync om-down
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -47,3 +47,29 @@ poc:
 	@trap '$(MAKE) poc-down' EXIT; \
 	set -a && . .env && set +a && \
 	uv run python -m scripts.poc
+
+# OpenMetadata catalog and column-level lineage (T24, ADR 0023): optional, local only, never
+# run by CI (~4.6 GiB of containers at idle). Its own fixed project name, distinct from
+# pfp-poc, and `down -v` leaves nothing behind, like poc-down. openmetadata/artifacts is
+# created here, not by Docker, so the ingestion container's read-only mount of it never
+# makes Docker create it root-owned.
+OM_COMPOSE = docker compose -f openmetadata/docker-compose.yml -p pfp-om
+
+om-up:
+	mkdir -p openmetadata/artifacts
+	$(OM_COMPOSE) up -d --wait
+
+# Needs `dbt build` to have run against the lake (`dbt docs generate` reads the built
+# tables' columns), so: `make poc-up`, export .env, `dbt build`, then this. Registers the
+# tables, runs the dbt ingestion workflow inside the ingestion container, then fails
+# unless gold.fact_transactions.amount traces back to bronze.transactions.amount.
+om-sync:
+	set -a && . ./.env && set +a && \
+	uv run dbt docs generate --project-dir dbt --profiles-dir dbt
+	uv run python -m scripts.openmetadata_sync sync
+	$(OM_COMPOSE) exec -T ingestion metadata ingest -c /opt/pfp-artifacts/dbt-workflow.yaml
+	uv run python -m scripts.openmetadata_sync check
+
+om-down:
+	$(OM_COMPOSE) down -v
+	rm -rf openmetadata/artifacts
