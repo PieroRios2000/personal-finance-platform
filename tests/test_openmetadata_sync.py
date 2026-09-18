@@ -306,3 +306,48 @@ def test_check_fails_when_the_column_chain_stops_short_of_bronze(
     monkeypatch.setattr(_FakeServer, "lineage", lineage)
     monkeypatch.setattr(om, "OpenMetadata", _FakeServer)
     assert om.main(["check"]) == 1
+
+
+def test_sync_with_a_malformed_artifact_exits_2_not_a_traceback(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    _write_artifacts(target)
+    (target / "manifest.json").write_text("{not json")
+    assert om.main(["sync", "--target-path", str(target)]) == 2
+
+
+def test_sync_with_a_manifest_that_has_no_sources_exits_2(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    _write_artifacts(target)
+    manifest = _manifest()
+    manifest["sources"] = {}
+    (target / "manifest.json").write_text(json.dumps(manifest))
+    assert om.main(["sync", "--target-path", str(target)]) == 2
+
+
+def test_column_paths_terminates_on_a_lineage_cycle() -> None:
+    lineage = {
+        "upstreamEdges": {
+            "a": {"columns": [{"fromColumns": ["t.b"], "toColumn": "t.a"}]},
+            "b": {"columns": [{"fromColumns": ["t.a"], "toColumn": "t.b"}]},
+        }
+    }
+    assert om.column_paths(lineage, "t.a") == []
+
+
+def test_check_fails_when_lineage_is_table_level_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_FakeServer, "lineage", {"upstreamEdges": {"edge": {}}})
+    monkeypatch.setattr(om, "OpenMetadata", _FakeServer)
+    assert om.main(["check"]) == 1
+
+
+def test_check_exits_2_when_the_server_reply_is_not_usable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Broken(_FakeServer):
+        def upstream_lineage(self, table_fqn: str) -> dict[str, Any]:
+            raise ValueError("not json")
+
+    monkeypatch.setattr(om, "OpenMetadata", _Broken)
+    assert om.main(["check"]) == 2
