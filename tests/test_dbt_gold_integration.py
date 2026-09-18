@@ -52,11 +52,12 @@ from tests.test_dbt_silver_integration import (
 
 pytestmark = pytest.mark.integration
 
-# T23's own account_ids, distinct from every other test file's, so this file's
-# fixtures can never accidentally collide (business key or T18b transfer
-# matching) with another dbt integration test file's data -- each test file
-# still shares the one `_t16_dbt_tests` lake prefix (see `lake` below), but
-# `lake` wipes it clean before and after every single test.
+# The two _t23-gold-*_ ids below are new and distinct from every other test
+# file's; the other two deliberately reuse test_dbt_silver_integration.py's
+# own _ACCOUNT_ID/_SCOTIABANK_ACCOUNT_ID, since a collision is harmless here
+# -- each test file shares the one `_t16_dbt_tests` lake prefix (see `lake`
+# below), but `lake` wipes it clean before and after every single test, and
+# nothing in this project runs dbt integration tests in parallel.
 _ASSET_INGRESO_ACCOUNT_ID = _ACCOUNT_ID
 _ASSET_EGRESO_ACCOUNT_ID = hashlib.sha256(b"t23-gold-asset-egreso").hexdigest()
 _LIABILITY_EGRESO_ACCOUNT_ID = _SCOTIABANK_ACCOUNT_ID
