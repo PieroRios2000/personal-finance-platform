@@ -1,5 +1,7 @@
-# dbt project: bronze (Delta on S3) -> silver -> gold (T16, ADR 0002, ADR 0011).
+# dbt project: bronze (Delta on S3) -> silver -> gold (T16, ADR 0002, ADR 0011),
+# plus Elementary (T22, ADR 0022) for quality/observability on top.
 # Run from the repository root:
+#   uv run dbt deps --project-dir dbt --profiles-dir dbt   # once, or after packages.yml changes
 #   uv run dbt build --project-dir dbt --profiles-dir dbt
 
 name: personal_finance_platform
@@ -20,10 +22,45 @@ models:
       # makes this the literal schema name (`gold.fact_transactions`, not dbt's
       # own default `silver_gold.fact_transactions`).
       +schema: gold
+  # T22: Elementary's own models (its metadata/monitoring tables, e.g.
+  # `dbt_run_results`, `dbt_tests`) get their own schema too, the same pattern
+  # gold's own `+schema:` above already established -- `elementary.dbt_run_results`,
+  # never `silver_elementary.dbt_run_results`.
+  elementary:
+    +schema: "elementary"
 
 # T18b: internal-transfer matching tolerances, both overridable per run with
 # `--vars '{internal_transfer_day_window_days: 5}'`. The defaults match the
 # acceptance criteria: exact amount, within 3 days.
+#
+# T22: `disable_tracking` turns off Elementary's own anonymous usage
+# reporting (which run/test commands, dbt version, anonymized project id --
+# never any table content) -- this project's own privacy stance (ADR 0004,
+# "real data never leaves your machine") errs on "off" for any telemetry this
+# project doesn't itself control, even one that sends no project data.
 vars:
   internal_transfer_day_window_days: 3
   internal_transfer_amount_tolerance: 0
+  disable_tracking: true
+  # T22 (SETUP.md's Known issues): Elementary's own `on-run-end` cleanup of its
+  # per-invocation temp tables (`elementary.clean_elementary_temp_tables()`)
+  # reproducibly crashes `dbt build`/`dbt test` on this project's stack
+  # (dbt-duckdb 1.11.0, elementary 0.26.0) with a `Catalog Error` for a temp
+  # table "that does not exist" -- confirmed by reproducing it directly, always
+  # *after* every real model/test result is already computed and printed
+  # ("Done. PASS=... WARN=... ERROR=0"), so it never hides a real failure, only
+  # dbt's own exit code afterward. The same shape as `deltalake==1.6.3`'s own
+  # exit-134 quirk this file already documents elsewhere: a real upstream bug
+  # in a cleanup step, not a correctness issue. Disabling this one cleanup
+  # step (elementary's own escape hatch for exactly this) avoids it; the temp
+  # tables it would have dropped are harmless and get reused/overwritten by
+  # the next run either way.
+  clean_elementary_temp_tables: false
+
+# T22: after every `dbt run`/`dbt build`/`dbt test` invocation, upload its own
+# results (which models/tests ran, pass/fail/warn, timing) into Elementary's
+# tables -- what `edr report` reads to render anomaly history and the run
+# summary. `on-run-end` runs even when a node fails, so a red build still gets
+# recorded, not just green ones.
+on-run-end:
+  - "{{ elementary.on_run_end() }}"

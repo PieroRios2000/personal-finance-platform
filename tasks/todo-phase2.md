@@ -107,21 +107,40 @@ column-level lineage, no new infrastructure (chosen over Great Expectations for 
 `tasks/plan-phase2.md`).
 
 **Acceptance criteria:**
-- [ ] Elementary installed as a dbt package (`packages.yml`), its own models built alongside
-  silver/gold in the same `dbt build`.
-- [ ] At least one real anomaly test on `silver.transactions` (e.g. row-count or freshness
+- [x] Elementary installed as a dbt package (`packages.yml`), its own models built alongside
+  silver/gold in the same `dbt build`. (`dbt/packages.yml` pins `elementary-data/elementary`
+  0.26.0; `dbt/dbt_project.yml`'s `elementary: +schema: "elementary"` and `on-run-end` hook.
+  Confirmed against a live, isolated SeaweedFS instance: `dbt build` populates
+  `elementary.dbt_run_results`/`elementary_test_results`/etc. in the same run as
+  `silver.transactions` and `gold.fact_transactions`.)
+- [x] At least one real anomaly test on `silver.transactions` (e.g. row-count or freshness
   anomaly detection) — not just the package installed with nothing configured.
-- [ ] `elementary monitor report` (or `edr report`) produces a real local report from this
-  project's own data (synthetic, per ADR 0004).
-- [ ] CI runs Elementary's tests as part of the existing `ephemeral-integration` job (T17),
+  (`elementary.volume_anomalies` on `transactions.date`, `dbt/models/silver/schema.yml`,
+  `severity: warn`, ADR 0022.)
+- [x] `elementary monitor report` (or `edr report`) produces a real local report from this
+  project's own data (synthetic, per ADR 0004). (`uv run edr report ...` against the live
+  instance produced a real, self-contained 5.7 MB HTML report; its embedded payload contains
+  the anomaly test's own `volume_anomalies`/`warn` data. `dbt/.edr/config.yml` disables
+  Elementary's own anonymous tracking so the report doesn't phone home.)
+- [x] CI runs Elementary's tests as part of the existing `ephemeral-integration` job (T17),
   warn-mode initially (mirrors how Phase 1's own numeric rules started in warn mode,
-  CONSTRAINTS.md).
+  CONSTRAINTS.md). (`severity: warn` at the dbt-test level, plus a dedicated
+  `continue-on-error: true` "elementary anomaly tests" step and an `edr report` step, both in
+  `.github/workflows/ci.yml`'s `ephemeral-integration` job. `dbt deps` added in the three
+  places that needed it — see ADR 0022.)
 
 **Verification:**
-- [ ] A deliberately broken synthetic scenario (e.g. a sudden row-count spike) is flagged by
+- [x] A deliberately broken synthetic scenario (e.g. a sudden row-count spike) is flagged by
   Elementary's anomaly detection; a normal run isn't.
-- [ ] The report renders and is human-readable, checked by actually opening it, not just
-  confirming the command exits 0.
+  (`tests/test_elementary_anomaly_integration.py`, run for real against a live, isolated
+  SeaweedFS instance: a normal day's count stays `PASS`; an 8x spike fires `WARN`, checked both
+  in `dbt build`'s own console output and by querying `elementary.elementary_test_results`
+  directly.)
+- [x] The report renders and is human-readable, checked by actually opening it, not just
+  confirming the command exits 0. (Opened the generated `elementary_report.html`: a real,
+  self-contained React app with the "Elementary Data" title and the anomaly test's own data —
+  `volume_anomalies`, `warn`, `row_count` — present in its embedded payload, not just a blank
+  shell.)
 
 **Dependencies:** T20 · **Files:** `dbt/packages.yml`, `dbt/models/**`,
 `.github/workflows/ci.yml`, `SETUP.md` · **Size:** M · **Skill:** test-driven-development

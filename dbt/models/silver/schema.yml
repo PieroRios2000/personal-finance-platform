@@ -5,6 +5,23 @@ models:
     description: >
       Silver: one row per bank movement, typed and with its description
       re-normalized. Built from `bronze.transactions` (T16).
+    data_tests:
+      # T22 (ADR 0022): Elementary's own row-count anomaly detection, bucketed
+      # by day (Elementary's own default `time_bucket`) on `date` -- the only
+      # column value the check actually needs configured, since every other
+      # parameter's default already fits this project (14 days back, a 2-day
+      # backfill/detection window, `min_training_set_size: 7`, comfortably
+      # under the 10-day training window `tests/test_elementary_anomaly_integration.py`
+      # seeds). `severity: warn` (CONSTRAINTS.md's own warn-then-block
+      # pattern): a real spike is worth surfacing every `dbt build`, but not
+      # yet worth failing one on in a project with no operating history to
+      # calibrate sensitivity against.
+      - elementary.volume_anomalies:
+          name: elementary_volume_anomalies_silver_transactions
+          arguments:
+            timestamp_column: "date"
+          config:
+            severity: warn
     columns:
       - name: user_id
         description: Who the movement belongs to (ADR 0009). Bronze's partition column.

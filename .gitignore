@@ -22,6 +22,9 @@ _delta_log/
 # overrides both, so this never applies to the test suite).
 dbt/target/
 dbt/logs/
+# `edr`'s own default --target-path (T22): logs and a temp results file from a
+# local `edr report`/`edr monitor` run with no --target-path override.
+edr_target/
 
 # Python and tooling
 .venv/

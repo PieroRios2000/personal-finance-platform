@@ -23,7 +23,7 @@ check-task: check-fast
 # runs except gitleaks, which runs in pre-commit on every commit (and in CI from T5 on).
 check-full: check-task
 	-uv run pip-audit
-	-uv run bandit -q -r . -x ./.venv --severity-level high
+	-uv run bandit -q -r . -x ./.venv,./dbt/dbt_packages --severity-level high
 	-uv run diff-cover coverage.xml --compare-branch=$(BASE) --fail-under=80
 
 # Local S3 (SeaweedFS) for the lakehouse (ADR 0003, ADR 0007). Fixed project name:

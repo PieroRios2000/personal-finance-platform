@@ -38,6 +38,7 @@ module_name = "orchestration.definitions"
 dev = [
     "bandit>=1.9.4",
     "diff-cover>=10.5.1",
+    "elementary-data>=0.26.0",
     "fpdf2>=2.8.8",
     "import-linter>=2.15",
     "mypy>=2.3.1",
@@ -92,6 +93,13 @@ extended_capitalisation_policy = "lower"
 
 [tool.mypy]
 strict = true
+# T22: dbt/dbt_packages/ (gitignored, dbt-deps-installed) ships elementary's own
+# Python integration-test suite with no types of its own -- not this project's
+# code, the same reason .venv/ is already outside mypy's scan (mypy's own
+# implicit venv-skip, which only fires for an actual venv directory, not a
+# dbt package). Scoped to that one path, not a blanket dbt/ exclude: dbt/*.py
+# scripts, if this project ever adds any, should still be checked.
+exclude = "^dbt/dbt_packages/"
 
 # pytesseract and pyarrow ship no type stubs or py.typed marker (T11b, T14); no
 # official types-pytesseract or types-pyarrow package exists on PyPI either, so
