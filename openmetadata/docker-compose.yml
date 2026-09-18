@@ -1,0 +1,146 @@
+# OpenMetadata: catalog + column-level lineage over the dbt project (T24, ADR 0023).
+#
+# OPTIONAL local-exploration infrastructure. CI never runs it (~4.6 GiB of containers at
+# idle, see SETUP.md): nothing in .github/ references this file, on purpose.
+#
+# Same ephemeral pattern as the root docker-compose.yml (ADR 0007): run it under its own
+# project name and tear it down with `-v`, so no volume outlives the environment
+# (`make om-up` / `make om-down`). The project name (`pfp-om`) is distinct from
+# `pfp-poc`, so this stack and the local SeaweedFS never collide.
+#
+# Condensed from the official release file (2.0.2, docker-compose-postgres.yml, 559
+# lines): the same four images, the same wiring, but only the settings that matter here.
+# The other ~450 lines are the server's own defaults restated (OIDC, SAML, SMTP, HSTS,
+# secrets managers...), which the image applies by itself when they're not set. Two real
+# differences, both on purpose:
+#   * Named volumes only. Upstream bind-mounts ./docker-volume/db-data-postgres, a
+#     directory the container's postgres user creates: `rm -rf` of it fails with
+#     "Permission denied" after `down -v`. A named volume is removed by `down -v`.
+#   * Only the UI/API port (8585) is published, bound to 127.0.0.1 (upstream binds
+#     0.0.0.0, which would expose the default admin login to the LAN). Upstream also publishes 5432, 9200, 9300,
+#     8586 and 8080; nothing here needs them from the host, and 5432 in particular
+#     collides with any Postgres already running on the machine.
+#
+# Every credential below is upstream's own local-development default (the stack listens
+# on localhost only and holds no real data: the catalog stores table/column metadata of
+# synthetic or local dbt artifacts, never rows).
+
+x-server-env: &server-env
+  SERVER_PORT: 8585
+  SERVER_ADMIN_PORT: 8586
+  LOG_LEVEL: INFO
+  DB_DRIVER_CLASS: org.postgresql.Driver
+  DB_SCHEME: postgresql
+  DB_PARAMS: allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+  DB_USER: openmetadata_user
+  DB_USER_PASSWORD: openmetadata_password
+  DB_HOST: postgresql
+  DB_PORT: 5432
+  OM_DATABASE: openmetadata_db
+  SEARCH_TYPE: elasticsearch
+  ELASTICSEARCH_HOST: elasticsearch
+  ELASTICSEARCH_PORT: 9200
+  ELASTICSEARCH_SCHEME: http
+  PIPELINE_SERVICE_CLIENT_ENDPOINT: http://ingestion:8080
+  SERVER_HOST_API_URL: http://openmetadata-server:8585/api
+  OPENMETADATA_HEAP_OPTS: -Xmx1G -Xms1G
+
+services:
+  postgresql:
+    image: docker.getcollate.io/openmetadata/postgresql:2.0.2
+    command: "--work_mem=10MB"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: psql -U postgres -tAc 'select 1' -d openmetadata_db
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.3.0
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
+      - xpack.security.enabled=false
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: "curl -s http://localhost:9200/_cluster/health?pretty | grep status | grep -qE 'green|yellow' || exit 1"
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # One-shot schema migration. Not part of `up --wait`'s "must keep running" set on its
+  # own: openmetadata-server depends on it with service_completed_successfully, which is
+  # the case `up --wait` handles (docker/compose#10596 only bites an orphan one-shot).
+  execute-migrate-all:
+    image: docker.getcollate.io/openmetadata/server:2.0.2
+    command: "./bootstrap/openmetadata-ops.sh migrate"
+    environment: *server-env
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      postgresql:
+        condition: service_healthy
+
+  openmetadata-server:
+    image: docker.getcollate.io/openmetadata/server:2.0.2
+    environment: *server-env
+    ports:
+      - "127.0.0.1:${OPENMETADATA_PORT:-8585}:8585"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      postgresql:
+        condition: service_healthy
+      execute-migrate-all:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8586/healthcheck"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # Airflow + the `metadata` CLI: what actually runs an ingestion workflow. The dbt
+  # artifacts and the generated workflow config reach it through ./artifacts, mounted
+  # read-only: the host writes them (`scripts/openmetadata_sync.py`), the container only
+  # reads, so nothing here is ever owned by the container's user (ADR 0023).
+  ingestion:
+    image: docker.getcollate.io/openmetadata/ingestion:2.0.2
+    depends_on:
+      elasticsearch:
+        condition: service_started
+      postgresql:
+        condition: service_healthy
+      openmetadata-server:
+        condition: service_healthy
+    environment:
+      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__OPENMETADATA_AIRFLOW_APIS__DAG_GENERATED_CONFIGS: /opt/airflow/dag_generated_configs
+      DB_HOST: postgresql
+      DB_PORT: 5432
+      AIRFLOW_DB: airflow_db
+      DB_USER: airflow_user
+      DB_SCHEME: postgresql+psycopg2
+      DB_PASSWORD: airflow_pass
+    entrypoint: /bin/bash
+    command:
+      - "/opt/airflow/ingestion_dependency.sh"
+    volumes:
+      - ingestion-volume-dag-airflow:/opt/airflow/dag_generated_configs
+      - ingestion-volume-dags:/opt/airflow/dags
+      - ingestion-volume-tmp:/tmp
+      - ./artifacts:/opt/pfp-artifacts:ro
+
+volumes:
+  postgres-data:
+  es-data:
+  ingestion-volume-dag-airflow:
+  ingestion-volume-dags:
+  ingestion-volume-tmp:

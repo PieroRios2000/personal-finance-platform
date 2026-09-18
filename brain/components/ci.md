@@ -37,6 +37,9 @@ GitHub Actions PR run to confirm the wiring itself, since this session can't tri
   purely informational, `benchmarks` is warn-only by design, ADR 0008/CONSTRAINTS.md) — but
   `ephemeral-integration`, which *should* gate a merge, is required only through
   `ephemeral-integration-gate`, a wrapper job with no conditional skip path of its own.
+- **CI does not run OpenMetadata (T24, [ADR 0023](../decisions/0023-openmetadata-catalog-and-column-lineage-from-dbt-artifacts.md)).**
+  `openmetadata/docker-compose.yml` is optional local infrastructure (~4.6 GiB of containers at
+  idle); nothing in `.github/` references it, deliberately, so a PR never pays that RAM cost.
 - No `paths` filters on workflows with required checks: they leave the check in "Pending" and
   block the merge. Impact-based skipping is per job (`if: needs.changes.outputs.…`), never
   a workflow-level filter.
