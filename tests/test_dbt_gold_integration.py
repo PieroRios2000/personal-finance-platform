@@ -197,7 +197,7 @@ def _write_cross_bank_transfer_scenario() -> None:
 
 
 def _row_count(connection: Any, relation: str) -> int:
-    row = connection.execute(f"select count(*) from {relation}").fetchone()  # noqa: S608
+    row = connection.execute(f"select count(*) from {relation}").fetchone()
     assert row is not None
     return int(row[0])
 
@@ -324,14 +324,20 @@ def test_cross_bank_egreso_sum_excludes_the_internal_transfer(
     import duckdb
 
     with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+        # sum(abs(amount)), not abs(sum(amount)): BCP's egreso amounts are
+        # negative (asset) and Scotiabank's are positive (liability) --
+        # summing the raw signed amounts would partly cancel them out
+        # instead of accumulating "how much was spent" as one coherent
+        # number, which is the exact cross-bank sign mismatch flow_type
+        # exists to paper over.
         filtered = connection.execute(
-            "select sum(amount) from gold.fact_transactions "
+            "select sum(abs(amount)) from gold.fact_transactions "
             "where flow_type = 'egreso' and is_internal_transfer = false "
             "and account_id in (?, ?)",
             [_BCP_CHECKING_ACCOUNT_ID, _SCOTIABANK_CREDIT_CARD_ACCOUNT_ID],
         ).fetchone()
         unfiltered = connection.execute(
-            "select sum(amount) from gold.fact_transactions "
+            "select sum(abs(amount)) from gold.fact_transactions "
             "where flow_type = 'egreso' "
             "and account_id in (?, ?)",
             [_BCP_CHECKING_ACCOUNT_ID, _SCOTIABANK_CREDIT_CARD_ACCOUNT_ID],
@@ -344,11 +350,8 @@ def test_cross_bank_egreso_sum_excludes_the_internal_transfer(
         ).fetchall()
 
     assert filtered is not None and unfiltered is not None
-    # BCP's egreso amounts are negative (asset), Scotiabank's are positive
-    # (liability) -- abs() is what makes "215.00 of spend" a coherent single
-    # number despite the two banks' opposite raw sign conventions.
-    filtered_total = abs(filtered[0])
-    unfiltered_total = abs(unfiltered[0])
+    filtered_total = filtered[0]
+    unfiltered_total = unfiltered[0]
     assert filtered_total == Decimal("215.00")
     # Without the is_internal_transfer filter, the BCP transfer's own -300.00
     # leg reads as egreso too (asset, negative) and inflates the total --
@@ -377,8 +380,8 @@ def test_spend_by_bank_by_month_query_joins_all_four_dimensions(
             """
             select
                 dim_bank.bank,
-                dim_date.year,
-                dim_date.month,
+                dim_date.year_number,
+                dim_date.month_number,
                 sum(abs(fact_transactions.amount)) as spend
             from gold.fact_transactions as fact_transactions
             inner join gold.dim_user as dim_user
@@ -393,7 +396,7 @@ def test_spend_by_bank_by_month_query_joins_all_four_dimensions(
                 fact_transactions.flow_type = 'egreso'
                 and fact_transactions.is_internal_transfer = false
                 and fact_transactions.account_id in (?, ?)
-            group by dim_bank.bank, dim_date.year, dim_date.month
+            group by dim_bank.bank, dim_date.year_number, dim_date.month_number
             order by dim_bank.bank
             """,
             [_BCP_CHECKING_ACCOUNT_ID, _SCOTIABANK_CREDIT_CARD_ACCOUNT_ID],
