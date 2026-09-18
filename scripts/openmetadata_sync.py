@@ -241,13 +241,17 @@ def column_paths(lineage: dict[str, Any], column: str) -> list[list[str]]:
         for pair in edge.get("columns") or []:
             upstream.setdefault(pair["toColumn"], []).extend(pair["fromColumns"])
 
-    def walk(target: str) -> list[list[str]]:
-        parents = upstream.get(target, [])
+    def walk(target: str, seen: frozenset[str]) -> list[list[str]]:
+        parents = [p for p in upstream.get(target, []) if p not in seen]
         if not parents:
             return [[target]]
-        return [path + [target] for parent in parents for path in walk(parent)]
+        return [
+            path + [target]
+            for parent in parents
+            for path in walk(parent, seen | {target})
+        ]
 
-    return [path for path in walk(column) if len(path) > 1]
+    return [path for path in walk(column, frozenset()) if len(path) > 1]
 
 
 class OpenMetadata:
@@ -352,7 +356,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.run(args))
-    except (OSError, RuntimeError, KeyError) as error:
+    except (OSError, RuntimeError, KeyError, ValueError, StopIteration) as error:
         print(f"could not run: {error}", file=sys.stderr)
         return 2
 

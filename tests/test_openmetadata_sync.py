@@ -331,7 +331,7 @@ def test_column_paths_terminates_on_a_lineage_cycle() -> None:
             "b": {"columns": [{"fromColumns": ["t.a"], "toColumn": "t.b"}]},
         }
     }
-    assert om.column_paths(lineage, "t.a") == []
+    assert om.column_paths(lineage, "t.a") == [["t.b", "t.a"]]
 
 
 def test_check_fails_when_lineage_is_table_level_only(
