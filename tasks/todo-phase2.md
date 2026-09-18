@@ -260,15 +260,30 @@ first, not assumed.
 **Description:** Leave the phase presentable, mirroring T19's own close of Phase 1.
 
 **Acceptance criteria:**
-- [ ] `README.md`: Phase 2's status row added to the existing progress table (not a rewrite —
-  same pattern T19 used for Phase 1).
-- [ ] Brain kept current: `brain/phases/phase-2.md` (new, mirrors `phase-1.md`'s shape),
-  every new component/concept/decision note cross-linked.
-- [ ] `PROJECT.md` checked against what was actually built vs. planned; any deviation noted.
+- [x] `README.md`: Phase 2's status row added to the existing progress table (not a rewrite —
+  same pattern T19 used for Phase 1). (Its own "Phase 2" table beside Phase 1's, the badge,
+  the architecture diagram extended, a synthetic quickstart, and an explicit "not yet
+  validated against real data" note.)
+- [x] Brain kept current: `brain/phases/phase-2.md` (new, mirrors `phase-1.md`'s shape),
+  every new component/concept/decision note cross-linked. (Links, and anchors, in README,
+  PROJECT.md, SETUP.md, docs/ and every `brain/**/*.md` checked with a script: no new
+  broken ones.)
+- [x] `PROJECT.md` checked against what was actually built vs. planned; any deviation noted.
+  (A status block under Phase 2: Dagster covers bronze -> dbt, no "refresh" step yet;
+  Elementary over Great Expectations; OpenMetadata over DataHub and why it's optional.)
+- [x] Added beyond the list: `docs/ingesting-your-own-pdfs.md` (step-by-step for real
+  statements, linked from README and SETUP.md), and `scripts/poc.py` now runs `dbt deps`
+  first (test first) -- writing that walkthrough surfaced that `make poc` failed on any
+  checkout that hadn't installed Elementary's package.
 
 **Verification:**
-- [ ] Clone the repo into a clean folder and follow the README through to a materialized
-  Dagster DAG with no missing steps.
+- [x] Clone the repo into a clean folder and follow the README through to a materialized
+  Dagster DAG with no missing steps. (Fresh `git clone` of this branch into `/tmp`, no
+  `dbt/dbt_packages`, no manifest: README's quickstart commands verbatim -> `dagster asset
+  materialize --select '*'` exit 0, `Done. PASS=127 WARN=0 ERROR=0`, 2m06s, and the gold
+  query returned rows. One deviation, on purpose: `make poc-up` was replaced by an
+  equivalent own compose project/port, because the real one would have reused the owner's
+  running `pfp-poc-seaweedfs-1`.)
 
 **Dependencies:** T20, T21, T22, T23, T24 · **Files:** `README.md`, `brain/**`, `PROJECT.md` ·
 **Size:** S

@@ -78,7 +78,8 @@ Two of `.env`'s values matter before you ingest anything (T6, ADR 0005 and ADR 0
   passed on the command line; convenient for a single-person install. `--user` always wins
   over it.
 
-Real PDFs live **outside the repo**, readable only by your user:
+Real PDFs live **outside the repo**, readable only by your user (the full walkthrough, from
+folder to first `make poc`, is [docs/ingesting-your-own-pdfs.md](docs/ingesting-your-own-pdfs.md)):
 
 ```bash
 mkdir -p ~/finance-data/inbox/<user>    # per-user inbox, e.g. inbox/piero
@@ -214,7 +215,7 @@ file and S3 secrets so it reads what `dbt build` just wrote, not a second databa
 ### `make poc`: the whole flow against your real PDFs (T17)
 
 `make poc` runs the same flow as CI's `ephemeral-integration` job (ADR 0007) — `poc-up`,
-`pfp ingest`, `dbt build` — but once, locally, against your own real inbox instead of the
+`dbt deps`, `pfp ingest`, `dbt build` — but once, locally, against your own real inbox instead of the
 synthetic fixture, and tears the environment down when it's done, success or failure. Unlike
 every command above, its own output is deliberately narrow: only pass/fail and reconciliation
 *counts* ever get printed (ADR 0004 — never a real balance, account number or description);

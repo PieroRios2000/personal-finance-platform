@@ -123,6 +123,14 @@ Every parser validates that the sum of the extracted transactions matches the ba
 
 **Closes:** orchestration, data governance, idempotent deduplication.
 
+**Status: built and closed (2026-09-18)** — [`brain/phases/phase-2.md`](brain/phases/phase-2.md). Against the plan above:
+- Dagster orchestrates *bronze → every dbt node* (ingest → dbt build, with the dbt tests inside the build). The plan's "→ refresh" step has nothing to refresh yet (no dashboard until Phase 5), so it isn't built.
+- Silver's incremental `MERGE` is keyed on `date + amount + normalized description + account_id + occurrence_number`; the occurrence number is scoped to one source file, which resolves the business-key note's open question. It also gained a model-layer balance-reconciliation test the plan didn't list.
+- Gold is a star schema (`fact_transactions` + `dim_date`/`dim_account`/`dim_bank`/`dim_user`). No `dim_category` (Phase 3) and no FX conversion, by decision.
+- Quality: **Elementary** was chosen over Great Expectations (the plan left it open); a single row-count anomaly test on silver, in warn-mode.
+- Catalog: **OpenMetadata** was chosen over DataHub. It is optional and local (not in CI) and needs a ~4.8 GiB peak; OpenMetadata 2.0.2 has no DuckDB connector, so a small script registers the tables (ADR 0023).
+- Still open: real-data validation of the Scotiabank parser, and the numeric CI rules leaving warn-mode on 2026-09-26.
+
 ### Phase 3 — ML in production
 **Goal:** deploy and monitor, not just train.
 - Automatic transaction categorization (classification).
