@@ -10,7 +10,8 @@ If you only want to see the pipeline work, use the synthetic quickstart in the
 > **One rule while asking for help** (from a colleague or an AI assistant): share only the
 > **counts and generic messages** `make poc` prints. Never paste a balance, an account
 > number, a movement description, or anything read from a PDF. If a statement fails, the
-> failure reason is enough to fix a parser; the statement itself is not needed.
+> failure reason is enough to fix a parser (minus any values after a colon, see section 4);
+> the statement itself is not needed.
 
 All commands run in a Linux shell (WSL2 on Windows) from the repository root, with
 [`SETUP.md`](../SETUP.md) sections 1–4 already done (uv, Docker, `uv sync --locked`).
@@ -63,6 +64,10 @@ inbox, runs `dbt build`, and **tears everything down at the end**, success or fa
 prints only pass/fail and counts — by construction never an amount, account or description
 (see `scripts/poc.py`).
 
+> **`make poc` moves your PDFs out of the inbox.** Like every ingest, it files each
+> processed PDF under `~/finance-data/raw/<user>/...` (never deleting it). Sections 5 and 6
+> say how to ingest again afterwards.
+>
 > `make poc` uses the fixed Docker Compose project `pfp-poc`. If you already started one
 > with `make poc-up`, it is shut down (with its volume, i.e. the lake) when `make poc`
 > finishes. Your archived PDFs in `~/finance-data/raw/` and the tables dbt already built in
@@ -83,13 +88,18 @@ prints only pass/fail and counts — by construction never an amount, account or
 
 Collect only this:
 
-- The full `make poc` output (it contains no amounts).
-- For each `Needs review` item, the generic reason:
-  - `wrong or missing password (checked BCP_PDF_PASSWORD)` → check the `.env` password.
-  - `no bank recognized this file's content` → layout not recognized.
-  - `the statement did not reconcile` → some movement wasn't read: the movements don't add
-    up to the balance the statement itself declares.
-  - `could not parse the statement` → unexpected layout.
+- The full `make poc` output. It contains counts, never amounts, and it does **not** say why a
+  file needs review.
+- The reason for each `Needs review` file. `make poc` hides them on purpose; they are printed
+  by `pfp ingest` itself (section 5), in the report's "Needs review" section. **Read that
+  section yourself and share only what is safe:**
+  - `wrong or missing password (checked BCP_PDF_PASSWORD)` → check the `.env` password. Safe.
+  - `no bank recognized this file's content` → layout not recognized. Safe.
+  - `the statement did not reconcile: ...` → some movement wasn't read (the movements don't add
+    up to the balance the statement declares). **Everything after the colon is real
+    balances: drop it**, share only `did not reconcile`.
+  - `could not parse the statement: ...` → unexpected layout. The text after the colon can
+    contain values from the file: drop it too.
 - How many files sit in each folder, without opening them:
 
   ```bash
@@ -111,7 +121,17 @@ regression-tested against synthetic fixtures, never against your real file.
 ## 5. Explore your data (persistent run, no teardown)
 
 `make poc` deletes the lake when it finishes. To browse your data, run the same flow by hand
-and leave it up:
+and leave it up. Your PDFs must be in the inbox for this to ingest anything: if you already ran
+`make poc` (or any ingest), they were **moved** to `~/finance-data/raw/<user>/...`. Move them
+back first (`mv`, not `cp`: an inbox copy identical to an archived file is filed as a duplicate
+and never reaches bronze):
+
+```bash
+i=0; find ~/finance-data/raw/<user> \( -name _duplicates -o -name _needs_review \) -prune \
+  -o -name '*.pdf' -print | while read -r f; do i=$((i+1)); mv "$f" ~/finance-data/inbox/<user>/restored-$i.pdf; done
+```
+
+(File names don't matter; the account and period are read from each PDF.) Then:
 
 ```bash
 make poc-up                                             # local S3, left running
@@ -127,11 +147,10 @@ uv run dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + tests 
 Then query the star schema:
 
 ```bash
-duckdb dbt/pfp.duckdb -c "select count(*) from gold.fact_transactions"
-duckdb dbt/pfp.duckdb -c "select bank, flow_type, currency, count(*) from gold.fact_transactions group by all"
+uv run python -c "import duckdb; duckdb.connect('dbt/pfp.duckdb', read_only=True).sql('select bank, flow_type, currency, count(*) as movements from gold.fact_transactions group by all').show()"
 ```
 
-or open `dbt/pfp.duckdb` in DBeaver
+Or open `dbt/pfp.duckdb` in DBeaver, or with the standalone `duckdb` CLI if you installed it
 ([SETUP.md section 7](../SETUP.md#7-browsing-the-lake-in-dbeaver)): schemas `silver`, `gold`
 and `elementary` are there.
 
@@ -161,7 +180,8 @@ uv run dbt build --project-dir dbt --profiles-dir dbt
 ([ADR 0010](../brain/decisions/0010-bronze-backfill-replaces-not-versions.md)) and only
 touches archived statements. Files in `_needs_review/` are not reprocessed by it: move them
 back into `~/finance-data/inbox/<user>/` and run `pfp ingest`. If the lake was already torn
-down (`make poc`, `make poc-down`), redo section 5 from `pfp ingest`.
+down (`make poc`, `make poc-down`), there is nothing in bronze to backfill: move the archived
+PDFs back into the inbox as described in section 5 and run `pfp ingest` again.
 
 ## Checklist
 

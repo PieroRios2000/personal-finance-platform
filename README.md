@@ -24,7 +24,7 @@ to one person's real financial data, with the same engineering discipline:
 | Delta/Parquet in the lake | Delta Lake, written with `delta-rs` |
 | Synapse / Databricks | DuckDB, embedded — no JVM, no cluster |
 | A modeling layer (dbt on Databricks) | dbt-duckdb, reading Delta straight off S3 |
-| An orchestrator (Airflow / ADF pipelines) | Dagster, wrapping the same CLI and dbt project as assets |
+| An orchestrator (Airflow / ADF pipelines) | Dagster, running the same functions the CLI calls and the dbt project as assets |
 | Data quality and a data catalog (Purview, Great Expectations) | Elementary (dbt-native anomaly detection) and OpenMetadata (column-level lineage) |
 | A CI/CD quality gate | GitHub Actions: lint, types, tests, security, architecture contracts, impact-based performance benchmarks |
 
@@ -165,8 +165,11 @@ uv run python -m scripts.seed_synthetic_inbox --inbox-root "$PFP_INBOX_ROOT" --u
 uv run dagster asset materialize --select '*'  # bronze -> silver -> gold, one DAG (first run ~2 min)
 
 uv run python -c "import duckdb; duckdb.connect('dbt/pfp.duckdb', read_only=True).sql('select bank, flow_type, currency, count(*) as movements from gold.fact_transactions group by all').show()"
-make poc-down                                  # tear the local S3 down
+make poc-down                                  # tear the local S3 down (also after a failed step)
 ```
+
+`PFP_INBOX_ROOT` / `PFP_ARCHIVE_ROOT` only apply to that shell (they point Dagster at a scratch
+folder); open a new one before running on real PDFs.
 
 ## Getting started
 

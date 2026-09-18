@@ -41,7 +41,7 @@ merged, and a clean clone follows the README's quickstart through to a materiali
   not yet reached; flipping `continue-on-error` and the `-`/`||true` markers is a two-line
   change once it is.
 - **OpenMetadata is not in CI and was measured on a 14.88 GiB Docker allocation** (peak
-  4.81 GiB, 554% CPU during ingestion); it was never measured at the earlier 7.4 GiB limit.
+  4.76–4.81 GiB and 457–554% CPU during ingestion, in two independent runs); it was never measured at the earlier 7.4 GiB limit.
   Its column-level lineage has two documented gaps (`silver.transactions.occurrence_number`
   has only a table-level edge; the manifest handed to it is a rewritten copy) — ADR 0023.
 - **Silver and gold live in `dbt/pfp.duckdb`, a local DuckDB file; only bronze is Delta on S3.**
