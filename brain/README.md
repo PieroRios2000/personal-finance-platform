@@ -25,10 +25,13 @@ flowchart LR
         ORG["Inbox organizer"]
         LAKE["Lakehouse · bronze"]
         DBT["dbt · silver"]
+        DAG["Dagster"]
     end
 
     PDF --> CLID --> BCP --> ORG --> LAKE --> DBT
     CLID --> SCOTIA --> ORG
+    DAG -. orchestrates .-> LAKE
+    DAG -. orchestrates .-> DBT
     PY --> CLID
     CI -. validates .-> PY
     GS -. protects .-> PDF
@@ -76,6 +79,9 @@ flowchart LR
     A16 --> LAKE
     A16 --> DBT
     A17{{"ADR 0017 · internal-transfer matching"}} --> DBT
+    A21{{"ADR 0021 · CI invokes the Dagster pipeline"}} --> DAG
+    A21 --> CI
+    CI -. validates .-> DAG
 ```
 
 Rectangle = component · oval = concept · hexagon = decision (ADR) · dotted line = uses relationship.
@@ -85,9 +91,9 @@ Rectangle = component · oval = concept · hexagon = decision (ADR) · dotted li
 | Type | Notes |
 |---|---|
 | Phases | [Phase 1 — Foundation](phases/phase-1.md) |
-| Components | [Security guards](components/security-guards.md) · [Python project](components/python-project.md) · [CI](components/ci.md) · [Layout inspector](components/layout-inspector.md) · [Quality bar](components/quality-bar.md) · [BCP parser](components/bcp-parser.md) · [Scotiabank parser](components/scotiabank-parser.md) · [Dispatcher and CLI](components/cli.md) · [Inbox organizer](components/inbox-organizer.md) · [Lakehouse](components/lakehouse.md) · [dbt silver](components/dbt-silver.md) |
+| Components | [Security guards](components/security-guards.md) · [Python project](components/python-project.md) · [CI](components/ci.md) · [Layout inspector](components/layout-inspector.md) · [Quality bar](components/quality-bar.md) · [BCP parser](components/bcp-parser.md) · [Scotiabank parser](components/scotiabank-parser.md) · [Dispatcher and CLI](components/cli.md) · [Inbox organizer](components/inbox-organizer.md) · [Lakehouse](components/lakehouse.md) · [dbt silver](components/dbt-silver.md) · [dagster](components/dagster.md) |
 | Concepts | [Medallion](concepts/medallion.md) · [Idempotency](concepts/idempotency.md) · [Business key](concepts/business-key.md) · [Reconciliation](concepts/reconciliation.md) · [File-level dedup](concepts/file-level-dedup.md) · [Users and accounts](concepts/users-and-accounts.md) |
-| Decisions | [0001 Python 3.12 with uv](decisions/0001-python-312-with-uv.md) · [0002 DuckDB + delta-rs](decisions/0002-duckdb-and-delta-rs-before-spark.md) · [0003 SeaweedFS](decisions/0003-local-s3-with-seaweedfs.md) · [0004 Real PDFs](decisions/0004-real-pdfs-never-leave-your-machine.md) · [0005 Schema scoped to user/account](decisions/0005-transaction-schema-with-user-and-account.md) · [0006 Lake location by URI](decisions/0006-lake-location-by-uri.md) · [0007 Ephemeral per-PR environments](decisions/0007-ephemeral-per-pr-environments.md) · [0008 Impact-based CI](decisions/0008-impact-based-ci.md) · [0009 Content over file name](decisions/0009-multi-user-multi-account-content-over-filename.md) · [0010 Backfill replaces a file's rows](decisions/0010-bronze-backfill-replaces-not-versions.md) · [0011 delta_scan as a dbt source](decisions/0011-delta-scan-as-a-dbt-source.md) · [0012 Scotiabank password fallback](decisions/0012-scotiabank-password-fallback-detection.md) · [0013 dbt state comparison in CI](decisions/0013-dbt-state-comparison-via-a-base-ref-worktree.md) · [0014 pr-data-diff shared instance](decisions/0014-pr-data-diff-shared-instance-full-build.md) · [0015 account_kind asset/liability](decisions/0015-account-kind-asset-or-liability.md) · [0016 Currency-aware statement continuity](decisions/0016-currency-aware-statement-continuity.md) · [0017 Internal-transfer matching](decisions/0017-internal-transfer-matching-mutual-nearest-neighbor.md) · [0019 ephemeral-integration required via gate job](decisions/0019-ephemeral-integration-required-via-gate-job.md) |
+| Decisions | [0001 Python 3.12 with uv](decisions/0001-python-312-with-uv.md) · [0002 DuckDB + delta-rs](decisions/0002-duckdb-and-delta-rs-before-spark.md) · [0003 SeaweedFS](decisions/0003-local-s3-with-seaweedfs.md) · [0004 Real PDFs](decisions/0004-real-pdfs-never-leave-your-machine.md) · [0005 Schema scoped to user/account](decisions/0005-transaction-schema-with-user-and-account.md) · [0006 Lake location by URI](decisions/0006-lake-location-by-uri.md) · [0007 Ephemeral per-PR environments](decisions/0007-ephemeral-per-pr-environments.md) · [0008 Impact-based CI](decisions/0008-impact-based-ci.md) · [0009 Content over file name](decisions/0009-multi-user-multi-account-content-over-filename.md) · [0010 Backfill replaces a file's rows](decisions/0010-bronze-backfill-replaces-not-versions.md) · [0011 delta_scan as a dbt source](decisions/0011-delta-scan-as-a-dbt-source.md) · [0012 Scotiabank password fallback](decisions/0012-scotiabank-password-fallback-detection.md) · [0013 dbt state comparison in CI](decisions/0013-dbt-state-comparison-via-a-base-ref-worktree.md) · [0014 pr-data-diff shared instance](decisions/0014-pr-data-diff-shared-instance-full-build.md) · [0015 account_kind asset/liability](decisions/0015-account-kind-asset-or-liability.md) · [0016 Currency-aware statement continuity](decisions/0016-currency-aware-statement-continuity.md) · [0017 Internal-transfer matching](decisions/0017-internal-transfer-matching-mutual-nearest-neighbor.md) · [0019 ephemeral-integration required via gate job](decisions/0019-ephemeral-integration-required-via-gate-job.md) · [0021 CI invokes the Dagster pipeline](decisions/0021-ci-invokes-the-dagster-pipeline.md) |
 
 ## Note conventions
 
