@@ -10,9 +10,9 @@ without materializing anything (that needs a real or ephemeral lake; see
 """
 
 import dagster as dg
-from orchestration.definitions import defs
 
 from orchestration.assets.bronze import bronze
+from orchestration.definitions import defs
 
 
 def test_defs_is_a_definitions_object() -> None:
