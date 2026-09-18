@@ -110,6 +110,7 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | duckdb | 1.5.5 | runtime | The engine dbt runs on; reads Delta off S3 with `delta_scan()` (T16, ADR 0002) |
 | dagster | 1.13.23 | runtime | Orchestrates bronze + dbt as one DAG (T21). Runtime: `dagster asset materialize` is a way to run the platform's own flow, same as `pfp ingest` + `dbt build` by hand |
 | dagster-dbt | 0.29.23 | runtime | Wraps the dbt project as Dagster assets, one per dbt node (T21) |
+| elementary-data | 0.26.0 | dev | The `edr` CLI (`edr report`/`edr monitor`), for rendering a local observability report from what `dbt build` already wrote (T22, ADR 0022). Elementary itself is a **dbt package**, not a `uv` dependency — see `dbt/packages.yml` and section 6.1 below |
 | sqlfluff | 4.3.0 | dev | Lints the dbt project's SQL (T16) |
 | sqlfluff-templater-dbt | 4.3.0 | dev | Lets sqlfluff compile the dbt project, so it lints the real `delta_scan(...)` SQL |
 | fpdf2 | 2.8.8 | dev | Generate synthetic PDFs inside the tests |
@@ -149,10 +150,18 @@ directory and `~/.dbt` — so both flags are needed, from the repository root:
 make poc-up                          # local S3 (leave it running)
 set -a && source .env && set +a      # LAKEHOUSE_URI + the AWS_* values dbt reads
 
-uv run dbt build --project-dir dbt --profiles-dir dbt   # silver + its tests
+uv run dbt deps --project-dir dbt --profiles-dir dbt    # once, or after packages.yml changes (T22)
+uv run dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + Elementary's own models/tests
 uv run sqlfluff lint dbt/models                         # SQL style
 uv run pytest -m integration                            # the S3-backed tests, deselected by default
 ```
+
+`dbt deps` only needs re-running when `dbt/packages.yml` changes; `dbt/dbt_packages/` (gitignored)
+caches the install. `dagster asset materialize` (section 9) and a plain `pytest` collecting the
+`test_dagster_*` modules both trigger it automatically the first time
+`orchestration/assets/dbt_project.py` is imported (`dagster-dbt`'s own `DbtProject.prepare()`) —
+the explicit command above is only needed for a bare `dbt build`/`dbt parse`/`sqlfluff` call like
+the ones on this line, which never import that module.
 
 `dbt build` writes `dbt/pfp.duckdb` (gitignored), so the built tables can be inspected
 afterwards: `duckdb dbt/pfp.duckdb -c "select count(*) from silver.transactions"`. Set
@@ -168,6 +177,38 @@ that is the point, it names the periods you never archived (see
 [reconciliation](brain/concepts/reconciliation.md)) — and `dbt build` reads whatever
 `LAKEHOUSE_URI` points at, so pointing it at a prefix (`LAKEHOUSE_URI=s3://lakehouse/scratch`)
 is how you try things out without touching your real bronze.
+
+### Elementary: anomaly detection and a local quality report (T22)
+
+`dbt build` above already builds Elementary's own models and runs its row-count anomaly test on
+`silver.transactions` (`elementary_volume_anomalies_silver_transactions`,
+`dbt/models/silver/schema.yml`) — no separate step. It's `severity: warn` (ADR 0022): a real
+anomaly shows up as `WARN` in `dbt build`'s own output, but doesn't fail the build yet.
+
+`edr report` (from the `elementary-data` package above) renders a local HTML report from what
+that build already wrote — same prerequisites as `dbt build`:
+
+```bash
+export PFP_DUCKDB_PATH="$PWD/dbt/pfp.duckdb"   # must be absolute for edr, see below
+uv run edr report --project-dir dbt --profiles-dir dbt --config-dir dbt/.edr \
+  --file-path dbt/elementary_report.html
+```
+
+`PFP_DUCKDB_PATH` has to be absolute here, unlike every `dbt build`/`dbt test` command above:
+`edr` runs its own internal dbt project from inside its own installed package directory, not this
+repo, so `profiles.yml`'s relative default (`dbt/pfp.duckdb`) would resolve against *that*
+directory instead and fail to find the database `dbt build` just wrote (confirmed directly:
+`edr report` fails with `Cannot open file ".../site-packages/elementary/.../dbt/pfp.duckdb"` with
+no override, and finds the right file with one).
+
+`--config-dir dbt/.edr` opts out of Elementary's own anonymous usage tracking (`dbt/.edr/config.yml`,
+committed) — without it the generated report embeds a PostHog project key that would let it phone
+home when opened in a browser (ADR 0004, ADR 0022). Drop `--open-browser false` if you want it to
+open automatically; `dbt/*.html` is gitignored.
+
+`edr` needs its own connection profile literally named `elementary` in `dbt/profiles.yml` (not the
+project's own `personal_finance_platform` profile) — already there, pointed at the same DuckDB
+file and S3 secrets so it reads what `dbt build` just wrote, not a second database.
 
 ### `make poc`: the whole flow against your real PDFs (T17)
 
@@ -328,3 +369,4 @@ uv run pytest -m benchmark -q --benchmark-min-rounds=10 \
 | `gh pr edit` fails with a *Projects classic* error (gh 2.46) | Use `gh api --method PATCH repos/<owner>/<repo>/pulls/<n>`, or upgrade gh from cli.github.com |
 | Files named `<PdfName>.pdf:Zone.Identifier` appear under `~/finance-data/` | Windows adds them when copying from File Explorer; delete them (`find ~/finance-data -name '*:Zone.Identifier' -delete`) — they're not part of the PDF |
 | `terminate called without an active exception` after a `pfp ingest`/`pfp backfill` run that read bronze, with exit code 134 | The command already did its work and printed its report: this is `deltalake==1.6.3` aborting while the process shuts down, after `main()` returned. Reproducible on this machine with `deltalake` alone (three lines: open a `DeltaTable`, `to_pyarrow_table()`, exit), so it isn't the CLI's doing; `pytest` isn't affected. Noted while building T14c; needs its own fix (a `deltalake` upgrade is the first thing to try) — don't script around a `pfp` exit code until then |
+| `dbt build`/`dbt test` exits non-zero with `Catalog Error: Table with name test_..._elementary_volume_anomalies...__metrics__tmp_... does not exist!`, right after printing `Done. PASS=... WARN=... ERROR=0` | Elementary's own `on-run-end` cleanup of its per-invocation temp tables (`elementary.clean_elementary_temp_tables()`) reproducibly crashes on this stack (dbt-duckdb 1.11.0, elementary 0.26.0) — always *after* every real result is already computed, so it never hides a failure, only dbt's own exit code afterward. `dbt/dbt_project.yml`'s `vars: clean_elementary_temp_tables: false` (T22) already works around it; if you see this anyway, check that var hasn't been reverted |
