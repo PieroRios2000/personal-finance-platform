@@ -154,17 +154,12 @@ def bronze_tables(manifest: dict[str, Any]) -> list[Table]:
 def resolve_sources(manifest: dict[str, Any]) -> dict[str, Any]:
     """A copy of `manifest` whose compiled SQL names each source, not its Delta path."""
     resolved = copy.deepcopy(manifest)
-    for node in resolved["nodes"].values():
-        for source in resolved["sources"].values():
+    for source in resolved["sources"].values():
+        db, schema, name = source["database"], source["schema"], source["identifier"]
+        for node in resolved["nodes"].values():
             if node.get("compiled_code"):
-                db, schema, name = (
-                    source["database"],
-                    source["schema"],
-                    source["identifier"],
-                )
-                logical = f'"{db}"."{schema}"."{name}"'
                 node["compiled_code"] = node["compiled_code"].replace(
-                    source["relation_name"], logical
+                    source["relation_name"], f'"{db}"."{schema}"."{name}"'
                 )
     return resolved
 
