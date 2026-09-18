@@ -1,0 +1,188 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: >
+      Gold (T23): one row per calendar date that appears in
+      silver.transactions -- this dimension's grain. Not a generated
+      calendar spine; see the model's own docstring for why.
+    columns:
+      - name: date
+        description: The calendar date itself; this dimension's grain and primary key.
+        data_tests:
+          - not_null
+          - unique
+      - name: year_number
+        data_tests:
+          - not_null
+      - name: quarter_number
+        data_tests:
+          - not_null
+      - name: month_number
+        data_tests:
+          - not_null
+      - name: month_name
+        data_tests:
+          - not_null
+      - name: day_number
+        data_tests:
+          - not_null
+      - name: day_name
+        data_tests:
+          - not_null
+      - name: is_weekend
+        data_tests:
+          - not_null
+
+  - name: dim_account
+    description: >
+      Gold (T23): one row per `account_id` that appears in
+      silver.transactions -- this dimension's grain, confirmed as a plain
+      dimension (no slowly-changing-dimension handling) in ADR 0020: an
+      account's kind and bank are set once per parser (ADR 0015) and never
+      change for a given account_id after the fact.
+    columns:
+      - name: account_id
+        description: HMAC-SHA256 of the bank and the full account number (ADR 0005).
+        data_tests:
+          - not_null
+          - unique
+      - name: bank
+        description: The bank the account belongs to, e.g. BCP.
+        data_tests:
+          - not_null
+      - name: account_last4
+        description: The last 4 digits of the account number; the only part ever stored.
+        data_tests:
+          - not_null
+      - name: account_kind
+        description: >
+          What this account's balance represents: `asset` for money on
+          hand (e.g. BCP checking), `liability` for debt owed (e.g. a
+          Scotiabank credit card). See ADR 0015.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["asset", "liability"]
+
+  - name: dim_bank
+    description: >
+      Gold (T23): one row per distinct bank name in silver.transactions --
+      this dimension's grain. Kept separate from dim_account so a
+      bank-level query can join fact_transactions straight to it, without
+      going through account-level detail.
+    columns:
+      - name: bank
+        description: The bank name, e.g. BCP or Scotiabank.
+        data_tests:
+          - not_null
+          - unique
+
+  - name: dim_user
+    description: >
+      Gold (T23): one row per distinct user_id in silver.transactions --
+      this dimension's grain. This project's only user attribute is the id
+      itself (brain/concepts/users-and-accounts.md).
+    columns:
+      - name: user_id
+        description: Who the movement belongs to (ADR 0009).
+        data_tests:
+          - not_null
+          - unique
+
+  - name: fact_transactions
+    description: >
+      Gold (T23): one row per silver.transactions business key (T20) --
+      this fact table's grain, identical to silver.transactions' own, since
+      this model is a straight select with no join that could fan a row
+      out. Foreign keys into every dimension above; `amount`/`currency`/
+      `date` stay as measures/degenerate attributes. `currency` is never
+      collapsed or converted -- no FX, ever (tasks/plan-phase2.md's
+      architecture decisions). `flow_type` standardizes direction
+      (`ingreso`/`egreso`/`pago`) across BCP and Scotiabank's opposite raw
+      sign conventions -- see the model's own docstring and ADR 0020 for
+      the full mapping.
+    columns:
+      - name: user_id
+        description: Who the movement belongs to (ADR 0009).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_user')
+                field: user_id
+      - name: account_id
+        description: HMAC-SHA256 of the bank and the full account number (ADR 0005).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_account')
+                field: account_id
+      - name: bank
+        description: The bank the statement came from, e.g. BCP.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_bank')
+                field: bank
+      - name: date
+        description: The date the bank posted the movement.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date
+      - name: amount
+        description: >
+          Signed DECIMAL(18, 2); negative is a charge on an asset account
+          or a payment/credit on a liability one, positive the opposite
+          (`ingestion.schema.Transaction`). A measure, never collapsed
+          across accounts without `flow_type`/`account_kind` in mind.
+        data_tests:
+          - not_null
+      - name: currency
+        description: >
+          The two currencies this project handles. Never collapsed or
+          converted into one number -- no FX anywhere in this project.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["PEN", "USD"]
+      - name: description
+        description: The movement's description, re-normalized (upper case, single spaces).
+        data_tests:
+          - not_null
+      - name: occurrence_number
+        description: >
+          T20: the last piece of the business key, carried through from
+          silver.transactions unchanged (`brain/concepts/business-key.md`).
+        data_tests:
+          - not_null
+      - name: is_internal_transfer
+        description: >
+          True for a movement matched to a transfer between two accounts of
+          the same user (T18b, ADR 0017), carried through from
+          silver.transactions unchanged -- never counted as an expense or
+          income. Every spend/income aggregate over fact_transactions
+          should filter this to `false`, or a credit-card payment funded by
+          a same-user transfer gets double-counted as an expense on one
+          side and silently untouched on the other.
+        data_tests:
+          - not_null
+      - name: flow_type
+        description: >
+          `ingreso` / `egreso` / `pago`, derived from `account_kind` +
+          `amount`'s sign -- never each bank's own raw sign convention
+          directly. See the model's own docstring and ADR 0020 for the
+          exact mapping. Direction only: doesn't anticipate or touch Phase
+          3's future `dim_category`.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["ingreso", "egreso", "pago"]
