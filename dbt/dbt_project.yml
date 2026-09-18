@@ -1,4 +1,4 @@
-# dbt project: bronze (Delta on S3) -> silver (T16, ADR 0002, ADR 0011).
+# dbt project: bronze (Delta on S3) -> silver -> gold (T16, ADR 0002, ADR 0011).
 # Run from the repository root:
 #   uv run dbt build --project-dir dbt --profiles-dir dbt
 
@@ -11,10 +11,15 @@ profile: personal_finance_platform
 
 models:
   personal_finance_platform:
-    # Tables, not views: silver is read repeatedly (dbt tests, T17b's base-vs-PR
-    # data diff, and ad-hoc queries), and a view would re-scan Delta on S3 every
-    # time. The volume is thousands of rows, so a full rebuild is cheap.
+    # Tables, not views: silver and gold are read repeatedly (dbt tests, T17b's
+    # base-vs-PR data diff, and ad-hoc queries), and a view would re-scan Delta on
+    # S3 every time. The volume is thousands of rows, so a full rebuild is cheap.
     +materialized: table
+    gold:
+      # T23: gold's own schema, not `silver` -- `dbt/macros/generate_schema_name.sql`
+      # makes this the literal schema name (`gold.fact_transactions`, not dbt's
+      # own default `silver_gold.fact_transactions`).
+      +schema: gold
 
 # T18b: internal-transfer matching tolerances, both overridable per run with
 # `--vars '{internal_transfer_day_window_days: 5}'`. The defaults match the

@@ -132,13 +132,13 @@ column-level lineage, no new infrastructure (chosen over Great Expectations for 
 feature pipeline actually wants, not silver's flat table.
 
 **Acceptance criteria:**
-- [ ] `dim_date`, `dim_account` (carries `account_kind`, T18a, and `bank`), `dim_user`,
+- [x] `dim_date`, `dim_account` (carries `account_kind`, T18a, and `bank`), `dim_user`,
   `dim_bank`: each with a clear grain, stated in its own `schema.yml` description.
-- [ ] `fact_transactions`: one row per business key (T20), foreign keys into every dimension
+- [x] `fact_transactions`: one row per business key (T20), foreign keys into every dimension
   above, `amount`/`currency`/`date` as measures/degenerate attributes. `currency` is never
   collapsed or converted — every currency-sliced query stays sliced (no FX, Piero's explicit
   call, `tasks/plan-phase2.md`'s architecture decisions).
-- [ ] `fact_transactions` gains `flow_type`: `ingreso` / `egreso` / `pago`, derived from
+- [x] `fact_transactions` gains `flow_type`: `ingreso` / `egreso` / `pago`, derived from
   `account_kind` (T18a) + `amount`'s sign, not each bank's own raw sign convention directly —
   `asset`+positive -> `ingreso`, `asset`+negative -> `egreso`, `liability`+positive (a charge)
   -> `egreso`, `liability`+negative (a payment/credit) -> `pago` (its own bucket, not folded
@@ -149,23 +149,37 @@ feature pipeline actually wants, not silver's flat table.
   transfer is never double-counted as an expense on one side and silently untouched on the
   other. `flow_type` is direction only — it doesn't anticipate or touch Phase 3's
   `dim_category`.
-- [ ] No `dim_category` yet — Phase 3's, not built ahead of the model that fills it (see
+- [x] No `dim_category` yet — Phase 3's, not built ahead of the model that fills it (see
   `tasks/plan-phase2.md`'s architecture decisions for why).
-- [ ] `dim_account`'s grain confirmed (one row per `account_id` ever seen, no SCD — see
+- [x] `dim_account`'s grain confirmed (one row per `account_id` ever seen, no SCD — see
   `tasks/plan-phase2.md`'s open questions) or built as an SCD if that turns out wrong.
+  (Confirmed, not built as an SCD: `account_kind`/`bank` are fixed per parser, ADR 0015, and
+  never change for a given `account_id` after the fact — full reasoning in ADR 0020.)
 
 **Verification:**
-- [ ] Row count of `fact_transactions` equals `silver.transactions`' row count exactly (a
-  1:1 fact, no fan-out from a dimension join).
-- [ ] Every foreign key in `fact_transactions` resolves to exactly one dimension row
-  (dbt `relationships` tests on every FK, not just `not_null`).
-- [ ] A synthetic query joining `fact_transactions` to all four dimensions produces a
+- [x] Row count of `fact_transactions` equals `silver.transactions`' row count exactly (a
+  1:1 fact, no fan-out from a dimension join). (Verified for real:
+  `test_fact_transactions_row_count_matches_silver_transactions_exactly` in
+  `tests/test_dbt_gold_integration.py`, plus the standing dbt test
+  `assert_fact_transactions_row_count_matches_silver.sql` that runs on every `dbt build`.)
+- [x] Every foreign key in `fact_transactions` resolves to exactly one dimension row
+  (dbt `relationships` tests on every FK, not just `not_null`). (Verified for real against a
+  live SeaweedFS: `dbt build` green with all four `relationships_fact_transactions_*` tests
+  present and passing, grepped by name in
+  `test_every_foreign_key_in_fact_transactions_resolves_via_relationships_tests`.)
+- [x] A synthetic query joining `fact_transactions` to all four dimensions produces a
   believable answer (e.g. "spend by bank by month") — run for real, not just modeled.
-- [ ] A synthetic scenario with one BCP checking account and one Scotiabank credit card, and a
+  (`test_spend_by_bank_by_month_query_joins_all_four_dimensions`: BCP 50.00, Scotiabank 165.00
+  for January 2026, matching the fixture by hand.)
+- [x] A synthetic scenario with one BCP checking account and one Scotiabank credit card, and a
   transfer between them (T18b): summed `egreso` across both accounts, filtered to
   `is_internal_transfer = false`, matches the expected total by hand — proving `flow_type`
   gives a coherent cross-bank answer despite BCP and Scotiabank's opposite raw sign
   conventions, and that the transfer itself doesn't inflate it.
+  (`test_cross_bank_egreso_sum_excludes_the_internal_transfer`: filtered total 215.00 PEN,
+  matching 50.00 BCP grocery + 120.00 + 45.00 Scotiabank charges by hand; the *unfiltered*
+  total is 515.00, showing the BCP transfer leg would otherwise inflate it by exactly its own
+  300.00 — run for real against a live, isolated SeaweedFS instance, `pfp-t23-gold`.)
 
 **Dependencies:** T20 · **Files:** `dbt/models/gold/**`, tests · **Size:** M · **Skill:**
 test-driven-development
