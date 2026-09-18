@@ -21,7 +21,7 @@ GitHub Actions PR run to confirm the wiring itself, since this session can't tri
 | [`ci.yml`](../../.github/workflows/ci.yml) (T5) | Built | Five jobs: `lint-types`, `tests` (+ diff-cover), `security` (gitleaks, pip-audit, bandit), `architecture` (import-linter), `floor-guard`; all five required in the ruleset |
 | `changes` job (T15, T17, [ADR 0008](../decisions/0008-impact-based-ci.md)) | Built | Pipes `git diff --name-only origin/<base>...HEAD` into [`scripts/ci_impact.py`](../../scripts/ci_impact.py) and publishes the affected areas (`benchmarks`, `integration`, `dbt_select`) as job outputs; expensive jobs carry their own `if` |
 | `benchmarks` job (T15) | Built | Measures the base branch and the PR on the same runner (only `ingestion/` and `lakehouse/` swapped between the two runs), `--benchmark-compare-fail=mean:20%`; warns until 2026-09-26 |
-| `ephemeral-integration` job (T17, [ADR 0007](../decisions/0007-ephemeral-per-pr-environments.md)) | Built | Local S3 up under a per-run project name, the synthetic fixture ingested twice (idempotency), `dbt build` (impact-narrowed per ADR 0008), `sqlfluff lint`, the `integration`-marked tests, then always torn down; logs and dbt's artifacts saved first |
+| `ephemeral-integration` job (T17, [ADR 0007](../decisions/0007-ephemeral-per-pr-environments.md); [ADR 0021](../decisions/0021-ci-invokes-the-dagster-pipeline.md)) | Built | Local S3 up under a per-run project name, `dagster asset materialize --select '*'` (T21: bronze + dbt build together, impact-narrowed per ADR 0008/0021) twice (idempotency, checked via `scripts/count_bronze_statements.py`'s real row count — a multi-asset materialize doesn't stream a step's own log text to stdout), `sqlfluff lint`, the `integration`-marked tests, then always torn down; logs and dbt's artifacts saved first |
 | `ephemeral-integration-gate` job ([ADR 0019](../decisions/0019-ephemeral-integration-required-via-gate-job.md)) | Built | The job the ruleset actually requires — always runs (`if: always()`), turns `ephemeral-integration`'s own `success`/`skipped` conclusion into a pass and `failure`/`cancelled` into a fail, since a ruleset-required check left "skipped" isn't reliably accepted as satisfied |
 | `make poc` (T17) | Built | The same flow, once, locally, against Piero's real PDFs; prints only pass/fail and reconciliation *counts* (ADR 0004) |
 | `pr-data-diff` job (T17b, [ADR 0014](../decisions/0014-pr-data-diff-shared-instance-full-build.md)) | Built | Ingest + `dbt build` run twice against the base branch's commit and the PR's, isolated by a `LAKEHOUSE_URI` prefix and a `PFP_DUCKDB_PATH` on one shared SeaweedFS instance; [`scripts/data_diff.py`](../../scripts/data_diff.py) diffs the two `.duckdb` files and posts Markdown to the job summary. Warn-only, gated on the same `integration` output as `ephemeral-integration` but runs in parallel with it |
@@ -58,6 +58,13 @@ GitHub Actions PR run to confirm the wiring itself, since this session can't tri
   `AWS_SECRET_ACCESS_KEY`) is a fixed, non-real value hardcoded in the job's own `env:`, the
   same shape as every developer's own `.env` — this is what lets the job run the same way on
   a PR from a fork (ADR 0007).
+- **Every command that reads a bronze Delta table in this job is piped (`| tee ...`), never
+  redirected alone (`> file`).** A known, pre-existing `deltalake==1.6.3` bug aborts the
+  process during interpreter shutdown *after* it already printed its real output (exit 134,
+  `SETUP.md`'s known issues, [Dispatcher and CLI](cli.md)) — piping to a second command means
+  this job's shell (no `pipefail`) reports the pipeline's exit code as the last command's, not
+  the crashing one's. Don't "simplify" one of these into a plain `>` redirect without checking
+  this first.
 - Its project name is `pfp-pr-<PR number, or the run id on a non-PR event>`
   (`docker compose -p`): unique per concurrent job, so two PRs' environments (or a push to
   `develop` and a PR, both in flight) never share a bucket or a volume.

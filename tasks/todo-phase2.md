@@ -60,26 +60,42 @@ otherwise collide on one key.
 existing `pfp` CLI and dbt project rather than reimplementing either.
 
 **Acceptance criteria:**
-- [ ] Dagster assets: a bronze asset (wraps `organizer.organize()` + `bronze.write_statement()`
+- [x] Dagster assets: a bronze asset (wraps `organizer.organize()` + `bronze.write_statement()`
   — the same functions `pfp ingest` already calls, not a shelled-out subprocess), a silver
   asset (`dbt build --select silver`, via `dagster-dbt`'s dbt Cloud/core integration), and
-  their dependency edges match the real data flow.
-- [ ] `uv run dagster asset materialize --select '*'` runs the whole pipeline locally, end to
+  their dependency edges match the real data flow. (Deviation, noted in the PR: the whole dbt
+  project is one `dagster-dbt` multi-asset — one Dagster asset key per dbt node — rather than a
+  single hardcoded `--select silver` asset, so a future model (T23's gold layer already landed
+  this way) becomes a Dagster asset automatically, with no per-model wiring to keep in sync.
+  The dependency-edge requirement is met the same way either way, verified for real below.)
+- [x] `uv run dagster asset materialize --select '*'` runs the whole pipeline locally, end to
   end, against a real (or ephemeral) lake — same result as running `pfp ingest` then
-  `dbt build` by hand.
-- [ ] CI's `ephemeral-integration` job (T17) is updated to invoke the Dagster job itself where
+  `dbt build` by hand. (Needs `DAGSTER_MODULE_NAME=orchestration.definitions`, `.env.example` —
+  not the same mechanism as `pyproject.toml`'s `[tool.dagster]` block, see ADR 0021.)
+- [x] CI's `ephemeral-integration` job (T17) is updated to invoke the Dagster job itself where
   it currently calls `pfp ingest`/`dbt build` directly, so CI proves the path a real install
-  actually uses, not a bypass of it.
-- [ ] `make poc` and the raw CLI commands still work unchanged for local single-shot use —
+  actually uses, not a bypass of it. (ADR 0021.)
+- [x] `make poc` and the raw CLI commands still work unchanged for local single-shot use —
   Dagster owns the DAG'd/scheduled path, it doesn't replace the manual one (Piero's own
   masked-dump debugging loop, ADR 0004, still needs `pfp parse` directly, no DAG in the way).
+  (Confirmed by diff, not re-run: neither `Makefile` nor `scripts/poc.py` is touched anywhere
+  in this branch — `make poc` runs against Piero's own real inbox and his own running
+  `pfp-poc-seaweedfs-1` instance, which this task does not touch, per this repo's own standing
+  rule never to run that command or stop that container on Piero's behalf.)
 
 **Verification:**
-- [ ] A fresh synthetic inbox, materialized through Dagster, produces the identical bronze +
+- [x] A fresh synthetic inbox, materialized through Dagster, produces the identical bronze +
   silver row counts as the equivalent `pfp ingest` + `dbt build` sequence.
-- [ ] Dagster's own asset lineage UI (or `dagster asset list`) shows the bronze -> silver
-  dependency correctly.
-- [ ] CI's `ephemeral-integration` job green with the Dagster-invoked path.
+  (`tests/test_dagster_pipeline_integration.py`, run for real against a live, isolated
+  SeaweedFS instance: 4 transactions, `DEFAULT_MOVEMENTS`, matching a manual `pfp ingest` +
+  `dbt build` baseline run first for comparison.)
+- [x] Dagster's own asset lineage UI (or `dagster asset list`) shows the bronze -> silver
+  dependency correctly. (`uv run dagster asset list -m orchestration.definitions` and
+  `tests/test_dagster_definitions.py::test_silver_transactions_depends_on_the_bronze_asset`.)
+- [x] CI's `ephemeral-integration` job green with the Dagster-invoked path. (Simulated the
+  exact CI steps by hand against a live, isolated SeaweedFS instance — both materialize passes,
+  the idempotency check, `sqlfluff lint`, all green; real GitHub Actions run still pending,
+  same as every other task in this project, per `brain/components/ci.md`'s own standing note.)
 
 **Dependencies:** T20 · **Files:** `dagster/**`, `.github/workflows/ci.yml`, `Makefile`,
 `pyproject.toml` · **Size:** L · **Skill:** ci-cd-and-automation

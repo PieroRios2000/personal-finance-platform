@@ -108,6 +108,8 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | pyarrow | 25.0.1 | runtime | Explicit table schemas for Delta writes (T14, ADR 0006) |
 | dbt-duckdb | 1.11.0 (dbt-core 1.12.4) | runtime | Builds silver from bronze (T16, ADR 0011). Runtime, not dev: `dbt build` is a step of the platform's own flow, not a check |
 | duckdb | 1.5.5 | runtime | The engine dbt runs on; reads Delta off S3 with `delta_scan()` (T16, ADR 0002) |
+| dagster | 1.13.23 | runtime | Orchestrates bronze + dbt as one DAG (T21). Runtime: `dagster asset materialize` is a way to run the platform's own flow, same as `pfp ingest` + `dbt build` by hand |
+| dagster-dbt | 0.29.23 | runtime | Wraps the dbt project as Dagster assets, one per dbt node (T21) |
 | sqlfluff | 4.3.0 | dev | Lints the dbt project's SQL (T16) |
 | sqlfluff-templater-dbt | 4.3.0 | dev | Lets sqlfluff compile the dbt project, so it lints the real `delta_scan(...)` SQL |
 | fpdf2 | 2.8.8 | dev | Generate synthetic PDFs inside the tests |
@@ -256,6 +258,32 @@ it as a vault needs no rework of the notes themselves.
 
 `.obsidian/` (Obsidian's own per-machine view state — panes, graph layout, theme) is already
 gitignored; it's never something to commit.
+
+## 9. Running the pipeline through Dagster (T21)
+
+`orchestration/definitions.py` wires the bronze asset and the whole dbt project (one Dagster
+asset per dbt node, via `dagster-dbt`) into one DAG — the same prerequisites as section 6
+(SeaweedFS up, `.env` exported):
+
+```bash
+make poc-up
+set -a && source .env && set +a
+
+uv run dagster asset list                       # the asset graph, bronze -> silver et al.
+uv run dagster asset materialize --select '*'    # the whole pipeline, end to end
+```
+
+Both commands need `DAGSTER_MODULE_NAME=orchestration.definitions` in `.env` (already in
+`.env.example`). This is *not* the same mechanism as `pyproject.toml`'s own `[tool.dagster]
+module_name` block: that block only drives `dagster dev`'s own workspace auto-discovery
+(`WorkspaceOpts`); `dagster asset list`/`dagster asset materialize` resolve their target
+through a different code path (`PythonPointerOpts`) that needs an explicit `-m`/`-f` flag or
+this env var — confirmed by reading `dagster`'s own CLI source
+(`dagster/_cli/asset.py`, `dagster_shared/cli/__init__.py`), not assumed from either flag's
+`--help` text, which doesn't mention `pyproject.toml` at all.
+
+`dagster dev` (the local web UI, not required for CI or `make poc`) does use the
+`pyproject.toml` block, so it needs no extra flag or env var: `uv run dagster dev`.
 
 ## Reviewing CI
 
