@@ -260,6 +260,7 @@ jobs:
       PFP_INBOX_ROOT: /tmp/pfp-ci-inbox
       PFP_ARCHIVE_ROOT: /tmp/pfp-ci-archive
       DBT_SELECT: ${{ needs.changes.outputs.dbt_select }}
+      DAGSTER_MODULE_NAME: orchestration.definitions
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -275,42 +276,60 @@ jobs:
           docker compose -p "$COMPOSE_PROJECT" up -d --wait seaweedfs
           docker compose -p "$COMPOSE_PROJECT" run --rm bucket-init
 
-      # Twice: the second pfp ingest must add 0 new rows to bronze, proving
-      # ingestion is idempotent against the real platform, not a mock of it.
-      # organize() (T12b) always moves a processed file out of the inbox, so
-      # the fixture is re-seeded (byte-identical) before each run.
-      - name: ingest the synthetic fixture (first pass)
+      # ADR 0008/0021: a change confined to dbt/ builds only what it touched and
+      # its descendants, compared against a manifest parsed from the base branch;
+      # anything else (a parser, bronze, a dependency) builds everything, since no
+      # state comparison can see what those change in the data. Computing the base
+      # manifest is unrelated to Dagster and unchanged since before T21; the
+      # resulting DBT_STATE_PATH is what _dbt_build_args() (T21,
+      # orchestration/assets/dbt_project.py) reads to narrow the now-Dagster-invoked
+      # dbt build below, exactly like the old bare `dbt build --select ... --state
+      # ...` call did. Runs once, before both materializations, so the narrowed
+      # build's own idempotency gets proven too, not just a full one.
+      - name: compute the dbt build selection
+        if: needs.changes.outputs.dbt_select == 'state:modified+'
         run: |
-          uv run python -m scripts.seed_synthetic_inbox \
-            --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
-          uv run pfp ingest --user "$PFP_USER" \
-            --inbox-root "$PFP_INBOX_ROOT" --archive-root "$PFP_ARCHIVE_ROOT" \
-            | tee /tmp/pfp-ci-ingest-1.log
-      - name: ingest the synthetic fixture again (must add 0 rows)
-        run: |
-          uv run python -m scripts.seed_synthetic_inbox \
-            --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
-          uv run pfp ingest --user "$PFP_USER" \
-            --inbox-root "$PFP_INBOX_ROOT" --archive-root "$PFP_ARCHIVE_ROOT" \
-            | tee /tmp/pfp-ci-ingest-2.log
-          grep -q "Bronze: 0 statement(s) written" /tmp/pfp-ci-ingest-2.log
+          git fetch origin "$PFP_BASE_REF"
+          git worktree add --detach /tmp/pfp-base-ref "origin/$PFP_BASE_REF"
+          uv run dbt parse --project-dir /tmp/pfp-base-ref/dbt --profiles-dir dbt \
+            --target-path /tmp/pfp-base-manifest
+          echo "DBT_STATE_PATH=/tmp/pfp-base-manifest" >> "$GITHUB_ENV"
 
-      # ADR 0008: a change confined to dbt/ builds only what it touched and its
-      # descendants, compared against a manifest parsed from the base branch;
-      # anything else (a parser, bronze, a dependency) builds everything, since
-      # no state comparison can see what those change in the data.
-      - name: dbt build
+      # Twice: the second materialization must add 0 new bronze rows, proving the
+      # whole pipeline -- bronze and every dbt node together, not just bronze alone
+      # -- is idempotent against the real platform, not a mock of it. T21: one
+      # `dagster asset materialize --select '*'` replaces the old separate `pfp
+      # ingest`/`dbt build` steps, so CI proves the path a real install actually
+      # uses. organize() (T12b) always moves a processed file out of the inbox, so
+      # the fixture is re-seeded (byte-identical) before each pass.
+      #
+      # bronze.statements' own row count (scripts/count_bronze_statements.py, T21),
+      # not the bronze asset's report text: a multi-asset `dagster asset
+      # materialize` doesn't stream a step's own log output to stdout the way a
+      # single-asset selection does (confirmed by reproducing it directly), so
+      # grepping for it the way the old `pfp ingest`-based check did isn't
+      # reliable through this path. Every command here is piped to `tee`/another
+      # command rather than redirected with `>` on its own: a known,
+      # already-documented `deltalake==1.6.3` bug aborts the process during
+      # shutdown *after* it already printed its output (SETUP.md's known issues,
+      # `brain/components/cli.md`) -- piping (no `pipefail` in this job's shell)
+      # is the same established workaround the pre-T21 `pfp ingest` steps already
+      # relied on, not a new one invented for T21.
+      - name: materialize the pipeline through Dagster (first pass)
         run: |
-          if [ "$DBT_SELECT" = "state:modified+" ]; then
-            git fetch origin "$PFP_BASE_REF"
-            git worktree add --detach /tmp/pfp-base-ref "origin/$PFP_BASE_REF"
-            uv run dbt parse --project-dir /tmp/pfp-base-ref/dbt --profiles-dir dbt \
-              --target-path /tmp/pfp-base-manifest
-            uv run dbt build --project-dir dbt --profiles-dir dbt \
-              --select "state:modified+" --state /tmp/pfp-base-manifest
-          else
-            uv run dbt build --project-dir dbt --profiles-dir dbt
-          fi
+          uv run python -m scripts.seed_synthetic_inbox \
+            --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
+          uv run dagster asset materialize --select '*' | tee /tmp/pfp-ci-dagster-1.log
+          uv run python -m scripts.count_bronze_statements \
+            | tee /tmp/pfp-ci-bronze-count-1.txt
+      - name: materialize the pipeline through Dagster again (must add 0 new bronze rows)
+        run: |
+          uv run python -m scripts.seed_synthetic_inbox \
+            --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
+          uv run dagster asset materialize --select '*' | tee /tmp/pfp-ci-dagster-2.log
+          uv run python -m scripts.count_bronze_statements \
+            | tee /tmp/pfp-ci-bronze-count-2.txt
+          diff /tmp/pfp-ci-bronze-count-1.txt /tmp/pfp-ci-bronze-count-2.txt
       - run: uv run sqlfluff lint dbt/models
       - run: uv run pytest -m integration
 
@@ -320,10 +339,14 @@ jobs:
           mkdir -p /tmp/pfp-ci-artifacts
           docker compose -p "$COMPOSE_PROJECT" logs --no-color \
             > /tmp/pfp-ci-artifacts/docker-compose.log 2>&1 || true
-          cp dbt/target/run_results.json /tmp/pfp-ci-artifacts/ 2>/dev/null || true
-          cp dbt/logs/dbt.log /tmp/pfp-ci-artifacts/ 2>/dev/null || true
-          cp /tmp/pfp-ci-ingest-1.log /tmp/pfp-ci-ingest-2.log /tmp/pfp-ci-artifacts/ \
+          # dagster-dbt runs each dbt invocation in its own dbt/target/dbt_models-*/
+          # subdirectory (T21), never dbt/target/run_results.json directly.
+          find dbt/target -name run_results.json -exec cp {} /tmp/pfp-ci-artifacts/ \; \
             2>/dev/null || true
+          cp dbt/logs/dbt.log /tmp/pfp-ci-artifacts/ 2>/dev/null || true
+          cp /tmp/pfp-ci-dagster-1.log /tmp/pfp-ci-dagster-2.log \
+            /tmp/pfp-ci-bronze-count-1.txt /tmp/pfp-ci-bronze-count-2.txt \
+            /tmp/pfp-ci-artifacts/ 2>/dev/null || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
