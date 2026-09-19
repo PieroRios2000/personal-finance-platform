@@ -228,3 +228,110 @@ def test_main_stops_before_touching_the_inbox_when_dbt_deps_fails(
     captured = capsys.readouterr()
     assert "poc: FAIL" in captured.out
     assert "deps: could not resolve" in captured.err
+
+
+# What real dbt prints: an ANSI colour, a timestamp, then the line. The lines
+# `_safe_dbt_lines` used to expect (starting with "Done." or containing " [FAIL")
+# never appeared, so `make poc` showed no dbt result at all on a real run.
+_REAL_DBT_OUTPUT = (
+    "\x1b[0m15:20:12  Running with dbt=1.11.0\n"
+    "\x1b[0m15:20:14  1 of 124 START test assert_statement_continuity ...... [RUN]\n"
+    "\x1b[0m15:20:15  17 of 124 \x1b[31mFAIL 4\x1b[0m assert_statement_continuity "
+    "................ [\x1b[31mFAIL 4\x1b[0m in 1.04s]\n"
+    "\x1b[0m15:20:16  18 of 124 \x1b[31mERROR\x1b[0m thing .......... "
+    "[\x1b[31mERROR\x1b[0m in 0.10s]\n"
+    "\x1b[0m15:20:17  \n"
+    "\x1b[0m15:20:17  Done. PASS=33 WARN=0 ERROR=1 SKIP=93 NO-OP=0 REUSED=0 TOTAL=127\n"
+)
+
+
+def test_dbt_filter_reads_real_coloured_and_timestamped_output() -> None:
+    assert _safe_dbt_lines(_REAL_DBT_OUTPUT) == [
+        "17 of 124 FAIL 4 assert_statement_continuity "
+        "................ [FAIL 4 in 1.04s]",
+        "18 of 124 ERROR thing .......... [ERROR in 0.10s]",
+        "Done. PASS=33 WARN=0 ERROR=1 SKIP=93 NO-OP=0 REUSED=0 TOTAL=127",
+    ]
+
+
+def test_main_sends_alerts_after_the_build_when_a_channel_is_configured(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Errors are sent the moment they appear (Phase 7): `make poc` hands the
+    build's results and the count of files needing review to `alerting`."""
+    monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
+    monkeypatch.setenv("ALERT_TEAMS_WEBHOOK_URL", "https://teams.example.test/hook")
+    _seed_transfer_tables(tmp_path / "pfp.duckdb", matched=0, unmatched=0)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(subprocess, "run", _recording(_fake_run(0, 1), calls))
+
+    main()
+
+    alert = calls[-1]
+    assert alert[2:6] == ["python", "-m", "alerting", "dbt"]
+    assert alert[alert.index("--needs-review") + 1] == "1"
+
+
+def test_main_does_not_call_alerting_without_a_configured_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PFP_USER", "piero")
+    for name in ("ALERT_TEAMS_WEBHOOK_URL", "ALERT_SMTP_HOST", "ALERT_EMAIL_TO"):
+        monkeypatch.delenv(name, raising=False)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(subprocess, "run", _recording(_fake_run(0, 1), calls))
+
+    main()
+
+    assert not any("alerting" in cmd for cmd in calls)
+
+
+def test_main_removes_stale_dbt_results_before_building_and_reports_the_return_code(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A stale `run_results.json` from an earlier build must never be alerted on
+    as if it were this run's; and a build that produced no results at all still
+    has to be reported, so poc passes dbt's return code along."""
+    monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.setenv("ALERT_TEAMS_WEBHOOK_URL", "https://teams.example.test/hook")
+    monkeypatch.chdir(tmp_path)
+    stale = tmp_path / "dbt" / "target" / "run_results.json"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("{}")
+    calls: list[list[str]] = []
+    seen_at_build: list[bool] = []
+
+    def run(cmd: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if cmd[2:4] == ["dbt", "build"]:
+            seen_at_build.append(stale.exists())
+        calls.append(list(cmd))
+        result: subprocess.CompletedProcess[str] = _fake_run(0, 2)(cmd, **kwargs)
+        return result
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+    main()
+
+    assert seen_at_build == [False]
+    alert = calls[-1]
+    assert alert[alert.index("--dbt-returncode") + 1] == "2"
+
+
+def test_a_missing_alerting_program_never_breaks_poc(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
+    monkeypatch.setenv("ALERT_TEAMS_WEBHOOK_URL", "https://teams.example.test/hook")
+    _seed_transfer_tables(tmp_path / "pfp.duckdb", matched=0, unmatched=0)
+
+    def run(cmd: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if "alerting" in cmd:
+            raise FileNotFoundError("uv")
+        result: subprocess.CompletedProcess[str] = _fake_run(0, 0)(cmd, **kwargs)
+        return result
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+    assert main() == 0

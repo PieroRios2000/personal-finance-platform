@@ -164,11 +164,11 @@ Every parser validates that the sum of the extracted transactions matches the ba
 
 **Closes:** turning the platform from "what happened" into "what happens next" on the owner's own data. Details and open questions: [`brain/phases/phase-6.md`](brain/phases/phase-6.md).
 
-### Phase 7 — Alerting *(planned, added 2026-09-19)*
+### Phase 7 — Alerting *(built, added 2026-09-19)*
 **Goal:** be told when something breaks instead of having to look.
-- Errors and warnings (dbt tests with `error`/`warn` severity, Dagster run failures, files that need review) delivered by **email or Microsoft Teams**.
+- Errors and warnings (dbt tests with `error`/`warn` severity, files that need review) delivered by **email or Microsoft Teams**: **errors the moment they appear, warnings in a weekly digest** ([ADR 0026](brain/decisions/0026-alerts-errors-now-warnings-weekly-names-and-counts-only.md)).
 - Messages carry names and counts only, never data from a real statement ([ADR 0004](brain/decisions/0004-real-pdfs-never-leave-your-machine.md) applies to anything that leaves the process).
-- Includes the small `scripts/poc.py` fix so `make poc` shows dbt's result lines on real output.
+- Includes the small `scripts/poc.py` fix so `make poc` shows dbt's result lines on real output. Not wired: Dagster-triggered alerts (run `make alert` after a run).
 
 **Closes:** operations and observability. Details and open questions: [`brain/phases/phase-7.md`](brain/phases/phase-7.md).
 
