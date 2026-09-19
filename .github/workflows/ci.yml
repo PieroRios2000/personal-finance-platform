@@ -96,6 +96,20 @@ jobs:
     name: tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # T21: importing orchestration.assets.dbt_project (several test modules do, for
+    # BronzeSourceDbtTranslator/_dbt_build_args, no live S3 needed) triggers a `dbt
+    # parse` at import time if no manifest exists yet -- this job's own fresh
+    # checkout never has one. `dbt parse` never connects to S3, but rendering
+    # profiles.yml's `secrets:` block and models/sources.yml's own `LAKEHOUSE_URI`
+    # reference (both env_var() with no default) still needs these set to
+    # *something*, so they're here even though this job brings up no SeaweedFS --
+    # same fixed, non-real, local-only values ephemeral-integration already uses
+    # (ADR 0007).
+    env:
+      AWS_ACCESS_KEY_ID: pfp-ci-dummy-key
+      AWS_SECRET_ACCESS_KEY: pfp-ci-dummy-secret
+      AWS_ENDPOINT_URL: http://localhost:8333
+      LAKEHOUSE_URI: s3://lakehouse
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -151,7 +165,7 @@ jobs:
         run: uv run pip-audit
       - name: bandit (warns until 2026-09-26, see CONSTRAINTS.md)
         continue-on-error: true
-        run: uv run bandit -q -r . -x ./.venv --severity-level high
+        run: uv run bandit -q -r . -x ./.venv,./dbt/dbt_packages --severity-level high
 
   architecture:
     name: architecture
@@ -193,6 +207,15 @@ jobs:
     if: needs.changes.outputs.benchmarks == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # T21: `pytest -m benchmark` still collects (imports) every test module before
+    # filtering by marker, including the ones that trigger a `dbt parse` at import
+    # time -- see the identical note on the `tests` job above for why these dummy
+    # values are needed even though this job brings up no SeaweedFS either.
+    env:
+      AWS_ACCESS_KEY_ID: pfp-ci-dummy-key
+      AWS_SECRET_ACCESS_KEY: pfp-ci-dummy-secret
+      AWS_ENDPOINT_URL: http://localhost:8333
+      LAKEHOUSE_URI: s3://lakehouse
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -260,6 +283,7 @@ jobs:
       PFP_INBOX_ROOT: /tmp/pfp-ci-inbox
       PFP_ARCHIVE_ROOT: /tmp/pfp-ci-archive
       DBT_SELECT: ${{ needs.changes.outputs.dbt_select }}
+      DAGSTER_MODULE_NAME: orchestration.definitions
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -275,44 +299,124 @@ jobs:
           docker compose -p "$COMPOSE_PROJECT" up -d --wait seaweedfs
           docker compose -p "$COMPOSE_PROJECT" run --rm bucket-init
 
-      # Twice: the second pfp ingest must add 0 new rows to bronze, proving
-      # ingestion is idempotent against the real platform, not a mock of it.
-      # organize() (T12b) always moves a processed file out of the inbox, so
-      # the fixture is re-seeded (byte-identical) before each run.
-      - name: ingest the synthetic fixture (first pass)
+      # ADR 0008/0021: a change confined to dbt/ builds only what it touched and
+      # its descendants, compared against a manifest parsed from the base branch;
+      # anything else (a parser, bronze, a dependency) builds everything, since no
+      # state comparison can see what those change in the data. Computing the base
+      # manifest is unrelated to Dagster and unchanged since before T21; the
+      # resulting DBT_STATE_PATH is what _dbt_build_args() (T21,
+      # orchestration/assets/dbt_project.py) reads to narrow the now-Dagster-invoked
+      # dbt build below, exactly like the old bare `dbt build --select ... --state
+      # ...` call did. Runs once, before both materializations, so the narrowed
+      # build's own idempotency gets proven too, not just a full one.
+      - name: compute the dbt build selection
+        if: needs.changes.outputs.dbt_select == 'state:modified+'
         run: |
-          uv run python -m scripts.seed_synthetic_inbox \
-            --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
-          uv run pfp ingest --user "$PFP_USER" \
-            --inbox-root "$PFP_INBOX_ROOT" --archive-root "$PFP_ARCHIVE_ROOT" \
-            | tee /tmp/pfp-ci-ingest-1.log
-      - name: ingest the synthetic fixture again (must add 0 rows)
-        run: |
-          uv run python -m scripts.seed_synthetic_inbox \
-            --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
-          uv run pfp ingest --user "$PFP_USER" \
-            --inbox-root "$PFP_INBOX_ROOT" --archive-root "$PFP_ARCHIVE_ROOT" \
-            | tee /tmp/pfp-ci-ingest-2.log
-          grep -q "Bronze: 0 statement(s) written" /tmp/pfp-ci-ingest-2.log
+          git fetch origin "$PFP_BASE_REF"
+          git worktree add --detach /tmp/pfp-base-ref "origin/$PFP_BASE_REF"
+          # T22: this bare `dbt parse` call is a plain dbt-CLI invocation, not
+          # routed through `dagster-dbt`'s own `DbtProject.prepare()` (which
+          # auto-runs `dbt deps --quiet` the first time
+          # `orchestration.assets.dbt_project` is imported, e.g. by the
+          # Dagster materialize steps below or by `pytest` collecting the
+          # `test_dagster_*` modules -- confirmed directly, no separate `dbt
+          # deps` step needed for the main `dbt/` project anywhere in this
+          # job). This worktree gets none of that, so it needs its own
+          # explicit `dbt deps` -- a no-op today (this branch's base,
+          # `develop`, has no dbt/packages.yml yet) and load-bearing once
+          # this PR merges and a later dbt-only PR takes this same path.
+          uv run dbt deps --project-dir /tmp/pfp-base-ref/dbt --profiles-dir dbt
+          uv run dbt parse --project-dir /tmp/pfp-base-ref/dbt --profiles-dir dbt \
+            --target-path /tmp/pfp-base-manifest
+          echo "DBT_STATE_PATH=/tmp/pfp-base-manifest" >> "$GITHUB_ENV"
 
-      # ADR 0008: a change confined to dbt/ builds only what it touched and its
-      # descendants, compared against a manifest parsed from the base branch;
-      # anything else (a parser, bronze, a dependency) builds everything, since
-      # no state comparison can see what those change in the data.
-      - name: dbt build
+      # Twice: the second materialization must add 0 new bronze rows, proving the
+      # whole pipeline -- bronze and every dbt node together, not just bronze alone
+      # -- is idempotent against the real platform, not a mock of it. T21: one
+      # `dagster asset materialize --select '*'` replaces the old separate `pfp
+      # ingest`/`dbt build` steps, so CI proves the path a real install actually
+      # uses. organize() (T12b) always moves a processed file out of the inbox, so
+      # the fixture is re-seeded (byte-identical) before each pass.
+      #
+      # bronze.statements' own row count (scripts/count_bronze_statements.py, T21),
+      # not the bronze asset's report text: a multi-asset `dagster asset
+      # materialize` doesn't stream a step's own log output to stdout the way a
+      # single-asset selection does (confirmed by reproducing it directly), so
+      # grepping for it the way the old `pfp ingest`-based check did isn't
+      # reliable through this path.
+      #
+      # `set -o pipefail` around `dagster asset materialize` itself: this job's
+      # default shell has no pipefail, so piping it to `tee` for its own log file
+      # would otherwise let a real materialization failure -- a broken dbt model,
+      # not just this job's own known deltalake quirk below -- report as a passing
+      # step, since `tee`'s exit code (always 0) is what `-e` would see instead.
+      # Turned back off before `scripts.count_bronze_statements`: that one *does*
+      # need the no-pipefail behavior, since a known, already-documented
+      # `deltalake==1.6.3` bug aborts the process during shutdown (exit 134) after
+      # it already printed the right value (SETUP.md's known issues,
+      # `brain/components/ci.md`) -- the same established workaround the pre-T21
+      # `pfp ingest | tee ...` steps already relied on, scoped here to only the one
+      # command that actually needs it, not the whole step.
+      - name: materialize the pipeline through Dagster (first pass)
         run: |
-          if [ "$DBT_SELECT" = "state:modified+" ]; then
-            git fetch origin "$PFP_BASE_REF"
-            git worktree add --detach /tmp/pfp-base-ref "origin/$PFP_BASE_REF"
-            uv run dbt parse --project-dir /tmp/pfp-base-ref/dbt --profiles-dir dbt \
-              --target-path /tmp/pfp-base-manifest
-            uv run dbt build --project-dir dbt --profiles-dir dbt \
-              --select "state:modified+" --state /tmp/pfp-base-manifest
-          else
-            uv run dbt build --project-dir dbt --profiles-dir dbt
-          fi
+          uv run python -m scripts.seed_synthetic_inbox \
+            --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
+          set -o pipefail
+          uv run dagster asset materialize --select '*' | tee /tmp/pfp-ci-dagster-1.log
+          set +o pipefail
+          uv run python -m scripts.count_bronze_statements \
+            | tee /tmp/pfp-ci-bronze-count-1.txt
+      - name: materialize the pipeline through Dagster again (must add 0 new bronze rows)
+        run: |
+          uv run python -m scripts.seed_synthetic_inbox \
+            --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
+          set -o pipefail
+          uv run dagster asset materialize --select '*' | tee /tmp/pfp-ci-dagster-2.log
+          set +o pipefail
+          uv run python -m scripts.count_bronze_statements \
+            | tee /tmp/pfp-ci-bronze-count-2.txt
+          diff /tmp/pfp-ci-bronze-count-1.txt /tmp/pfp-ci-bronze-count-2.txt
       - run: uv run sqlfluff lint dbt/models
       - run: uv run pytest -m integration
+
+      # T22 (ADR 0022, CONSTRAINTS.md's warn-then-block pattern): Elementary's
+      # anomaly test already ran once as part of both `dagster asset
+      # materialize` passes above (it's a normal dbt test, `severity: warn`
+      # in dbt/models/silver/schema.yml, so it never failed either of those
+      # steps). This step re-selects just that test on its own, the same
+      # "own labeled step, continue-on-error: true" shape as this file's
+      # other still-warning checks (diff-cover, pip-audit, bandit,
+      # import-linter) -- so an anomaly is visible in its own step/log here,
+      # not only buried inside a much larger materialize log, without yet
+      # blocking the job if `edr`/dbt tooling itself has a bad day.
+      - name: elementary anomaly tests (warn-mode initially, see CONSTRAINTS.md)
+        continue-on-error: true
+        run: |
+          uv run dbt test --project-dir dbt --profiles-dir dbt \
+            --select tag:elementary-tests
+      # `edr report` reads what `dbt build`'s on-run-end hook already wrote
+      # into the `elementary` schema (dbt/dbt_project.yml's `on-run-end`) --
+      # no extra build step. `--config-dir dbt/.edr` opts the generated
+      # report out of Elementary's own anonymous usage tracking (ADR 0004,
+      # ADR 0022): without it, the report embeds a PostHog project key that
+      # would let it phone home when opened in a browser. Warn-mode, same
+      # reasoning as the test step above: this is observability tooling, not
+      # a correctness gate, so a bad `edr` release shouldn't block the job.
+      #
+      # PFP_DUCKDB_PATH must be absolute here: `edr` runs its own internal
+      # dbt project from inside its own installed package directory, not
+      # this repo -- profiles.yml's relative default (`dbt/pfp.duckdb`)
+      # would resolve against *that* directory instead and fail to find the
+      # database `dbt build` just wrote (confirmed directly: reproducible
+      # every time with no override, gone with one).
+      - name: elementary report (warn-mode, see CONSTRAINTS.md)
+        continue-on-error: true
+        env:
+          PFP_DUCKDB_PATH: ${{ github.workspace }}/dbt/pfp.duckdb
+        run: |
+          uv run edr report --project-dir dbt --profiles-dir dbt \
+            --config-dir dbt/.edr --open-browser false \
+            --file-path /tmp/pfp-ci-elementary-report.html
 
       - name: save logs and dbt artifacts
         if: always()
@@ -320,10 +424,19 @@ jobs:
           mkdir -p /tmp/pfp-ci-artifacts
           docker compose -p "$COMPOSE_PROJECT" logs --no-color \
             > /tmp/pfp-ci-artifacts/docker-compose.log 2>&1 || true
-          cp dbt/target/run_results.json /tmp/pfp-ci-artifacts/ 2>/dev/null || true
+          # dagster-dbt runs each dbt invocation (both materialize passes) in its
+          # own dbt/target/dbt_models-*/ subdirectory (T21), never
+          # dbt/target/run_results.json directly -- named by its own parent
+          # directory so the first pass's file isn't silently overwritten by the
+          # second's.
+          find dbt/target -name run_results.json 2>/dev/null | while read -r f; do
+            cp "$f" "/tmp/pfp-ci-artifacts/run_results-$(basename "$(dirname "$f")").json"
+          done
           cp dbt/logs/dbt.log /tmp/pfp-ci-artifacts/ 2>/dev/null || true
-          cp /tmp/pfp-ci-ingest-1.log /tmp/pfp-ci-ingest-2.log /tmp/pfp-ci-artifacts/ \
-            2>/dev/null || true
+          cp /tmp/pfp-ci-dagster-1.log /tmp/pfp-ci-dagster-2.log \
+            /tmp/pfp-ci-bronze-count-1.txt /tmp/pfp-ci-bronze-count-2.txt \
+            /tmp/pfp-ci-artifacts/ 2>/dev/null || true
+          cp /tmp/pfp-ci-elementary-report.html /tmp/pfp-ci-artifacts/ 2>/dev/null || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -335,6 +448,35 @@ jobs:
       - name: tear down the ephemeral environment
         if: always()
         run: docker compose -p "$COMPOSE_PROJECT" down -v
+
+  # This is the job the branch ruleset actually requires, not
+  # ephemeral-integration itself. GitHub's own docs say a job skipped by a
+  # job-level `if:` should report "success" to a required check -- but as of
+  # this writing there is an open, acknowledged inconsistency where
+  # repository rulesets (not classic branch protection) sometimes see
+  # "skipped" and refuse to treat it as satisfied, leaving an unrelated PR
+  # (one that never touches ingestion/lakehouse/dbt, so ephemeral-integration
+  # never runs at all) blocked forever with no clear reason why. This gate
+  # always runs (`if: always()`, overriding the default "only if needs
+  # succeeded"), reads ephemeral-integration's own real conclusion, and
+  # turns `success` *and* `skipped` into a pass, `failure`/`cancelled` into a
+  # fail -- deliberately not a third-party action for this: the whole fix is
+  # a five-line if statement, not something worth a new dependency.
+  ephemeral-integration-gate:
+    name: ephemeral-integration-gate
+    needs: ephemeral-integration
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: pass through ephemeral-integration's real result
+        run: |
+          result="${{ needs.ephemeral-integration.result }}"
+          echo "ephemeral-integration reported: $result"
+          if [ "$result" = "success" ] || [ "$result" = "skipped" ]; then
+            exit 0
+          fi
+          exit 1
 
   # T17b: what dbt build actually *produces* differs between the base branch
   # and the PR, not just whether it succeeds -- the same gap ADR 0007's own
@@ -380,6 +522,14 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
       - run: uv sync --locked
+      # T22: this job's own `dbt build` calls below are bare dbt-CLI
+      # invocations, unlike `ephemeral-integration`'s (which goes through
+      # `dagster asset materialize`, and so gets `dbt deps` for free the
+      # first time `orchestration.assets.dbt_project` is imported --
+      # `dagster-dbt`'s own `DbtProject.prepare()`, confirmed directly). This
+      # job never imports that module, so Elementary has to be installed
+      # explicitly before the "PR run" step's own `dbt build` below.
+      - run: uv run dbt deps --project-dir dbt --profiles-dir dbt
 
       - name: bring up the ephemeral environment
         run: |
@@ -405,6 +555,11 @@ jobs:
           git fetch origin "$PFP_BASE_REF"
           git checkout "origin/$PFP_BASE_REF" -- ingestion lakehouse
           git worktree add --detach /tmp/pfp-diff-base-ref "origin/$PFP_BASE_REF"
+          # T22: this worktree is a second, separate checkout with its own
+          # dbt/dbt_packages/, so the "base run" step's own `dbt build`
+          # below needs it installed here too -- a no-op today, before
+          # `develop` carries dbt/packages.yml, and load-bearing once it does.
+          uv run dbt deps --project-dir /tmp/pfp-diff-base-ref/dbt --profiles-dir dbt
 
       # continue-on-error so a broken base branch still lets the PR's own run
       # and the restore step happen: a failed base build is itself worth

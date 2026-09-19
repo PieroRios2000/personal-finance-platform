@@ -18,8 +18,12 @@ Recognize a PDF that was already ingested by its content, not by its name.
 ## Limit
 
 If the bank regenerates the PDF (say, with a different issue date), the bytes change and so
-does the hash, even though the movements are the same. That case is covered by the second
-layer: the [business key](business-key.md).
+does the hash, even though the movements are the same. The inbox organizer covers the common
+case one step later: it compares what was *parsed* against the archived copy of the same
+period, and identical content goes to `_duplicates/` instead of becoming a `_v2`
+([ADR 0024](../decisions/0024-regenerated-pdfs-with-identical-content-are-duplicates.md)). A
+regenerated file whose numbers really differ is still a new version, and the
+[business key](business-key.md) is the layer that keeps its movements from duplicating.
 
 ## Related
 

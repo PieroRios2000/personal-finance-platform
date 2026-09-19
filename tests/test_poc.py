@@ -87,8 +87,14 @@ def test_main_fails_clearly_without_pfp_user(
     assert "PFP_USER" in capsys.readouterr().err
 
 
-def _fake_run(ingest_returncode: int, dbt_returncode: int) -> Any:
+def _fake_run(
+    ingest_returncode: int, dbt_returncode: int, deps_returncode: int = 0
+) -> Any:
     def run(cmd: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if cmd[2:4] == ["dbt", "deps"]:
+            return subprocess.CompletedProcess(
+                cmd, deps_returncode, stdout="", stderr="deps: could not resolve"
+            )
         if cmd[2] == "pfp":
             return subprocess.CompletedProcess(
                 cmd, ingest_returncode, stdout=_LEAKY_INGEST_REPORT, stderr=""
@@ -177,3 +183,48 @@ def test_main_does_not_query_transfer_tables_when_dbt_build_fails(
 
     assert main() == 1
     assert "Internal transfers:" not in capsys.readouterr().out
+
+
+def _recording(inner: Any, calls: list[list[str]]) -> Any:
+    def run(cmd: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        calls.append(list(cmd))
+        result: subprocess.CompletedProcess[str] = inner(cmd, **kwargs)
+        return result
+
+    return run
+
+
+def test_main_installs_dbt_packages_before_ingesting_and_building(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Elementary (T22) is a dbt package: on a checkout that never ran `dbt deps`
+    (dbt/dbt_packages is gitignored) a bare `dbt build` fails, so `make poc` has to
+    install the packages itself, first."""
+    monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
+    _seed_transfer_tables(tmp_path / "pfp.duckdb", matched=0, unmatched=0)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(subprocess, "run", _recording(_fake_run(0, 0), calls))
+
+    assert main() == 0
+    assert [cmd[2:4] for cmd in calls] == [
+        ["dbt", "deps"],
+        ["pfp", "ingest"],
+        ["dbt", "build"],
+    ]
+
+
+def test_main_stops_before_touching_the_inbox_when_dbt_deps_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("PFP_USER", "piero")
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        subprocess, "run", _recording(_fake_run(0, 0, deps_returncode=1), calls)
+    )
+
+    assert main() == 1
+    assert len(calls) == 1
+    captured = capsys.readouterr()
+    assert "poc: FAIL" in captured.out
+    assert "deps: could not resolve" in captured.err

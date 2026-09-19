@@ -78,6 +78,22 @@ def main() -> int:
         print("poc: PFP_USER is not set (see .env.example)", file=sys.stderr)
         return 2
 
+    # T22: Elementary is a dbt package, and dbt/dbt_packages is gitignored, so a
+    # checkout that never ran `dbt deps` fails `dbt build` below. Before ingest:
+    # a setup failure shouldn't have already moved the PDFs out of the inbox.
+    print("poc: installing dbt packages...")
+    deps = subprocess.run(
+        ["uv", "run", "dbt", "deps", "--project-dir", "dbt", "--profiles-dir", "dbt"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if deps.returncode != 0:
+        # Package names and network errors only -- no statement data exists yet.
+        print(deps.stderr.strip() or deps.stdout.strip(), file=sys.stderr)
+        print("poc: FAIL")
+        return 1
+
     print(f"poc: ingesting the real inbox for user {user!r}...")
     ingest = subprocess.run(
         ["uv", "run", "pfp", "ingest", "--user", user],

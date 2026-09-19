@@ -1,0 +1,9 @@
+# T22 (ADR 0022, ADR 0004): opt out of Elementary CLI's own anonymous usage
+# tracking -- the same "off by default" stance dbt_project.yml's own
+# `disable_tracking` var already applies to the dbt package side. Without
+# this, `edr report`'s generated HTML embeds a PostHog project API key
+# (elementary/monitor/data_monitoring/report/data_monitoring_report.py) that
+# lets the report phone home when opened in a browser; with it, that key is
+# omitted and the bundled PostHog script never initializes (confirmed
+# directly: the key disappears from the report's own embedded data).
+anonymous_usage_tracking: false

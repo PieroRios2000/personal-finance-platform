@@ -18,6 +18,7 @@ if something breaks, fall back to these.
 | pre-commit | 4.6.2 | Security guards and lint before every commit | Start |
 | make | 4.4 | Check shortcuts (`make check-task`) | T4 |
 | Docker Desktop | 4.43.2 (Engine 28.3.2, Compose 2.38) | Local S3 with SeaweedFS | T13 |
+| OpenMetadata stack (optional, `openmetadata/docker-compose.yml`) | OpenMetadata 2.0.2 (server, ingestion, PostgreSQL) + Elasticsearch 9.3.0 | Catalog and column-level lineage over the dbt project (T24). **Needs ~4.6 GiB of RAM at idle (measured: ~4.8 GiB peak while ingesting) and up to ~4.5 of 6 vCPUs while ingesting**, on top of SeaweedFS; the official minimum is 6 GiB and 4 vCPUs given to Docker. ~12 GiB of images. Measured on WSL2 with `memory=11GB processors=6 swap=4GB` in `C:\Users\<you>\.wslconfig` (Docker then sees 14.88 GiB); not measured at 7.4 GiB. Never run by CI | T24 |
 | Tesseract OCR + Spanish language pack | 5.5 | OCR for scanned PDFs | T11b |
 | GitHub CLI (`gh`) | 2.46 | PRs from the terminal | Optional |
 
@@ -77,7 +78,8 @@ Two of `.env`'s values matter before you ingest anything (T6, ADR 0005 and ADR 0
   passed on the command line; convenient for a single-person install. `--user` always wins
   over it.
 
-Real PDFs live **outside the repo**, readable only by your user:
+Real PDFs live **outside the repo**, readable only by your user (the full walkthrough, from
+folder to first `make poc`, is [docs/ingesting-your-own-pdfs.md](docs/ingesting-your-own-pdfs.md)):
 
 ```bash
 mkdir -p ~/finance-data/inbox/<user>    # per-user inbox, e.g. inbox/piero
@@ -108,6 +110,9 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | pyarrow | 25.0.1 | runtime | Explicit table schemas for Delta writes (T14, ADR 0006) |
 | dbt-duckdb | 1.11.0 (dbt-core 1.12.4) | runtime | Builds silver from bronze (T16, ADR 0011). Runtime, not dev: `dbt build` is a step of the platform's own flow, not a check |
 | duckdb | 1.5.5 | runtime | The engine dbt runs on; reads Delta off S3 with `delta_scan()` (T16, ADR 0002) |
+| dagster | 1.13.23 | runtime | Orchestrates bronze + dbt as one DAG (T21). Runtime: `dagster asset materialize` is a way to run the platform's own flow, same as `pfp ingest` + `dbt build` by hand |
+| dagster-dbt | 0.29.23 | runtime | Wraps the dbt project as Dagster assets, one per dbt node (T21) |
+| elementary-data | 0.26.0 | dev | The `edr` CLI (`edr report`/`edr monitor`), for rendering a local observability report from what `dbt build` already wrote (T22, ADR 0022). Elementary itself is a **dbt package**, not a `uv` dependency — see `dbt/packages.yml` and the "Elementary" subsection under section 6 below |
 | sqlfluff | 4.3.0 | dev | Lints the dbt project's SQL (T16) |
 | sqlfluff-templater-dbt | 4.3.0 | dev | Lets sqlfluff compile the dbt project, so it lints the real `delta_scan(...)` SQL |
 | fpdf2 | 2.8.8 | dev | Generate synthetic PDFs inside the tests |
@@ -147,10 +152,18 @@ directory and `~/.dbt` — so both flags are needed, from the repository root:
 make poc-up                          # local S3 (leave it running)
 set -a && source .env && set +a      # LAKEHOUSE_URI + the AWS_* values dbt reads
 
-uv run dbt build --project-dir dbt --profiles-dir dbt   # silver + its tests
+uv run dbt deps --project-dir dbt --profiles-dir dbt    # once, or after packages.yml changes (T22)
+uv run dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + Elementary's own models/tests
 uv run sqlfluff lint dbt/models                         # SQL style
 uv run pytest -m integration                            # the S3-backed tests, deselected by default
 ```
+
+`dbt deps` only needs re-running when `dbt/packages.yml` changes; `dbt/dbt_packages/` (gitignored)
+caches the install. `dagster asset materialize` (section 9) and a plain `pytest` collecting the
+`test_dagster_*` modules both trigger it automatically the first time
+`orchestration/assets/dbt_project.py` is imported (`dagster-dbt`'s own `DbtProject.prepare()`) —
+the explicit command above is only needed for a bare `dbt build`/`dbt parse`/`sqlfluff` call like
+the ones on this line, which never import that module.
 
 `dbt build` writes `dbt/pfp.duckdb` (gitignored), so the built tables can be inspected
 afterwards: `duckdb dbt/pfp.duckdb -c "select count(*) from silver.transactions"`. Set
@@ -167,10 +180,42 @@ that is the point, it names the periods you never archived (see
 `LAKEHOUSE_URI` points at, so pointing it at a prefix (`LAKEHOUSE_URI=s3://lakehouse/scratch`)
 is how you try things out without touching your real bronze.
 
+### Elementary: anomaly detection and a local quality report (T22)
+
+`dbt build` above already builds Elementary's own models and runs its row-count anomaly test on
+`silver.transactions` (`elementary_volume_anomalies_silver_transactions`,
+`dbt/models/silver/schema.yml`) — no separate step. It's `severity: warn` (ADR 0022): a real
+anomaly shows up as `WARN` in `dbt build`'s own output, but doesn't fail the build yet.
+
+`edr report` (from the `elementary-data` package above) renders a local HTML report from what
+that build already wrote — same prerequisites as `dbt build`:
+
+```bash
+export PFP_DUCKDB_PATH="$PWD/dbt/pfp.duckdb"   # must be absolute for edr, see below
+uv run edr report --project-dir dbt --profiles-dir dbt --config-dir dbt/.edr \
+  --file-path dbt/elementary_report.html
+```
+
+`PFP_DUCKDB_PATH` has to be absolute here, unlike every `dbt build`/`dbt test` command above:
+`edr` runs its own internal dbt project from inside its own installed package directory, not this
+repo, so `profiles.yml`'s relative default (`dbt/pfp.duckdb`) would resolve against *that*
+directory instead and fail to find the database `dbt build` just wrote (confirmed directly:
+`edr report` fails with `Cannot open file ".../site-packages/elementary/.../dbt/pfp.duckdb"` with
+no override, and finds the right file with one).
+
+`--config-dir dbt/.edr` opts out of Elementary's own anonymous usage tracking (`dbt/.edr/config.yml`,
+committed) — without it the generated report embeds a PostHog project key that would let it phone
+home when opened in a browser (ADR 0004, ADR 0022). Drop `--open-browser false` if you want it to
+open automatically; `dbt/*.html` is gitignored.
+
+`edr` needs its own connection profile literally named `elementary` in `dbt/profiles.yml` (not the
+project's own `personal_finance_platform` profile) — already there, pointed at the same DuckDB
+file and S3 secrets so it reads what `dbt build` just wrote, not a second database.
+
 ### `make poc`: the whole flow against your real PDFs (T17)
 
 `make poc` runs the same flow as CI's `ephemeral-integration` job (ADR 0007) — `poc-up`,
-`pfp ingest`, `dbt build` — but once, locally, against your own real inbox instead of the
+`dbt deps`, `pfp ingest`, `dbt build` — but once, locally, against your own real inbox instead of the
 synthetic fixture, and tears the environment down when it's done, success or failure. Unlike
 every command above, its own output is deliberately narrow: only pass/fail and reconciliation
 *counts* ever get printed (ADR 0004 — never a real balance, account number or description);
@@ -257,6 +302,67 @@ it as a vault needs no rework of the notes themselves.
 `.obsidian/` (Obsidian's own per-machine view state — panes, graph layout, theme) is already
 gitignored; it's never something to commit.
 
+## 9. Running the pipeline through Dagster (T21)
+
+`orchestration/definitions.py` wires the bronze asset and the whole dbt project (one Dagster
+asset per dbt node, via `dagster-dbt`) into one DAG — the same prerequisites as section 6
+(SeaweedFS up, `.env` exported):
+
+```bash
+make poc-up
+set -a && source .env && set +a
+
+uv run dagster asset list                       # the asset graph, bronze -> silver et al.
+uv run dagster asset materialize --select '*'    # the whole pipeline, end to end
+```
+
+Both commands need `DAGSTER_MODULE_NAME=orchestration.definitions` in `.env` (already in
+`.env.example`). This is *not* the same mechanism as `pyproject.toml`'s own `[tool.dagster]
+module_name` block: that block only drives `dagster dev`'s own workspace auto-discovery
+(`WorkspaceOpts`); `dagster asset list`/`dagster asset materialize` resolve their target
+through a different code path (`PythonPointerOpts`) that needs an explicit `-m`/`-f` flag or
+this env var — confirmed by reading `dagster`'s own CLI source
+(`dagster/_cli/asset.py`, `dagster_shared/cli/__init__.py`), not assumed from either flag's
+`--help` text, which doesn't mention `pyproject.toml` at all.
+
+`dagster dev` (the local web UI, not required for CI or `make poc`) does use the
+`pyproject.toml` block, so it needs no extra flag or env var: `uv run dagster dev`.
+
+## 10. Browsing the catalog and lineage in OpenMetadata (T24)
+
+Optional. `openmetadata/docker-compose.yml` runs OpenMetadata 2.0.2 with PostgreSQL and
+Elasticsearch under its own project name (`pfp-om`), ephemeral like the SeaweedFS one
+(ADR 0007): `make om-down` removes every volume. Make sure WSL2 has the memory first
+(requirements table above); after editing `.wslconfig`, run `wsl --shutdown` from PowerShell.
+CI never runs this stack (ADR 0023).
+
+```bash
+make poc-up                          # local S3, as in section 6
+set -a && source .env && set +a
+uv run dbt deps --project-dir dbt --profiles-dir dbt
+uv run dbt build --project-dir dbt --profiles-dir dbt   # or `dagster asset materialize`, section 9
+
+make om-up                           # ~5 minutes to become healthy the first time
+make om-sync                         # docs generate, register tables, ingest, check the lineage
+```
+
+`make om-sync` ends with `OK: 1 column-level path(s) from ...bronze.transactions.amount`, or
+exits 1 if `gold.fact_transactions.amount` no longer traces back to bronze. Then open
+<http://localhost:8585> (login `admin@open-metadata.org` / `admin`, the stack's upstream local
+default) and browse *Explore* -> `pfp_duckdb` -> `gold` -> `fact_transactions` -> *Lineage*,
+with *Column level lineage* on. The same from the API:
+
+```bash
+TOKEN=$(curl -s -X POST localhost:8585/api/v1/users/login -H 'Content-Type: application/json' \
+  -d "{\"email\":\"admin@open-metadata.org\",\"password\":\"$(printf admin | base64)\"}" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "localhost:8585/api/v1/lineage/getLineage?fqn=pfp_duckdb.pfp.gold.fact_transactions&type=table&upstreamDepth=10&downstreamDepth=0"
+```
+
+Re-run `make om-sync` after any `dbt build` that changes models; it is idempotent. `make om-down`
+when done. Elementary's own models are not catalogued and dbt tests are not ingested.
+
 ## Reviewing CI
 
 Every PR runs `.github/workflows/ci.yml`: `lint-types`, `tests`, `security`, `architecture`
@@ -300,3 +406,8 @@ uv run pytest -m benchmark -q --benchmark-min-rounds=10 \
 | `gh pr edit` fails with a *Projects classic* error (gh 2.46) | Use `gh api --method PATCH repos/<owner>/<repo>/pulls/<n>`, or upgrade gh from cli.github.com |
 | Files named `<PdfName>.pdf:Zone.Identifier` appear under `~/finance-data/` | Windows adds them when copying from File Explorer; delete them (`find ~/finance-data -name '*:Zone.Identifier' -delete`) — they're not part of the PDF |
 | `terminate called without an active exception` after a `pfp ingest`/`pfp backfill` run that read bronze, with exit code 134 | The command already did its work and printed its report: this is `deltalake==1.6.3` aborting while the process shuts down, after `main()` returned. Reproducible on this machine with `deltalake` alone (three lines: open a `DeltaTable`, `to_pyarrow_table()`, exit), so it isn't the CLI's doing; `pytest` isn't affected. Noted while building T14c; needs its own fix (a `deltalake` upgrade is the first thing to try) — don't script around a `pfp` exit code until then |
+| `dbt build`/`dbt test` exits non-zero with `Catalog Error: Table with name test_..._elementary_volume_anomalies...__metrics__tmp_... does not exist!`, right after printing `Done. PASS=... WARN=... ERROR=0` | Elementary's own `on-run-end` cleanup of its per-invocation temp tables (`elementary.clean_elementary_temp_tables()`) reproducibly crashes on this stack (dbt-duckdb 1.11.0, elementary 0.26.0) — always *after* every real result is already computed, so it never hides a failure, only dbt's own exit code afterward. `dbt/dbt_project.yml`'s `vars: clean_elementary_temp_tables: false` (T22) already works around it; if you see this anyway, check that var hasn't been reverted |
+| `make om-up` takes ~5 minutes the first time (measured: 4m40s with the images already pulled) | Normal: `up --wait` blocks until every container, including `ingestion` (Airflow, the slowest), reports healthy. Give it the time before assuming a failure |
+| `metadata ingest` logs `Unable to find the node or columns in the catalog file for dbt node: source.personal_finance_platform.bronze.*` (and the `operation.*` on-run-end hooks) | Expected and harmless: dbt's catalog can't see bronze (`delta_scan()` isn't a DuckDB relation) and hooks have no columns. Bronze's tables and columns are registered by `scripts/openmetadata_sync.py` instead; the run still ends `Success %: 100.0` |
+| `make om-sync`'s `check` prints `FAIL: no column-level path ...` and exits 1 | Column lineage stopped short of bronze. Reproduced on purpose by ingesting `dbt/target/manifest.json` as-is instead of the copy `sync` writes to `openmetadata/artifacts/manifest.json` (its `delta_scan(...)` paths aren't tables to OpenMetadata's SQL parser, ADR 0023): re-run `make om-sync`, which regenerates the copy |
+| Upstream's own `docker-compose-postgres.yml` leaves `docker-volume/db-data-postgres` behind and `rm -rf` fails with `Permission denied` | Not applicable to `openmetadata/docker-compose.yml`: it uses named volumes, so `make om-down` (`down -v`) removes everything (checked: no `pfp-om_*` volume left) |
