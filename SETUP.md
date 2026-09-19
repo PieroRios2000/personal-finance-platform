@@ -373,10 +373,13 @@ many rows, how many files need review), never an amount, an account or a file na
 ([ADR 0026](brain/decisions/0026-alerts-errors-now-warnings-weekly-names-and-counts-only.md)).
 
 1. Fill in the `ALERT_*` variables in `.env` (template in `.env.example`); a channel is on when
-   its variables are set, and both can be on:
+   its variables are set, and both can be on. **Wrap each value in single quotes**: `.env` is
+   sourced by the shell, and a Teams URL contains `&` (which would cut it short), an app password
+   may contain spaces:
    - **Email:** `ALERT_SMTP_HOST`, `ALERT_SMTP_PORT` (587, STARTTLS), `ALERT_SMTP_USER`,
      `ALERT_SMTP_PASSWORD`, `ALERT_EMAIL_FROM`, `ALERT_EMAIL_TO` (comma-separated). Most providers
-     need an *app password* here, not the account password.
+     need an *app password* here, not the account password. The server's certificate is verified;
+     port 465 (SMTPS, implicit TLS) is not supported, only STARTTLS (usually 587).
    - **Teams:** `ALERT_TEAMS_WEBHOOK_URL`: in Teams, create a Workflows flow triggered by "When a
      Teams webhook request is received" that posts to your channel or chat, and paste its URL
      (whether your tenant allows it depends on its admin).
@@ -392,9 +395,19 @@ many rows, how many files need review), never an amount, an account or a file na
    0 9 * * 6 cd ~/projects/personal-finance-platform && make alert-digest >> ~/finance-data/alerts/digest.log 2>&1
    ```
 
-   or a Windows Task Scheduler task running
+   Cron has a minimal `PATH`: put `PATH=/home/<you>/.local/bin:/usr/bin:/bin` (where `uv` lives) as
+   the first line of the crontab, and create the log's folder first (`mkdir -p ~/finance-data/alerts`).
+   The cron service must be started again after each WSL restart. Or use a Windows Task Scheduler task running
    `wsl -e bash -lc "cd ~/projects/personal-finance-platform && make alert-digest"` on Saturdays.
-   The machine has to be on at that time.
+   The machine has to be on at that time. If a digest cannot be delivered to any channel the queue
+   is kept (claimed as `warnings.jsonl.sending`) and goes out, with anything queued since, in the
+   next digest; if at least one channel delivered it, the queue is emptied and the failing channel
+   is reported (exit code 1).
+
+   Exit codes: `make alert` returns 0 when the alerts were delivered (or there was nothing to send)
+   and 1 when a channel failed, whether or not the build was healthy. An *error* alert whose
+   delivery fails is not retried: the failure is printed and the exit code is 1, so look at
+   `dbt/target/run_results.json` or re-run `make alert`.
 
 ## Reviewing CI
 

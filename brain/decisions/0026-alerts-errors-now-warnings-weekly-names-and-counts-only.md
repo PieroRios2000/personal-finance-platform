@@ -54,6 +54,13 @@ number.
 
 ## Consequences
 
+- A digest that reaches at least one channel empties the queue (repeating it where it already
+  arrived would be noise); one that reaches none is kept and goes out with the next. An *error*
+  alert that could not be delivered is not retried: it is printed with exit code 1, and the next
+  build overwrites `run_results.json`. A retry spool would fix that if it ever matters.
+- `make poc` deletes the previous `run_results.json` before building, so a stale one is never
+  alerted on; a build that writes no results (a parse or connection error) is reported as "build
+  did not complete". After a manual build, `make alert` reads whatever file is there.
 - The weekly digest only runs when the machine is on at the scheduled time; a missed week's
   warnings stay queued and go out in the next digest.
 - `make poc` and `make alert` are the automatic triggers. A Dagster run started by hand needs

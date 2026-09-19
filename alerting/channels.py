@@ -7,7 +7,7 @@ never includes the webhook URL or the SMTP password (both are secrets).
 
 import json
 import smtplib
-import urllib.error
+import ssl
 import urllib.request
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -39,9 +39,13 @@ class EmailChannel:
         )
         if not (host and sender and to):
             return None
+        try:
+            port = int(env.get("ALERT_SMTP_PORT") or "587")
+        except ValueError:
+            raise ValueError("ALERT_SMTP_PORT must be a number") from None
         return cls(
             host=host,
-            port=int(env.get("ALERT_SMTP_PORT", "587")),
+            port=port,
             sender=sender,
             recipients=tuple(r.strip() for r in to.split(",") if r.strip()),
             user=env.get("ALERT_SMTP_USER") or None,
@@ -49,6 +53,8 @@ class EmailChannel:
         )
 
     def send(self, subject: str, body: str) -> str | None:
+        if not self.recipients:
+            return "email: no recipient"
         message = EmailMessage()
         message["Subject"] = subject
         message["From"] = self.sender
@@ -56,11 +62,11 @@ class EmailChannel:
         message.set_content(body)
         try:
             with smtplib.SMTP(self.host, self.port, timeout=_TIMEOUT_SECONDS) as smtp:
-                smtp.starttls()
+                smtp.starttls(context=ssl.create_default_context())
                 if self.user and self.password:
                     smtp.login(self.user, self.password)
                 smtp.send_message(message)
-        except (OSError, smtplib.SMTPException) as error:
+        except Exception as error:  # the type name is all a caller ever sees
             return f"email: {type(error).__name__}"
         return None
 
@@ -71,19 +77,26 @@ class TeamsChannel:
     an Adaptive Card with the subject and the body."""
 
     url: str
+    allow_http: bool = False  # only for the local server in the tests
 
     def send(self, subject: str, body: str) -> str | None:
+        allowed = ("https://", "http://") if self.allow_http else ("https://",)
+        if not self.url.startswith(allowed):
+            return "teams: not an https URL"
+        lines = [subject, *body.splitlines()]
         card = {
             "type": "AdaptiveCard",
             "version": "1.4",
+            # One block per line: a single newline inside a block often does not
+            # render as a line break in Teams.
             "body": [
                 {
                     "type": "TextBlock",
-                    "text": subject,
-                    "weight": "Bolder",
+                    "text": line,
                     "wrap": True,
-                },
-                {"type": "TextBlock", "text": body, "wrap": True},
+                    **({"weight": "Bolder"} if index == 0 else {}),
+                }
+                for index, line in enumerate(lines)
             ],
         }
         payload = {
@@ -104,7 +117,7 @@ class TeamsChannel:
         try:
             with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS):
                 return None
-        except (OSError, urllib.error.URLError) as error:
+        except Exception as error:
             return f"teams: {type(error).__name__}"
 
 

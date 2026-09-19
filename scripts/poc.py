@@ -31,6 +31,7 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 import duckdb
 
@@ -76,25 +77,30 @@ def _needs_review_count(ingest_output: str) -> int:
     return 0
 
 
-def _send_alerts(needs_review: int) -> None:
+def _send_alerts(needs_review: int, dbt_returncode: int) -> None:
     """Phase 7: errors go out now, warnings are queued for the weekly digest.
     Only when a channel is configured, and never allowed to change `make poc`'s
     own result. `alerting` prints names and counts only."""
     if not any(os.environ.get(name) for name in _ALERT_VARIABLES):
         return
-    subprocess.run(
-        [
-            "uv",
-            "run",
-            "python",
-            "-m",
-            "alerting",
-            "dbt",
-            "--needs-review",
-            str(needs_review),
-        ],
-        check=False,
-    )
+    try:
+        subprocess.run(
+            [
+                "uv",
+                "run",
+                "python",
+                "-m",
+                "alerting",
+                "dbt",
+                "--needs-review",
+                str(needs_review),
+                "--dbt-returncode",
+                str(dbt_returncode),
+            ],
+            check=False,
+        )
+    except OSError as error:
+        print(f"poc: could not run alerting ({type(error).__name__})", file=sys.stderr)
 
 
 def _transfer_match_summary(duckdb_path: str) -> str:
@@ -151,6 +157,10 @@ def main() -> int:
         # (ingestion/cli.py's _run_ingest); safe to print in full.
         print(ingest.stderr.strip(), file=sys.stderr)
 
+    # A `run_results.json` left by an earlier build must never be mistaken for
+    # this one's: if dbt fails before writing a new one, there is none.
+    Path("dbt/target/run_results.json").unlink(missing_ok=True)
+
     print("poc: building silver with dbt...")
     dbt = subprocess.run(
         ["uv", "run", "dbt", "build", "--project-dir", "dbt", "--profiles-dir", "dbt"],
@@ -165,7 +175,7 @@ def main() -> int:
         duckdb_path = os.environ.get("PFP_DUCKDB_PATH", "dbt/pfp.duckdb")
         print(f"  {_transfer_match_summary(duckdb_path)}")
 
-    _send_alerts(_needs_review_count(ingest.stdout))
+    _send_alerts(_needs_review_count(ingest.stdout), dbt.returncode)
 
     ok = ingest.returncode == 0 and dbt.returncode == 0
     print(f"poc: {'PASS' if ok else 'FAIL'}")

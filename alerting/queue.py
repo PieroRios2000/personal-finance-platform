@@ -32,8 +32,8 @@ class DigestLine:
 
 
 def append(path: Path, events: list[Event], now: datetime) -> None:
+    # 0700 only on a directory created here, never on one the user pointed at.
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    path.parent.chmod(0o700)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     with os.fdopen(fd, "a") as handle:
         for event in events:
@@ -47,21 +47,49 @@ def append(path: Path, events: list[Event], now: datetime) -> None:
     path.chmod(0o600)
 
 
-def read(path: Path) -> list[Record]:
+def read_counting_skipped(path: Path) -> tuple[list[Record], int]:
+    """The records in `path`, and how many lines were skipped because they were
+    blank, torn or not the expected shape (one bad line must not poison the
+    queue for good)."""
     if not path.exists():
-        return []
-    records = []
+        return [], 0
+    records: list[Record] = []
+    skipped = 0
     for line in path.read_text().splitlines():
-        raw = json.loads(line)
-        records.append(
-            Record(
-                raw["source"],
-                raw["name"],
-                raw["count"],
-                datetime.fromisoformat(raw["at"]),
+        if not line.strip():
+            continue
+        try:
+            raw = json.loads(line)
+            records.append(
+                Record(
+                    str(raw["source"]),
+                    str(raw["name"]),
+                    int(raw["count"]),
+                    datetime.fromisoformat(raw["at"]),
+                )
             )
-        )
-    return records
+        except (ValueError, KeyError, TypeError):
+            skipped += 1
+    return records, skipped
+
+
+def read(path: Path) -> list[Record]:
+    return read_counting_skipped(path)[0]
+
+
+def claim(path: Path) -> Path | None:
+    """Move the queue aside (`<name>.sending`) so warnings queued while a digest
+    is being sent are not lost. A claim left by a digest that failed is kept:
+    it is claimed again, together with whatever was queued since."""
+    sending = path.with_name(path.name + ".sending")
+    if path.exists():
+        if sending.exists():
+            with sending.open("a") as handle:
+                handle.write(path.read_text())
+            path.unlink()
+        else:
+            path.rename(sending)
+    return sending if sending.exists() else None
 
 
 def clear(path: Path) -> None:

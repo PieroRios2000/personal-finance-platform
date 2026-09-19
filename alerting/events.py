@@ -43,7 +43,8 @@ def dbt_events(run_results: dict[str, Any]) -> list[Event]:
             continue
         failures = result.get("failures")
         count = failures if isinstance(failures, int) and failures > 0 else 1
-        events.append(Event(level, "dbt", _node_name(result["unique_id"]), count))
+        name = _node_name(result["unique_id"]) if result.get("unique_id") else "unknown"
+        events.append(Event(level, "dbt", name, count))
     if skipped:
         # Skipped nodes are the consequence of an error: silver and gold were
         # not built.
