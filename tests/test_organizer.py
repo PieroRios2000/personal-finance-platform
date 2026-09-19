@@ -9,10 +9,12 @@ from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from ingestion import organizer
+from ingestion.schema import Statement
 from tests.fixtures.synthetic_pdfs import DEFAULT_MOVEMENTS, Movement, bcp_statement_pdf
 
 # Last 4 digits are distinct and easy to recognize in assertions (0001/0002/0003).
@@ -432,3 +434,87 @@ def test_a_regenerated_pdf_is_still_a_new_version_when_the_archived_copy_is_unre
 
     assert len(report.archived) == 1
     assert report.archived[0].version == 2
+
+
+def test_same_balances_but_different_movements_is_a_new_version(
+    tmp_path: Path,
+) -> None:
+    """The failure mode that would silently drop data: two downloads that share the
+    period and both balances but list different movements are NOT the same
+    statement, so the second must be kept as a version, not thrown away."""
+    inbox_root, archive_root = tmp_path / "inbox", tmp_path / "raw"
+    inbox = inbox_root / "piero"
+    _drop(inbox, "one.pdf", _bcp_pdf(movements=_JAN_MOVEMENTS))
+    organizer.organize("piero", inbox_root=inbox_root, archive_root=archive_root)
+
+    same_total_split = (
+        Movement(date(2026, 1, 5), "COMPRA FICTICIA", Decimal("-25.00")),
+        Movement(date(2026, 1, 5), "COMPRA FICTICIA", Decimal("-25.00")),
+    )
+    _drop(inbox, "two.pdf", _bcp_pdf(movements=same_total_split))
+    report = organizer.organize(
+        "piero", inbox_root=inbox_root, archive_root=archive_root
+    )
+
+    assert not report.duplicates
+    assert len(report.archived) == 1
+    assert report.archived[0].version == 2
+
+
+def _statement(currency: str, amount: str) -> Statement:
+    return Statement.model_validate(
+        {
+            "user_id": "piero",
+            "bank": "Scotiabank",
+            "account_id": "a" * 64,
+            "account_last4": "0001",
+            "period_start": date(2026, 1, 1),
+            "period_end": date(2026, 1, 31),
+            "opening_balance": Decimal("0.00"),
+            "closing_balance": Decimal(amount),
+            "account_kind": "liability",
+            "currency": currency,
+            "transactions": [
+                {
+                    "user_id": "piero",
+                    "bank": "Scotiabank",
+                    "account_id": "a" * 64,
+                    "account_last4": "0001",
+                    "date": date(2026, 1, 5),
+                    "description": "COMPRA FICTICIA",
+                    "amount": Decimal(amount),
+                    "currency": currency,
+                    "source_file_sha256": "b" * 64,
+                }
+            ],
+        }
+    )
+
+
+def test_a_multi_currency_file_matches_only_when_every_currency_matches(
+    tmp_path: Path,
+) -> None:
+    """Scotiabank's parse() returns one Statement per currency for one file."""
+    archived = tmp_path / "archived.pdf"
+    archived.write_bytes(b"x")
+    soles, dolares = _statement("PEN", "10.00"), _statement("USD", "20.00")
+
+    def parse(*args: Any, **kwargs: Any) -> list[Statement]:
+        return [soles, dolares]
+
+    def twin(statements: list[Statement]) -> Path | None:
+        return organizer._archived_twin(parse, [archived], statements, "piero", "")
+
+    assert twin([soles, dolares]) == archived
+    assert twin([soles, _statement("USD", "21.00")]) is None
+    assert twin([soles]) is None
+
+
+def test_an_unexpected_error_rereading_the_archived_copy_is_not_a_match() -> None:
+    """Whatever a parser raises on the archived file (OCR, a parser change, a
+    damaged file), the answer is "not a match", never a crash mid-run."""
+
+    def parse(*args: Any, **kwargs: Any) -> list[Statement]:
+        raise RuntimeError("tesseract fell over")
+
+    assert organizer._archived_twin(parse, [Path(__file__)], [], "piero", "") is None
