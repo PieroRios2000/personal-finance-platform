@@ -169,10 +169,15 @@ DuckDB stays the engine (it reads bronze off S3); silver and gold are created in
 database `PFP_PG_DATABASE`, schemas `silver` and `gold`. **Elementary keeps its own small DuckDB file**
 (`dbt/elementary.duckdb`, gitignored) because its views and its results upload do not work through
 the attach. The first time the Postgres volume is created it also makes the read-only role `pfp_bi`
-(password `PFP_PG_BI_PASSWORD`), which can `select` from `gold` and nothing else, including tables dbt
-recreates later: that is the login BI tools use. Change `PFP_PG_BI_PASSWORD` after the volume exists
-and it is ignored: `make poc-down` (removes the volume) and `make pg-up` again. `make pg-down` only
-stops it.
+(password `PFP_PG_BI_PASSWORD`; its sessions are read-only), which can connect and `select` from
+`gold` and nothing else, including tables dbt recreates later (`postgres/grants.sql`): that is the
+login BI tools use. It can still see table and column *names* in Postgres's catalog, not their data.
+The role exists only in a volume created by this version: with an older volume, or after changing
+`PFP_PG_BI_PASSWORD`, run `make poc-down` (removes the volume, lake included) and `make pg-up` again.
+`make pg-down` only stops Postgres.
+
+The `edr` CLI (`elementary:` profile) still reads `dbt/pfp.duckdb`; on the Postgres target point
+`PFP_DUCKDB_PATH` at `dbt/elementary.duckdb` (T28 tidies this).
 
 `make check-task` doesn't cover this: dbt reads bronze's Delta tables straight off local S3, so
 it needs SeaweedFS running and `.env` exported into the shell. `profiles.yml` lives inside the

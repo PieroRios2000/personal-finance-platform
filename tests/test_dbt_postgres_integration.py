@@ -177,7 +177,8 @@ def test_the_bi_role_reads_gold_only_and_keeps_doing_so_after_a_rebuild(
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             reader.execute("select count(*) from silver.transactions")
         reader.rollback()
-        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        # Read-only sessions: a write fails before privileges are checked.
+        with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
             reader.execute("create table gold.not_allowed (a int)")
         reader.rollback()
         with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
