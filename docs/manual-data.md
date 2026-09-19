@@ -28,11 +28,11 @@ names, account numbers or other personal data in any cell.
 | `cuenta` | The account's name, always written the same way |
 | `fecha` | Date of the movement |
 | `descripcion` | Short text (deposit, interest, ...) |
-| `monto` | Signed: positive when money comes in, negative when it goes out |
+| `monto` | Signed (negative when money goes out) or unsigned: an unsigned amount whose balance went down is read as a withdrawal |
 | `moneda` | `PEN` or `USD` |
 | `saldo_final` | The account's balance after that movement |
 
-**A month with no movements** still needs one row: `descripcion` = `cierre de mes`, `monto` = 0
+Every row's balance must equal the previous row's balance plus or minus its amount; if it does not, the import stops and names the row (never the values). **A month with no movements** still needs one row: `descripcion` = `cierre de mes`, `monto` = 0
 and the balance at month end. That is how the platform knows the month exists and how it closed
 (months are checked one statement per account and month, like the PDFs). A row with amount 0 is a
 balance marker, not a transaction.
@@ -61,8 +61,23 @@ If a fund charges a fee or there are taxes, say so: a `comision` column would be
 - **Investments** are tracked separately to see each fund's return month by month. They are not
   part of the savings goal ([ADR 0027](../brain/decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md)).
 
-The importer that reads the workbook is not built yet. Its design starts from a **masked** description
-of your real file that you review before anyone reads it, the same loop the PDF parsers went
+## Loading it
+
+```bash
+uv run pfp import-manual ~/finance-data/manual/finanzas-manual.xlsx   # needs .env (PFP_USER, PFP_ACCOUNT_KEY, LAKEHOUSE_URI)
+```
+
+The `Ahorros` sheet is loaded into bronze; then run the pipeline as usual (`dbt build`). It is safe
+to run again and again: each account-month is **replaced**, not added, so you can keep adding rows
+to the same workbook and reload it, and correct an old row and reload. If any row does not
+reconcile the import stops and writes nothing, naming the row (never the values). The `Inversiones`
+sheet is not loaded yet.
+
+## How it was designed
+
+The importer was built from the template's structure and checked against a real workbook by
+counting (rows, months, problems), never by printing values. When something needs adjusting, the
+**masked** description below is what you review and share, the same loop the PDF parsers went
 through:
 
 ```bash

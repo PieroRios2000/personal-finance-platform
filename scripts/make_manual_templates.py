@@ -74,7 +74,8 @@ _INSTRUCTIONS = (
     "cuenta: el nombre de la cuenta, escrito siempre igual.",
     "fecha: la fecha del movimiento.",
     "descripcion: texto corto del movimiento (deposito, intereses, ...).",
-    "monto: con signo. Positivo si entra dinero, negativo si sale.",
+    "monto: puede ir con signo (negativo si sale dinero) o sin signo: el sentido se "
+    "lee del saldo (si el saldo baja, fue un retiro).",
     "moneda: PEN o USD.",
     "saldo_final: el saldo de la cuenta despues de ese movimiento.",
     "cierre de mes: si en un mes no hubo movimientos, agrega una fila con "

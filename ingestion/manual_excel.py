@@ -8,9 +8,12 @@ docs/manual-data.md). Rules that follow from that:
 - One statement per account, currency and calendar month. A month with no
   movements is a `cierre de mes` row (amount 0): a balance marker, not a
   transaction (`Transaction` rejects a zero amount, ADR 0005).
-- Each row's `saldo_final` must be the previous row's plus its `monto`. That is
-  the reconciliation for this source: a mistyped balance or amount is reported,
-  not absorbed. Between months, dbt's continuity test checks the same thing.
+- Each row's `saldo_final` must be the previous row's plus or minus its
+  `monto`. That is the reconciliation for this source: a mistyped balance or
+  amount is reported, not absorbed. An amount typed as a positive number whose
+  balance went down is a withdrawal (people type them unsigned); a negative
+  amount is taken as typed. The first row of an account has no previous balance
+  and is taken as typed. Between months, dbt's continuity test checks the same thing.
 - A month's identity (the `file_sha256` bronze keys it on) comes from user,
   account, currency and month, **not** from its content, so loading a corrected
   workbook *replaces* that month (`bronze.replace_statement`) and loading the
@@ -25,7 +28,7 @@ returns statements and the CLI writes them.
 
 import calendar
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -178,16 +181,27 @@ def read_savings(path: Path, *, user_id: str) -> SavingsImport:
         group = sorted(group, key=lambda r: r.day)  # stable: sheet order within a day
         previous: Decimal | None = None
         broken = False
+        signed: list[_Row] = []
         for row in group:
-            if previous is not None and row.balance != previous + row.amount:
-                result.problems.append(
-                    f"{SHEET} row {row.number}: "
-                    "the balance does not follow the previous one"
-                )
-                broken = True
+            amount = row.amount
+            if previous is not None:
+                if row.balance == previous + amount:
+                    pass
+                elif amount > 0 and row.balance == previous - amount:
+                    # Typed unsigned (a withdrawal as a positive number): the
+                    # balance says which way the money went.
+                    amount = -amount
+                else:
+                    result.problems.append(
+                        f"{SHEET} row {row.number}: "
+                        "the balance does not follow the previous one"
+                    )
+                    broken = True
+            signed.append(replace(row, amount=amount))
             previous = row.balance
         if broken:
             continue
+        group = signed
         account_id = hash_account(account, account)
         by_month: dict[tuple[int, int], list[_Row]] = {}
         for row in group:
