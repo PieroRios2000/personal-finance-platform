@@ -67,11 +67,11 @@ If a fund charges a fee or there are taxes, say so: a `comision` column would be
 uv run pfp import-manual ~/finance-data/manual/finanzas-manual.xlsx   # needs .env (PFP_USER, PFP_ACCOUNT_KEY, LAKEHOUSE_URI)
 ```
 
-The `Ahorros` sheet is loaded into bronze; then run the pipeline as usual (`dbt build`). It is safe
+Both sheets are loaded into bronze (`Ahorros` as statements, `Inversiones` as its own table); then run the pipeline as usual (`dbt build`). It is safe
 to run again and again: each account-month is **replaced**, not added, so you can keep adding rows
 to the same workbook and reload it, and correct an old row and reload. If any row does not
 reconcile the import stops and writes nothing, naming the row (never the values). The `Inversiones`
-sheet is not loaded yet.
+sheet is optional: a workbook without it loads only the savings.
 
 **Things to know**
 
