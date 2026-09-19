@@ -157,7 +157,8 @@ Every parser validates that the sum of the extracted transactions matches the ba
 
 ### Phase 6 — Savings-goal projection *(planned, added 2026-09-19)*
 **Goal:** answer "given my real cash flow, how long until I reach my savings goal?"
-- Banco Ripley as a third bank (the owner's savings account, in soles): its own parser, calibrated against real statements like the other two.
+- Banco Ripley as a third source (the owner's savings account, in soles). It gives no statements, so its movements come from a **manual Excel** typed month by month, with the same reconciliation rules ([ADR 0027](brain/decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md), [`docs/manual-data.md`](docs/manual-data.md)).
+- **Investment tracking** (three Tyba funds and Flip), from a second sheet of the same Excel: contributions, withdrawals and month-end valuations, to see each fund's monthly return. Tracked separately from the goal.
 - A projection over the gold tables: time to reach a target amount (in soles or dollars) at the observed monthly flow, leaving out transfers between the owner's own accounts.
 - A **sol/dólar exchange-rate projection** section so dollar accounts and dollar goals can be converted. It exists **only in this phase**: bronze, silver and gold keep never converting currencies; the projection converts on its own, on top of gold.
 - **Scope decision:** only liquid money in bank accounts counts. Investments held on other platforms (mutual funds) are long term and market-dependent, so they are deliberately not part of the goal or the flow ([ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md)).

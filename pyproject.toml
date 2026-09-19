@@ -8,6 +8,7 @@ dependencies = [
     "dbt-duckdb>=1.11.0",
     "deltalake>=1.6.3",
     "duckdb>=1.5.5",
+    "openpyxl>=3.1.5",
     "pdfplumber>=0.11.10",
     "pikepdf>=10.13.0.post1",
     "pyarrow>=25.0.1",
@@ -50,6 +51,7 @@ dev = [
     "ruff>=0.16.7",
     "sqlfluff>=4.3.0",
     "sqlfluff-templater-dbt>=4.3.0",
+    "types-openpyxl>=3.1.5.20260827",
 ]
 
 [tool.ruff.lint]

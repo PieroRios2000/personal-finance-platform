@@ -93,7 +93,7 @@ date or an amount wrong while the balances still add up.
 
 | Phase | What |
 |---|---|
-| 6 — Savings-goal projection | Banco Ripley as a third bank, then a projection of how long it takes to reach a savings goal at the owner's real cash flow. Goals can be in soles or dollars, with a sol/dólar exchange-rate projection that exists only in this phase (the lake itself never converts currencies). Only liquid money in bank accounts counts; investments elsewhere (mutual funds) are deliberately left out — [ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md) |
+| 6 — Savings-goal projection | Banco Ripley savings and investment tracking through a manual Excel ([template and columns](docs/manual-data.md)), then a projection of how long it takes to reach a savings goal at the owner's real cash flow. Goals can be in soles or dollars, with a sol/dólar exchange-rate projection that exists only in this phase (the lake itself never converts currencies). Only liquid money in bank accounts counts; investments elsewhere (mutual funds) are deliberately left out — [ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md) |
 
 
 The order of what is next is in [`tasks/backlog.md`](tasks/backlog.md).
