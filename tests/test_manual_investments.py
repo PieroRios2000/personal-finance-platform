@@ -195,3 +195,32 @@ def test_different_columns_are_a_clear_problem(tmp_path: Path) -> None:
     assert read_investments(tmp_path / "f.xlsx", user_id="piero").problems == [
         "Inversiones: the columns are not the template's"
     ]
+
+
+def test_a_file_that_is_not_a_workbook_is_a_clear_problem(tmp_path: Path) -> None:
+    path = tmp_path / "f.xlsx"
+    path.write_text("not a zip")
+
+    assert read_investments(path, user_id="piero").problems == [
+        "the file is not a readable .xlsx workbook"
+    ]
+
+
+def test_a_month_that_cannot_be_built_is_a_value_free_problem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(**kwargs: Any) -> None:
+        raise ValueError("would quote 1234.56")
+
+    monkeypatch.setattr("ingestion.manual_excel.InvestmentMonth", refuse)
+
+    result = read_investments(
+        _workbook(tmp_path / "f.xlsx", _TWO_MONTHS), user_id="piero"
+    )
+
+    assert result.months == []
+    assert "1234.56" not in " ".join(result.problems)
+    assert (
+        result.problems[0]
+        == "Inversiones row 2: the month could not be built (invalid values)"
+    )

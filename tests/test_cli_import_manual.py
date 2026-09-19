@@ -201,3 +201,39 @@ def test_a_problem_in_the_investments_stops_the_savings_from_loading_too(
     assert code == 1
     assert "Inversiones row 2: tipo must be" in capsys.readouterr().err
     assert not (env / "bronze").exists()
+
+
+def test_months_without_a_valuation_and_missing_months_are_reported_as_counts(
+    tmp_path: Path, env: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rows: list[tuple[object, ...]] = [
+        ("Fondo A", date(2026, 7, 5), "aporte", 100.0, "PEN", 100.0, None),
+        ("Fondo A", date(2026, 9, 5), "aporte", 100.0, "PEN", 205.0, None),
+    ]
+    workbook = _with_investments(_workbook(tmp_path / "f.xlsx", _ROWS), rows)
+
+    cli.main(["import-manual", str(workbook)])
+
+    out = capsys.readouterr().out
+    assert "Inversiones: 2 month(s) without a valuation" in out
+    assert "Inversiones: 1 month(s) missing between the first and last" in out
+
+
+def test_a_workbook_without_an_investments_sheet_says_nothing_was_loaded(
+    tmp_path: Path, env: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cli.main(["import-manual", str(_workbook(tmp_path / "f.xlsx", _ROWS))])
+
+    assert "Inversiones: nothing to load" in capsys.readouterr().out
+
+
+def test_an_unreadable_workbook_is_reported_once(
+    tmp_path: Path, env: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "f.xlsx"
+    path.write_text("not a zip")
+
+    code = cli.main(["import-manual", str(path)])
+
+    assert code == 1
+    assert capsys.readouterr().err.count("not a readable .xlsx workbook") == 1

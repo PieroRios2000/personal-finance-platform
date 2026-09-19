@@ -7,7 +7,6 @@ suite). Run with `pytest -m integration`.
 
 import hashlib
 import os
-from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -17,34 +16,16 @@ import pytest
 
 from ingestion.schema import Currency, InvestmentEntry, InvestmentKind, InvestmentMonth
 from lakehouse import bronze
-from tests.test_dbt_silver_integration import (
-    _TEST_LAKE_SUFFIX,
-    _USER_ID,
-    _dbt_build,
-    _skip_reason,
-    _wipe_test_lake,
-)
+from tests.test_dbt_gold_integration import lake as _lake
+from tests.test_dbt_silver_integration import _USER_ID, _dbt_build
 
 pytestmark = pytest.mark.integration
 
 _SELECT = "fct_investment_monthly+ investment_entries"
 
 
-@pytest.fixture
-def lake() -> Iterator[str]:
-    reason = _skip_reason()
-    if reason:
-        pytest.skip(reason)
-
-    uri = f"{os.environ['LAKEHOUSE_URI'].rstrip('/')}/{_TEST_LAKE_SUFFIX}"
-    previous = os.environ["LAKEHOUSE_URI"]
-    os.environ["LAKEHOUSE_URI"] = uri
-    try:
-        _wipe_test_lake()
-        yield uri
-        _wipe_test_lake()
-    finally:
-        os.environ["LAKEHOUSE_URI"] = previous
+# The same wiped, per-worker test lake every dbt integration file uses.
+lake = _lake
 
 
 def _month(
@@ -223,3 +204,142 @@ def test_the_first_months_opening_is_the_balance_before_the_first_movement(
 
     assert january["opening_balance"] == Decimal("510.00")
     assert january["gain"] == Decimal("2.00")
+    # 510 already there + 100 put in = 610 net contributed; 612 - 610 earned
+    assert january["cumulative_net_contributed"] == Decimal("610.00")
+    assert january["cumulative_gain"] == Decimal("2.00")
+
+
+def test_a_lake_with_no_investments_still_builds_with_empty_tables(
+    lake: str, tmp_path: Path
+) -> None:
+    """The bronze table only exists once an investments sheet has been loaded."""
+    result = _dbt_build(tmp_path, select=_SELECT)
+
+    assert result.returncode == 0, result.stdout
+    assert _rows(tmp_path) == {}
+
+
+def test_a_trailing_slash_in_the_lake_uri_still_finds_the_table(
+    lake: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _month(
+        "Fondo E",
+        2026,
+        1,
+        [(5, "aporte", "100", "100"), (31, "valorizacion", "0", "101")],
+    )
+    monkeypatch.setenv("LAKEHOUSE_URI", os.environ["LAKEHOUSE_URI"] + "/")
+
+    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+
+    assert ("Fondo E", "PEN", 1) in _rows(tmp_path)
+
+
+def test_a_flow_on_the_last_day_has_no_weight_and_a_zero_capital_has_no_return(
+    lake: str, tmp_path: Path
+) -> None:
+    """Opening 0 and the only contribution on the last day: nothing was invested
+    during the month, so there is no capital to earn a return on."""
+    _month(
+        "Fondo F",
+        2026,
+        1,
+        [(31, "aporte", "100", "100"), (31, "valorizacion", "0", "100")],
+    )
+
+    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    january = _rows(tmp_path)[("Fondo F", "PEN", 1)]
+
+    assert january["return_pct"] is None
+    assert january["is_return_reliable"] is False
+
+
+def test_the_closing_balance_must_be_a_valuation_to_count(
+    lake: str, tmp_path: Path
+) -> None:
+    """A valuation on day 3 followed by a contribution on day 10: the month
+    closes at 'the balance after the last movement', not at a valuation."""
+    _month(
+        "Fondo G",
+        2026,
+        1,
+        [(3, "valorizacion", "0", "100"), (10, "aporte", "10", "112")],
+    )
+
+    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    january = _rows(tmp_path)[("Fondo G", "PEN", 1)]
+
+    assert january["has_valuation"] is False
+    assert january["return_pct"] is None
+
+
+def test_same_day_rows_are_ordered_by_their_row_in_the_sheet(
+    lake: str, tmp_path: Path
+) -> None:
+    """A contribution and a valuation on the same day: the later row is the
+    closing one."""
+    _month(
+        "Fondo H",
+        2026,
+        1,
+        [(31, "aporte", "10", "110"), (31, "valorizacion", "0", "111")],
+    )
+    _month(
+        "Fondo I",
+        2026,
+        1,
+        [(31, "valorizacion", "0", "111"), (31, "aporte", "10", "121")],
+    )
+
+    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    rows = _rows(tmp_path)
+
+    assert rows[("Fondo H", "PEN", 1)]["closing_balance"] == Decimal("111.00")
+    assert rows[("Fondo I", "PEN", 1)]["closing_balance"] == Decimal("121.00")
+
+
+def test_a_first_month_with_only_a_valuation_is_not_a_return(
+    lake: str, tmp_path: Path
+) -> None:
+    """No flow marks where the fund starts: gain 0 would read as a 0% month."""
+    _month("Fondo J", 2026, 1, [(31, "valorizacion", "0", "500")])
+
+    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    january = _rows(tmp_path)[("Fondo J", "PEN", 1)]
+
+    assert january["is_return_reliable"] is False
+    assert january["return_pct"] is None
+
+
+def test_a_month_with_only_a_valuation_after_a_first_month_is_a_real_return(
+    lake: str, tmp_path: Path
+) -> None:
+    _month(
+        "Fondo K",
+        2026,
+        1,
+        [(5, "aporte", "100", "100"), (31, "valorizacion", "0", "100")],
+    )
+    _month("Fondo K", 2026, 2, [(28, "valorizacion", "0", "103")])
+
+    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    february = _rows(tmp_path)[("Fondo K", "PEN", 2)]
+
+    assert february["gain"] == Decimal("3.00")
+    assert round(float(february["return_pct"]), 4) == 0.03
+    assert february["is_return_reliable"] is True
+
+
+def test_a_return_after_a_missing_month_is_not_shown(lake: str, tmp_path: Path) -> None:
+    _month(
+        "Fondo L",
+        2026,
+        1,
+        [(5, "aporte", "100", "100"), (31, "valorizacion", "0", "101")],
+    )
+    _month("Fondo L", 2026, 3, [(31, "valorizacion", "0", "103")])
+
+    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    march = _rows(tmp_path)[("Fondo L", "PEN", 3)]
+
+    assert march["return_pct"] is None
