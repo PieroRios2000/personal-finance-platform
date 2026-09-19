@@ -132,17 +132,25 @@ def test_cumulative_figures_track_net_contributions_and_total_gain(
     assert february["cumulative_gain"] == Decimal("4.00")
 
 
-def test_a_month_without_a_valuation_has_no_reliable_return(
+def test_a_month_without_a_valuation_uses_the_last_balance_and_says_so(
     lake: str, tmp_path: Path
 ) -> None:
+    """Until the owner types month-end valuations, the last balance of the month
+    is its closing balance: the return is shown, and `closing_basis` tells it
+    apart from a month closed by a real valuation."""
     _seed_fund_a()
 
     assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
-    march = _rows(tmp_path)[("Fondo A", "PEN", 3)]
+    rows = _rows(tmp_path)
+    march = rows[("Fondo A", "PEN", 3)]
 
     assert march["has_valuation"] is False
-    assert march["return_pct"] is None
-    assert march["is_return_reliable"] is False
+    assert march["closing_basis"] == "last_movement"
+    assert march["gain"] == Decimal("1.00")
+    # 1 / (54 + 10 * (31 - 10) / 31)
+    assert round(float(march["return_pct"]), 4) == 0.0165
+    assert march["is_return_reliable"] is True
+    assert rows[("Fondo A", "PEN", 1)]["closing_basis"] == "valuation"
 
 
 def test_a_missing_month_makes_the_next_return_unreliable(
@@ -254,11 +262,12 @@ def test_a_flow_on_the_last_day_has_no_weight_and_a_zero_capital_has_no_return(
     assert january["is_return_reliable"] is False
 
 
-def test_the_closing_balance_must_be_a_valuation_to_count(
+def test_a_valuation_followed_by_a_contribution_closes_at_the_last_movement(
     lake: str, tmp_path: Path
 ) -> None:
     """A valuation on day 3 followed by a contribution on day 10: the month
-    closes at 'the balance after the last movement', not at a valuation."""
+    closes at 'the balance after the last movement', not at a valuation. Being
+    the fund's first month with a valuation as its first row, no return."""
     _month(
         "Fondo G",
         2026,
@@ -270,6 +279,7 @@ def test_the_closing_balance_must_be_a_valuation_to_count(
     january = _rows(tmp_path)[("Fondo G", "PEN", 1)]
 
     assert january["has_valuation"] is False
+    assert january["closing_basis"] == "last_movement"
     assert january["return_pct"] is None
 
 
