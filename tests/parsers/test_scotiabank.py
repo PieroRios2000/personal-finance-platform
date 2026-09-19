@@ -388,3 +388,92 @@ def test_default_movements_cover_both_currencies() -> None:
     testing less than they claim to."""
     currencies = {m.currency for m in DEFAULT_SCOTIABANK_MOVEMENTS}
     assert currencies == {"PEN", "USD"}
+
+
+def _card_pdf(*, totals: list[tuple[int, str, list[tuple[int, str]]]]) -> bytes:
+    """A one-page card statement (opening 500.00 PEN and 10.00 USD, one 50.00
+    PEN charge) plus extra lines: `(y, label, [(x, text), ...])`."""
+    from fpdf import FPDF
+
+    pdf = FPDF(unit="pt")
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=9)
+    pdf.text(40, 20, "00000000")
+    pdf.text(140, 20, "0000-0000-****-0000")
+    pdf.text(40, 50, "PERIODO DE TARJETA DEL 05-01-2026 AL 05-01-2026")
+    pdf.text(40, 70, "Saldo Anterior")
+    pdf.text(451, 70, "500.00")
+    pdf.text(520, 70, "10.00")
+    pdf.text(40, 100, "Fecha")
+    pdf.text(140, 100, "Fecha")
+    pdf.text(240, 100, "Descripción")
+    pdf.text(451, 110, "Soles")
+    pdf.text(520, 110, "Dólares")
+    pdf.text(40, 130, "04/01/26")
+    pdf.text(140, 130, "05/01/26")
+    pdf.text(240, 130, "COMPRA FICTICIA")
+    pdf.text(451, 130, "50.00")
+    for y, label, cells in totals:
+        pdf.text(40, y, label)
+        for x, text in cells:
+            pdf.text(x, y, text)
+    return bytes(pdf.output())
+
+
+def _parse_card(tmp_path: Path, data: bytes) -> dict[str, Decimal]:
+    path = tmp_path / "card.pdf"
+    path.write_bytes(data)
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+    return {s.currency: s.closing_balance for s in statements}
+
+
+def test_parse_without_a_total_line_uses_the_computed_closing_balance(
+    tmp_path: Path,
+) -> None:
+    assert _parse_card(tmp_path, _card_pdf(totals=[])) == {
+        "PEN": Decimal("550.00"),
+        "USD": Decimal("10.00"),
+    }
+
+
+def test_parse_ignores_a_prose_line_that_merely_contains_total(
+    tmp_path: Path,
+) -> None:
+    """Only a line that is a label, "Total", and amounts is a Total line: a
+    sentence with the word and a figure must not become the declared closing."""
+    data = _card_pdf(
+        totals=[
+            (150, "Sub Total", [(451, "550.00"), (520, "10.00")]),
+            (170, "Total de la deuda vencida", [(451, "999.99")]),
+        ]
+    )
+
+    assert _parse_card(tmp_path, data)["PEN"] == Decimal("550.00")
+
+
+def test_parse_takes_the_closing_from_the_last_total_line_only(
+    tmp_path: Path,
+) -> None:
+    """A currency missing from the last Total line is not filled in from an
+    earlier one (a stale, non-closing figure): it falls back to the computed
+    balance instead of failing the statement."""
+    data = _card_pdf(
+        totals=[
+            (150, "Sub Total", [(451, "123.45"), (520, "77.77")]),
+            (170, "Sub Total", [(451, "550.00")]),
+        ]
+    )
+
+    assert _parse_card(tmp_path, data) == {
+        "PEN": Decimal("550.00"),
+        "USD": Decimal("10.00"),
+    }
+
+
+def test_parse_skips_a_saldo_anterior_prose_line_without_amounts(
+    tmp_path: Path,
+) -> None:
+    """A dashboard sentence printed before the real line must not shadow it."""
+    data = _card_pdf(totals=[(60, "saldo del mes anterior", [])])
+
+    assert _parse_card(tmp_path, data)["PEN"] == Decimal("550.00")
