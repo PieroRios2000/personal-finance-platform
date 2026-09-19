@@ -233,3 +233,31 @@ models:
           - accepted_values:
               arguments:
                 values: ["asset", "liability"]
+
+  - name: investment_entries
+    description: >
+      Silver (ADR 0028): the manual Excel's investment rows, typed and with the
+      month they belong to. Empty (same columns) until a workbook with an
+      `Inversiones` sheet is loaded. Not part of `silver.transactions`:
+      investments are not spending or income and do not count toward the
+      savings goal (ADR 0025).
+    columns:
+      - name: kind
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["aporte", "retiro", "valorizacion"]
+      - name: currency
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["PEN", "USD"]
+      - name: place
+        data_tests:
+          - not_null
+      - name: month_start
+        data_tests:
+          - not_null
+      - name: balance
+        data_tests:
+          - not_null

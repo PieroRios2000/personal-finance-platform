@@ -22,7 +22,7 @@ from typing import Any
 import pyarrow as pa
 from deltalake import DeltaTable, write_deltalake
 
-from ingestion.schema import Statement
+from ingestion.schema import InvestmentMonth, Statement
 from lakehouse.storage import storage_options, table_uri
 
 _MONEY = pa.decimal128(18, 2)
@@ -57,6 +57,26 @@ _STATEMENTS_SCHEMA = pa.schema(
         ("account_kind", pa.string()),
         ("currency", pa.string()),
         ("file_sha256", pa.string()),
+        ("ingested_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
+
+# ADR 0028: the manual Excel's investments. Not statements or transactions: an
+# investment's balance moves with the market, so its rows are kept as they are
+# typed, and `month_key` (one per fund, currency and month, independent of the
+# content) is what a corrected workbook replaces.
+_INVESTMENT_ENTRIES_SCHEMA = pa.schema(
+    [
+        ("user_id", pa.string()),
+        ("place", pa.string()),
+        ("currency", pa.string()),
+        ("entry_date", pa.date32()),
+        ("kind", pa.string()),
+        ("amount", _MONEY),
+        ("balance", _MONEY),
+        ("detail", pa.string()),
+        ("sheet_row", pa.int32()),
+        ("month_key", pa.string()),
         ("ingested_at", pa.timestamp("us", tz="UTC")),
     ]
 )
@@ -251,3 +271,28 @@ def replace_statement(statement: Statement, file_sha256: str) -> None:
     )
     _delete_file_rows("statements", "file_sha256", statement.user_id, file_sha256)
     write_statement(statement, file_sha256)
+
+
+def replace_investment_month(month: InvestmentMonth) -> None:
+    """Replace whatever an earlier load of this fund-month wrote with `month`'s
+    rows (ADR 0028): delete by `(user_id, month_key)`, then append. Loading the
+    same month again therefore changes nothing but the load time."""
+    _delete_file_rows("investment_entries", "month_key", month.user_id, month.month_key)
+    ingested_at = datetime.now(UTC)
+    rows = [
+        {
+            "user_id": month.user_id,
+            "place": month.place,
+            "currency": month.currency,
+            "entry_date": entry.date,
+            "kind": entry.kind,
+            "amount": entry.amount,
+            "balance": entry.balance,
+            "detail": entry.detail,
+            "sheet_row": entry.position,
+            "month_key": month.month_key,
+            "ingested_at": ingested_at,
+        }
+        for entry in month.entries
+    ]
+    _append("investment_entries", _INVESTMENT_ENTRIES_SCHEMA, rows)

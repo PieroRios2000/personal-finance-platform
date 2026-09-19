@@ -77,7 +77,7 @@ def _wipe_test_lake() -> None:
     from deltalake import DeltaTable
 
     options = storage_options()
-    for name in ("transactions", "statements", "ingested_files"):
+    for name in ("transactions", "statements", "ingested_files", "investment_entries"):
         uri = table_uri(name)
         assert _TEST_LAKE_SUFFIX in uri
         if DeltaTable.is_deltatable(uri, storage_options=options):

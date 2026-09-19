@@ -149,16 +149,15 @@ Every parser validates that the sum of the extracted transactions matches the ba
 
 ### Phase 5 — Serving + Uploader
 **Goal:** make the repo demonstrable and operable.
-- Streamlit dashboard over the gold tables.
-- Minimal uploader (`st.file_uploader`) → saves to SeaweedFS → triggers the pipeline.
-- (Optional) Power BI connection.
+- A dashboard over the gold tables, in an **open-source, zero-cost BI tool** (the owner will not use Power BI, 2026-09-19): spending and income, savings, and each investment's monthly return. Apache Superset is the proposal, with Metabase and Streamlit as alternatives; **the choice is still open** (see [`tasks/backlog.md`](tasks/backlog.md)).
+- Minimal uploader (`st.file_uploader`) → saves to SeaweedFS → triggers the pipeline; a form to type the manual Excel's movements and balances could live here too.
 
 **Closes:** end-to-end delivery, a showcase for recruiters.
 
 ### Phase 6 — Savings-goal projection *(planned, added 2026-09-19)*
 **Goal:** answer "given my real cash flow, how long until I reach my savings goal?"
 - Banco Ripley as a third source (the owner's savings account, in soles). It gives no statements, so its movements come from a **manual Excel** typed month by month, with the same reconciliation rules ([ADR 0027](brain/decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md), [`docs/manual-data.md`](docs/manual-data.md)).
-- **Investment tracking** (three Tyba funds and Flip), from a second sheet of the same Excel: contributions, withdrawals and month-end valuations, to see each fund's monthly return. Tracked separately from the goal.
+- **Investment tracking** (three Tyba funds and Flip), from a second sheet of the same Excel: contributions, withdrawals and month-end valuations, to see each fund's monthly return (Modified Dietz, `gold.fct_investment_monthly`, [ADR 0028](brain/decisions/0028-investment-return-is-modified-dietz-per-fund-and-month.md)). Tracked separately from the goal. **Built.**
 - A projection over the gold tables: time to reach a target amount (in soles or dollars) at the observed monthly flow, leaving out transfers between the owner's own accounts.
 - A **sol/dólar exchange-rate projection** section so dollar accounts and dollar goals can be converted. It exists **only in this phase**: bronze, silver and gold keep never converting currencies; the projection converts on its own, on top of gold.
 - **Scope decision:** only liquid money in bank accounts counts. Investments held on other platforms (mutual funds) are long term and market-dependent, so they are deliberately not part of the goal or the flow ([ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md)).
