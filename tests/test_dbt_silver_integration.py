@@ -376,12 +376,12 @@ def test_a_statement_starting_two_days_after_the_previous_one_ended_passes(
     assert result.returncode == 0, result.stdout
 
 
-def test_a_gap_of_several_days_still_fails_even_with_matching_balances(
+def test_a_gap_of_four_days_still_fails_even_with_matching_balances(
     lake: str, tmp_path: Path
 ) -> None:
     """The tolerance is for a bank's cycle cut-off, not for a missing period:
-    a week without a statement fails."""
-    _write(date(2026, 1, 1), date(2026, 1, 24), "1000.00", "-100.00")
+    four days without a statement fails (three is the last that passes)."""
+    _write(date(2026, 1, 1), date(2026, 1, 28), "1000.00", "-100.00")
     _write(*_FEBRUARY)
 
     failed = _dbt_build(tmp_path)
@@ -403,3 +403,26 @@ def test_a_movement_dated_before_its_statements_period_is_not_a_reconciliation_f
     result = _dbt_build(tmp_path)
 
     assert result.returncode == 0, result.stdout
+
+
+def test_a_gap_of_exactly_the_tolerance_passes(lake: str, tmp_path: Path) -> None:
+    _write(date(2026, 1, 1), date(2026, 1, 29), "1000.00", "-100.00")
+    _write(*_FEBRUARY)
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_overlapping_periods_fail_even_with_matching_balances(
+    lake: str, tmp_path: Path
+) -> None:
+    """The lower bound of the tolerance: a statement that starts before the
+    previous one ended (or the same day) is never a cycle cut-off."""
+    _write(date(2026, 1, 1), date(2026, 2, 5), "1000.00", "-100.00")
+    _write(*_FEBRUARY)
+
+    failed = _dbt_build(tmp_path)
+
+    assert failed.returncode != 0, failed.stdout
+    assert "assert_statement_continuity" in failed.stdout
