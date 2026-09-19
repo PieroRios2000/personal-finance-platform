@@ -82,25 +82,22 @@ Everything above came directly from the masked dump or from Piero's explicit ans
 identification: "es un código de cliente/producto"; multi-currency: "un PDF puede producir
 varios Statements"; credit-card semantics: "no tiene saldo contable sino saldo de deuda").
 
-**One piece did not come from confirmed data: no independently-declared closing/total-debt
-figure was identifiable anywhere in the dump.** `SALDO`, `ANTERIOR`, `ACTUAL`, `FINAL`,
-`DISPONIBLE` and `CONTABLE` are all words T9's masking tool leaves unmasked when present, and
-only `SALDO ANTERIOR` ever showed up — the true total-debt figure almost certainly lives on the
-statement's first, dashboard-style summary page, under labels (credit limit, minimum payment,
-"deuda total" or similar) that were never confirmed and are out of scope here.
+**The closing balance (corrected against real statements, 2026-09).** The first version had no
+independently declared closing figure and summed every `Total` line as a page subtotal. Real
+statements showed otherwise: the **last** `Total` line, per currency, is the closing balance
+(it equals `Saldo Anterior` plus every transaction of that currency), and the `Total` lines of
+earlier pages are something else. `parse()` now compares that last `Total` with the opening
+balance plus its own transaction sum and raises `ValueError` on a mismatch, so a dropped row
+cannot pass silently (`reconcile()` itself stays tautological here: the closing balance it
+checks is computed). A statement with no `Total` line falls back to the computed balance.
 
-So `closing_balance` is **computed** (opening balance plus that currency's own transactions),
-not checked against an independent number the way BCP's `SALDO ACTUAL` is — which means
-`reconcile()` can **never actually fail** for this parser; it's tautologically true by
-construction. The real protection is a separate, ad-hoc check: every `Total` line in the
-document (a generic word appearing once per real page, with one Soles and one Dólares figure
-next to it — read as that page's own subtotal) is summed per currency and compared against
-this parser's own transaction sum, raising `ValueError` on a mismatch.
+Two other things the real statements corrected, each with a regression test on a synthetic
+fixture: the label is title case (`Saldo Anterior`, not `SALDO ANTERIOR`), and some rows carry
+a tag such as `(abc:12)` to the right of the amount, which used to hide the amount because it was
+the last token of the currency cell.
 
-**This is the piece most likely to need a follow-up fix**, exactly like BCP's own five
-real-data rounds. It has not been run against Piero's real PDF; only he can do that (ADR 0004),
-using the same masked-dump-and-fix loop BCP went through — see
-[`test_scotiabank.py`](../../tests/parsers/test_scotiabank.py)'s `real_pdf`-marked test.
+Real statements in the *other* Scotiabank layout (a savings account: `FECHA`, `CONCEPTO`,
+`CARGO`, `ABONO`, `SALDO`) are not handled by this parser yet.
 
 ## Account kind (T18a)
 
