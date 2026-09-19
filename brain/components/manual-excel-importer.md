@@ -35,6 +35,12 @@ sheet is **not** imported yet (investment tracking is the next piece).
   adds the new ones; loading the same workbook again changes nothing. Checked end to end on the
   owner's real workbook: importing twice and running `dbt build` twice leaves the same gold rows
   and every dbt node passing (continuity by month, reconciliation by file, the silver merge).
+- **A month replaced by one with no transactions** (only a balance marker) leaves no stale rows
+  in silver: `purge_reprocessed_files` also deletes silver rows whose `source_file_sha256` bronze no
+  longer holds any transaction for (found in review; covered by an integration test). A month
+  **absent** from the workbook is deliberately not deleted, so a partial workbook is safe.
+- Cell values are never in a message: pydantic and reconciliation errors (which quote values) are
+  caught and reported as "the month could not be built (invalid values)" with the row.
 - **`cierre de mes`** (amount 0) marks a month without movements: a balance marker, not a
   transaction.
 - The account is identified by the name typed in the sheet (no account number exists), with

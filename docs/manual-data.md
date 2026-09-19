@@ -73,6 +73,23 @@ to the same workbook and reload it, and correct an old row and reload. If any ro
 reconcile the import stops and writes nothing, naming the row (never the values). The `Inversiones`
 sheet is not loaded yet.
 
+**Things to know**
+
+- A month that is **not in the workbook is left alone**, never deleted: you can load a workbook that
+  only has the newest months without touching the older ones. (There is no command to remove a
+  month yet; ask if you need one.)
+- The first row of each account has no previous balance to read its direction from: make it a
+  deposit (or a `cierre de mes`). An unsigned withdrawal typed *after* that is understood from the
+  balance; a deposit whose balance you mistyped as `previous - amount` would be read as a
+  withdrawal, so check the balances.
+- The account is identified by its **exact name** in `cuenta`: `Ripley` and `ripley` are two
+  accounts, and renaming one later starts a new account (the old months stay under the old name).
+- Amounts have at most 2 decimals. A formula cell must have been saved by Excel (open and save the
+  file): a formula with no saved value reads as empty. Hidden rows and columns are loaded.
+- Every import re-writes every month it reads (same content, new load time), so dbt re-merges that
+  slice each time; with a few hundred rows this is instant. The months are written one at a time:
+  if the process is interrupted, run the import again.
+
 ## How it was designed
 
 The importer was built from the template's structure and checked against a real workbook by
