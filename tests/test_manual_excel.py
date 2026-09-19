@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from ingestion.manual_excel import read_savings
 from openpyxl import Workbook
 
+from ingestion.manual_excel import SAVINGS_COLUMNS, read_savings
 from ingestion.reconciliation import reconcile
 from ingestion.schema import hash_account
-from scripts.make_manual_templates import SAVINGS_COLUMNS, write_template
+from scripts.make_manual_templates import write_template
 
 _ACCOUNT = "Ahorros Prueba"
 
@@ -35,7 +35,9 @@ def _workbook(path: Path, rows: list[tuple[Any, ...]]) -> Path:
     return path
 
 
-def _row(day: date, description: str, amount: str, balance: str, currency: str = "PEN"):
+def _row(
+    day: date, description: str, amount: str, balance: str, currency: str = "PEN"
+) -> tuple[Any, ...]:
     return (_ACCOUNT, day, description, float(amount), currency, float(balance))
 
 
@@ -112,7 +114,8 @@ def test_a_months_identity_does_not_depend_on_its_content(tmp_path: Path) -> Non
     corrected = [
         _row(date(2026, 7, 5), "deposito", "100.00", "100.00"),
         _row(date(2026, 7, 21), "intereses", "2.00", "102.00"),
-        *_TWO_MONTHS[2:],
+        _row(date(2026, 8, 10), "deposito", "50.00", "152.00"),
+        _row(date(2026, 8, 31), "cierre de mes", "0", "152.00"),
     ]
     second = read_savings(_workbook(tmp_path / "b.xlsx", corrected), user_id="piero")
 
@@ -239,4 +242,54 @@ def test_a_workbook_without_the_sheet_is_a_clear_problem(tmp_path: Path) -> None
 
     assert read_savings(tmp_path / "f.xlsx", user_id="piero").problems == [
         "the workbook has no 'Ahorros' sheet"
+    ]
+
+
+def test_an_unsigned_amount_takes_its_direction_from_the_balance_change(
+    tmp_path: Path,
+) -> None:
+    """People type withdrawals as positive numbers (as in the investments
+    sheet): the balance says which way the money went."""
+    rows = [
+        _row(date(2026, 7, 5), "deposito", "100.00", "100.00"),
+        _row(date(2026, 7, 10), "retiro", "30.00", "70.00"),
+        _row(date(2026, 7, 20), "intereses", "1.50", "71.50"),
+    ]
+
+    result = read_savings(_workbook(tmp_path / "f.xlsx", rows), user_id="piero")
+
+    assert result.problems == []
+    july = result.entries[0].statement
+    assert [t.amount for t in july.transactions] == [
+        Decimal("100.00"),
+        Decimal("-30.00"),
+        Decimal("1.50"),
+    ]
+    assert july.closing_balance == Decimal("71.50")
+
+
+def test_a_signed_negative_amount_is_still_accepted(tmp_path: Path) -> None:
+    rows = [
+        _row(date(2026, 7, 5), "deposito", "100.00", "100.00"),
+        _row(date(2026, 7, 10), "retiro", "-30.00", "70.00"),
+    ]
+
+    result = read_savings(_workbook(tmp_path / "f.xlsx", rows), user_id="piero")
+
+    assert result.problems == []
+    assert result.entries[0].statement.transactions[1].amount == Decimal("-30.00")
+
+
+def test_an_unsigned_amount_that_matches_neither_direction_is_still_a_problem(
+    tmp_path: Path,
+) -> None:
+    rows = [
+        _row(date(2026, 7, 5), "deposito", "100.00", "100.00"),
+        _row(date(2026, 7, 10), "retiro", "30.00", "65.00"),
+    ]
+
+    result = read_savings(_workbook(tmp_path / "f.xlsx", rows), user_id="piero")
+
+    assert result.problems == [
+        "Ahorros row 3: the balance does not follow the previous one"
     ]

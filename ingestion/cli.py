@@ -34,7 +34,7 @@ from pathlib import Path
 
 import pikepdf
 
-from ingestion import dispatcher, organizer
+from ingestion import dispatcher, manual_excel, organizer
 from ingestion.dedup import file_sha256
 from ingestion.reconciliation import ReconciliationError
 from ingestion.schema import MissingAccountKeyError
@@ -92,6 +92,45 @@ def _run_parse(args: argparse.Namespace) -> int:
         print(f"Period: {statement.period_start} to {statement.period_end}")
         print(f"Transactions: {len(statement.transactions)}")
         print("Reconciliation: OK")
+    return 0
+
+
+def _run_import_manual(args: argparse.Namespace) -> int:
+    workbook: Path = args.workbook
+    if not workbook.exists():
+        print("error: workbook not found", file=sys.stderr)
+        return 2
+    user_id: str | None = args.user
+    if not user_id:
+        print("error: --user is required (or set PFP_USER)", file=sys.stderr)
+        return 2
+    try:
+        lakehouse_uri()
+    except MissingLakehouseURIError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    try:
+        savings = manual_excel.read_savings(workbook, user_id=user_id)
+    except MissingAccountKeyError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    if savings.problems:
+        for problem in savings.problems:
+            print(f"error: {problem}", file=sys.stderr)
+        print("nothing was written", file=sys.stderr)
+        return 1
+    for entry in savings.entries:
+        bronze.replace_statement(entry.statement, entry.file_sha256)
+    print(
+        f"Ahorros: {len(savings.entries)} statement(s) written "
+        f"(a month already loaded is replaced, not added)"
+    )
+    if savings.missing_months:
+        print(
+            f"Ahorros: {savings.missing_months} month(s) missing "
+            "between the first and last"
+        )
+    print("Inversiones: not imported yet")
     return 0
 
 
@@ -333,6 +372,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--user", default=os.environ.get("PFP_USER"), help="defaults to $PFP_USER"
     )
     parse_cmd.set_defaults(func=_run_parse)
+
+    import_cmd = subparsers.add_parser(
+        "import-manual",
+        help="Load the manual Excel's savings sheet (Banco Ripley, ...) into "
+        "bronze; safe to run again with an updated workbook.",
+    )
+    import_cmd.add_argument("workbook", type=Path)
+    import_cmd.add_argument(
+        "--user", default=os.environ.get("PFP_USER"), help="defaults to $PFP_USER"
+    )
+    import_cmd.set_defaults(func=_run_import_manual)
 
     organize_cmd = subparsers.add_parser(
         "organize",

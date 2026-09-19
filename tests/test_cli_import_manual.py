@@ -1,6 +1,7 @@
 """`pfp import-manual`: the manual Excel's savings into bronze, safe to run
 again and again."""
 
+from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from deltalake import DeltaTable
 from openpyxl import Workbook
 
 from ingestion import cli
-from scripts.make_manual_templates import SAVINGS_COLUMNS
+from ingestion.manual_excel import SAVINGS_COLUMNS
 
 _ACCOUNT = "Ahorros Prueba"
 
@@ -23,7 +24,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return lake
 
 
-def _workbook(path: Path, rows: list[tuple[object, ...]]) -> Path:
+def _workbook(path: Path, rows: Sequence[tuple[object, ...]]) -> Path:
     workbook = Workbook()
     sheet = workbook.active
     assert sheet is not None
@@ -43,7 +44,8 @@ _ROWS: list[tuple[object, ...]] = [
 
 
 def _count(lake: Path, table: str) -> int:
-    return DeltaTable(str(lake / "bronze" / table)).to_pyarrow_table().num_rows
+    rows: int = DeltaTable(str(lake / "bronze" / table)).to_pyarrow_table().num_rows
+    return rows
 
 
 def test_the_savings_reach_bronze_and_the_report_has_counts_only(
