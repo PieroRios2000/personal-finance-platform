@@ -128,3 +128,76 @@ def test_a_missing_file_a_missing_user_and_a_missing_key_are_clear_errors(
     monkeypatch.delenv("PFP_ACCOUNT_KEY")
     assert cli.main(["import-manual", str(workbook)]) == 1
     assert "PFP_ACCOUNT_KEY" in capsys.readouterr().err
+
+
+_INVEST_HEADER = ["lugar", "fecha", "tipo", "monto", "moneda", "saldo_final", "nota"]
+
+
+def _with_investments(path: Path, rows: Sequence[tuple[object, ...]]) -> Path:
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(path)
+    sheet = workbook.create_sheet("Inversiones")
+    sheet.append(_INVEST_HEADER)
+    for row in rows:
+        sheet.append(list(row))
+    workbook.save(path)
+    return path
+
+
+_INVEST: list[tuple[object, ...]] = [
+    ("Fondo A", date(2026, 7, 5), "aporte", 100.0, "PEN", 100.0, "Detalle Secreto"),
+    ("Fondo A", date(2026, 7, 31), "valorizacion", 0, "PEN", 102.0, None),
+    ("Fondo A", date(2026, 8, 31), "valorizacion", 0, "PEN", 103.0, None),
+]
+
+
+def test_the_investments_sheet_is_loaded_too_with_counts_only(
+    tmp_path: Path, env: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    workbook = _with_investments(_workbook(tmp_path / "f.xlsx", _ROWS), _INVEST)
+
+    code = cli.main(["import-manual", str(workbook)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Inversiones: 2 month(s) written" in out
+    assert _count(env, "investment_entries") == 3
+    for private in ("Fondo A", "Detalle Secreto", "102"):
+        assert private not in out
+
+
+def test_loading_the_investments_again_replaces_the_months_it_holds(
+    tmp_path: Path, env: Path
+) -> None:
+    workbook = _with_investments(_workbook(tmp_path / "f.xlsx", _ROWS), _INVEST)
+    cli.main(["import-manual", str(workbook)])
+    cli.main(["import-manual", str(workbook)])
+
+    assert _count(env, "investment_entries") == 3
+
+    corrected = _with_investments(
+        _workbook(tmp_path / "g.xlsx", _ROWS),
+        [
+            ("Fondo A", date(2026, 7, 5), "aporte", 100.0, "PEN", 100.0, None),
+            ("Fondo A", date(2026, 7, 31), "valorizacion", 0, "PEN", 101.0, None),
+            ("Fondo A", date(2026, 8, 31), "valorizacion", 0, "PEN", 103.0, None),
+            ("Fondo A", date(2026, 9, 30), "valorizacion", 0, "PEN", 104.0, None),
+        ],
+    )
+    cli.main(["import-manual", str(corrected)])
+
+    assert _count(env, "investment_entries") == 4
+
+
+def test_a_problem_in_the_investments_stops_the_savings_from_loading_too(
+    tmp_path: Path, env: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bad = [("Fondo A", date(2026, 7, 5), "compra", 100.0, "PEN", 100.0, None)]
+    workbook = _with_investments(_workbook(tmp_path / "f.xlsx", _ROWS), bad)
+
+    code = cli.main(["import-manual", str(workbook)])
+
+    assert code == 1
+    assert "Inversiones row 2: tipo must be" in capsys.readouterr().err
+    assert not (env / "bronze").exists()
