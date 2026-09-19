@@ -1,7 +1,7 @@
 """Reading the manual Excel's `Ahorros` sheet into statements. Everything here
 is invented; problems are reported as counts and row numbers, never values."""
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -168,7 +168,12 @@ def test_a_balance_that_does_not_follow_is_a_problem_with_its_row_number(
         ),
         (
             (_ACCOUNT, date(2026, 7, 5), "x", 1.0, "PEN", None),
-            "Ahorros row 2: saldo_final is not a number",
+            "Ahorros row 2: saldo_final is empty (a formula without a saved value? "
+            "open and save the file in Excel)",
+        ),
+        (
+            (_ACCOUNT, date(2026, 7, 5), "x", 1.005, "PEN", 1.0),
+            "Ahorros row 2: monto has more than 2 decimals",
         ),
         (
             (None, date(2026, 7, 5), "x", 1.0, "PEN", 1.0),
@@ -293,3 +298,110 @@ def test_an_unsigned_amount_that_matches_neither_direction_is_still_a_problem(
     assert result.problems == [
         "Ahorros row 3: the balance does not follow the previous one"
     ]
+
+
+def test_more_than_two_decimals_is_rejected_but_float_noise_is_not(
+    tmp_path: Path,
+) -> None:
+    rows = [
+        _row(date(2026, 7, 5), "deposito", "0.10", "0.10"),
+        (
+            _ACCOUNT,
+            date(2026, 7, 6),
+            "deposito",
+            0.1 + 0.2,
+            "PEN",
+            0.4,
+        ),  # 0.30000000000000004
+    ]
+
+    result = read_savings(_workbook(tmp_path / "f.xlsx", rows), user_id="piero")
+
+    assert result.problems == []
+    assert result.entries[0].statement.transactions[1].amount == Decimal("0.30")
+
+
+def test_a_description_that_normalizes_to_nothing_is_a_value_free_problem(
+    tmp_path: Path,
+) -> None:
+    rows = [(_ACCOUNT, date(2026, 7, 5), "___", 100.0, "PEN", 100.0)]
+
+    result = read_savings(_workbook(tmp_path / "f.xlsx", rows), user_id="piero")
+
+    assert result.entries == []
+    assert result.problems == [
+        "Ahorros row 2: the month could not be built (invalid values)"
+    ]
+
+
+def test_an_empty_sheet_is_a_problem_not_a_silent_success(tmp_path: Path) -> None:
+    result = read_savings(_workbook(tmp_path / "f.xlsx", []), user_id="piero")
+
+    assert result.problems == ["Ahorros: the sheet has no rows"]
+
+
+def test_a_file_that_is_not_a_workbook_is_a_clear_problem(tmp_path: Path) -> None:
+    path = tmp_path / "f.xlsx"
+    path.write_text("not a zip")
+
+    assert read_savings(path, user_id="piero").problems == [
+        "the file is not a readable .xlsx workbook"
+    ]
+
+
+def test_one_broken_account_stops_the_whole_import(tmp_path: Path) -> None:
+    rows = [
+        (_ACCOUNT, date(2026, 7, 5), "deposito", 100.0, "PEN", 100.0),
+        ("Otra Cuenta", date(2026, 7, 5), "deposito", 10.0, "PEN", 10.0),
+        ("Otra Cuenta", date(2026, 7, 6), "deposito", 10.0, "PEN", 999.0),
+    ]
+
+    result = read_savings(_workbook(tmp_path / "f.xlsx", rows), user_id="piero")
+
+    assert result.entries == []
+    assert len(result.problems) == 1
+
+
+def test_an_overdraft_is_accepted(tmp_path: Path) -> None:
+    rows = [
+        _row(date(2026, 7, 5), "deposito", "10.00", "10.00"),
+        _row(date(2026, 7, 6), "retiro", "-30.00", "-20.00"),
+    ]
+
+    result = read_savings(_workbook(tmp_path / "f.xlsx", rows), user_id="piero")
+
+    assert result.problems == []
+    assert result.entries[0].statement.closing_balance == Decimal("-20.00")
+
+
+def test_months_across_a_year_boundary_and_a_leap_february(tmp_path: Path) -> None:
+    rows = [
+        _row(date(2027, 12, 20), "deposito", "100.00", "100.00"),
+        _row(date(2028, 1, 15), "deposito", "10.00", "110.00"),
+        _row(date(2028, 2, 29), "deposito", "5.00", "115.00"),
+    ]
+
+    result = read_savings(_workbook(tmp_path / "f.xlsx", rows), user_id="piero")
+
+    assert result.problems == [] and result.missing_months == 0
+    assert result.entries[2].statement.period_end == date(2028, 2, 29)
+
+
+def test_a_datetime_cell_with_a_time_uses_its_date(tmp_path: Path) -> None:
+    rows = [(_ACCOUNT, datetime(2026, 7, 5, 23, 59), "deposito", 100.0, "PEN", 100.0)]
+
+    result = read_savings(_workbook(tmp_path / "f.xlsx", rows), user_id="piero")
+
+    assert result.entries[0].statement.transactions[0].date == date(2026, 7, 5)
+
+
+def test_the_first_row_of_an_account_is_taken_as_typed(tmp_path: Path) -> None:
+    """There is no previous balance to read its direction from, so an account's
+    first row must be a deposit (or a cierre de mes): documented, and locked here."""
+    rows = [_row(date(2026, 7, 5), "deposito inicial", "100.00", "100.00")]
+
+    result = read_savings(_workbook(tmp_path / "f.xlsx", rows), user_id="piero")
+
+    statement = result.entries[0].statement
+    assert statement.opening_balance == Decimal("0.00")
+    assert statement.transactions[0].amount == Decimal("100.00")
