@@ -252,3 +252,36 @@ def test_dbt_filter_reads_real_coloured_and_timestamped_output() -> None:
         "18 of 124 ERROR thing .......... [ERROR in 0.10s]",
         "Done. PASS=33 WARN=0 ERROR=1 SKIP=93 NO-OP=0 REUSED=0 TOTAL=127",
     ]
+
+
+def test_main_sends_alerts_after_the_build_when_a_channel_is_configured(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Errors are sent the moment they appear (Phase 7): `make poc` hands the
+    build's results and the count of files needing review to `alerting`."""
+    monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
+    monkeypatch.setenv("ALERT_TEAMS_WEBHOOK_URL", "https://teams.example.test/hook")
+    _seed_transfer_tables(tmp_path / "pfp.duckdb", matched=0, unmatched=0)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(subprocess, "run", _recording(_fake_run(0, 1), calls))
+
+    main()
+
+    alert = calls[-1]
+    assert alert[2:6] == ["python", "-m", "alerting", "dbt"]
+    assert alert[alert.index("--needs-review") + 1] == "1"
+
+
+def test_main_does_not_call_alerting_without_a_configured_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PFP_USER", "piero")
+    for name in ("ALERT_TEAMS_WEBHOOK_URL", "ALERT_SMTP_HOST", "ALERT_EMAIL_TO"):
+        monkeypatch.delenv(name, raising=False)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(subprocess, "run", _recording(_fake_run(0, 1), calls))
+
+    main()
+
+    assert not any("alerting" in cmd for cmd in calls)

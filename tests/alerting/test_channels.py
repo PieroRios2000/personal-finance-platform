@@ -1,10 +1,11 @@
 import json
+import smtplib
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 import pytest
-from alerting import channels
+
 from alerting.channels import EmailChannel, TeamsChannel, channels_from_env
 
 
@@ -37,7 +38,7 @@ class _FakeSMTP:
 @pytest.fixture(autouse=True)
 def fake_smtp(monkeypatch: pytest.MonkeyPatch) -> None:
     _FakeSMTP.instances.clear()
-    monkeypatch.setattr(channels.smtplib, "SMTP", _FakeSMTP)
+    monkeypatch.setattr(smtplib, "SMTP", _FakeSMTP)
 
 
 _EMAIL_ENV = {
@@ -127,3 +128,16 @@ def test_a_failing_channel_reports_without_leaking_its_secret() -> None:
 
 def test_a_successful_send_reports_nothing() -> None:
     assert EmailChannel.from_env(_EMAIL_ENV).send("s", "b") is None  # type: ignore[union-attr]
+
+
+def test_a_failing_email_reports_the_error_type_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise ConnectionRefusedError("s3cret host details")
+
+    monkeypatch.setattr(smtplib, "SMTP", refuse)
+
+    error = EmailChannel.from_env(_EMAIL_ENV).send("s", "b")  # type: ignore[union-attr]
+
+    assert error == "email: ConnectionRefusedError"

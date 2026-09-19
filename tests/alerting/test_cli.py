@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+
 from alerting import cli, queue
 
 _NOW = datetime(2026, 9, 26, 9, 0)
@@ -46,7 +47,7 @@ def _dbt(
             str(_run_results(tmp_path, *statuses)),
             *(extra or []),
         ],
-        channels=channels,  # type: ignore[arg-type]
+        channels=channels,
         queue_path=tmp_path / "q.jsonl",
         now=_NOW,
     )
@@ -154,7 +155,7 @@ def test_the_digest_sends_the_week_and_empties_the_queue(tmp_path: Path) -> None
     path = _queued(tmp_path)
     channel = _Recorder()
 
-    code = cli.main(["digest"], channels=[channel], queue_path=path, now=_NOW)  # type: ignore[list-item]
+    code = cli.main(["digest"], channels=[channel], queue_path=path, now=_NOW)
 
     assert code == 0
     assert channel.sent[0][0] == "[pfp] weekly digest: 2 kinds of warning"
@@ -170,7 +171,7 @@ def test_an_empty_week_sends_nothing(
         ["digest"],
         channels=[channel],
         queue_path=tmp_path / "q.jsonl",
-        now=_NOW,  # type: ignore[list-item]
+        now=_NOW,
     )
 
     assert code == 0
@@ -185,7 +186,7 @@ def test_a_failed_digest_keeps_the_queue_for_the_next_try(tmp_path: Path) -> Non
         ["digest"],
         channels=[_Recorder(error="SMTP: refused")],
         queue_path=path,
-        now=_NOW,  # type: ignore[list-item]
+        now=_NOW,
     )
 
     assert code == 1

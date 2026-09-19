@@ -28,6 +28,7 @@ Run via `make poc`, after `make poc-up`: `uv run python -m scripts.poc`.
 """
 
 import os
+import re
 import subprocess
 import sys
 
@@ -47,10 +48,18 @@ def _safe_ingest_lines(output: str) -> list[str]:
     ]
 
 
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+_TIMESTAMP = re.compile(r"^\d{2}:\d{2}:\d{2}\s+")
+
+
 def _safe_dbt_lines(output: str) -> list[str]:
+    """dbt's summary and its failing/erroring node lines. Real dbt output has an
+    ANSI colour and a `HH:MM:SS` timestamp on every line, so both are stripped
+    before matching (and from what is printed)."""
+    cleaned = (_TIMESTAMP.sub("", _ANSI.sub("", line)) for line in output.splitlines())
     return [
         line
-        for line in output.splitlines()
+        for line in cleaned
         if line.startswith("Done.") or " [FAIL" in line or " [ERROR" in line
     ]
 

@@ -47,12 +47,10 @@ def test_failures_errors_and_warnings_become_events_with_names_and_counts() -> N
     assert Event("warn", "dbt", "elementary_volume_anomalies_silver", 1) in events
 
 
-def test_skipped_nodes_are_one_summary_event_because_they_hide_silver_and_gold() -> (
-    None
-):
+def test_skipped_nodes_are_one_error_because_they_hide_silver_and_gold() -> None:
     events = dbt_events(_RUN_RESULTS)
 
-    assert Event("warn", "dbt", "nodes skipped", 2) in events
+    assert Event("error", "dbt", "nodes skipped", 2) in events
 
 
 def test_no_dbt_message_ever_reaches_an_event() -> None:
