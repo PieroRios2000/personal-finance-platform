@@ -380,7 +380,13 @@ jobs:
             | tee /tmp/pfp-ci-bronze-count-2.txt
           diff /tmp/pfp-ci-bronze-count-1.txt /tmp/pfp-ci-bronze-count-2.txt
       - run: uv run sqlfluff lint dbt/models
-      - run: uv run pytest -m integration
+      # Four pytest-xdist workers, each with its own test lake (tests/
+      # test_dbt_silver_integration.py's `_lake_suffix`): the suite is ~39 tests
+      # that each run a real `dbt build`, ~17 min one after another. `--durations`
+      # keeps the slowest ones visible in the log, so a slowdown is noticed when it
+      # is introduced (tasks/backlog.md, "CI speed").
+      - name: integration tests (parallel)
+        run: uv run pytest -m integration -n 4 --durations=15
 
       # T22 (ADR 0022, CONSTRAINTS.md's warn-then-block pattern): Elementary's
       # anomaly test already ran once as part of both `dagster asset

@@ -119,6 +119,7 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | pytest | 9.1.1 | dev | Tests |
 | pytest-cov | 7.1.0 | dev | Coverage |
 | pytest-benchmark | 5.3.0 | dev | Parsing and bronze-write benchmarks, base vs PR (T15) |
+| pytest-xdist | 3.8.0 | dev | Runs the integration suite on several workers in CI (`-n 4`), each with its own test lake |
 | ruff | 0.16.7 | dev | Lint and format |
 | mypy | 2.3.1 | dev | Types (strict mode) |
 | diff-cover | 10.5.1 | dev | Coverage of changed lines against the base branch |
@@ -156,6 +157,7 @@ uv run dbt deps --project-dir dbt --profiles-dir dbt    # once, or after package
 uv run dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + Elementary's own models/tests
 uv run sqlfluff lint dbt/models                         # SQL style
 uv run pytest -m integration                            # the S3-backed tests, deselected by default
+uv run pytest -m integration -n 4                       # same, on 4 workers (what CI does; ~2.5x faster on 6 CPUs)
 ```
 
 `dbt deps` only needs re-running when `dbt/packages.yml` changes; `dbt/dbt_packages/` (gitignored)

@@ -29,7 +29,17 @@ from lakehouse.storage import storage_options, table_uri
 pytestmark = pytest.mark.integration
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_TEST_LAKE_SUFFIX = "_t16_dbt_tests"
+
+
+def _lake_suffix(xdist_worker: str | None) -> str:
+    """The test lake's path suffix. Under pytest-xdist every worker gets its own
+    (`..._gw0`, `..._gw1`, ...), so tests running side by side never wipe each
+    other's bronze tables; without xdist it is the original name."""
+    base = "_t16_dbt_tests"
+    return f"{base}_{xdist_worker}" if xdist_worker else base
+
+
+_TEST_LAKE_SUFFIX = _lake_suffix(os.environ.get("PYTEST_XDIST_WORKER"))
 _BANK = "BCP"
 _LAST4 = "9999"
 _ACCOUNT_ID = hashlib.sha256(b"t16-dbt-tests-account").hexdigest()

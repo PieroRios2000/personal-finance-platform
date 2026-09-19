@@ -29,14 +29,17 @@ So the end-to-end flow is *not* the cost (under 2 minutes); the cost is the 39 i
 and **all 39 run whatever the PR changed**: the impact map (ADR 0008) decides whether the job runs,
 not which tests inside it. Options, in the order they are worth doing:
 
-- [ ] **Run only the impacted integration test files.** Map changed paths to test files (a gold
+- [ ] **Run only the impacted integration test files.** Checked while doing the parallel work:
+      it saves less than it looks, because every test's `dbt build` runs *every* dbt test, so
+      almost any `dbt/` change touches all of them; it only helps for gold-only, test-only or
+      script-only changes. Worth doing after making each build cheaper. Map changed paths to test files (a gold
       model → `test_dbt_gold_integration.py`; `ingestion/` or `lakehouse/` → bronze and Dagster
       tests; silver models or shared macros → silver, incremental merge, transfers), in
       `scripts/ci_impact.py` next to the existing map. Same safety net as ADR 0008: pushes to
       `develop` and the weekly run still run all of them, so a missed dependency is caught there.
-- [ ] **Run the files in parallel.** Either a job matrix (one compose stack per group, wall clock
-      becomes the slowest group) or `pytest-xdist` with a per-worker test lake (today every test
-      shares one lake path, so they cannot run side by side).
+- [x] **Run the tests in parallel** (`pytest-xdist -n 4`, one test lake per worker). Locally the
+      whole integration suite went from about 33 min one after another to 12.9 min on 4 workers
+      (6 CPUs, all passing); CI's own number is in the PR that introduced it.
 - [ ] **Make each test's `dbt build` cheaper.** Most tests need one model or one test, not all
       124 nodes plus Elementary's hooks: use `--select` and skip Elementary where it is not the
       subject.

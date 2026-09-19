@@ -93,8 +93,9 @@ GitHub Actions PR run to confirm the wiring itself, since this session can't tri
 `ephemeral-integration` is the slow job: about 20 minutes when it runs, of which 17 are
 `pytest -m integration` (39 tests, each running a real `dbt build`). The end-to-end Dagster passes
 take under 2 minutes. The impact map ([ADR 0008](../decisions/0008-impact-based-ci.md)) decides
-whether the job runs, but once it does, every integration test runs. Narrowing that, parallelizing
-it and making each `dbt build` cheaper is tracked in [`tasks/backlog.md`](../../tasks/backlog.md)
+whether the job runs, but once it does, every integration test runs. The integration tests now run on four
+pytest-xdist workers (`-n 4`), each with its own test lake (`_lake_suffix` in
+`tests/test_dbt_silver_integration.py`); narrowing the set and making each `dbt build` cheaper is tracked in [`tasks/backlog.md`](../../tasks/backlog.md)
 ("CI speed"). The job's timeout is 30 minutes (raised from 20 after a cancelled run in #82).
 
 ## How to use it and how to verify it
