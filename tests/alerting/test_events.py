@@ -65,3 +65,9 @@ def test_files_needing_review_are_a_warning_with_a_count() -> None:
         Event("warn", "ingest", "files need review", 3)
     ]
     assert ingest_events(needs_review=0) == []
+
+
+def test_a_result_without_an_id_does_not_crash() -> None:
+    assert dbt_events({"results": [{"status": "fail"}]}) == [
+        Event("error", "dbt", "unknown", 1)
+    ]

@@ -285,3 +285,53 @@ def test_main_does_not_call_alerting_without_a_configured_channel(
     main()
 
     assert not any("alerting" in cmd for cmd in calls)
+
+
+def test_main_removes_stale_dbt_results_before_building_and_reports_the_return_code(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A stale `run_results.json` from an earlier build must never be alerted on
+    as if it were this run's; and a build that produced no results at all still
+    has to be reported, so poc passes dbt's return code along."""
+    monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.setenv("ALERT_TEAMS_WEBHOOK_URL", "https://teams.example.test/hook")
+    monkeypatch.chdir(tmp_path)
+    stale = tmp_path / "dbt" / "target" / "run_results.json"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("{}")
+    calls: list[list[str]] = []
+    seen_at_build: list[bool] = []
+
+    def run(cmd: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if cmd[2:4] == ["dbt", "build"]:
+            seen_at_build.append(stale.exists())
+        calls.append(list(cmd))
+        result: subprocess.CompletedProcess[str] = _fake_run(0, 2)(cmd, **kwargs)
+        return result
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+    main()
+
+    assert seen_at_build == [False]
+    alert = calls[-1]
+    assert alert[alert.index("--dbt-returncode") + 1] == "2"
+
+
+def test_a_missing_alerting_program_never_breaks_poc(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
+    monkeypatch.setenv("ALERT_TEAMS_WEBHOOK_URL", "https://teams.example.test/hook")
+    _seed_transfer_tables(tmp_path / "pfp.duckdb", matched=0, unmatched=0)
+
+    def run(cmd: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if "alerting" in cmd:
+            raise FileNotFoundError("uv")
+        result: subprocess.CompletedProcess[str] = _fake_run(0, 0)(cmd, **kwargs)
+        return result
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+    assert main() == 0

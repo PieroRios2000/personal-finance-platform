@@ -74,3 +74,15 @@ def test_a_digest_name_that_is_not_a_plain_identifier_is_never_printed() -> None
     )
 
     assert "1234.56" not in render_digest([line])[1]
+
+
+def test_a_name_with_a_trailing_newline_is_not_a_plain_identifier() -> None:
+    _, body = render([Event("error", "dbt", "a_test\nINJECTED", 1)])
+
+    assert "INJECTED" not in body
+
+
+def test_a_source_that_is_not_a_plain_identifier_is_never_printed() -> None:
+    _, body = render([Event("error", "Juan 1234.56", "a_test", 1)])
+
+    assert "1234.56" not in body

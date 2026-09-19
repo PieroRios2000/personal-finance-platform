@@ -145,6 +145,12 @@ def test_a_missing_run_results_file_is_a_clear_error(
     assert "run_results.json" in capsys.readouterr().err
 
 
+def _claimed_records(path: Path) -> list[queue.Record]:
+    claimed = queue.claim(path)
+    assert claimed is not None
+    return queue.read(claimed)
+
+
 def _queued(tmp_path: Path) -> Path:
     path = tmp_path / "q.jsonl"
     _dbt(tmp_path, "warn", "warn", channels=[])
@@ -190,4 +196,109 @@ def test_a_failed_digest_keeps_the_queue_for_the_next_try(tmp_path: Path) -> Non
     )
 
     assert code == 1
-    assert len(queue.read(path)) == 2
+    assert len(_claimed_records(path)) == 2
+
+
+def test_a_failed_build_with_no_results_file_is_an_error_not_silence(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    channel = _Recorder()
+
+    code = cli.main(
+        ["dbt", "--run-results", str(tmp_path / "gone.json"), "--dbt-returncode", "2"],
+        channels=[channel],
+        queue_path=tmp_path / "q.jsonl",
+        now=_NOW,
+    )
+
+    assert code == 0
+    assert "build did not complete" in channel.sent[0][1]
+
+
+def test_a_failed_build_whose_errors_are_in_the_results_adds_nothing_extra(
+    tmp_path: Path,
+) -> None:
+    channel = _Recorder()
+
+    _dbt(tmp_path, "fail", channels=[channel], extra=["--dbt-returncode", "1"])
+
+    assert "did not complete" not in channel.sent[0][1]
+
+
+def test_invalid_results_json_is_a_clear_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bad = tmp_path / "run_results.json"
+    bad.write_text("{not json")
+
+    code = cli.main(
+        ["dbt", "--run-results", str(bad)],
+        channels=[],
+        queue_path=tmp_path / "q.jsonl",
+        now=_NOW,
+    )
+
+    assert code == 2
+    assert "not valid JSON" in capsys.readouterr().err
+
+
+def test_an_empty_queue_path_variable_falls_back_to_the_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("ALERT_QUEUE_PATH", "")
+    monkeypatch.setattr(queue, "DEFAULT_QUEUE_PATH", tmp_path / "default.jsonl")
+
+    code = cli.main(["digest"], channels=[])
+
+    assert code == 0
+    assert "No warnings" in capsys.readouterr().out
+
+
+def test_a_bad_alert_configuration_is_a_clear_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for name, value in {
+        "ALERT_SMTP_HOST": "h",
+        "ALERT_EMAIL_FROM": "a@b",
+        "ALERT_EMAIL_TO": "c@d",
+        "ALERT_SMTP_PORT": "abc",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    code = cli.main(["digest"])
+
+    assert code == 2
+    assert "ALERT_SMTP_PORT" in capsys.readouterr().err
+
+
+def test_a_digest_one_channel_accepted_is_not_sent_again_to_it(tmp_path: Path) -> None:
+    """One channel failing must not make the next digest repeat the message on
+    the channel that already delivered it: the queue is emptied, and the failure
+    is still reported."""
+    path = _queued(tmp_path)
+
+    code = cli.main(
+        ["digest"],
+        channels=[_Recorder(), _Recorder(error="Teams: refused")],
+        queue_path=path,
+        now=_NOW,
+    )
+
+    assert code == 1
+    assert queue.read(path) == []
+    assert not list(tmp_path.glob("*.sending"))
+
+
+def test_a_digest_no_channel_accepted_stays_claimed_for_the_next_try(
+    tmp_path: Path,
+) -> None:
+    path = _queued(tmp_path)
+
+    cli.main(
+        ["digest"],
+        channels=[_Recorder(error="SMTP: refused")],
+        queue_path=path,
+        now=_NOW,
+    )
+
+    assert len(_claimed_records(path)) == 2

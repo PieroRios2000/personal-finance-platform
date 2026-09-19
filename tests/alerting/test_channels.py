@@ -1,5 +1,6 @@
 import json
 import smtplib
+import ssl
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
@@ -15,6 +16,7 @@ class _FakeSMTP:
     def __init__(self, host: str, port: int, timeout: float) -> None:
         self.host, self.port = host, port
         self.started_tls = False
+        self.tls_context: ssl.SSLContext | None = None
         self.login_args: tuple[str, str] | None = None
         self.sent: list[Any] = []
         _FakeSMTP.instances.append(self)
@@ -25,8 +27,9 @@ class _FakeSMTP:
     def __exit__(self, *exc: object) -> None:
         return None
 
-    def starttls(self) -> None:
+    def starttls(self, context: ssl.SSLContext | None = None) -> None:
         self.started_tls = True
+        self.tls_context = context
 
     def login(self, user: str, password: str) -> None:
         self.login_args = (user, password)
@@ -111,7 +114,7 @@ def test_teams_gets_an_adaptive_card_with_the_subject_and_body() -> None:
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}/hook"
 
-    TeamsChannel(url).send("[pfp] 1 error", "ERROR  dbt: a_test (4)")
+    TeamsChannel(url, allow_http=True).send("[pfp] 1 error", "ERROR  dbt: a_test (4)")
     thread.join(timeout=5)
     server.server_close()
 
@@ -126,7 +129,7 @@ def test_teams_gets_an_adaptive_card_with_the_subject_and_body() -> None:
 def test_a_failing_channel_reports_without_leaking_its_secret() -> None:
     secret_url = "http://127.0.0.1:1/very-secret-token"
 
-    error = TeamsChannel(secret_url).send("s", "b")
+    error = TeamsChannel(secret_url, allow_http=True).send("s", "b")
 
     assert error is not None
     assert "very-secret-token" not in error
@@ -147,3 +150,55 @@ def test_a_failing_email_reports_the_error_type_only(
     error = _email(_EMAIL_ENV).send("s", "b")
 
     assert error == "email: ConnectionRefusedError"
+
+
+def test_starttls_verifies_the_servers_certificate_and_hostname() -> None:
+    _email(_EMAIL_ENV).send("s", "b")
+
+    context = _FakeSMTP.instances[0].tls_context
+    assert context is not None
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname
+
+
+def test_empty_optional_variables_fall_back_to_the_defaults() -> None:
+    env = {**_EMAIL_ENV, "ALERT_SMTP_PORT": "", "ALERT_SMTP_USER": ""}
+
+    channel = _email(env)
+
+    assert channel.port == 587
+    assert channel.user is None
+
+
+def test_a_port_that_is_not_a_number_is_a_configuration_error() -> None:
+    with pytest.raises(ValueError, match="ALERT_SMTP_PORT"):
+        channels_from_env({**_EMAIL_ENV, "ALERT_SMTP_PORT": "abc"})
+
+
+def test_a_bad_teams_url_is_reported_not_raised() -> None:
+    assert (
+        TeamsChannel("file:///etc/passwd").send("s", "b") == "teams: not an https URL"
+    )
+    assert TeamsChannel("not a url").send("s", "b") == "teams: not an https URL"
+
+
+def test_an_email_with_no_recipient_is_reported_not_raised() -> None:
+    env = {**_EMAIL_ENV, "ALERT_EMAIL_TO": ","}
+
+    assert _email(env).send("s", "b") == "email: no recipient"
+
+
+def test_each_line_of_the_body_is_its_own_teams_text_block() -> None:
+    _Hook.received.clear()
+    server = HTTPServer(("127.0.0.1", 0), _Hook)
+    thread = threading.Thread(target=server.handle_request)
+    thread.start()
+
+    TeamsChannel(f"http://127.0.0.1:{server.server_port}/h", allow_http=True).send(
+        "subject", "line one\nline two"
+    )
+    thread.join(timeout=5)
+    server.server_close()
+
+    texts = [b["text"] for b in _Hook.received[0]["attachments"][0]["content"]["body"]]
+    assert texts == ["subject", "line one", "line two"]
