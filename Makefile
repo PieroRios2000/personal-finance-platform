@@ -5,7 +5,7 @@
 
 BASE ?= origin/develop
 
-.PHONY: check-fast check-task check-full poc poc-up poc-down om-up om-sync om-down
+.PHONY: check-fast check-task check-full poc poc-up poc-down om-up om-sync om-down alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -73,3 +73,12 @@ om-sync:
 om-down:
 	$(OM_COMPOSE) down -v
 	rm -rf openmetadata/artifacts
+
+# Phase 7 (alerting, SETUP.md section 11): send the errors of the last `dbt build`
+# now and queue its warnings; `alert-digest` sends the queued warnings as one
+# message (schedule it weekly). Both need the ALERT_* variables in .env.
+alert:
+	set -a && . ./.env && set +a && uv run python -m alerting dbt
+
+alert-digest:
+	set -a && . ./.env && set +a && uv run python -m alerting digest

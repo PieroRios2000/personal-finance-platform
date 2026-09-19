@@ -8,6 +8,7 @@ dependencies = [
     "dbt-duckdb>=1.11.0",
     "deltalake>=1.6.3",
     "duckdb>=1.5.5",
+    "openpyxl>=3.1.5",
     "pdfplumber>=0.11.10",
     "pikepdf>=10.13.0.post1",
     "pyarrow>=25.0.1",
@@ -23,7 +24,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["ingestion", "lakehouse", "scripts", "orchestration"]
+packages = ["ingestion", "lakehouse", "scripts", "orchestration", "alerting"]
 
 # `dagster dev`'s own auto-discovery (T21): this block is what lets the local web UI
 # find orchestration/definitions.py with no flag. `dagster asset materialize`/`dagster
@@ -50,6 +51,7 @@ dev = [
     "ruff>=0.16.7",
     "sqlfluff>=4.3.0",
     "sqlfluff-templater-dbt>=4.3.0",
+    "types-openpyxl>=3.1.5.20260827",
 ]
 
 [tool.ruff.lint]
@@ -126,7 +128,7 @@ source = ["ingestion", "lakehouse", "scripts"]
 # `ignore_imports` declares the one allowed dependency (T14): ingestion.cli orchestrates
 # both organizer and bronze; lakehouse depends only on the schema, never on the parsers.
 [tool.importlinter]
-root_packages = ["ingestion", "lakehouse", "orchestration"]
+root_packages = ["ingestion", "lakehouse", "orchestration", "alerting"]
 
 [[tool.importlinter.contracts]]
 name = "Parsing does not import lakehouse (only ingestion.cli orchestrates both)"
@@ -158,3 +160,11 @@ name = "ingestion and lakehouse never import orchestration (T21 wraps, not the o
 type = "forbidden"
 source_modules = ["ingestion", "lakehouse"]
 forbidden_modules = ["orchestration"]
+
+# alerting (Phase 7) only ever handles names and counts: it must not know how a
+# statement is parsed or stored, and nothing depends on it.
+[[tool.importlinter.contracts]]
+name = "alerting is standalone: no parsers, no lake, no orchestration (ADR 0026)"
+type = "forbidden"
+source_modules = ["alerting"]
+forbidden_modules = ["ingestion", "lakehouse", "orchestration"]

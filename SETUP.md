@@ -119,6 +119,8 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | pytest | 9.1.1 | dev | Tests |
 | pytest-cov | 7.1.0 | dev | Coverage |
 | pytest-benchmark | 5.3.0 | dev | Parsing and bronze-write benchmarks, base vs PR (T15) |
+| openpyxl | 3.1.5 | runtime | Writes (and later reads) the manual Excel for Ripley savings and investments (`scripts/make_manual_templates.py`) |
+| types-openpyxl | 3.1.5 | dev | Type stubs for openpyxl (mypy strict) |
 | pytest-xdist | 3.8.0 | dev | Runs the integration suite on several workers in CI (`-n 4`), each with its own test lake |
 | ruff | 0.16.7 | dev | Lint and format |
 | mypy | 2.3.1 | dev | Types (strict mode) |
@@ -364,6 +366,50 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 Re-run `make om-sync` after any `dbt build` that changes models; it is idempotent. `make om-down`
 when done. Elementary's own models are not catalogued and dbt tests are not ingested.
+
+## 11. Alerts by email or Microsoft Teams (Phase 7)
+
+Errors are sent **the moment they appear**; warnings are **queued and sent once a week** as one
+digest, to read on the weekend. Only names and counts are ever sent (a failing test's name, how
+many rows, how many files need review), never an amount, an account or a file name
+([ADR 0026](brain/decisions/0026-alerts-errors-now-warnings-weekly-names-and-counts-only.md)).
+
+1. Fill in the `ALERT_*` variables in `.env` (template in `.env.example`); a channel is on when
+   its variables are set, and both can be on. **Wrap each value in single quotes**: `.env` is
+   sourced by the shell, and a Teams URL contains `&` (which would cut it short), an app password
+   may contain spaces:
+   - **Email:** `ALERT_SMTP_HOST`, `ALERT_SMTP_PORT` (587, STARTTLS), `ALERT_SMTP_USER`,
+     `ALERT_SMTP_PASSWORD`, `ALERT_EMAIL_FROM`, `ALERT_EMAIL_TO` (comma-separated). Most providers
+     need an *app password* here, not the account password. The server's certificate is verified;
+     port 465 (SMTPS, implicit TLS) is not supported, only STARTTLS (usually 587).
+   - **Teams:** `ALERT_TEAMS_WEBHOOK_URL`: in Teams, create a Workflows flow triggered by "When a
+     Teams webhook request is received" that posts to your channel or chat, and paste its URL
+     (whether your tenant allows it depends on its admin).
+2. Errors: `make poc` sends them by itself after the build when a channel is configured. After a
+   plain `dbt build` or Dagster run, run `make alert` (it reads `dbt/target/run_results.json`).
+   The same command queues the warnings in `~/finance-data/alerts/warnings.jsonl` (private,
+   outside the repo; change it with `ALERT_QUEUE_PATH`).
+3. Weekly digest: `make alert-digest` sends everything queued and empties the queue (only if the
+   send worked; otherwise the warnings stay for the next try). To run it every Saturday morning,
+   add a cron line inside WSL (`crontab -e`; `sudo service cron start` if cron is not running):
+
+   ```
+   0 9 * * 6 cd ~/projects/personal-finance-platform && make alert-digest >> ~/finance-data/alerts/digest.log 2>&1
+   ```
+
+   Cron has a minimal `PATH`: put `PATH=/home/<you>/.local/bin:/usr/bin:/bin` (where `uv` lives) as
+   the first line of the crontab, and create the log's folder first (`mkdir -p ~/finance-data/alerts`).
+   The cron service must be started again after each WSL restart. Or use a Windows Task Scheduler task running
+   `wsl -e bash -lc "cd ~/projects/personal-finance-platform && make alert-digest"` on Saturdays.
+   The machine has to be on at that time. If a digest cannot be delivered to any channel the queue
+   is kept (claimed as `warnings.jsonl.sending`) and goes out, with anything queued since, in the
+   next digest; if at least one channel delivered it, the queue is emptied and the failing channel
+   is reported (exit code 1).
+
+   Exit codes: `make alert` returns 0 when the alerts were delivered (or there was nothing to send)
+   and 1 when a channel failed, whether or not the build was healthy. An *error* alert whose
+   delivery fails is not retried: the failure is printed and the exit code is 1, so look at
+   `dbt/target/run_results.json` or re-run `make alert`.
 
 ## Reviewing CI
 

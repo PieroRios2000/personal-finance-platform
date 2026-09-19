@@ -237,6 +237,32 @@ def test_backfill_with_a_corrected_description_updates_the_row_in_place(
     )
 
 
+def test_a_replaced_file_that_ends_with_no_transactions_leaves_nothing_in_silver(
+    lake: str, tmp_path: Path
+) -> None:
+    """A corrected manual-Excel month can end with only a balance marker: bronze
+    then holds the statement but no transaction row for that file, so no fresh
+    `(sha, ingested_at)` pair ever tells the purge about it. The old silver rows
+    of a file bronze no longer has any transaction for must go too."""
+    file_sha256 = hashlib.sha256(b"manual-month-emptied").hexdigest()
+    bronze.write_statement(
+        _statement(file_sha256=file_sha256, movements=[("DEPOSITO", "100.00")]),
+        file_sha256,
+    )
+    first = _dbt_build(tmp_path)
+    assert first.returncode == 0, first.stdout
+    assert _descriptions(tmp_path) == ["DEPOSITO"]
+
+    bronze.replace_statement(
+        _statement(file_sha256=file_sha256, movements=[]), file_sha256
+    )
+
+    second = _dbt_build(tmp_path)
+
+    assert second.returncode == 0, second.stdout
+    assert _descriptions(tmp_path) == []
+
+
 def test_backfill_of_unchanged_content_does_not_duplicate(
     lake: str, tmp_path: Path
 ) -> None:
