@@ -88,6 +88,15 @@ GitHub Actions PR run to confirm the wiring itself, since this session can't tri
   ruleset's required checks, so a real base-vs-PR difference — or even a broken base-branch
   build — can never block a merge the way `ephemeral-integration` itself does.
 
+## Cost, and where it goes
+
+`ephemeral-integration` is the slow job: about 20 minutes when it runs, of which 17 are
+`pytest -m integration` (39 tests, each running a real `dbt build`). The end-to-end Dagster passes
+take under 2 minutes. The impact map ([ADR 0008](../decisions/0008-impact-based-ci.md)) decides
+whether the job runs, but once it does, every integration test runs. Narrowing that, parallelizing
+it and making each `dbt build` cheaper is tracked in [`tasks/backlog.md`](../../tasks/backlog.md)
+("CI speed"). The job's timeout is 30 minutes (raised from 20 after a cancelled run in #82).
+
 ## How to use it and how to verify it
 
 `gh pr checks <n>` and `gh run view <run_id> --log-failed`; see "Reviewing CI" in
