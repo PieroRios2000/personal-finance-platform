@@ -1,5 +1,6 @@
 """Scotiabank credit-card statement parser (T18): turns a decrypted PDF into
-one reconciled `Statement` *per currency* it carries.
+one reconciled `Statement` *per currency* it carries. A PDF with no card
+header is read as a savings-account statement instead (`scotiabank_account`).
 
 No `detect()` is exposed here (see `ingestion.parsers.base`'s module docstring):
 unlike BCP's real export, a real Scotiabank PDF's raw bytes start with a plain
@@ -72,6 +73,7 @@ import pdfplumber
 import pikepdf
 
 from ingestion import ocr
+from ingestion.parsers import scotiabank_account
 from ingestion.reconciliation import reconcile
 from ingestion.schema import (
     Currency,
@@ -348,14 +350,21 @@ def parse(
 
     with pdfplumber.open(decrypted) as doc:
         words: list[Word] = []
-        lines: list[list[Word]] = []
+        pages: list[list[list[Word]]] = []
         for page in doc.pages:
             page_words = page.extract_words() or ocr.extract_words(page)
             words.extend(page_words)
-            lines.extend(_group_lines(page_words))
+            pages.append(_group_lines(page_words))
+    lines = [line for page in pages for line in page]
 
     header = _find_header_columns(lines)
     if header is None:
+        # Not a card statement: a savings account has its own layout.
+        account_statements = scotiabank_account.parse_pages(
+            pages, user_id=user_id, file_sha256=file_sha256
+        )
+        if account_statements is not None:
+            return account_statements
         raise ValueError(
             "could not find the Fecha/Descripción/Soles/Dólares header row"
         )

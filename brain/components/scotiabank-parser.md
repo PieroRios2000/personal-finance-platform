@@ -96,8 +96,23 @@ fixture: the label is title case (`Saldo Anterior`, not `SALDO ANTERIOR`), and s
 a tag such as `(abc:12)` to the right of the amount, which used to hide the amount because it was
 the last token of the currency cell.
 
-Real statements in the *other* Scotiabank layout (a savings account: `FECHA`, `CONCEPTO`,
-`CARGO`, `ABONO`, `SALDO`) are not handled by this parser yet.
+## The savings-account layout
+
+Scotiabank also issues savings-account statements (found on the owner's real inbox: 20 of the 25
+Scotiabank files). `scotiabank.parse` falls back to
+[`scotiabank_account.py`](../../ingestion/parsers/scotiabank_account.py) when a PDF has no card
+header. Same bank and password, different document: `CUENTA DE AHORROS M.N. SOLES` (or
+`M.E. DOLARES`) plus a `000-0000000` number identify the account and currency; the period is
+`01-ENE- 2026 Al 31-ENE-2026`; rows are `DD/MM`, `DD/MM` (value date, the one kept), a code, the
+description, a reference, one of `CARGO`/`ABONO`, and a running `SALDO`, all right-aligned (so a
+column is picked by the label's right edge). A row has no year: it comes from the period, and
+December rows of a December–January period land in the earlier year.
+
+Unlike the card layout, the bank declares everything: an opening `Saldo Final al ...` line, and a
+closing one with the CARGO total, the ABONO total and the closing balance. Those go into
+`Statement.declared_*`, so `reconcile()` checks the balance and both totals for real. CARGO is
+negative, ABONO positive (BCP's convention) and the account is an `asset`. All 20 real files
+parse and reconcile.
 
 ## Account kind (T18a)
 
