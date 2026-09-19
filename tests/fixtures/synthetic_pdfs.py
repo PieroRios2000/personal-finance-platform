@@ -492,6 +492,97 @@ def scotiabank_statement_pdf(
     return bytes(pdf.output())
 
 
+_SCOTIA_ACCOUNT_NUMBER = "000-0000000"
+_SCOTIA_ACC_CARGO_X1 = 443  # amounts are right-aligned: these are their right edges
+_SCOTIA_ACC_ABONO_X1 = 505
+_SCOTIA_ACC_SALDO_X1 = 569
+_SPANISH_MONTH_ABBR_UPPER = "ENE FEB MAR ABR MAY JUN JUL AGO SET OCT NOV DIC".split()
+
+
+def _right_aligned(pdf: FPDF, right_x: float, y: float, text: str) -> None:
+    pdf.text(right_x - pdf.get_string_width(text), y, text)
+
+
+def scotiabank_account_pdf(
+    *,
+    opening_balance: Decimal = Decimal("1000.00"),
+    movements: Sequence[Movement] = DEFAULT_MOVEMENTS,
+    currency_words: str = "M.N. SOLES",
+    period: tuple[date, date] = (date(2026, 1, 1), date(2026, 1, 31)),
+    reconciles: bool = True,
+) -> bytes:
+    """Render a fictional Scotiabank *savings-account* statement.
+
+    Matches the second real Scotiabank layout, confirmed from a masked dump:
+    a `CUENTA DE AHORROS M.N. SOLES ... 000-0000000` line (`M.E. DOLARES` for a
+    dollar account), a period printed as `01-ENE- 2026 Al 31-ENE-2026` (the
+    year is a separate word after the first date), a two-line header (`FECHA` /
+    `FECHA VALOR`, then `CONCEPTO REFERENCIA CARGO ABONO SALDO`), rows of
+    `DD/MM` (processing date), `DD/MM` (value date), a 3-digit code, the
+    description, a reference, one of CARGO/ABONO and the running SALDO, all
+    amounts right-aligned. A `Saldo Final al ...` line with only a balance
+    opens the statement and another one, with the CARGO and ABONO totals and
+    the closing balance, closes it. `Movement.amount` is signed: negative is a
+    CARGO. `reconciles=False` breaks the printed closing balance by a fixed
+    drift, keeping the per-row math honest, like `bcp_statement_pdf`.
+    """
+    pdf = FPDF(unit="pt")
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=9)
+
+    start, end = period
+    pdf.text(435, 78, "Periodo")
+    pdf.text(458, 78, f"{start:%d}-{_SPANISH_MONTH_ABBR_UPPER[start.month - 1]}-")
+    pdf.text(488, 78, f"{start:%Y}")
+    pdf.text(507, 78, "Al")
+    pdf.text(518, 78, f"{end:%d}-{_SPANISH_MONTH_ABBR_UPPER[end.month - 1]}-{end:%Y}")
+    pdf.text(23, 261, "CUENTA DE AHORROS")
+    pdf.text(144, 261, currency_words)
+    pdf.text(204, 261, "Nro.")
+    pdf.text(223, 261, _SCOTIA_ACCOUNT_NUMBER)
+
+    pdf.text(29, 280, "FECHA")
+    pdf.text(72, 280, "FECHA")
+    pdf.text(31, 288, "VALOR")
+    pdf.text(110, 284, "ORIG")
+    pdf.text(206, 284, "CONCEPTO")
+    pdf.text(329, 284, "REFERENCIA")
+    pdf.text(402, 284, "CARGO")
+    pdf.text(463, 284, "ABONO")
+    pdf.text(527, 284, "SALDO")
+
+    pdf.text(137, 303, "Saldo Final al 31 de DICIEMBRE del 2025")
+    _right_aligned(pdf, _SCOTIA_ACC_SALDO_X1, 303, f"{opening_balance:,.2f}")
+
+    balance = opening_balance
+    cargos = abonos = Decimal("0.00")
+    y = 313
+    for movement in movements:
+        pdf.text(34, y, f"{movement.when:%d/%m}")
+        pdf.text(77, y, f"{movement.when:%d/%m}")
+        pdf.text(114, y, "001")
+        pdf.text(137, y, movement.description)
+        pdf.text(338, y, "0000000001")
+        if movement.amount < 0:
+            cargos += -movement.amount
+            _right_aligned(pdf, _SCOTIA_ACC_CARGO_X1, y, f"{-movement.amount:,.2f}")
+        else:
+            abonos += movement.amount
+            _right_aligned(pdf, _SCOTIA_ACC_ABONO_X1, y, f"{movement.amount:,.2f}")
+        balance += movement.amount
+        _right_aligned(pdf, _SCOTIA_ACC_SALDO_X1, y, f"{balance:,.2f}")
+        y += 10
+
+    printed_closing = balance + (_BROKEN_DRIFT if not reconciles else Decimal("0"))
+    y += 9
+    pdf.text(137, y, "Saldo Final al 31 de ENERO del 2026")
+    _right_aligned(pdf, _SCOTIA_ACC_CARGO_X1, y, f"{cargos:,.2f}")
+    _right_aligned(pdf, _SCOTIA_ACC_ABONO_X1, y, f"{abonos:,.2f}")
+    _right_aligned(pdf, _SCOTIA_ACC_SALDO_X1, y, f"{printed_closing:,.2f}")
+
+    return bytes(pdf.output())
+
+
 def bcp_scanned_statement_pdf(
     *,
     opening_balance: Decimal = Decimal("1000.00"),
