@@ -41,6 +41,12 @@ def fake_smtp(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(smtplib, "SMTP", _FakeSMTP)
 
 
+def _email(env: dict[str, str]) -> EmailChannel:
+    channel = EmailChannel.from_env(env)
+    assert channel is not None
+    return channel
+
+
 _EMAIL_ENV = {
     "ALERT_SMTP_HOST": "smtp.example.test",
     "ALERT_SMTP_PORT": "2525",
@@ -65,7 +71,7 @@ def test_each_channel_turns_on_with_its_own_variables() -> None:
 
 
 def test_an_email_goes_to_every_recipient_over_starttls_with_login() -> None:
-    EmailChannel.from_env(_EMAIL_ENV).send("subject", "body")  # type: ignore[union-attr]
+    _email(_EMAIL_ENV).send("subject", "body")
 
     (smtp,) = _FakeSMTP.instances
     assert (smtp.host, smtp.port) == ("smtp.example.test", 2525)
@@ -80,7 +86,7 @@ def test_an_email_goes_to_every_recipient_over_starttls_with_login() -> None:
 def test_email_without_credentials_skips_login() -> None:
     env = {k: v for k, v in _EMAIL_ENV.items() if k not in ("ALERT_SMTP_USER",)}
 
-    EmailChannel.from_env(env).send("s", "b")  # type: ignore[union-attr]
+    _email(env).send("s", "b")
 
     assert _FakeSMTP.instances[0].login_args is None
 
@@ -127,7 +133,7 @@ def test_a_failing_channel_reports_without_leaking_its_secret() -> None:
 
 
 def test_a_successful_send_reports_nothing() -> None:
-    assert EmailChannel.from_env(_EMAIL_ENV).send("s", "b") is None  # type: ignore[union-attr]
+    assert _email(_EMAIL_ENV).send("s", "b") is None
 
 
 def test_a_failing_email_reports_the_error_type_only(
@@ -138,6 +144,6 @@ def test_a_failing_email_reports_the_error_type_only(
 
     monkeypatch.setattr(smtplib, "SMTP", refuse)
 
-    error = EmailChannel.from_env(_EMAIL_ENV).send("s", "b")  # type: ignore[union-attr]
+    error = _email(_EMAIL_ENV).send("s", "b")
 
     assert error == "email: ConnectionRefusedError"
