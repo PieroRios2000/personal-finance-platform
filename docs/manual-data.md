@@ -61,6 +61,15 @@ If a fund charges a fee or there are taxes, say so: a `comision` column would be
 - **Investments** are tracked separately to see each fund's return month by month. They are not
   part of the savings goal ([ADR 0027](../brain/decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md)).
 
-The importer that reads the workbook is not built yet. Its design starts from a **masked** layout
-dump of your real file (digits as `9`, text as `X`) that you review before anyone reads it, the
-same loop the PDF parsers went through.
+The importer that reads the workbook is not built yet. Its design starts from a **masked** description
+of your real file that you review before anyone reads it, the same loop the PDF parsers went
+through:
+
+```bash
+uv run python -m scripts.inspect_manual_excel ~/finance-data/manual/finanzas-manual.xlsx \
+    > ~/finance-data/masked-dumps/manual-excel.masked.txt
+```
+
+It prints structure and counts only: text as shapes (`X` letters, `9` digits), no number or date
+at all, no account or fund name, how many rows follow the previous balance, how many months each
+group covers and how many have a valuation. Read it yourself before sharing it.

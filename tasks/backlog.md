@@ -54,7 +54,7 @@ not which tests inside it. Options, in the order they are worth doing:
 
 - [x] [Phase 7 — Alerting](../brain/phases/phase-7.md): built. Left: Dagster-triggered alerts.
 - [ ] [Phase 6 — Savings-goal projection](../brain/phases/phase-6.md): first the manual-Excel
-      importer (Ripley savings + investment tracking; template done, waiting for the owner's masked
-      dump), then the cash-flow projection and its own sol/dólar exchange-rate section (the only
+      importer (Ripley savings + investment tracking; template done, masked-description tool done
+      (`scripts/inspect_manual_excel.py`), waiting for the owner to review the dump), then the cash-flow projection and its own sol/dólar exchange-rate section (the only
       place currencies are converted). Scope in [ADR 0025](../brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md).
 - [ ] Phase 3 (ML), 4 (cloud), 5 (dashboard): see [PROJECT.md](../PROJECT.md).
