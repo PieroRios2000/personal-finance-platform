@@ -408,6 +408,7 @@ def scotiabank_statement_pdf(
     movements: Sequence[ScotiabankMovement] = DEFAULT_SCOTIABANK_MOVEMENTS,
     account_code: str = _SCOTIABANK_ACCOUNT_CODE,
     reconciles: bool = True,
+    stray_tags: bool = False,
 ) -> bytes:
     """Render a fictional, one-page Scotiabank credit-card statement.
 
@@ -423,16 +424,27 @@ def scotiabank_statement_pdf(
     no suffix, a payment ends in "-".
 
     By default the statement reconciles: for each currency, opening + that
-    currency's own movements equals what `Total` (this fixture's one page)
-    declares. `reconciles=False` breaks Soles' total by a fixed, non-zero
-    drift, the same "keep the per-row math honest, only the printed summary
-    lies" contract `bcp_statement_pdf(reconciles=False)` uses.
+    currency's own movements equals the closing balance `Total` declares.
+    `reconciles=False` breaks Soles' total by a fixed, non-zero drift, the
+    same "keep the per-row math honest, only the printed summary lies"
+    contract `bcp_statement_pdf(reconciles=False)` uses.
+
+    `stray_tags=True` adds what a real statement carries on some rows: a
+    `(abc:12)` tag to the right of the amount, on the same line (confirmed from
+    a real masked dump: `(XXX:99)` past the last column).
     """
     pen_moves = [m for m in movements if m.currency == "PEN"]
     usd_moves = [m for m in movements if m.currency == "USD"]
     pen_total = sum((m.amount for m in pen_moves), Decimal("0.00"))
     usd_total = sum((m.amount for m in usd_moves), Decimal("0.00"))
-    printed_pen_total = pen_total + (_BROKEN_DRIFT if not reconciles else Decimal("0"))
+    # The real "Total" line is the closing balance (opening + the movements),
+    # confirmed against real statements: it is what the parser cross-checks.
+    printed_pen_total = (
+        (opening_pen or Decimal("0.00"))
+        + pen_total
+        + (_BROKEN_DRIFT if not reconciles else Decimal("0"))
+    )
+    printed_usd_total = (opening_usd or Decimal("0.00")) + usd_total
 
     dates = [m.when for m in movements] or [date.today()]
     period_start, period_end = min(dates), max(dates)
@@ -448,7 +460,7 @@ def scotiabank_statement_pdf(
         50,
         f"PERIODO DE TARJETA DEL {period_start:%d-%m-%Y} AL {period_end:%d-%m-%Y}",
     )
-    pdf.text(40, 70, "SALDO ANTERIOR")
+    pdf.text(40, 70, "Saldo Anterior")
     if opening_pen is not None:
         pdf.text(_SCOTIA_SOLES_X, 70, _scotia_money(opening_pen))
     if opening_usd is not None:
@@ -469,11 +481,13 @@ def scotiabank_statement_pdf(
         pdf.text(_SCOTIA_DESCRIPTION_X, row_y, movement.description)
         amount_x = _SCOTIA_SOLES_X if movement.currency == "PEN" else _SCOTIA_DOLARES_X
         pdf.text(amount_x, row_y, _scotia_money(movement.amount))
+        if stray_tags:
+            pdf.text(555, row_y, "(abc:12)")
 
     row_y += 20
     pdf.text(40, row_y, "Total")
     pdf.text(_SCOTIA_SOLES_X, row_y, _scotia_money(printed_pen_total))
-    pdf.text(_SCOTIA_DOLARES_X, row_y, _scotia_money(usd_total))
+    pdf.text(_SCOTIA_DOLARES_X, row_y, _scotia_money(printed_usd_total))
 
     return bytes(pdf.output())
 

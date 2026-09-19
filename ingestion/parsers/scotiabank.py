@@ -52,29 +52,13 @@ from BCP's checking-account one, confirmed from that dump:
   make the same mistake here when a real Scotiabank statement is *also*
   routinely multi-page.
 
-**What's confirmed vs. inferred — read before trusting this against a real
-file.** Everything above came directly from the masked dump or from the
-owner's explicit answers. One piece did not: **no independently-declared
-closing/total-debt figure was identifiable anywhere in the dump.** `SALDO`,
-`ANTERIOR`, `ACTUAL`, `FINAL`, `DISPONIBLE` and `CONTABLE` are all words this
-project's masking tool leaves unmasked when present, and only `SALDO ANTERIOR`
-ever showed up — the true total-debt figure almost certainly lives on the
-statement's first, dashboard-style summary page, under labels (credit limit,
-minimum payment, "deuda total" or similar) that were never confirmed and are
-out of scope here. So `closing_balance` is **computed** — opening balance plus
-that currency's own transactions — rather than checked against an independent
-number the same way BCP's `SALDO ACTUAL` is. The one independent check this
-parser *does* have is `Total`, a generic word that already appears once per
-page in the real dump with one Soles and one Dólares figure next to it, read
-here as a page-level subtotal of that page's own transactions; every `Total`
-line found across the whole document is summed and compared against this
-parser's own transaction sum, per currency, raising `ValueError` on a
-mismatch — real protection, but not the same guarantee as an independently
-declared closing balance. **This is the piece most likely to need a follow-up
-fix**, exactly like BCP's own five real-data rounds — see
-`brain/components/scotiabank-parser.md`. It has not been run against the
-owner's real PDF; only he can do that (ADR 0004), and this parser should be
-treated as unverified until he does.
+**The closing balance.** The last `Total` line of the statement, per currency,
+is the closing balance (checked against real statements: it equals `Saldo
+Anterior` plus every transaction of that currency; the `Total` lines of earlier
+pages do not, and are ignored). `parse()` compares it with the opening balance
+plus its own transaction sum and raises `ValueError` on a mismatch, so a
+dropped or misread row cannot pass silently. A statement with no `Total` line
+falls back to the computed closing balance.
 """
 
 import io
@@ -103,6 +87,9 @@ _CURRENCIES: tuple[Currency, ...] = ("PEN", "USD")
 _ACCOUNT_CODE_RE = re.compile(r"^\d{8}$")
 _MASKED_CARD_RE = re.compile(r"^\d{4}-\d{4}-\*{4}-(\d{4})$")
 _AMOUNT_RE = re.compile(r"^[\d,]+\.\d{2}-?$")
+# A tag some real rows carry to the right of the last amount, e.g. `(abc:12)`
+# (sometimes several run together). It is not part of the amount.
+_STRAY_TAG_RE = re.compile(r"^(\([A-Za-z]+:\d+\))+$")
 _PERIOD_DATE_RE = re.compile(r"^(\d{2})-(\d{2})-(\d{4})$")
 _ROW_DATE_RE = re.compile(r"^(\d{2})/(\d{2})/(\d{2})$")
 
@@ -278,7 +265,7 @@ def _currency_amount(
 
     `currency_columns` only ever has two entries (PEN, USD): whatever sits to
     the left of the *first* one (a row's dates and description, or a label
-    like "SALDO"/"ANTERIOR"/"Total") has no column of its own to fall into and
+    like "Saldo"/"Anterior"/"Total") has no column of its own to fall into and
     lands in that first bucket too, the same "no boundary before the leftmost
     column" trait `_assign_columns` already has for `bcp.py`. Rather than add
     a boundary for everything that could sit there, only the *last*
@@ -286,6 +273,7 @@ def _currency_amount(
     shape — the real amount, when a currency has one, is always the last
     token in its own cell, whatever leaked in ahead of it.
     """
+    line = [w for w in line if not _STRAY_TAG_RE.match(w["text"])]
     cells = _assign_columns(line, currency_columns)
     amounts: dict[str, Decimal] = {}
     for currency in currency_columns:
@@ -298,39 +286,53 @@ def _currency_amount(
 def _find_opening_balances(
     lines: list[list[Word]], currency_columns: dict[str, float], skip_index: int
 ) -> dict[str, Decimal]:
-    """The "SALDO ANTERIOR" line's amount(s), one per currency present."""
+    """The "Saldo Anterior" line's amount(s), one per currency present."""
     for index, line in enumerate(lines):
         if index == skip_index:
             continue
-        texts = {w["text"] for w in line}
-        if "SALDO" in texts and "ANTERIOR" in texts:
-            return _currency_amount(line, currency_columns)
+        # The real statement prints it title case ("Saldo Anterior"); compare
+        # case-insensitively so a bank restyling it doesn't break the parser.
+        texts = {w["text"].lower() for w in line}
+        if "saldo" in texts and "anterior" in texts:
+            amounts = _currency_amount(line, currency_columns)
+            if amounts:  # a prose line with the same words has none
+                return amounts
     return {}
 
 
-def _sum_declared_totals(
+def _is_total_line(line: list[Word]) -> bool:
+    """A label, the word "Total", then only amounts (and stray tags): a
+    sentence that merely contains "Total" and a figure is not one."""
+    words = [w["text"] for w in line]
+    if "Total" not in words:
+        return False
+    after = words[words.index("Total") + 1 :]
+    return bool(after) and all(
+        _AMOUNT_RE.match(text) or _STRAY_TAG_RE.match(text) for text in after
+    )
+
+
+def _declared_closing_balances(
     lines: list[list[Word]], currency_columns: dict[str, float], skip_index: int
-) -> dict[str, Decimal] | None:
-    """Every "Total" line's amount(s), summed per currency across the whole
-    document. A real statement prints one per page (this parser doesn't track
-    page boundaries once lines are flattened, so a per-page check and a
-    summed-across-all-pages check are mathematically the same as long as each
-    page's own "Total" really is that page's own subtotal — the read this
-    parser's module docstring documents). `None` if no "Total" line was found
-    at all, so the caller can skip the check rather than comparing against a
-    false zero.
+) -> dict[str, Decimal]:
+    """The closing balance the statement declares, per currency: the amounts on
+    the *last* "Total" line.
+
+    A real statement prints a "Total" at the end of most pages, but checked
+    against real files only the last one equals the opening balance plus every
+    transaction; the earlier ones are not the running balance, so they are
+    ignored, and a currency missing from the last one is not filled in from an
+    earlier one. Empty if there is no Total line, so the caller can skip the
+    check and keep the computed balance.
     """
-    totals: dict[str, Decimal] = {}
-    found = False
+    declared: dict[str, Decimal] = {}
     for index, line in enumerate(lines):
-        if index == skip_index:
+        if index == skip_index or not _is_total_line(line):
             continue
-        if "Total" not in {w["text"] for w in line}:
-            continue
-        found = True
-        for currency, amount in _currency_amount(line, currency_columns).items():
-            totals[currency] = totals.get(currency, Decimal("0.00")) + amount
-    return totals if found else None
+        amounts = _currency_amount(line, currency_columns)
+        if amounts:
+            declared = amounts
+    return declared
 
 
 def parse(
@@ -384,7 +386,7 @@ def parse(
         row_date_text = fecha_words[0] if fecha_words else ""
         stray_words = fecha_words[1:]
         if not _ROW_DATE_RE.match(row_date_text):
-            continue  # a header row, or an info line like "SALDO ANTERIOR"
+            continue  # a header row, or an info line like "Saldo Anterior"
 
         amounts = _currency_amount(line, currency_columns)
         if len(amounts) > 1:
@@ -411,7 +413,7 @@ def parse(
             )
         )
 
-    declared_totals = _sum_declared_totals(lines, currency_columns, header_index)
+    declared_closing = _declared_closing_balances(lines, currency_columns, header_index)
 
     statements: list[Statement] = []
     for currency in _CURRENCIES:
@@ -424,18 +426,18 @@ def parse(
                 f"found {currency} transactions but no opening balance for it"
             )
 
-        if declared_totals is not None and currency in declared_totals:
-            actual_total = sum((t.amount for t in transactions), Decimal("0.00"))
-            if actual_total != declared_totals[currency]:
-                raise ValueError(
-                    f"{currency} Total does not match the sum of its own "
-                    f"transactions: declared {declared_totals[currency]}, "
-                    f"got {actual_total}"
-                )
-
         closing_balance = opening_balance + sum(
             (t.amount for t in transactions), Decimal("0.00")
         )
+        if (
+            currency in declared_closing
+            and declared_closing[currency] != closing_balance
+        ):
+            raise ValueError(
+                f"{currency} closing balance declared by Total "
+                f"({declared_closing[currency]}) does not match opening balance "
+                f"plus its own transactions ({closing_balance})"
+            )
         statement = Statement(
             user_id=user_id,
             bank="Scotiabank",

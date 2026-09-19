@@ -37,6 +37,11 @@ merged, and a clean clone follows the README's quickstart through to a materiali
   Writing it turned up one real gap that only a real run would have hit: `make poc` ran
   `dbt build` without `dbt deps`, so it failed on any checkout that hadn't installed
   Elementary's package. Fixed in T25 (`scripts/poc.py`, test first).
+  **Update (2026-09-19, first real run):** BCP parsed 60/60; real Scotiabank statements
+  corrected the card parser (title-case `Saldo Anterior`, a stray `(abc:12)` tag after some
+  amounts, and the last `Total` being the declared closing balance) and turned out to include a
+  second layout, a savings account, not parsed yet. See
+  [the parser note](../components/scotiabank-parser.md).
 - **The numeric rules are still in warn mode** — CONSTRAINTS.md's switch date is 2026-09-26,
   not yet reached; flipping `continue-on-error` and the `-`/`||true` markers is a two-line
   change once it is.
