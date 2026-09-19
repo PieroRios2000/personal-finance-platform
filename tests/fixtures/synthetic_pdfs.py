@@ -448,7 +448,7 @@ def scotiabank_statement_pdf(
         50,
         f"PERIODO DE TARJETA DEL {period_start:%d-%m-%Y} AL {period_end:%d-%m-%Y}",
     )
-    pdf.text(40, 70, "SALDO ANTERIOR")
+    pdf.text(40, 70, "Saldo Anterior")
     if opening_pen is not None:
         pdf.text(_SCOTIA_SOLES_X, 70, _scotia_money(opening_pen))
     if opening_usd is not None:
