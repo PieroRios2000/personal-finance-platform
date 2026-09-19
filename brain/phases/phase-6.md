@@ -16,8 +16,17 @@ session starts from facts. Scope decision:
 | Piece | What | Status |
 |---|---|---|
 | Banco Ripley parser | A third bank: the owner's savings account, in soles. Same rules as BCP and Scotiabank: content detection, reconciliation against declared balances, masked layout dump reviewed by the owner before any parser work | planned, first task |
-| Projection | Time to reach a goal, from `gold.fact_transactions` | planned, after Ripley |
+| Cash-flow projection | Time to reach a goal, from `gold.fact_transactions`; goals can be in soles or dollars | planned, after Ripley |
+| Exchange-rate projection (sol/dólar) | A rate history and a projected rate path, so dollar balances and dollar goals can be converted. **Exists only inside this phase**: bronze, silver and gold never convert | planned, with the projection |
 | Out of scope | Investments on other platforms (mutual funds): long term and market-dependent, deliberately not counted | decided |
+
+## The exchange rate stays inside this phase
+
+Until now the project deliberately never converted currencies: every layer keeps soles and dollars
+apart. The projection is the one exception, by the owner's decision
+([ADR 0025](../decisions/0025-savings-goal-projection-counts-liquid-savings-only.md)): it converts
+on top of gold, in its own section, and never writes a converted amount back into bronze, silver
+or gold.
 
 ## What it needs from the existing platform
 
@@ -28,7 +37,7 @@ session starts from facts. Scope decision:
 
 ## Open questions
 
-Listed in the concept note (currencies, method, irregular months) and in the ADR. They are
+Listed in the concept note (exchange-rate source and path model, cash-flow method, irregular months) and in the ADR. They are
 settled when this phase is planned, not before.
 
 ## Related

@@ -126,7 +126,7 @@ Every parser validates that the sum of the extracted transactions matches the ba
 **Status: built and closed (2026-09-18)** — [`brain/phases/phase-2.md`](brain/phases/phase-2.md). Against the plan above:
 - Dagster orchestrates *bronze → every dbt node* (ingest → dbt build, with the dbt tests inside the build). The plan's "→ refresh" step has nothing to refresh yet (no dashboard until Phase 5), so it isn't built.
 - Silver's incremental `MERGE` is keyed on `date + amount + normalized description + account_id + occurrence_number`; the occurrence number is scoped to one source file, which resolves the business-key note's open question. It also gained a model-layer balance-reconciliation test the plan didn't list.
-- Gold is a star schema (`fact_transactions` + `dim_date`/`dim_account`/`dim_bank`/`dim_user`). No `dim_category` (Phase 3) and no FX conversion, by decision.
+- Gold is a star schema (`fact_transactions` + `dim_date`/`dim_account`/`dim_bank`/`dim_user`). No `dim_category` (Phase 3) and no FX conversion in these layers, by decision (only the Phase 6 projection converts, on top of gold).
 - Quality: **Elementary** was chosen over Great Expectations (the plan left it open); a single row-count anomaly test on silver, in warn-mode.
 - Catalog: **OpenMetadata** was chosen over DataHub. It is optional and local (not in CI) and needs a ~4.8 GiB peak; OpenMetadata 2.0.2 has no DuckDB connector, so a small script registers the tables (ADR 0023).
 - Still open: real-data validation of the Scotiabank parser, and the numeric CI rules leaving warn-mode on 2026-09-26.
@@ -158,7 +158,8 @@ Every parser validates that the sum of the extracted transactions matches the ba
 ### Phase 6 — Savings-goal projection *(planned, added 2026-09-19)*
 **Goal:** answer "given my real cash flow, how long until I reach my savings goal?"
 - Banco Ripley as a third bank (the owner's savings account, in soles): its own parser, calibrated against real statements like the other two.
-- A projection over the gold tables: time to reach a target amount at the observed monthly flow, leaving out transfers between the owner's own accounts.
+- A projection over the gold tables: time to reach a target amount (in soles or dollars) at the observed monthly flow, leaving out transfers between the owner's own accounts.
+- A **sol/dólar exchange-rate projection** section so dollar accounts and dollar goals can be converted. It exists **only in this phase**: bronze, silver and gold keep never converting currencies; the projection converts on its own, on top of gold.
 - **Scope decision:** only liquid money in bank accounts counts. Investments held on other platforms (mutual funds) are long term and market-dependent, so they are deliberately not part of the goal or the flow ([ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md)).
 
 **Closes:** turning the platform from "what happened" into "what happens next" on the owner's own data. Details and open questions: [`brain/phases/phase-6.md`](brain/phases/phase-6.md).

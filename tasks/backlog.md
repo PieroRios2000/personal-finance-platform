@@ -18,5 +18,6 @@ branch and PR when it is picked up; see [`CLAUDE.md`](../CLAUDE.md) for how.
 - [ ] [Phase 7 — Alerting](../brain/phases/phase-7.md): errors and warnings by email or Microsoft
       Teams.
 - [ ] [Phase 6 — Savings-goal projection](../brain/phases/phase-6.md): first the Banco Ripley
-      parser, then the projection. Scope in [ADR 0025](../brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md).
+      parser, then the cash-flow projection and its own sol/dólar exchange-rate section (the only
+      place currencies are converted). Scope in [ADR 0025](../brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md).
 - [ ] Phase 3 (ML), 4 (cloud), 5 (dashboard): see [PROJECT.md](../PROJECT.md).

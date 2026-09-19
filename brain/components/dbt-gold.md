@@ -51,12 +51,16 @@ purpose (`tasks/plan-phase2.md`'s own architecture decisions).
 Full reasoning, including why the mapping has no catch-all `else` branch, in
 [ADR 0020](../decisions/0020-gold-star-schema-flow-type-and-dim-account-grain.md).
 
-## No FX, ever
+## No FX in the layers
 
 `currency` is carried through from `silver.transactions` unchanged and never collapsed or
 converted — every currency-sliced query (gold included) stays sliced. Piero's explicit call
 (`tasks/plan-phase2.md`): an FX rate is one more moving, external input this project would have
 to source and keep current, for a number nobody asked for.
+
+Since 2026-09-19 there is one exception, and it is outside these layers: the Phase 6
+savings-goal projection converts sol/dólar on its own, on top of gold, and never writes a
+converted amount back ([ADR 0025](../decisions/0025-savings-goal-projection-counts-liquid-savings-only.md)).
 
 ## How to use it and how to verify it
 

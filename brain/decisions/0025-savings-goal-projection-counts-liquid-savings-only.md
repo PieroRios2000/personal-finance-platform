@@ -5,7 +5,7 @@ status: accepted
 date: 2026-09-19
 ---
 
-# ADR 0025: The savings-goal projection counts liquid savings in bank accounts only
+# ADR 0025: The savings-goal projection counts liquid savings only, and is the one place with exchange rates
 
 ## Context
 
@@ -31,12 +31,20 @@ model is built: which money counts, and which banks feed it.
   never leaving the machine ([ADR 0004](0004-real-pdfs-never-leave-your-machine.md)).
 - The projection is a **separate phase** on top of gold ([Phase 6](../phases/phase-6.md)), not
   a change to the existing layers.
+- **The projection does handle exchange rates**, and it has its own **sol/dólar exchange-rate
+  projection** section, so a goal can be met with dollar accounts too. This applies **only to
+  the projection phase**: bronze, silver and gold keep the earlier decision of never converting
+  or mixing currencies, and the projection converts on its own, on top of gold, never writing a
+  converted amount back into those layers.
 
 ## Alternatives considered
 
 - **Include the investments with a manual "current value" input**: rejected by the owner; the
   values are volatile and long-term, so they would make the answer to "when do I reach the goal"
   depend on the market instead of on saving behaviour.
+- **Convert currencies in gold so every consumer gets one currency**: rejected; the owner wants
+  conversion confined to the projection, and a rate is an assumption about the future, which does
+  not belong in the layers that record what the bank actually said.
 - **Model only the banks already supported**: rejected, the savings account being projected is
   the Ripley one, so without it the projection would start from the wrong balance.
 
@@ -48,9 +56,11 @@ model is built: which money counts, and which banks feed it.
 - The projection reads gold. Internal transfers between the owner's own accounts have to stay
   out of income and spending ([ADR 0017](0017-internal-transfer-matching-mutual-nearest-neighbor.md)),
   otherwise moving money to the savings account would look like spending.
-- Open, to settle when Phase 6 is planned: how USD accounts (Scotiabank has one) enter a goal
-  set in soles, since the project has so far decided **not** to convert currencies; how the goal
-  and the horizon are provided; and what the projection method is.
+- The exchange rate is an input the projection has to get from somewhere and project forward;
+  that is the exchange-rate section of Phase 6. Where the historical rates come from (a free
+  public source, or entered by hand, since the platform is fully local and zero-cost) and how the
+  future path is modelled are open, to settle when Phase 6 is planned, as are how the goal and
+  the horizon are provided and what the cash-flow projection method is.
 
 ## Related
 
