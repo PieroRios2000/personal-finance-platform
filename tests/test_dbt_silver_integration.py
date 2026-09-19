@@ -102,8 +102,12 @@ def _write(
     account_kind: AccountKind = "asset",
     currency: Currency = "PEN",
     file_sha256: str | None = None,
+    transaction_date: date | None = None,
 ) -> None:
     """Write one synthetic statement to the test lake, reconciled by construction.
+
+    `transaction_date` defaults to `period_start`; a caller can set it outside
+    the period, as a real bank does for a movement dated just before a cycle.
 
     A `movement` of zero means a period with no transactions at all, which is what
     a dormant month looks like; `Transaction` rejects a zero amount (ADR 0005).
@@ -132,7 +136,7 @@ def _write(
                 bank=bank,
                 account_id=account_id,
                 account_last4=_LAST4,
-                date=period_start,
+                date=transaction_date or period_start,
                 description="  compra pos....visa  ",
                 amount=amount,
                 currency=currency,
@@ -384,3 +388,18 @@ def test_a_gap_of_several_days_still_fails_even_with_matching_balances(
 
     assert failed.returncode != 0, failed.stdout
     assert "assert_statement_continuity" in failed.stdout
+
+
+def test_a_movement_dated_before_its_statements_period_is_not_a_reconciliation_failure(
+    lake: str, tmp_path: Path
+) -> None:
+    """Real BCP statements list a few movements dated a day or two before the
+    period they belong to. The balance reconciliation must attribute a movement
+    to the statement it came from, not to whichever period its date falls in:
+    otherwise the neighbouring statement 'gains' it and both fail."""
+    _write(*_JANUARY)
+    _write(*_FEBRUARY, transaction_date=date(2026, 1, 30))
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout
