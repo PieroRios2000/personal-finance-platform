@@ -510,6 +510,7 @@ def scotiabank_account_pdf(
     currency_words: str = "M.N. SOLES",
     period: tuple[date, date] = (date(2026, 1, 1), date(2026, 1, 31)),
     reconciles: bool = True,
+    page_break_after: int | None = None,
 ) -> bytes:
     """Render a fictional Scotiabank *savings-account* statement.
 
@@ -525,10 +526,23 @@ def scotiabank_account_pdf(
     the closing balance, closes it. `Movement.amount` is signed: negative is a
     CARGO. `reconciles=False` breaks the printed closing balance by a fixed
     drift, keeping the per-row math honest, like `bcp_statement_pdf`.
+    `page_break_after=N` moves the rows after the first N onto a second page
+    that repeats the header, as a long real statement does.
     """
     pdf = FPDF(unit="pt")
     pdf.add_page()
     pdf.set_font("Helvetica", size=9)
+
+    def draw_header() -> None:
+        pdf.text(29, 280, "FECHA")
+        pdf.text(72, 280, "FECHA")
+        pdf.text(31, 288, "VALOR")
+        pdf.text(110, 284, "ORIG")
+        pdf.text(206, 284, "CONCEPTO")
+        pdf.text(329, 284, "REFERENCIA")
+        pdf.text(402, 284, "CARGO")
+        pdf.text(463, 284, "ABONO")
+        pdf.text(527, 284, "SALDO")
 
     start, end = period
     pdf.text(300, 78, "Periodo")
@@ -541,15 +555,7 @@ def scotiabank_account_pdf(
     pdf.text(230, 261, "Nro.")
     pdf.text(270, 261, _SCOTIA_ACCOUNT_NUMBER)
 
-    pdf.text(29, 280, "FECHA")
-    pdf.text(72, 280, "FECHA")
-    pdf.text(31, 288, "VALOR")
-    pdf.text(110, 284, "ORIG")
-    pdf.text(206, 284, "CONCEPTO")
-    pdf.text(329, 284, "REFERENCIA")
-    pdf.text(402, 284, "CARGO")
-    pdf.text(463, 284, "ABONO")
-    pdf.text(527, 284, "SALDO")
+    draw_header()
 
     pdf.text(137, 303, "Saldo Final al 31 de DICIEMBRE del 2025")
     _right_aligned(pdf, _SCOTIA_ACC_SALDO_X1, 303, f"{opening_balance:,.2f}")
@@ -557,7 +563,11 @@ def scotiabank_account_pdf(
     balance = opening_balance
     cargos = abonos = Decimal("0.00")
     y = 313
-    for movement in movements:
+    for index, movement in enumerate(movements):
+        if index == page_break_after:
+            pdf.add_page()
+            draw_header()
+            y = 313
         pdf.text(34, y, f"{movement.when:%d/%m}")
         pdf.text(77, y, f"{movement.when:%d/%m}")
         pdf.text(114, y, "001")

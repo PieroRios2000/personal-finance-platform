@@ -223,5 +223,50 @@ def test_a_dollar_account_written_with_an_accent_is_usd() -> None:
 
 
 def test_a_statement_without_a_period_line_is_rejected() -> None:
-    with pytest.raises(ValueError, match="could not find the account number"):
+    with pytest.raises(ValueError, match="period"):
         _parse_pages(_without(_pages(), "Al"))
+
+
+def test_a_statement_spanning_two_pages_with_a_repeated_header(
+    tmp_path: Path,
+) -> None:
+    (statement,) = _parse(tmp_path, scotiabank_account_pdf(page_break_after=2))
+
+    assert len(statement.transactions) == 4
+    assert statement.closing_balance == Decimal("3594.20")
+
+
+def test_saldo_final_inside_a_description_is_a_movement_not_a_balance_line(
+    tmp_path: Path,
+) -> None:
+    data = scotiabank_account_pdf(
+        movements=(
+            Movement(
+                date(2026, 1, 5), "AJUSTE SALDO FINAL AL CIERRE", Decimal("-7.00")
+            ),
+        ),
+        opening_balance=Decimal("100.00"),
+    )
+
+    (statement,) = _parse(tmp_path, data)
+
+    assert [t.amount for t in statement.transactions] == [Decimal("-7.00")]
+    assert statement.closing_balance == Decimal("93.00")
+
+
+def test_a_third_saldo_final_line_is_rejected_rather_than_ignored() -> None:
+    pages = _pages()
+    extra = next(ln for ln in pages[0] if ln[0]["text"] == "Saldo")
+    pages[0].append(extra)
+
+    with pytest.raises(ValueError, match="exactly two"):
+        _parse_pages(pages)
+
+
+def test_a_header_without_referencia_is_not_this_layout() -> None:
+    pages = _pages()
+    for word in (w for page in pages for ln in page for w in ln):
+        if word["text"] == "REFERENCIA":
+            word["text"] = "REF"
+
+    assert _parse_pages(pages) is None
