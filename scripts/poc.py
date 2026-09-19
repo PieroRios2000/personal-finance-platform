@@ -64,6 +64,39 @@ def _safe_dbt_lines(output: str) -> list[str]:
     ]
 
 
+_ALERT_VARIABLES = ("ALERT_TEAMS_WEBHOOK_URL", "ALERT_SMTP_HOST", "ALERT_EMAIL_TO")
+
+
+def _needs_review_count(ingest_output: str) -> int:
+    """N from the report's own "Needs review: N" summary line (a count)."""
+    for line in _safe_ingest_lines(ingest_output):
+        match = re.search(r"Needs review: (\d+)", line)
+        if match:
+            return int(match[1])
+    return 0
+
+
+def _send_alerts(needs_review: int) -> None:
+    """Phase 7: errors go out now, warnings are queued for the weekly digest.
+    Only when a channel is configured, and never allowed to change `make poc`'s
+    own result. `alerting` prints names and counts only."""
+    if not any(os.environ.get(name) for name in _ALERT_VARIABLES):
+        return
+    subprocess.run(
+        [
+            "uv",
+            "run",
+            "python",
+            "-m",
+            "alerting",
+            "dbt",
+            "--needs-review",
+            str(needs_review),
+        ],
+        check=False,
+    )
+
+
 def _transfer_match_summary(duckdb_path: str) -> str:
     """T18b: how many internal transfers matched, and how many candidates
     didn't -- row counts only, never an amount, account or date."""
@@ -131,6 +164,8 @@ def main() -> int:
     if dbt.returncode == 0:
         duckdb_path = os.environ.get("PFP_DUCKDB_PATH", "dbt/pfp.duckdb")
         print(f"  {_transfer_match_summary(duckdb_path)}")
+
+    _send_alerts(_needs_review_count(ingest.stdout))
 
     ok = ingest.returncode == 0 and dbt.returncode == 0
     print(f"poc: {'PASS' if ok else 'FAIL'}")

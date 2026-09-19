@@ -365,6 +365,37 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 Re-run `make om-sync` after any `dbt build` that changes models; it is idempotent. `make om-down`
 when done. Elementary's own models are not catalogued and dbt tests are not ingested.
 
+## 11. Alerts by email or Microsoft Teams (Phase 7)
+
+Errors are sent **the moment they appear**; warnings are **queued and sent once a week** as one
+digest, to read on the weekend. Only names and counts are ever sent (a failing test's name, how
+many rows, how many files need review), never an amount, an account or a file name
+([ADR 0026](brain/decisions/0026-alerts-errors-now-warnings-weekly-names-and-counts-only.md)).
+
+1. Fill in the `ALERT_*` variables in `.env` (template in `.env.example`); a channel is on when
+   its variables are set, and both can be on:
+   - **Email:** `ALERT_SMTP_HOST`, `ALERT_SMTP_PORT` (587, STARTTLS), `ALERT_SMTP_USER`,
+     `ALERT_SMTP_PASSWORD`, `ALERT_EMAIL_FROM`, `ALERT_EMAIL_TO` (comma-separated). Most providers
+     need an *app password* here, not the account password.
+   - **Teams:** `ALERT_TEAMS_WEBHOOK_URL`: in Teams, create a Workflows flow triggered by "When a
+     Teams webhook request is received" that posts to your channel or chat, and paste its URL
+     (whether your tenant allows it depends on its admin).
+2. Errors: `make poc` sends them by itself after the build when a channel is configured. After a
+   plain `dbt build` or Dagster run, run `make alert` (it reads `dbt/target/run_results.json`).
+   The same command queues the warnings in `~/finance-data/alerts/warnings.jsonl` (private,
+   outside the repo; change it with `ALERT_QUEUE_PATH`).
+3. Weekly digest: `make alert-digest` sends everything queued and empties the queue (only if the
+   send worked; otherwise the warnings stay for the next try). To run it every Saturday morning,
+   add a cron line inside WSL (`crontab -e`; `sudo service cron start` if cron is not running):
+
+   ```
+   0 9 * * 6 cd ~/projects/personal-finance-platform && make alert-digest >> ~/finance-data/alerts/digest.log 2>&1
+   ```
+
+   or a Windows Task Scheduler task running
+   `wsl -e bash -lc "cd ~/projects/personal-finance-platform && make alert-digest"` on Saturdays.
+   The machine has to be on at that time.
+
 ## Reviewing CI
 
 Every PR runs `.github/workflows/ci.yml`: `lint-types`, `tests`, `security`, `architecture`
