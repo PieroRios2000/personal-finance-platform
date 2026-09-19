@@ -9,8 +9,8 @@ root, never in two places at once.
 
 **Duplicate-detection scoping.** There's no persistent "already ingested" registry
 yet — that's T14's bronze writer, which will track every file's hash against what's
-already been written to the lake. Until then, `organize()` only catches two kinds of
-duplicate, neither of which needs a database:
+already been written to the lake. Until then, `organize()` only catches three kinds of
+duplicate, none of which needs a database:
 
 1. Two files in the *same inbox pass* with identical bytes: their shared sha256 is
    tracked in memory for the run, and the second (and any later) copy goes to
@@ -20,6 +20,12 @@ duplicate, neither of which needs a database:
    path, not by a general index): this reuses the archive layout itself as a narrow,
    per-account version check — the flip side of the "regenerated statement" check
    below — not a real duplicate registry.
+3. A file whose bytes differ from the archived copy at that destination but whose
+   *parsed content* is identical (same account, period, balances and movements): a
+   bank re-download, since a bank hands out a fresh PDF on every download. Compared
+   against every archived version of that period; if the archived copy can no longer
+   be parsed it is not a match, and the file is filed as a new version like any other
+   different one (ADR 0024).
 
 A duplicate that shows up in a *later, separate* run with no earlier match in that
 run's inbox and no file yet archived at the same destination (for example, both
@@ -41,6 +47,7 @@ and this task's PR for the full explanation.
 import os
 import re
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -214,6 +221,55 @@ def _missing_months(periods: list[tuple[date, date]]) -> list[str]:
     return missing
 
 
+def _content_key(statements: list[Statement]) -> list[tuple[object, ...]]:
+    """What a set of statements *says*, ignoring which file they came from: the
+    account, period, balances and every movement, but not `source_file_sha256`."""
+    return sorted(
+        (
+            s.bank,
+            s.account_id,
+            s.currency,
+            s.period_start,
+            s.period_end,
+            s.opening_balance,
+            s.closing_balance,
+            s.account_kind,
+            sorted((t.date, t.amount, t.description) for t in s.transactions),
+        )
+        for s in statements
+    )
+
+
+def _archived_twin(
+    parse: Callable[..., list[Statement]],
+    archived_versions: list[Path],
+    statements: list[Statement],
+    user_id: str,
+    password: str,
+) -> Path | None:
+    """The already-archived file, if any, that says exactly what `statements` say.
+
+    A bank hands out a fresh PDF on every download, so the same month can arrive
+    twice with different bytes and identical numbers. Comparing what was parsed,
+    not the bytes, is what tells that apart from a genuine correction. An archived
+    file that can't be parsed any more is simply not a match: the caller then keeps
+    the safe old behavior (a new version), never guesses."""
+    key = _content_key(statements)
+    for archived in archived_versions:
+        try:
+            parsed = parse(
+                archived,
+                user_id=user_id,
+                file_sha256=file_sha256(archived),
+                password=password,
+            )
+        except (pikepdf.PikepdfError, ReconciliationError, ValueError, OSError):
+            continue
+        if _content_key(parsed) == key:
+            return archived
+    return None
+
+
 def organize(
     user_id: str,
     *,
@@ -301,6 +357,26 @@ def organize(
                         "identical content to the statement already archived for "
                         f"{statement.bank} ...{statement.account_last4}, "
                         f"{statement.period_start} to {statement.period_end}",
+                        dest,
+                    )
+                )
+                continue
+            twin = _archived_twin(
+                entry.parse,
+                [dest_path, *sorted(account_dir.glob(f"{base_name}_v*.pdf"))],
+                statements,
+                user_id,
+                password,
+            )
+            if twin is not None:
+                dest = _move_without_overwrite(pdf, archive / "_duplicates")
+                duplicates.append(
+                    SkippedItem(
+                        digest,
+                        "same content as the statement already archived for "
+                        f"{statement.bank} ...{statement.account_last4}, "
+                        f"{statement.period_start} to {statement.period_end} "
+                        "(the file's bytes differ: a re-download)",
                         dest,
                     )
                 )
