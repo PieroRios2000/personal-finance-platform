@@ -15,10 +15,11 @@ session starts from facts. Scope decision:
 
 | Piece | What | Status |
 |---|---|---|
-| Banco Ripley parser | A third bank: the owner's savings account, in soles. Same rules as BCP and Scotiabank: content detection, reconciliation against declared balances, masked layout dump reviewed by the owner before any parser work | planned, first task |
+| Manual Excel importer | Banco Ripley gives no statements, so its savings movements (and the investments) are typed month by month into one Excel (`Ahorros` and `Inversiones` sheets). The template exists (`scripts/make_manual_templates.py`, [`docs/manual-data.md`](../../docs/manual-data.md)); the importer is designed from a masked dump of the owner's real file. [ADR 0027](../decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md) | template built; importer planned, first task |
+| Investment tracking | Tyba funds and Flip: contributions, withdrawals and month-end valuations, to see each fund's return per month. Separate from the savings goal | planned, with the importer |
 | Cash-flow projection | Time to reach a goal, from `gold.fact_transactions`; goals can be in soles or dollars | planned, after Ripley |
 | Exchange-rate projection (sol/dólar) | A rate history and a projected rate path, so dollar balances and dollar goals can be converted. **Exists only inside this phase**: bronze, silver and gold never convert | planned, with the projection |
-| Out of scope | Investments on other platforms (mutual funds): long term and market-dependent, deliberately not counted | decided |
+| Out of the goal | Investments on other platforms: long term and market-dependent, deliberately not counted toward the goal (they are tracked separately, above) | decided |
 
 ## The exchange rate stays inside this phase
 

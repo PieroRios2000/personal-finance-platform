@@ -26,9 +26,10 @@ model is built: which money counts, and which banks feed it.
 - **Investments elsewhere (mutual funds and similar) are out of scope, on purpose.** Their value
   moves with the market, they are held for the long term, and they have no bank statement the
   platform could ingest. They are neither an input nor part of the "amount saved".
-- **Banco Ripley becomes the third bank**, as its own parser under the same rules as the other
-  two: content detection, reconciliation against the balances the statement declares, real PDFs
-  never leaving the machine ([ADR 0004](0004-real-pdfs-never-leave-your-machine.md)).
+- **Banco Ripley becomes the third source**, under the same reconciliation rules as the other
+  two and the same privacy rule ([ADR 0004](0004-real-pdfs-never-leave-your-machine.md)). This ADR
+  first planned a PDF parser; Ripley gives no statements, so [ADR 0027](0027-manual-excel-for-ripley-savings-and-investment-tracking.md)
+  replaces that with a manual Excel.
 - The projection is a **separate phase** on top of gold ([Phase 6](../phases/phase-6.md)), not
   a change to the existing layers.
 - **The projection does handle exchange rates**, and it has its own **sol/dólar exchange-rate
@@ -50,9 +51,9 @@ model is built: which money counts, and which banks feed it.
 
 ## Consequences
 
-- A third parser has to be built and calibrated against real Ripley statements, using the same
+- Ripley's data has to be imported and calibrated against the owner's real Excel, using the same
   masked-dump loop as BCP and Scotiabank (each of those needed several rounds against real
-  files). It is the first task of Phase 6.
+  data). It is the first task of Phase 6 (see ADR 0027).
 - The projection reads gold. Internal transfers between the owner's own accounts have to stay
   out of income and spending ([ADR 0017](0017-internal-transfer-matching-mutual-nearest-neighbor.md)),
   otherwise moving money to the savings account would look like spending.

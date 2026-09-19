@@ -119,6 +119,8 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | pytest | 9.1.1 | dev | Tests |
 | pytest-cov | 7.1.0 | dev | Coverage |
 | pytest-benchmark | 5.3.0 | dev | Parsing and bronze-write benchmarks, base vs PR (T15) |
+| openpyxl | 3.1.5 | runtime | Writes (and later reads) the manual Excel for Ripley savings and investments (`scripts/make_manual_templates.py`) |
+| types-openpyxl | 3.1.5 | dev | Type stubs for openpyxl (mypy strict) |
 | pytest-xdist | 3.8.0 | dev | Runs the integration suite on several workers in CI (`-n 4`), each with its own test lake |
 | ruff | 0.16.7 | dev | Lint and format |
 | mypy | 2.3.1 | dev | Types (strict mode) |

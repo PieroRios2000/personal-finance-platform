@@ -8,6 +8,7 @@ from typing import Any
 
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
+
 from scripts.make_manual_templates import (
     INVESTMENT_COLUMNS,
     SAVINGS_COLUMNS,
