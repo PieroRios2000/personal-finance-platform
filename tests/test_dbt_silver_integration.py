@@ -355,3 +355,32 @@ def test_a_genuine_duplicate_period_still_fails_the_continuity_test(
 
     assert failed.returncode != 0, failed.stdout
     assert "assert_statement_continuity" in failed.stdout
+
+
+def test_a_statement_starting_two_days_after_the_previous_one_ended_passes(
+    lake: str, tmp_path: Path
+) -> None:
+    """Real Scotiabank savings statements end on the 30th of a 31-day month and
+    the next one starts on the 1st: two days apart, with the balance carried
+    over exactly. Bank cycles do not always tile the calendar, and the balance
+    half of the rule still proves nothing went missing."""
+    _write(date(2026, 1, 1), date(2026, 1, 30), "1000.00", "-100.00")
+    _write(*_FEBRUARY)
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_a_gap_of_several_days_still_fails_even_with_matching_balances(
+    lake: str, tmp_path: Path
+) -> None:
+    """The tolerance is for a bank's cycle cut-off, not for a missing period:
+    a week without a statement fails."""
+    _write(date(2026, 1, 1), date(2026, 1, 24), "1000.00", "-100.00")
+    _write(*_FEBRUARY)
+
+    failed = _dbt_build(tmp_path)
+
+    assert failed.returncode != 0, failed.stdout
+    assert "assert_statement_continuity" in failed.stdout
