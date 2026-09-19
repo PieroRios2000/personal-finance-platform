@@ -27,7 +27,7 @@ checked. Design decisions in [ADR 0011](../decisions/0011-delta-scan-as-a-dbt-so
 | [`dbt/models/silver/unmatched_transfers.sql`](../../dbt/models/silver/unmatched_transfers.sql) | T18b: `silver.unmatched_transfers`, transfer candidates with no mutual match -- for review, never dropped |
 | [`dbt/macros/movement_id.sql`](../../dbt/macros/movement_id.sql) | T18b: a content-based identity (md5 hash) for one `bronze.transactions` row, shared by `internal_transfer_matches.sql` and `transactions.sql` so their two lookups of the same row can never silently drift apart. Extended in T20 to include `occurrence_number`, resolving a limitation it used to document as its own out-of-scope gap |
 | [`dbt/models/silver/schema.yml`](../../dbt/models/silver/schema.yml) | `not_null` on every column, `accepted_values` on `currency` (`PEN`, `USD`) and `account_kind` (`asset`, `liability`), matching `ingestion.schema.Currency`/`AccountKind`; column docs and tests for the T18b and T20 models too |
-| [`dbt/tests/assert_statement_continuity.sql`](../../dbt/tests/assert_statement_continuity.sql) | The continuity test: a period's closing balance is the next period's opening balance, and the periods are contiguous (a gap of up to `max_statement_gap_days`, default 3, is tolerated: real Scotiabank cycles can end on the 30th and restart on the 1st), per user, account and currency (T18c) |
+| [`dbt/tests/assert_statement_continuity.sql`](../../dbt/tests/assert_statement_continuity.sql) | The continuity test: a period's closing balance is the next period's opening balance, and the periods are contiguous (by month, not by day: each calendar month must have its statement, since real cycles do not tile the calendar and accounts can go days without movements), per user, account and currency (T18c) |
 | [`dbt/tests/assert_internal_transfers_are_one_to_one.sql`](../../dbt/tests/assert_internal_transfers_are_one_to_one.sql) | T18b: standing proof that no movement appears in more than one matched pair |
 | [`dbt/tests/assert_statement_balance_reconciliation.sql`](../../dbt/tests/assert_statement_balance_reconciliation.sql) | T20: re-checks T8's own Python-level balance check at the model layer — per account/period/currency, `sum(silver.transactions.amount)` equals the matching statement's `closing_balance - opening_balance` — specifically to catch what the incremental `MERGE` could get wrong that a check upstream of it never would. Movements are attributed to a statement by `source_file_sha256`, not by date window: real BCP statements list a few movements dated before their own period. |
 | [`dbt/tests/assert_transactions_business_key_is_unique.sql`](../../dbt/tests/assert_transactions_business_key_is_unique.sql) | T20: standing proof the `MERGE`'s own `unique_key` is actually unique — dbt's merge strategy doesn't refuse a duplicate-keyed source batch itself, it just matches ambiguously |
@@ -70,8 +70,10 @@ consecutive statements of the same account against each other, which is the only
 *missing* statement can show up at all:
 
 - the closing balance of a period must equal the opening balance of the next, and
-- the next period must start 1 to `max_statement_gap_days` (default 3) days after the previous
-  one ended: real Scotiabank cycles can end on the 30th and restart on the 1st.
+- the next statement must end in the month after the previous one's (one statement per account
+  and month; a statement belongs to the month its period ends in). Counting days would fail real
+  data: Scotiabank cycles can end on the 30th and restart on the 1st, and an account can go
+  days without movements.
 
 Both halves earn their place. A missing month usually shows up as a balance drift, but not if
 that month's movements happen to net to zero — then only the date check catches it, and

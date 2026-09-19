@@ -267,7 +267,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.integration == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 30, not 20: the integration suite alone takes ~17 min (39 tests, each a
+    # real `dbt build`), so 20 left almost nothing for setup, the two Dagster
+    # passes and the Elementary steps, and a slow runner cancelled the job.
+    timeout-minutes: 30
     # No secrets (ADR 0007): SeaweedFS's identity here is a fixed, local-only,
     # non-real value -- the same shape as every developer's own .env, just
     # hardcoded so this job runs the same way on a PR from a fork.

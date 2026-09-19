@@ -40,10 +40,6 @@ models:
 # project doesn't itself control, even one that sends no project data.
 vars:
   internal_transfer_day_window_days: 3
-  # Largest gap, in days, between one statement's period_end and the next
-  # one's period_start that `assert_statement_continuity` still accepts (the
-  # balances must match exactly either way). Sized for monthly statements.
-  max_statement_gap_days: 3
   internal_transfer_amount_tolerance: 0
   disable_tracking: true
   # T22 (SETUP.md's Known issues): Elementary's own `on-run-end` cleanup of its
