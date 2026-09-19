@@ -1,5 +1,6 @@
 """Scotiabank credit-card statement parser (T18): turns a decrypted PDF into
-one reconciled `Statement` *per currency* it carries.
+one reconciled `Statement` *per currency* it carries. A PDF with no card
+header is read as a savings-account statement instead (`scotiabank_account`).
 
 No `detect()` is exposed here (see `ingestion.parsers.base`'s module docstring):
 unlike BCP's real export, a real Scotiabank PDF's raw bytes start with a plain

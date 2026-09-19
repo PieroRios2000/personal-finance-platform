@@ -115,7 +115,8 @@ def _find_header(lines: list[list[Word]]) -> dict[str, float] | None:
     and left edge of REFERENCIA (where the description ends)."""
     for line in lines:
         by_text = {w["text"].upper(): w for w in line}
-        if all(name in by_text for name in (*_MONEY_COLUMNS, "CONCEPTO")):
+        needed = (*_MONEY_COLUMNS, "CONCEPTO", "REFERENCIA")
+        if all(name in by_text for name in needed):
             columns = {name: by_text[name]["x1"] for name in _MONEY_COLUMNS}
             columns["REFERENCIA_X0"] = by_text["REFERENCIA"]["x0"]
             return columns
@@ -126,7 +127,7 @@ def _money_by_column(line: list[Word], columns: dict[str, float]) -> dict[str, D
     """Each amount on the line, under the header label nearest its right edge."""
     found: dict[str, Decimal] = {}
     for word in line:
-        if not _AMOUNT_RE.match(word["text"]):
+        if not _AMOUNT_RE.match(word["text"]) or word["x0"] < columns["REFERENCIA_X0"]:
             continue
         name = min(_MONEY_COLUMNS, key=lambda c: abs(columns[c] - word["x1"]))
         found[name] = _amount(word["text"])
@@ -173,8 +174,9 @@ def parse_pages(
     transactions: list[Transaction] = []
     for line in lines:
         texts = [w["text"] for w in line]
-        lowered = {t.lower() for t in texts}
-        if {"saldo", "final", "al"} <= lowered:
+        # A balance line *starts* with "Saldo Final al"; the same words inside
+        # a movement's description do not make it one.
+        if [t.lower() for t in texts[:3]] == ["saldo", "final", "al"]:
             balances.append(_money_by_column(line, columns))
             continue
         dates = [t for t in texts[:2] if _ROW_DATE_RE.match(t)]
@@ -208,9 +210,11 @@ def parse_pages(
             )
         )
 
-    if len(balances) < 2 or "SALDO" not in balances[0]:
-        raise ValueError("could not find the opening and closing 'Saldo Final' lines")
-    closing = balances[-1]
+    if len(balances) != 2 or "SALDO" not in balances[0]:
+        raise ValueError(
+            "expected exactly two 'Saldo Final' lines (opening and closing)"
+        )
+    closing = balances[1]
     if not {"CARGO", "ABONO", "SALDO"} <= closing.keys():
         raise ValueError("the closing 'Saldo Final' line has no totals")
 
