@@ -12,6 +12,13 @@
 -- the rule is about which statements were ingested at all, and silver adds
 -- nothing to a statement's balances.
 --
+-- The date half tolerates a small gap (`max_statement_gap_days`, default 3), not
+-- only exactly one day. Found on real Scotiabank savings statements: a cycle
+-- can end on the 30th of a 31-day month and the next one start on the 1st, two
+-- days apart, with the balance carried over to the cent. A missing statement is
+-- a gap of about a month, and any movement inside a small gap would make the
+-- balances differ, which the balance half still catches.
+--
 -- A singular test, not a generic one: it is one query about one relation, and
 -- there is nothing to parametrize. Severity is dbt's default, `error`, so a gap
 -- fails `dbt build` instead of warning.
@@ -60,5 +67,6 @@ where
     previous_period_end is not null
     and (
         opening_balance != previous_closing_balance
-        or date_diff('day', previous_period_end, period_start) != 1
+        or date_diff('day', previous_period_end, period_start)
+        not between 1 and {{ var('max_statement_gap_days', 3) }}
     )

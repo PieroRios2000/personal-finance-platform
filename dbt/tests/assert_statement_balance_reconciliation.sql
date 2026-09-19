@@ -16,6 +16,11 @@
 -- without also matching currency would blend two independent ledgers into
 -- one meaningless number.
 --
+-- A movement belongs to the statement it came from (`source_file_sha256`), not
+-- to whichever period its date falls in: real BCP statements list a few
+-- movements dated a day or two before their own period, and matching on the
+-- date window handed those to the previous statement, failing both.
+--
 -- A singular test, not a generic one: one query joining two relations, with
 -- nothing to parametrize. Severity is dbt's default, `error`.
 
@@ -27,6 +32,7 @@ with statement_totals as (
         currency,
         period_start,
         period_end,
+        file_sha256,
         closing_balance - opening_balance as declared_movement
     from {{ source('bronze', 'statements') }}
 
@@ -48,8 +54,7 @@ actual_totals as (
             statement_totals.user_id = silver_transactions.user_id
             and statement_totals.account_id = silver_transactions.account_id
             and statement_totals.currency = silver_transactions.currency
-            and silver_transactions.date
-            between statement_totals.period_start and statement_totals.period_end
+            and statement_totals.file_sha256 = silver_transactions.source_file_sha256
     group by
         statement_totals.user_id,
         statement_totals.account_id,
