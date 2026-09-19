@@ -61,6 +61,8 @@ collided on a number more than once).
 | Flow direction (`flow_type`) | A derived column on `fact_transactions`: `ingreso` / `egreso` / `pago`, computed from `account_kind` (T18a) + sign — never the bank's own raw sign convention directly. `asset` + positive -> `ingreso`; `asset` + negative -> `egreso`; `liability` + positive (a charge) -> `egreso`; `liability` + negative (a payment/credit) -> `pago`, kept distinct from `ingreso` | Piero's own framing (2026-09-14): BCP and Scotiabank's opposite sign conventions (T18a) mean summing raw `amount` across a checking account and a credit card gives a number with no coherent meaning. A `pago` on a liability account is usually a transfer from the user's own other account (already flagged separately by `is_internal_transfer`, T18b) or a refund — genuinely ambiguous which, so it gets its own bucket rather than being forced into `ingreso` and inflating "income." `flow_type` is direction, not merchant category — doesn't touch or anticipate Phase 3's `dim_category` |
 | Ingestion correctness, at the model layer | A dbt test compares each account's summed `silver.transactions` amounts per statement period against that same statement's own declared opening/closing balance delta (`bronze.statements`) | Piero's own framing (2026-09-14): `ingestion/reconciliation.py` already checks this once, in Python, at parse time (T8) — but T20's MERGE is new code with its own chance to silently drop or duplicate a row. Re-checking the same arithmetic at the model layer, from the data that's actually in the lake, catches what the MERGE gets wrong that a Python-level check upstream of it never would |
 | Quality/observability | **Elementary** (chosen 2026-09-14, over Great Expectations) | Runs as a dbt package, no separate service — fits a local, zero-cost install the way GX's own separate validation layer wouldn't; dbt-native anomaly detection and column-level lineage |
+| Store for silver and gold (added 2026-09-19) | **PostgreSQL**, written by dbt-duckdb through `attach`; DuckDB stays the engine reading bronze | The owner wants BI, the catalog and Dagster to read while dbt builds, and a DuckDB file has a single writer; OpenMetadata also has a native Postgres connector. Feasibility checked on this project's own models (incl. the incremental MERGE). [ADR 0029](../brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md) |
+| Dashboard (added 2026-09-19) | **Apache Superset**, its own Compose stack, reading Postgres with a read-only role | Open source and free; a real BI tool; Streamlit stays for the manual-data form (Phase 5) |
 | Catalog/lineage | **OpenMetadata** (chosen 2026-09-14, over DataHub) | Lighter of the two, still real column-level lineage; DataHub is more extensible but needs platform-engineering time this is a one-person install. Even so: needs 6 GiB+ RAM, Postgres/MySQL and Elasticsearch — see Risks, this is the phase's one real resource risk and gets its own checkpoint before the rest of the phase depends on it |
 
 ## Structure once Phase 2 closes
@@ -101,6 +103,16 @@ See [`tasks/todo-phase2.md`](todo-phase2.md) for full acceptance criteria per ta
 | T23 | Gold star schema (`fact_transactions` + dimensions) | T20 |
 | T24 | OpenMetadata catalog/lineage | T21, T23 (needs the DAG and the gold layer to have something real to catalog) |
 | T25 | Phase 2 close | T20-T24 |
+| T26 | PostgreSQL service and the dbt connection (ADR 0029) | T25 |
+| T27 | Readers (scripts, Dagster, tests) move from the DuckDB file to PostgreSQL | T26 |
+| T28 | Elementary on its own DuckDB file | T27 |
+| T29 | CI ephemeral environment and PR data diff on PostgreSQL | T27, T28 |
+| T30 | OpenMetadata reads PostgreSQL natively (retires the DuckDB workaround) | T26 |
+| T31 | Dagster shows the Postgres tables | T27 |
+| T32 | Superset over PostgreSQL, first dashboards | T26 |
+| T33 | Phase 2 re-close | T26-T32 |
+
+T26-T33 were added on 2026-09-19, after T25 closed the phase: see the extension header in `todo-phase2.md`.
 
 ## Risks and mitigations
 
@@ -109,6 +121,9 @@ See [`tasks/todo-phase2.md`](todo-phase2.md) for full acceptance criteria per ta
 | OpenMetadata's 6 GiB+ RAM (Postgres/MySQL + Elasticsearch) on top of everything Phase 1 already runs (SeaweedFS, DuckDB, Docker Desktop itself) exceeds what WSL2 can spare | High | T24 starts with a standalone RAM/CPU measurement against `.wslconfig`'s actual limit *before* building the ingestion workflow — if it doesn't fit, the fallback (lighter catalog, or deferring T24 alone past phase close) is decided then, not assumed now |
 | The business-key occurrence-number tiebreak (above) still isn't right for some real statement shape not yet seen | Medium | Reconciliation is the backstop, same as every parser: a MERGE that silently drops or duplicates a real row breaks `silver.transactions`' own row-count expectations, which T20's tests check directly, not just the MERGE's mechanics |
 | Dagster becomes a second orchestration layer that duplicates what `pfp`'s CLI and `Makefile` targets already do, rather than replacing the manual sequence | Medium | T21's assets call the *same* functions `ingestion/cli.py` and `dbt` already expose — Dagster wraps, it doesn't reimplement; `make poc` and the CLI stay for local single-shot use, Dagster owns the scheduled/DAG'd path |
+| The Postgres move (T26-T33) touches most readers of the built tables (scripts, ~a dozen tests, CI, the catalog script) at once | High | Small PRs in dependency order, each leaving `develop` green; T27 keeps the parallel test runner working with one schema per worker; the whole integration suite is the gate |
+| Elementary does not work through the Postgres attach (its views, its results upload) | Medium | Found in the feasibility check; T28 gives it its own DuckDB file |
+| Superset's RAM on top of SeaweedFS, Postgres and OpenMetadata exceeds WSL2's limit | Medium | It is a separate stack started on demand, like OpenMetadata; T32 measures it first |
 | Incremental `MERGE` semantics differ subtly from Phase 1's append-only bronze -> full-refresh silver (e.g. a late-arriving backfilled row via `pfp backfill`, ADR 0010, needs to actually update its silver row, not get skipped as "already merged") | Medium | T20's own tests cover a backfill-then-rebuild scenario explicitly, not just a fresh MERGE |
 | CI's ephemeral environment (T17) now needs to run a Dagster job, not just `pfp ingest` + `dbt build` directly, and getting that wrong silently makes CI test something looser than what actually runs on a real install | Medium | T21 or T25 (whichever ends up right) updates `ephemeral-integration` to invoke the Dagster job itself, not the bypassed CLI calls, so CI proves the real path |
 
@@ -131,6 +146,8 @@ See [`tasks/todo-phase2.md`](todo-phase2.md) for full acceptance criteria per ta
 7. **Balance totals double as an ingestion-correctness test**, not just a display number — a
    dbt test re-checks T20's MERGE output against each statement's own declared balance delta,
    promoting T8's existing Python-level reconciliation check into a model-layer one too.
+8. **PostgreSQL as dbt's store, and the dashboard, inside Phase 2 (2026-09-19):** owner's decision, so BI,
+   the catalog and Dagster read one store while dbt builds; DuckDB stays the engine. T26-T33; see ADR 0029.
 
 ## Open questions
 
