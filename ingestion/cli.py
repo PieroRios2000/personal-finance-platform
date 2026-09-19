@@ -115,7 +115,7 @@ def _run_import_manual(args: argparse.Namespace) -> int:
     except MissingAccountKeyError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    problems = [*savings.problems, *investments.problems]
+    problems = list(dict.fromkeys([*savings.problems, *investments.problems]))
     if problems:
         for problem in problems:
             print(f"error: {problem}", file=sys.stderr)

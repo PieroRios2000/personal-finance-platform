@@ -314,7 +314,11 @@ def test_a_valorizacion_has_no_amount_and_an_aporte_or_retiro_does() -> None:
 
     from ingestion.schema import InvestmentEntry
 
-    common = {"date": date(2026, 7, 5), "balance": Decimal("10"), "position": 2}
+    common: dict[str, Any] = {
+        "date": date(2026, 7, 5),
+        "balance": Decimal("10"),
+        "position": 2,
+    }
     InvestmentEntry(kind="valorizacion", amount=Decimal("0"), **common)
     InvestmentEntry(kind="aporte", amount=Decimal("5"), **common)
     with pytest.raises(ValidationError):

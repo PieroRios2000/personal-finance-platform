@@ -31,10 +31,12 @@ have put money in. The measure has to separate the fund's own result from the ow
 - **Opening balance** is the previous month's closing balance; for a fund's first month it is the
   balance before its first row, so a fund already worth something when the records begin does not
   read as a huge first-month gain.
-- **A month is "reliable"** only if it has a month-end `valorizacion` row and follows the previous
-  month directly. Without a valuation the closing balance is just "the balance at the last
-  movement": the return is left null. After a missing month the figure would span several months:
-  it is computed but flagged.
+- **A month is "reliable"** only if it **closes at a `valorizacion`** (its last row, by date and sheet
+  row), has capital to earn a return on, and follows the previous month directly; a fund's first
+  month also needs a contribution or withdrawal to mark where it starts (a first month of only a
+  valuation would read as a 0% artifact). Otherwise `return_pct` is null (the gain and the
+  balances are always there): a closing balance that is only "the balance at the last movement", a
+  month after a missing one (it spans several months) and a month with no capital are not returns.
 - **Cumulative figures** (net contributed and total gain since the records begin) are kept beside
   the monthly ones, since with a few months of history they are what says most.
 - **Loading is idempotent and replaces:** each fund-currency-month has an identity independent of
@@ -60,6 +62,11 @@ have put money in. The measure has to separate the fund's own result from the ow
 - Modified Dietz is an approximation; large flows late in a volatile month make it less exact.
 - Fees and taxes are not modelled (a `comision` column would be added if a fund charges them), so
   returns are as the owner's balances show them.
+- A fund is identified by the exact text typed in `lugar` (`Tyba Conservador` and `tyba conservador`
+  are two funds), and a month a corrected workbook drops entirely is not deleted, as with the
+  savings sheet.
+- Under CI's `state:modified+` selection, `silver.investment_entries` is not rebuilt merely because
+  the bronze table appeared; a full build (Dagster, `dbt build`) always is.
 - The manual `saldo_final` is not checked against anything the fund itself declares (unlike a bank
   statement), so a mistyped balance shows up only as a strange return.
 

@@ -51,6 +51,13 @@ purpose (`tasks/plan-phase2.md`'s own architecture decisions).
 Full reasoning, including why the mapping has no catch-all `else` branch, in
 [ADR 0020](../decisions/0020-gold-star-schema-flow-type-and-dim-account-grain.md).
 
+## Investments (Phase 6)
+
+`gold.fct_investment_monthly` (one row per fund, currency and month, with the monthly Modified Dietz
+return) is not part of the star schema around `fact_transactions`: investments are not spending or
+income. See [Investment tracking](investment-tracking.md) and
+[ADR 0028](../decisions/0028-investment-return-is-modified-dietz-per-fund-and-month.md).
+
 ## No FX in the layers
 
 `currency` is carried through from `silver.transactions` unchanged and never collapsed or

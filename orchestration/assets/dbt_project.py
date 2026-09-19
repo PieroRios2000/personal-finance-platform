@@ -7,16 +7,17 @@ T18b's internal-transfer models, and whatever gold models T23 adds later,
 with no per-model selection to keep in sync here. `dbt build` is the command,
 identical to what a developer or CI already runs by hand.
 
-**The one piece of custom wiring:** `dbt/models/sources.yml` declares two dbt
-sources, `bronze.transactions` and `bronze.statements`. `dagster-dbt`'s own
-default translator would turn those into two separate stub assets (one dbt
-source, one asset -- see `dagster_dbt.asset_utils.default_asset_key_fn`), but
-both tables are written by a single call,
-`lakehouse.bronze.write_statement()`, inside one Dagster asset,
-`orchestration.assets.bronze.bronze`. `BronzeSourceDbtTranslator` collapses
-both dbt sources onto that one asset's key instead, so the graph shows one
-real edge (bronze -> silver) matching the actual data flow, not two upstream
-stubs for tables Dagster never separately produces.
+**The one piece of custom wiring:** `dbt/models/sources.yml` declares three dbt
+sources: `bronze.transactions`, `bronze.statements` and (Phase 6)
+`bronze.investment_entries`. `dagster-dbt`'s own default translator would turn
+those into separate stub assets (one dbt source, one asset -- see
+`dagster_dbt.asset_utils.default_asset_key_fn`), but the first two are written
+by a single call, `lakehouse.bronze.write_statement()`, inside one Dagster
+asset, `orchestration.assets.bronze.bronze`, and the investments are loaded
+into the same bronze layer by `pfp import-manual`. `BronzeSourceDbtTranslator`
+collapses every dbt source onto that one asset's key instead, so the graph
+shows one real edge (bronze -> silver) matching the actual data flow, not
+upstream stubs for tables Dagster never separately produces.
 """
 
 import os
