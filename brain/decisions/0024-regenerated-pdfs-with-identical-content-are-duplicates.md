@@ -15,7 +15,7 @@ duplicate, same destination and a different hash meant a new version (`..._v2.pd
 already described `_v2` as "regenerated: content differs from the archived one", but nothing ever
 compared content.
 
-Running the platform on a real inbox (the owner's 60 BCP statements) showed why that matters. A
+Running the platform on a real inbox (62 BCP statements) showed why that matters. A
 bank hands out a fresh PDF on every download, so the same month arrives twice with different bytes.
 Four months were like that, each pair with **identical** opening balance, closing balance and
 movements. Each second copy was filed as `_v2`, reached bronze as a second statement for the same
@@ -37,8 +37,9 @@ taken by a file with a different hash:
 - **Same content** → `_duplicates/`, with a reason that says the bytes differ (a re-download).
 - **Different content** → a new version (`_v2`, `_v3`, …), exactly as before: a real correction
   still reaches the continuity test, which is where a human should look at it.
-- **The archived copy can't be parsed** any more (wrong password, damaged file, the parser changed
-  and now rejects it) → not a match, so the file becomes a new version. Never a guess.
+- **The archived copy can't be read** any more, for any reason at all (wrong password, damaged
+  file, OCR failing, the parser changed and now rejects it) → not a match, so the file becomes a
+  new version. Never a guess, and never a crash: any exception is caught.
 
 Comparing against every version, not just the base, is what stops a re-download of a *correction*
 from becoming a `_v3`.
@@ -64,8 +65,9 @@ from becoming a `_v3`.
 - One extra parse per collision, only when a file lands on an already-taken destination with a
   different hash. Negligible next to OCR, and it doesn't happen on a normal run.
 - The rule is strict on purpose: any difference in a movement's description, amount, date or
-  position makes it a new version, and a field added to `Statement` later is compared for free. If a bank ever re-words a description between downloads, the file becomes a
-  `_v2` and the continuity test flags it, which is the safe direction to fail in.
+  position makes it a new version, and a field added to `Statement` later is compared for free.
+  If a bank ever re-words a description between downloads, the file becomes a `_v2` and the
+  continuity test flags it, which is the safe direction to fail in.
 - Archives built **before** this change keep their `_v2` files. Move them back to the inbox and
   ingest again ([walkthrough](../../docs/ingesting-your-own-pdfs.md), section 5): the second copy
   of each pair is now recognized as a duplicate.

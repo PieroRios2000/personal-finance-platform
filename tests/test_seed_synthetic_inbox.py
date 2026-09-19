@@ -25,9 +25,9 @@ def test_seeds_a_bcp_recognizable_pdf_into_the_users_inbox(tmp_path: Path) -> No
 def test_seeding_twice_writes_back_byte_identical_content(tmp_path: Path) -> None:
     """The property `ephemeral-integration`'s second `pfp ingest` relies on:
     without this, fpdf2's own /CreationDate timestamp would make every call
-    look like a *different*, regenerated statement instead of the same one
-    seen twice (organizer.py's version-2 path), and the second `pfp ingest`
-    would archive it again instead of proving 0 new rows."""
+    a file with different bytes, so the second `pfp ingest` would have to
+    re-parse the archived copy to recognize it (ADR 0024) instead of stopping
+    at the hash check, which is what makes "0 new rows" a cheap, exact proof."""
     inbox_root = tmp_path / "inbox"
 
     main(["--inbox-root", str(inbox_root), "--user", "ci"])
