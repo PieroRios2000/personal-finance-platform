@@ -28,6 +28,7 @@ returns statements and the CLI writes them.
 
 import calendar
 import hashlib
+import zipfile
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal
@@ -75,10 +76,26 @@ class _Row:
     balance: Decimal
 
 
-def _money(value: Any) -> Decimal | None:
+_FLOAT_NOISE = Decimal("0.000001")
+
+
+def _money(value: Any) -> tuple[Decimal | None, str | None]:
+    """The number as an amount with at most 2 decimals, or why it is not one.
+    Excel stores floats, so binary noise (0.1 + 0.2) is rounded away, but a
+    real third decimal (1.005) is reported, like everywhere else in the
+    platform (`Transaction` rejects it too)."""
+    if value is None:
+        return None, (
+            "is empty (a formula without a saved value? "
+            "open and save the file in Excel)"
+        )
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return Decimal(str(round(float(value), 2)))
+        return None, "is not a number"
+    exact = Decimal(repr(float(value)))
+    rounded = exact.quantize(Decimal("0.01"))
+    if abs(exact - rounded) > _FLOAT_NOISE:
+        return None, "has more than 2 decimals"
+    return rounded, None
 
 
 def _day(value: Any) -> date | None:
@@ -87,12 +104,16 @@ def _day(value: Any) -> date | None:
     return value if isinstance(value, date) else None
 
 
-def _parse_rows(raw: list[tuple[int, tuple[Any, ...]]]) -> tuple[list[_Row], list[str]]:
+def _parse_rows(
+    raw: list[tuple[int, tuple[Any, ...]]],
+) -> tuple[list[_Row], list[tuple[int, str]]]:
     rows: list[_Row] = []
-    problems: list[str] = []
+    problems: list[tuple[int, str]] = []
     for number, cells in raw:
         account, when, description, amount, currency, balance = cells[:6]
-        day, value, closing = _day(when), _money(amount), _money(balance)
+        day = _day(when)
+        value, value_reason = _money(amount)
+        closing, closing_reason = _money(balance)
         found: list[str] = []
         if not (isinstance(account, str) and account.strip()):
             found.append("cuenta is empty")
@@ -101,13 +122,13 @@ def _parse_rows(raw: list[tuple[int, tuple[Any, ...]]]) -> tuple[list[_Row], lis
         if not (isinstance(description, str) and description.strip()):
             found.append("descripcion is empty")
         if value is None:
-            found.append("monto is not a number")
+            found.append(f"monto {value_reason}")
         if currency not in ("PEN", "USD"):
             found.append("moneda must be PEN or USD")
         if closing is None:
-            found.append("saldo_final is not a number")
+            found.append(f"saldo_final {closing_reason}")
         if found:
-            problems += [f"{SHEET} row {number}: {message}" for message in found]
+            problems += [(number, message) for message in found]
             continue
         assert day is not None and value is not None and closing is not None
         rows.append(
@@ -135,16 +156,13 @@ def _months_between(first: tuple[int, int], last: tuple[int, int]) -> int:
     return (last[0] - first[0]) * 12 + last[1] - first[1] + 1
 
 
-def _problem_order(problem: str) -> tuple[int, str]:
-    """By row number when the problem names one, others first."""
-    if "row " in problem:
-        return int(problem.split("row ")[1].split(":")[0]), problem
-    return 0, problem
-
-
 def read_savings(path: Path, *, user_id: str) -> SavingsImport:
     result = SavingsImport()
-    workbook = load_workbook(path, data_only=True)
+    try:
+        workbook = load_workbook(path, data_only=True)
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile):
+        result.problems.append("the file is not a readable .xlsx workbook")
+        return result
     if SHEET not in workbook.sheetnames:
         result.problems.append(f"the workbook has no '{SHEET}' sheet")
         return result
@@ -159,6 +177,9 @@ def read_savings(path: Path, *, user_id: str) -> SavingsImport:
         for index, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), 2)
         if any(v is not None for v in row)
     ]
+    if not raw:
+        result.problems.append(f"{SHEET}: the sheet has no rows")
+        return result
     examples = sum(
         1
         for _, cells in raw
@@ -170,81 +191,110 @@ def read_savings(path: Path, *, user_id: str) -> SavingsImport:
         )
         return result
 
-    rows, problems = _parse_rows(raw)
-    result.problems += problems
+    rows, row_problems = _parse_rows(raw)
+    found: list[tuple[int, str]] = list(row_problems)
     groups: dict[tuple[str, Currency], list[_Row]] = {}
     for row in rows:
         groups.setdefault((row.account, row.currency), []).append(row)
 
-    statements: list[Entry] = []
+    entries: list[Entry] = []
     for (account, currency), group in groups.items():
         group = sorted(group, key=lambda r: r.day)  # stable: sheet order within a day
-        previous: Decimal | None = None
-        broken = False
-        signed: list[_Row] = []
-        for row in group:
-            amount = row.amount
-            if previous is not None:
-                if row.balance == previous + amount:
-                    pass
-                elif amount > 0 and row.balance == previous - amount:
-                    # Typed unsigned (a withdrawal as a positive number): the
-                    # balance says which way the money went.
-                    amount = -amount
-                else:
-                    result.problems.append(
-                        f"{SHEET} row {row.number}: "
-                        "the balance does not follow the previous one"
-                    )
-                    broken = True
-            signed.append(replace(row, amount=amount))
-            previous = row.balance
-        if broken:
+        signed, chain_problems = _follow_balances(group)
+        found += chain_problems
+        if chain_problems:
             continue
-        group = signed
         account_id = hash_account(account, account)
         by_month: dict[tuple[int, int], list[_Row]] = {}
-        for row in group:
+        for row in signed:
             by_month.setdefault((row.day.year, row.day.month), []).append(row)
         result.missing_months += _months_between(min(by_month), max(by_month)) - len(
             by_month
         )
         for (year, month), month_rows in sorted(by_month.items()):
             sha = _identity(user_id, account_id, currency, year, month)
-            first, last = month_rows[0], month_rows[-1]
-            statement = Statement(
+            try:
+                statement = _month_statement(
+                    user_id, account, account_id, currency, year, month, month_rows, sha
+                )
+            except ValueError:  # pydantic and reconciliation errors quote values
+                found.append(
+                    (
+                        month_rows[0].number,
+                        "the month could not be built (invalid values)",
+                    )
+                )
+                continue
+            entries.append(Entry(statement, sha))
+
+    found.sort()
+    result.problems += [f"{SHEET} row {row}: {message}" for row, message in found]
+    if not result.problems:
+        result.entries = entries
+    return result
+
+
+def _follow_balances(group: list[_Row]) -> tuple[list[_Row], list[tuple[int, str]]]:
+    """Check each row's balance against the previous one and fix the sign of an
+    amount typed unsigned. Returns the rows with signed amounts and the problems."""
+    previous: Decimal | None = None
+    signed: list[_Row] = []
+    problems: list[tuple[int, str]] = []
+    for row in group:
+        amount = row.amount
+        if previous is not None:
+            if row.balance == previous + amount:
+                pass
+            elif amount > 0 and row.balance == previous - amount:
+                # Typed unsigned (a withdrawal as a positive number): the
+                # balance says which way the money went.
+                amount = -amount
+            else:
+                problems.append(
+                    (row.number, "the balance does not follow the previous one")
+                )
+        signed.append(replace(row, amount=amount))
+        previous = row.balance
+    return signed, problems
+
+
+def _month_statement(
+    user_id: str,
+    account: str,
+    account_id: str,
+    currency: Currency,
+    year: int,
+    month: int,
+    month_rows: list[_Row],
+    sha: str,
+) -> Statement:
+    first, last = month_rows[0], month_rows[-1]
+    statement = Statement(
+        user_id=user_id,
+        bank=account,
+        account_id=account_id,
+        account_last4="0000",
+        period_start=date(year, month, 1),
+        period_end=date(year, month, calendar.monthrange(year, month)[1]),
+        opening_balance=first.balance - first.amount,
+        closing_balance=last.balance,
+        account_kind="asset",
+        currency=currency,
+        transactions=[
+            Transaction(
                 user_id=user_id,
                 bank=account,
                 account_id=account_id,
                 account_last4="0000",
-                period_start=date(year, month, 1),
-                period_end=date(year, month, calendar.monthrange(year, month)[1]),
-                opening_balance=first.balance - first.amount,
-                closing_balance=last.balance,
-                account_kind="asset",
+                date=r.day,
+                description=normalize_description(r.description),
+                amount=r.amount,
                 currency=currency,
-                transactions=[
-                    Transaction(
-                        user_id=user_id,
-                        bank=account,
-                        account_id=account_id,
-                        account_last4="0000",
-                        date=r.day,
-                        description=normalize_description(r.description),
-                        amount=r.amount,
-                        currency=currency,
-                        source_file_sha256=sha,
-                    )
-                    for r in month_rows
-                    if r.amount != 0
-                ],
+                source_file_sha256=sha,
             )
-            reconcile(statement)
-            statements.append(Entry(statement, sha))
-
-    result.problems.sort(
-        key=lambda p: (int(p.split("row ")[1].split(":")[0]) if "row " in p else 0, p)
+            for r in month_rows
+            if r.amount != 0
+        ],
     )
-    if not result.problems:
-        result.entries = statements
-    return result
+    reconcile(statement)
+    return statement
