@@ -220,3 +220,8 @@ def test_a_dollar_account_written_with_an_accent_is_usd() -> None:
     (statement,) = _parse_pages(pages)
 
     assert statement.currency == "USD"
+
+
+def test_a_statement_without_a_period_line_is_rejected() -> None:
+    with pytest.raises(ValueError, match="could not find the account number"):
+        _parse_pages(_without(_pages(), "Al"))
