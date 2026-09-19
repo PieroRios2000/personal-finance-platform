@@ -16,7 +16,7 @@ Reconciliation is integral, at three levels:
 | Level | What it checks | Where |
 |---|---|---|
 | Statement | `opening balance + Σ amounts = closing balance`, and the charge/credit totals when the bank declares them | T8 |
-| Continuity | A period's closing balance is the next period's opening balance, **and the next period starts the day after the previous one ended**, for the same user and account; catches missing statements | T16 |
+| Continuity | A period's closing balance is the next period's opening balance, **and the next period starts within a few days of the previous one's end (3 at most; the day after, normally)**, for the same user and account; catches missing statements | T16 |
 | Between accounts | Every transfer between accounts of the same user has its counterpart, and never counts as an expense or income | T18b |
 
 - `ReconciliationError` reports the expected value, the actual one, and the difference.

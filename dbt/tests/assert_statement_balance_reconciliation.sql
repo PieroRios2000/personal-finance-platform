@@ -21,6 +21,13 @@
 -- movements dated a day or two before their own period, and matching on the
 -- date window handed those to the previous statement, failing both.
 --
+-- Consequence to know: when a regenerated statement with *different* numbers
+-- replaces its rows in silver in place (`transactions.sql`), the older statement
+-- of that period keeps its `file_sha256` in bronze but has no silver rows left, so
+-- this test fails for it. That is the same period arriving twice with different
+-- numbers, which `assert_statement_continuity` rejects too; it needs a human
+-- decision either way.
+--
 -- A singular test, not a generic one: one query joining two relations, with
 -- nothing to parametrize. Severity is dbt's default, `error`.
 

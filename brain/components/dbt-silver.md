@@ -70,7 +70,8 @@ consecutive statements of the same account against each other, which is the only
 *missing* statement can show up at all:
 
 - the closing balance of a period must equal the opening balance of the next, and
-- the next period must start the day after the previous one ended.
+- the next period must start 1 to `max_statement_gap_days` (default 3) days after the previous
+  one ended: real Scotiabank cycles can end on the 30th and restart on the 1st.
 
 Both halves earn their place. A missing month usually shows up as a balance drift, but not if
 that month's movements happen to net to zero — then only the date check catches it, and

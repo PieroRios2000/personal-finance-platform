@@ -44,7 +44,7 @@ merged, and a clean clone follows the README's quickstart through to a materiali
   [the parser note](../components/scotiabank-parser.md).
   With all 85 real statements in one lake, `dbt build` then failed twice for reasons the synthetic data could
   not show, both fixed: the continuity test now tolerates a cycle gap of up to 3 days, and the balance
-  reconciliation matches movements to their statement by file, not by date. Final run: 127/127 nodes pass.
+  reconciliation matches movements to their statement by file, not by date. Final run: every node passes.
 - **The numeric rules are still in warn mode** — CONSTRAINTS.md's switch date is 2026-09-26,
   not yet reached; flipping `continue-on-error` and the `-`/`||true` markers is a two-line
   change once it is.
