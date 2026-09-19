@@ -42,6 +42,9 @@ merged, and a clean clone follows the README's quickstart through to a materiali
   amounts, and the last `Total` being the declared closing balance) and turned out to include a
   second layout, a savings account, now parsed by `scotiabank_account.py`. See
   [the parser note](../components/scotiabank-parser.md).
+  With all 85 real statements in one lake, `dbt build` then failed twice for reasons the synthetic data could
+  not show, both fixed: the continuity test now checks one statement per account and month instead of counting days, and the balance
+  reconciliation matches movements to their statement by file, not by date. Final run: every node passes.
 - **The numeric rules are still in warn mode** — CONSTRAINTS.md's switch date is 2026-09-26,
   not yet reached; flipping `continue-on-error` and the `-`/`||true` markers is a two-line
   change once it is.

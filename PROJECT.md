@@ -8,7 +8,7 @@ Personal portfolio project to demonstrate **Data Lead / Data Engineer** skills: 
 
 ## Goal
 
-Ingest bank statement PDFs (BCP and Scotiabank), process and validate them, model them under a medallion architecture, orchestrate the flow, run ML models on top of it, and serve it through a dashboard — replicating in open source what corporate environments do with Azure Data Factory + ADLS + Synapse/Databricks.
+Ingest bank statement PDFs (BCP and Scotiabank today, Banco Ripley planned), process and validate them, model them under a medallion architecture, orchestrate the flow, run ML models on top of it, and serve it through a dashboard — replicating in open source what corporate environments do with Azure Data Factory + ADLS + Synapse/Databricks.
 
 **Equivalence the project demonstrates (for interviews):**
 
@@ -126,7 +126,7 @@ Every parser validates that the sum of the extracted transactions matches the ba
 **Status: built and closed (2026-09-18)** — [`brain/phases/phase-2.md`](brain/phases/phase-2.md). Against the plan above:
 - Dagster orchestrates *bronze → every dbt node* (ingest → dbt build, with the dbt tests inside the build). The plan's "→ refresh" step has nothing to refresh yet (no dashboard until Phase 5), so it isn't built.
 - Silver's incremental `MERGE` is keyed on `date + amount + normalized description + account_id + occurrence_number`; the occurrence number is scoped to one source file, which resolves the business-key note's open question. It also gained a model-layer balance-reconciliation test the plan didn't list.
-- Gold is a star schema (`fact_transactions` + `dim_date`/`dim_account`/`dim_bank`/`dim_user`). No `dim_category` (Phase 3) and no FX conversion, by decision.
+- Gold is a star schema (`fact_transactions` + `dim_date`/`dim_account`/`dim_bank`/`dim_user`). No `dim_category` (Phase 3) and no FX conversion in these layers, by decision (only the Phase 6 projection converts, on top of gold).
 - Quality: **Elementary** was chosen over Great Expectations (the plan left it open); a single row-count anomaly test on silver, in warn-mode.
 - Catalog: **OpenMetadata** was chosen over DataHub. It is optional and local (not in CI) and needs a ~4.8 GiB peak; OpenMetadata 2.0.2 has no DuckDB connector, so a small script registers the tables (ADR 0023).
 - Still open: real-data validation of the Scotiabank parser, and the numeric CI rules leaving warn-mode on 2026-09-26.
@@ -154,6 +154,25 @@ Every parser validates that the sum of the extracted transactions matches the ba
 - (Optional) Power BI connection.
 
 **Closes:** end-to-end delivery, a showcase for recruiters.
+
+### Phase 6 — Savings-goal projection *(planned, added 2026-09-19)*
+**Goal:** answer "given my real cash flow, how long until I reach my savings goal?"
+- Banco Ripley as a third bank (the owner's savings account, in soles): its own parser, calibrated against real statements like the other two.
+- A projection over the gold tables: time to reach a target amount (in soles or dollars) at the observed monthly flow, leaving out transfers between the owner's own accounts.
+- A **sol/dólar exchange-rate projection** section so dollar accounts and dollar goals can be converted. It exists **only in this phase**: bronze, silver and gold keep never converting currencies; the projection converts on its own, on top of gold.
+- **Scope decision:** only liquid money in bank accounts counts. Investments held on other platforms (mutual funds) are long term and market-dependent, so they are deliberately not part of the goal or the flow ([ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md)).
+
+**Closes:** turning the platform from "what happened" into "what happens next" on the owner's own data. Details and open questions: [`brain/phases/phase-6.md`](brain/phases/phase-6.md).
+
+### Phase 7 — Alerting *(planned, added 2026-09-19)*
+**Goal:** be told when something breaks instead of having to look.
+- Errors and warnings (dbt tests with `error`/`warn` severity, Dagster run failures, files that need review) delivered by **email or Microsoft Teams**.
+- Messages carry names and counts only, never data from a real statement ([ADR 0004](brain/decisions/0004-real-pdfs-never-leave-your-machine.md) applies to anything that leaves the process).
+- Includes the small `scripts/poc.py` fix so `make poc` shows dbt's result lines on real output.
+
+**Closes:** operations and observability. Details and open questions: [`brain/phases/phase-7.md`](brain/phases/phase-7.md).
+
+> **Order:** phases 6 and 7 were added after Phase 2 closed and do not renumber 3–5. The next steps in practice are listed in [`tasks/backlog.md`](tasks/backlog.md).
 
 > **Scope note:** the uploader stays at its minimal, functional version. None of the target job postings value frontend skills; the value is in what happens *after* the file comes in (parsing, reconciliation, MERGE, orchestration, ML).
 

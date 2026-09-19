@@ -3,25 +3,33 @@
 -- `ingestion/reconciliation.py` checks one statement against itself: opening
 -- balance + the movements = closing balance. This is the same rule one level up,
 -- between consecutive statements of the same account: a period's closing balance
--- must be the next period's opening balance, and the next period must start the
--- day after the previous one ended.
+-- must be the next period's opening balance, and every calendar month must have
+-- its statement: the next statement must end in the month after the previous
+-- one's.
+--
+-- The second half is about *months*, not days. Bank cycles do not tile the
+-- calendar (found on real Scotiabank savings statements: one ends on the 30th
+-- of a 31-day month and the next starts on the 1st) and an account can go days
+-- without a movement, so counting the days between two statements would fail
+-- healthy data. What matters is whether the account has a statement for each
+-- month. A statement belongs to the month its period ends in.
 --
 -- Both halves are needed. A missing month usually shows up as a balance drift,
--- but not if that month's movements happen to net to zero; the date check catches
--- it anyway. It runs on the bronze source rather than on a silver model because
--- the rule is about which statements were ingested at all, and silver adds
--- nothing to a statement's balances.
+-- but not if that month's movements happen to net to zero; the month check
+-- catches it anyway. It runs on the bronze source rather than on a silver model
+-- because the rule is about which statements were ingested at all, and silver
+-- adds nothing to a statement's balances.
+--
+-- Two statements ending in the same month also fail it (a month difference of
+-- zero). That is the intended reading: a duplicated period is exactly as wrong
+-- as a missing one. A bank re-download of a period with identical numbers no
+-- longer gets this far (the inbox organizer files it as a duplicate, ADR 0024);
+-- what still fails here is a period that really arrived twice with *different*
+-- numbers, i.e. a correction to reconcile. Severity is dbt's default, `error`,
+-- so a gap fails `dbt build` instead of warning.
 --
 -- A singular test, not a generic one: it is one query about one relation, and
--- there is nothing to parametrize. Severity is dbt's default, `error`, so a gap
--- fails `dbt build` instead of warning.
---
--- Two statements covering the same period also fail it (the second one does not
--- start the day after the first one ends). That is the intended reading: a
--- duplicated period is exactly as wrong as a missing one. A bank re-download of a
--- period with identical numbers no longer gets this far (the inbox organizer
--- files it as a duplicate, ADR 0024); what still fails here is a period that
--- really arrived twice with *different* numbers, i.e. a correction to reconcile.
+-- there is nothing to parametrize.
 --
 -- Partitioned by currency too (T18c), not just user_id/account_id: a Scotiabank
 -- statement is two independent ledgers billed as one account (ADR 0012), so it
@@ -38,9 +46,11 @@ with ordered as (
         account_id,
         period_start,
         opening_balance,
-        lag(period_end) over (
+        extract(year from period_end) * 12
+        + extract(month from period_end) as month_index,
+        lag(extract(year from period_end) * 12 + extract(month from period_end)) over (
             partition by user_id, account_id, currency order by period_start
-        ) as previous_period_end,
+        ) as previous_month_index,
         lag(closing_balance) over (
             partition by user_id, account_id, currency order by period_start
         ) as previous_closing_balance
@@ -52,13 +62,14 @@ select
     user_id,
     account_id,
     period_start,
-    previous_period_end,
+    month_index,
+    previous_month_index,
     opening_balance,
     previous_closing_balance
 from ordered
 where
-    previous_period_end is not null
+    previous_month_index is not null
     and (
         opening_balance != previous_closing_balance
-        or date_diff('day', previous_period_end, period_start) != 1
+        or month_index - previous_month_index != 1
     )

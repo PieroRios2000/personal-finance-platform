@@ -29,7 +29,17 @@ from lakehouse.storage import storage_options, table_uri
 pytestmark = pytest.mark.integration
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_TEST_LAKE_SUFFIX = "_t16_dbt_tests"
+
+
+def _lake_suffix(xdist_worker: str | None) -> str:
+    """The test lake's path suffix. Under pytest-xdist every worker gets its own
+    (`..._gw0`, `..._gw1`, ...), so tests running side by side never wipe each
+    other's bronze tables; without xdist it is the original name."""
+    base = "_t16_dbt_tests"
+    return f"{base}_{xdist_worker}" if xdist_worker else base
+
+
+_TEST_LAKE_SUFFIX = _lake_suffix(os.environ.get("PYTEST_XDIST_WORKER"))
 _BANK = "BCP"
 _LAST4 = "9999"
 _ACCOUNT_ID = hashlib.sha256(b"t16-dbt-tests-account").hexdigest()
@@ -102,8 +112,12 @@ def _write(
     account_kind: AccountKind = "asset",
     currency: Currency = "PEN",
     file_sha256: str | None = None,
+    transaction_date: date | None = None,
 ) -> None:
     """Write one synthetic statement to the test lake, reconciled by construction.
+
+    `transaction_date` defaults to `period_start`; a caller can set it outside
+    the period, as a real bank does for a movement dated just before a cycle.
 
     A `movement` of zero means a period with no transactions at all, which is what
     a dormant month looks like; `Transaction` rejects a zero amount (ADR 0005).
@@ -132,7 +146,7 @@ def _write(
                 bank=bank,
                 account_id=account_id,
                 account_last4=_LAST4,
-                date=period_start,
+                date=transaction_date or period_start,
                 description="  compra pos....visa  ",
                 amount=amount,
                 currency=currency,
@@ -350,6 +364,108 @@ def test_a_genuine_duplicate_period_still_fails_the_continuity_test(
     only tells apart two statements that are *supposed* to coexist."""
     _write(*_JANUARY)
     _write(*_JANUARY)  # same account_id, same currency, same period: a real dup
+
+    failed = _dbt_build(tmp_path)
+
+    assert failed.returncode != 0, failed.stdout
+    assert "assert_statement_continuity" in failed.stdout
+
+
+def test_a_statement_starting_two_days_after_the_previous_one_ended_passes(
+    lake: str, tmp_path: Path
+) -> None:
+    """Real Scotiabank savings statements end on the 30th of a 31-day month and
+    the next one starts on the 1st. The rule is about *months*, not days: as
+    long as each calendar month has its statement and the balance carries
+    over, the exact cut-off day does not matter."""
+    _write(date(2026, 1, 1), date(2026, 1, 30), "1000.00", "-100.00")
+    _write(*_FEBRUARY)
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_days_without_movements_between_statements_are_not_a_gap(
+    lake: str, tmp_path: Path
+) -> None:
+    """A statement can end well before the month does when nothing happened
+    for a while; the next month's statement is still there, so nothing is
+    missing."""
+    _write(date(2026, 1, 1), date(2026, 1, 20), "1000.00", "-100.00")
+    _write(*_FEBRUARY)
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout
+
+
+def test_two_statements_ending_in_the_same_month_fail_even_with_matching_balances(
+    lake: str, tmp_path: Path
+) -> None:
+    """One statement per account and month: a second one ending in the same
+    month is a duplicated period, never a cycle cut-off."""
+    _write(date(2026, 1, 1), date(2026, 2, 5), "1000.00", "-100.00")
+    _write(*_FEBRUARY)
+
+    failed = _dbt_build(tmp_path)
+
+    assert failed.returncode != 0, failed.stdout
+    assert "assert_statement_continuity" in failed.stdout
+
+
+def test_consecutive_months_across_a_year_boundary_pass(
+    lake: str, tmp_path: Path
+) -> None:
+    """The month arithmetic must roll over: December to January is one month."""
+    _write(date(2025, 12, 1), date(2025, 12, 31), "1000.00", "-100.00")
+    _write(date(2026, 1, 1), date(2026, 1, 31), "900.00", "-50.00")
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout
+    assert "assert_statement_continuity" in result.stdout
+
+
+def test_a_missing_month_in_one_currency_fails_even_if_the_other_is_complete(
+    lake: str, tmp_path: Path
+) -> None:
+    """Months are counted per account *and currency*: a card with Soles for
+    January and February but Dólares only for January and March is missing a
+    Dólares month."""
+    cases: tuple[tuple[tuple[date, date, str, str], Currency], ...] = (
+        (_JANUARY, "PEN"),
+        (_JANUARY, "USD"),
+        (_FEBRUARY, "PEN"),
+        (_MARCH, "USD"),
+    )
+    for period, currency in cases:
+        _write(
+            *period,
+            bank="Scotiabank",
+            account_id=_SCOTIABANK_ACCOUNT_ID,
+            account_kind="liability",
+            currency=currency,
+            file_sha256=hashlib.sha256(
+                f"months-{period}-{currency}".encode()
+            ).hexdigest(),
+        )
+
+    failed = _dbt_build(tmp_path)
+
+    assert failed.returncode != 0, failed.stdout
+    assert "assert_statement_continuity" in failed.stdout
+    assert "FAIL 1" in failed.stdout
+
+
+def test_a_statement_ending_early_in_the_next_month_still_counts_as_that_month(
+    lake: str, tmp_path: Path
+) -> None:
+    """A statement belongs to the month its period ends in: a January cycle
+    that ends on 2 February is a February statement, so a February one right
+    after it (ending 28 February) is a duplicated month."""
+    _write(date(2026, 1, 3), date(2026, 2, 2), "1000.00", "-100.00")
+    _write(date(2026, 2, 3), date(2026, 2, 28), "900.00", "50.00")
 
     failed = _dbt_build(tmp_path)
 
