@@ -18,8 +18,7 @@ duplicate, none of which needs a database:
 2. A file whose content exactly matches what's *already sitting in the archive* at
    its own account/period destination (found by hashing the one file already at that
    path, not by a general index): this reuses the archive layout itself as a narrow,
-   per-account version check — the flip side of the "regenerated statement" check
-   below — not a real duplicate registry.
+   per-account version check, not a real duplicate registry.
 3. A file whose bytes differ from the archived copy at that destination but whose
    *parsed content* is identical (same account, period, balances and movements): a
    bank re-download, since a bank hands out a fresh PDF on every download. Compared
@@ -253,7 +252,10 @@ def _archived_twin(
                 file_sha256=file_sha256(archived),
                 password=password,
             )
-        except (pikepdf.PikepdfError, ReconciliationError, ValueError, OSError):
+        except Exception:
+            # Anything at all: OCR, pdfminer, a parser changed since archiving.
+            # The rule is "can't read it, so it's not a match", and a crash here would
+            # abort the whole run over a file that is only being compared against.
             continue
         if _content_key(parsed) == key:
             return archived
