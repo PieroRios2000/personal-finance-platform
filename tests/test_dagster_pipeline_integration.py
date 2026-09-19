@@ -76,11 +76,11 @@ def _materialize_whole_pipeline(
     here: `bcp_statement_pdf()` embeds a timestamp (reportlab's own default
     `/CreationDate`), so two separate calls seconds apart -- exactly the gap
     a real `dbt build` between two materializations leaves -- are not
-    byte-identical, and `organizer.organize()` correctly (by its own design,
-    see its own docstring on duplicate-detection scoping) treats non-identical
-    bytes at the same destination as a regenerated statement (`_v2.pdf`), not
-    a duplicate. `tests/test_dagster_bronze.py`'s own idempotency test avoids
-    this the same way, generating its PDF once and reusing those exact bytes.
+    byte-identical. `organizer.organize()` would still file the second copy as
+    a duplicate (since ADR 0024 it compares parsed content when the bytes
+    differ), but only after re-parsing the archived one; identical bytes
+    short-circuit at the hash check. `tests/test_dagster_bronze.py`'s own
+    idempotency test does the same, generating its PDF once and reusing it.
     """
     inbox_root = tmp_path / "inbox"
     archive_root = tmp_path / "raw"

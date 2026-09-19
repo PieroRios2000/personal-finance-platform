@@ -17,9 +17,11 @@
 -- fails `dbt build` instead of warning.
 --
 -- Two statements covering the same period also fail it (the second one does not
--- start the day after the first one ends). That is the intended reading: a bank
--- that regenerates a period's PDF with different bytes gets past T7's file-level
--- dedup, and a duplicated period is exactly as wrong as a missing one.
+-- start the day after the first one ends). That is the intended reading: a
+-- duplicated period is exactly as wrong as a missing one. A bank re-download of a
+-- period with identical numbers no longer gets this far (the inbox organizer
+-- files it as a duplicate, ADR 0024); what still fails here is a period that
+-- really arrived twice with *different* numbers, i.e. a correction to reconcile.
 --
 -- Partitioned by currency too (T18c), not just user_id/account_id: a Scotiabank
 -- statement is two independent ledgers billed as one account (ADR 0012), so it

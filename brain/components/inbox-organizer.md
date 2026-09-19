@@ -25,8 +25,12 @@ email attachments, manual saves) while `~/finance-data/raw/<user>/` stays predic
 3. Detect the bank ([dispatcher](cli.md), T12) and parse it, reusing the matching parser's
    `password_env` the same way `pfp parse` already does.
 4. On success: move to `<bank>/<last4>-<id6>/<start>_<end>.pdf`.
-   - If that path is already taken by a file with a **different** hash, it's a regenerated
-     statement: filed as `..._v2.pdf` (climbing to `_v3`, etc. if those exist too).
+   - If that path is already taken by a file with a **different** hash, the new file's parsed
+     content is compared against every archived version of that period. **Same content** (account,
+     period, balances and every movement) means a bank re-download → `_duplicates/`, with
+     a reason saying the bytes differ ([ADR 0024](../decisions/0024-regenerated-pdfs-with-identical-content-are-duplicates.md)).
+     **Different content** (a real correction) → `..._v2.pdf` (climbing to `_v3`, etc.). If
+     the archived copy can't be parsed to compare, it also becomes a new version: never a guess.
    - If it's already taken by a file with the **same** hash, it's a duplicate that showed up
      in a later run (see below) → `_duplicates/`.
 5. Anything that fails to parse — `UnrecognizedBankError`, a wrong/missing password
@@ -39,14 +43,16 @@ email attachments, manual saves) while `~/finance-data/raw/<user>/` stays predic
 
 There's no persistent "already ingested" registry yet — that's T14's bronze writer, which will
 track every file's hash against what's already in the lake. Until then `organize()` only
-catches two kinds of duplicate, both without a database:
+catches three kinds of duplicate, all without a database:
 
 1. Two files in the **same inbox pass** with identical bytes (an in-memory set of hashes seen
    so far in this run).
 2. A file whose content exactly matches what's **already sitting in the archive** at its own
    account/period destination — found by hashing the one file already there, not by a general
-   index. This is the flip side of the "regenerated statement" check: same destination, same
-   hash means duplicate; same destination, different hash means a new version.
+   index. Same destination and same hash means duplicate.
+3. A file with a **different** hash but the **same parsed content** at that destination (or at
+   one of its `_vN` versions): a re-download of a statement already archived. Same destination
+   and different content is what a new version means.
 
 A duplicate that shows up in a **later, separate** run with no earlier match in that run's
 inbox and nothing yet archived at that destination (e.g. both copies land in separate inbox

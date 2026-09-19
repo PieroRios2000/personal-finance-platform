@@ -36,7 +36,8 @@ shares the same mechanism for its own, different identity need — full reasonin
 ## Related
 
 - [Idempotency](idempotency.md) — the business key is its second layer.
-- [File-level dedup](file-level-dedup.md) — the earlier layer, which misses regenerated PDFs.
+- [File-level dedup](file-level-dedup.md) — the earlier layer; a regenerated PDF with identical
+  content is caught there since ADR 0024, one whose numbers differ reaches this layer.
 - [Medallion architecture](medallion.md) — the MERGE happens in silver.
 - [ADR 0018: Incremental MERGE, occurrence-number business key](../decisions/0018-incremental-merge-business-key-occurrence-number.md)
 - [dbt silver](../components/dbt-silver.md)
