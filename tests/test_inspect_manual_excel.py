@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 
 from openpyxl import Workbook
+
 from scripts.inspect_manual_excel import describe, main
 
 _SAVINGS_HEADER = ["cuenta", "fecha", "descripcion", "monto", "moneda", "saldo_final"]
