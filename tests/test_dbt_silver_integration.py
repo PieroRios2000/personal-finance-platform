@@ -402,3 +402,62 @@ def test_two_statements_ending_in_the_same_month_fail_even_with_matching_balance
 
     assert failed.returncode != 0, failed.stdout
     assert "assert_statement_continuity" in failed.stdout
+
+
+def test_consecutive_months_across_a_year_boundary_pass(
+    lake: str, tmp_path: Path
+) -> None:
+    """The month arithmetic must roll over: December to January is one month."""
+    _write(date(2025, 12, 1), date(2025, 12, 31), "1000.00", "-100.00")
+    _write(date(2026, 1, 1), date(2026, 1, 31), "900.00", "-50.00")
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout
+    assert "assert_statement_continuity" in result.stdout
+
+
+def test_a_missing_month_in_one_currency_fails_even_if_the_other_is_complete(
+    lake: str, tmp_path: Path
+) -> None:
+    """Months are counted per account *and currency*: a card with Soles for
+    January and February but Dólares only for January and March is missing a
+    Dólares month."""
+    cases: tuple[tuple[tuple[date, date, str, str], Currency], ...] = (
+        (_JANUARY, "PEN"),
+        (_JANUARY, "USD"),
+        (_FEBRUARY, "PEN"),
+        (_MARCH, "USD"),
+    )
+    for period, currency in cases:
+        _write(
+            *period,
+            bank="Scotiabank",
+            account_id=_SCOTIABANK_ACCOUNT_ID,
+            account_kind="liability",
+            currency=currency,
+            file_sha256=hashlib.sha256(
+                f"months-{period}-{currency}".encode()
+            ).hexdigest(),
+        )
+
+    failed = _dbt_build(tmp_path)
+
+    assert failed.returncode != 0, failed.stdout
+    assert "assert_statement_continuity" in failed.stdout
+    assert "FAIL 1" in failed.stdout
+
+
+def test_a_statement_ending_early_in_the_next_month_still_counts_as_that_month(
+    lake: str, tmp_path: Path
+) -> None:
+    """A statement belongs to the month its period ends in: a January cycle
+    that ends on 2 February is a February statement, so a February one right
+    after it (ending 28 February) is a duplicated month."""
+    _write(date(2026, 1, 3), date(2026, 2, 2), "1000.00", "-100.00")
+    _write(date(2026, 2, 3), date(2026, 2, 28), "900.00", "50.00")
+
+    failed = _dbt_build(tmp_path)
+
+    assert failed.returncode != 0, failed.stdout
+    assert "assert_statement_continuity" in failed.stdout
