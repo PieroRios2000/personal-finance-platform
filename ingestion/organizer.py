@@ -221,23 +221,13 @@ def _missing_months(periods: list[tuple[date, date]]) -> list[str]:
     return missing
 
 
-def _content_key(statements: list[Statement]) -> list[tuple[object, ...]]:
-    """What a set of statements *says*, ignoring which file they came from: the
-    account, period, balances and every movement, but not `source_file_sha256`."""
-    return sorted(
-        (
-            s.bank,
-            s.account_id,
-            s.currency,
-            s.period_start,
-            s.period_end,
-            s.opening_balance,
-            s.closing_balance,
-            s.account_kind,
-            sorted((t.date, t.amount, t.description) for t in s.transactions),
-        )
+def _content_key(statements: list[Statement]) -> list[dict[str, object]]:
+    """What a set of statements *says*: every field the parser read, in the order it
+    read them, except which file each movement came from (`source_file_sha256`)."""
+    return [
+        s.model_dump(exclude={"transactions": {"__all__": {"source_file_sha256"}}})
         for s in statements
-    )
+    ]
 
 
 def _archived_twin(

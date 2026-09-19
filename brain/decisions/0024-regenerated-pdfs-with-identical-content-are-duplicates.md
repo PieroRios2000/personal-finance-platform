@@ -29,9 +29,11 @@ including all of silver and gold. Four harmless re-downloads meant no data at al
 taken by a file with a different hash:
 
 - It parses the archived file(s) of that period — the base file and every `_vN` — with the same
-  parser and password, and compares a content key: bank, account, currency, period, both balances,
-  account kind and every movement (date, amount, description). `source_file_sha256` is not part of
-  it, and movements are sorted, so the order in the PDF doesn't matter.
+  parser and password, and compares everything the parser read (`Statement.model_dump`: account,
+  currency, period, balances, the declared totals a credit-card statement carries, and every
+  movement) except `source_file_sha256`, the one field that names the file. The order of the
+  movements counts, which is safe: a re-download keeps the PDF's order, and if it ever didn't
+  the file would just become a new version.
 - **Same content** → `_duplicates/`, with a reason that says the bytes differ (a re-download).
 - **Different content** → a new version (`_v2`, `_v3`, …), exactly as before: a real correction
   still reaches the continuity test, which is where a human should look at it.
@@ -61,8 +63,8 @@ from becoming a `_v3`.
 
 - One extra parse per collision, only when a file lands on an already-taken destination with a
   different hash. Negligible next to OCR, and it doesn't happen on a normal run.
-- The rule is strict on purpose: any difference in a movement's description, amount or date makes
-  it a new version. If a bank ever re-words a description between downloads, the file becomes a
+- The rule is strict on purpose: any difference in a movement's description, amount, date or
+  position makes it a new version, and a field added to `Statement` later is compared for free. If a bank ever re-words a description between downloads, the file becomes a
   `_v2` and the continuity test flags it, which is the safe direction to fail in.
 - Archives built **before** this change keep their `_v2` files. Move them back to the inbox and
   ingest again ([walkthrough](../../docs/ingesting-your-own-pdfs.md), section 5): the second copy
