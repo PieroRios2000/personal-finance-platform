@@ -111,16 +111,20 @@ def _run_import_manual(args: argparse.Namespace) -> int:
         return 1
     try:
         savings = manual_excel.read_savings(workbook, user_id=user_id)
+        investments = manual_excel.read_investments(workbook, user_id=user_id)
     except MissingAccountKeyError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    if savings.problems:
-        for problem in savings.problems:
+    problems = [*savings.problems, *investments.problems]
+    if problems:
+        for problem in problems:
             print(f"error: {problem}", file=sys.stderr)
         print("nothing was written", file=sys.stderr)
         return 1
     for entry in savings.entries:
         bronze.replace_statement(entry.statement, entry.file_sha256)
+    for month in investments.months:
+        bronze.replace_investment_month(month)
     print(
         f"Ahorros: {len(savings.entries)} statement(s) written "
         f"(a month already loaded is replaced, not added)"
@@ -130,7 +134,20 @@ def _run_import_manual(args: argparse.Namespace) -> int:
             f"Ahorros: {savings.missing_months} month(s) missing "
             "between the first and last"
         )
-    print("Inversiones: not imported yet")
+    if investments.months:
+        print(f"Inversiones: {len(investments.months)} month(s) written")
+        if investments.months_without_valuation:
+            print(
+                f"Inversiones: {investments.months_without_valuation} month(s) "
+                "without a valuation (their return cannot be computed)"
+            )
+        if investments.missing_months:
+            print(
+                f"Inversiones: {investments.missing_months} month(s) missing "
+                "between the first and last"
+            )
+    else:
+        print("Inversiones: nothing to load")
     return 0
 
 

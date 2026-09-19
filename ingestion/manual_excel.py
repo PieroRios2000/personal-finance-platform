@@ -40,6 +40,9 @@ from openpyxl import load_workbook
 from ingestion.reconciliation import reconcile
 from ingestion.schema import (
     Currency,
+    InvestmentEntry,
+    InvestmentKind,
+    InvestmentMonth,
     Statement,
     Transaction,
     hash_account,
@@ -47,7 +50,17 @@ from ingestion.schema import (
 )
 
 SAVINGS_COLUMNS = ("cuenta", "fecha", "descripcion", "monto", "moneda", "saldo_final")
+INVESTMENT_COLUMNS = (
+    "lugar",
+    "fecha",
+    "tipo",
+    "monto",
+    "moneda",
+    "saldo_final",
+    "nota",
+)
 SHEET = "Ahorros"
+INVESTMENT_SHEET = "Inversiones"
 _EXAMPLE_PREFIX = "EJEMPLO"
 _MONTH_END = "cierre de mes"
 
@@ -298,3 +311,181 @@ def _month_statement(
     )
     reconcile(statement)
     return statement
+
+
+@dataclass
+class InvestmentImport:
+    months: list[InvestmentMonth] = field(default_factory=list)
+    problems: list[str] = field(default_factory=list)
+    months_without_valuation: int = 0
+    missing_months: int = 0
+
+
+_KINDS: tuple[InvestmentKind, ...] = ("aporte", "retiro", "valorizacion")
+
+
+@dataclass(frozen=True)
+class _InvestmentRow:
+    number: int
+    place: str
+    day: date
+    kind: InvestmentKind
+    amount: Decimal
+    currency: Currency
+    balance: Decimal
+    detail: str | None
+
+
+def _investment_identity(
+    user_id: str, place: str, currency: str, year: int, month: int
+) -> str:
+    key = f"manual-excel-investments|{user_id}|{place}|{currency}|{year}-{month:02d}"
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+def _parse_investment_rows(
+    raw: list[tuple[int, tuple[Any, ...]]],
+) -> tuple[list[_InvestmentRow], list[tuple[int, str]]]:
+    rows: list[_InvestmentRow] = []
+    problems: list[tuple[int, str]] = []
+    for number, cells in raw:
+        place, when, kind, amount, currency, balance, note = cells[:7]
+        day = _day(when)
+        value, value_reason = _money(amount)
+        closing, closing_reason = _money(balance)
+        found: list[str] = []
+        if not (isinstance(place, str) and place.strip()):
+            found.append("lugar is empty")
+        if day is None:
+            found.append("fecha is not a date")
+        if kind not in _KINDS:
+            found.append("tipo must be aporte, retiro or valorizacion")
+        if value is None:
+            found.append(f"monto {value_reason}")
+        elif kind == "valorizacion" and value != 0:
+            found.append("monto must be 0 in a valorizacion")
+        elif kind in ("aporte", "retiro") and value <= 0:
+            found.append("monto must be greater than 0 in an aporte or retiro")
+        if currency not in ("PEN", "USD"):
+            found.append("moneda must be PEN or USD")
+        if closing is None:
+            found.append(f"saldo_final {closing_reason}")
+        elif closing < 0:
+            found.append("saldo_final cannot be negative")
+        if found:
+            problems += [(number, message) for message in found]
+            continue
+        assert day is not None and value is not None and closing is not None
+        rows.append(
+            _InvestmentRow(
+                number,
+                str(place).strip(),
+                day,
+                "aporte"
+                if kind == "aporte"
+                else "retiro"
+                if kind == "retiro"
+                else "valorizacion",
+                value,
+                "PEN" if currency == "PEN" else "USD",
+                closing,
+                str(note).strip() if isinstance(note, str) and note.strip() else None,
+            )
+        )
+    return rows, problems
+
+
+def read_investments(path: Path, *, user_id: str) -> InvestmentImport:
+    """Read the `Inversiones` sheet into one `InvestmentMonth` per fund, currency
+    and calendar month (ADR 0028). The sheet is optional: a workbook without it,
+    or with only the header, imports nothing and is not a problem."""
+    result = InvestmentImport()
+    try:
+        workbook = load_workbook(path, data_only=True)
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile):
+        result.problems.append("the file is not a readable .xlsx workbook")
+        return result
+    if INVESTMENT_SHEET not in workbook.sheetnames:
+        return result
+    sheet = workbook[INVESTMENT_SHEET]
+    header = tuple(c.value for c in sheet[1])
+    if header[: len(INVESTMENT_COLUMNS)] != INVESTMENT_COLUMNS:
+        result.problems.append(
+            f"{INVESTMENT_SHEET}: the columns are not the template's"
+        )
+        return result
+    raw = [
+        (index, tuple(row))
+        for index, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), 2)
+        if any(v is not None for v in row)
+    ]
+    examples = sum(
+        1
+        for _, cells in raw
+        if len(cells) > 6
+        and isinstance(cells[6], str)
+        and cells[6].startswith(_EXAMPLE_PREFIX)
+    )
+    if examples:
+        result.problems.append(
+            f"{INVESTMENT_SHEET}: {examples} example row(s) are still in the sheet "
+            "(EJEMPLO)"
+        )
+        return result
+
+    rows, row_problems = _parse_investment_rows(raw)
+    found: list[tuple[int, str]] = list(row_problems)
+    groups: dict[tuple[str, Currency], list[_InvestmentRow]] = {}
+    for row in rows:
+        groups.setdefault((row.place, row.currency), []).append(row)
+
+    months: list[InvestmentMonth] = []
+    for (place, currency), group in groups.items():
+        group = sorted(group, key=lambda r: (r.day, r.number))
+        by_month: dict[tuple[int, int], list[_InvestmentRow]] = {}
+        for row in group:
+            by_month.setdefault((row.day.year, row.day.month), []).append(row)
+        result.missing_months += _months_between(min(by_month), max(by_month)) - len(
+            by_month
+        )
+        for (year, month), month_rows in sorted(by_month.items()):
+            if not any(r.kind == "valorizacion" for r in month_rows):
+                result.months_without_valuation += 1
+            try:
+                months.append(
+                    InvestmentMonth(
+                        user_id=user_id,
+                        place=place,
+                        currency=currency,
+                        year=year,
+                        month=month,
+                        month_key=_investment_identity(
+                            user_id, place, currency, year, month
+                        ),
+                        entries=[
+                            InvestmentEntry(
+                                date=r.day,
+                                kind=r.kind,
+                                amount=r.amount,
+                                balance=r.balance,
+                                detail=r.detail,
+                                position=r.number,
+                            )
+                            for r in month_rows
+                        ],
+                    )
+                )
+            except ValueError:
+                found.append(
+                    (
+                        month_rows[0].number,
+                        "the month could not be built (invalid values)",
+                    )
+                )
+    found.sort()
+    result.problems += [
+        f"{INVESTMENT_SHEET} row {row}: {message}" for row, message in found
+    ]
+    if not result.problems:
+        result.months = months
+    return result

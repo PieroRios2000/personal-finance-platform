@@ -9,8 +9,8 @@ from typing import Any
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from ingestion.manual_excel import SAVINGS_COLUMNS
-from scripts.make_manual_templates import INVESTMENT_COLUMNS, main, write_template
+from ingestion.manual_excel import INVESTMENT_COLUMNS, SAVINGS_COLUMNS
+from scripts.make_manual_templates import main, write_template
 
 
 def _sheet(path: Path, name: str) -> Worksheet:
