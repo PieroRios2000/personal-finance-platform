@@ -84,7 +84,7 @@ varios Statements"; credit-card semantics: "no tiene saldo contable sino saldo d
 
 **The closing balance (corrected against real statements, 2026-09).** The first version had no
 independently declared closing figure and summed every `Total` line as a page subtotal. Real
-statements showed otherwise: the **last** `Total` line, per currency, is the closing balance
+statements showed otherwise: the **last** `Total` line (a label, "Total", and amounts only) is the closing balance
 (it equals `Saldo Anterior` plus every transaction of that currency), and the `Total` lines of
 earlier pages are something else. `parse()` now compares that last `Total` with the opening
 balance plus its own transaction sum and raises `ValueError` on a mismatch, so a dropped row

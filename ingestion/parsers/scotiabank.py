@@ -265,7 +265,7 @@ def _currency_amount(
 
     `currency_columns` only ever has two entries (PEN, USD): whatever sits to
     the left of the *first* one (a row's dates and description, or a label
-    like "SALDO"/"ANTERIOR"/"Total") has no column of its own to fall into and
+    like "Saldo"/"Anterior"/"Total") has no column of its own to fall into and
     lands in that first bucket too, the same "no boundary before the leftmost
     column" trait `_assign_columns` already has for `bcp.py`. Rather than add
     a boundary for everything that could sit there, only the *last*
@@ -286,7 +286,7 @@ def _currency_amount(
 def _find_opening_balances(
     lines: list[list[Word]], currency_columns: dict[str, float], skip_index: int
 ) -> dict[str, Decimal]:
-    """The "SALDO ANTERIOR" line's amount(s), one per currency present."""
+    """The "Saldo Anterior" line's amount(s), one per currency present."""
     for index, line in enumerate(lines):
         if index == skip_index:
             continue
@@ -294,29 +294,44 @@ def _find_opening_balances(
         # case-insensitively so a bank restyling it doesn't break the parser.
         texts = {w["text"].lower() for w in line}
         if "saldo" in texts and "anterior" in texts:
-            return _currency_amount(line, currency_columns)
+            amounts = _currency_amount(line, currency_columns)
+            if amounts:  # a prose line with the same words has none
+                return amounts
     return {}
+
+
+def _is_total_line(line: list[Word]) -> bool:
+    """A label, the word "Total", then only amounts (and stray tags): a
+    sentence that merely contains "Total" and a figure is not one."""
+    words = [w["text"] for w in line]
+    if "Total" not in words:
+        return False
+    after = words[words.index("Total") + 1 :]
+    return bool(after) and all(
+        _AMOUNT_RE.match(text) or _STRAY_TAG_RE.match(text) for text in after
+    )
 
 
 def _declared_closing_balances(
     lines: list[list[Word]], currency_columns: dict[str, float], skip_index: int
 ) -> dict[str, Decimal]:
-    """The closing balance the statement declares, per currency: the amount on
-    the *last* "Total" line that has one for that currency.
+    """The closing balance the statement declares, per currency: the amounts on
+    the *last* "Total" line.
 
     A real statement prints a "Total" at the end of most pages, but checked
     against real files only the last one equals the opening balance plus every
     transaction; the earlier ones are not the running balance, so they are
-    ignored. Empty if no "Total" line carries an amount, so the caller can skip
-    the check rather than comparing against a false zero.
+    ignored, and a currency missing from the last one is not filled in from an
+    earlier one. Empty if there is no Total line, so the caller can skip the
+    check and keep the computed balance.
     """
     declared: dict[str, Decimal] = {}
     for index, line in enumerate(lines):
-        if index == skip_index:
+        if index == skip_index or not _is_total_line(line):
             continue
-        if "Total" not in {w["text"] for w in line}:
-            continue
-        declared.update(_currency_amount(line, currency_columns))
+        amounts = _currency_amount(line, currency_columns)
+        if amounts:
+            declared = amounts
     return declared
 
 
@@ -371,7 +386,7 @@ def parse(
         row_date_text = fecha_words[0] if fecha_words else ""
         stray_words = fecha_words[1:]
         if not _ROW_DATE_RE.match(row_date_text):
-            continue  # a header row, or an info line like "SALDO ANTERIOR"
+            continue  # a header row, or an info line like "Saldo Anterior"
 
         amounts = _currency_amount(line, currency_columns)
         if len(amounts) > 1:
