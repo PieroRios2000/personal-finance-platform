@@ -29,7 +29,17 @@ _REQUIRED = (
     "PFP_PG_DATABASE",
     "PFP_PG_USER",
     "PFP_PG_PASSWORD",
+    "PFP_PG_BI_PASSWORD",
 )
+_GRANTS = Path(__file__).resolve().parent.parent / "postgres" / "grants.sql"
+
+
+def _redacted(result: subprocess.CompletedProcess[str]) -> str:
+    """dbt's output for an assertion message, without the Postgres password."""
+    output = result.stdout
+    for name in ("PFP_PG_PASSWORD", "PFP_PG_BI_PASSWORD"):
+        output = output.replace(os.environ[name], "***")
+    return output
 
 
 def _conninfo(
@@ -117,7 +127,7 @@ def test_silver_and_gold_are_built_in_postgres_and_elementary_is_not(
 
     result = _dbt_build(tmp_path, database)
 
-    assert result.returncode == 0, result.stdout
+    assert result.returncode == 0, _redacted(result)
     tables = _tables(database)
     assert {"silver.transactions", "gold.fact_transactions", "gold.dim_bank"} <= tables
     assert not any(t.startswith("elementary.") for t in tables)
@@ -134,30 +144,32 @@ def test_a_second_build_changes_nothing_in_postgres(
 
     second = _dbt_build(tmp_path, database)
 
-    assert second.returncode == 0, second.stdout
+    assert second.returncode == 0, _redacted(second)
     assert _scalar(database, "select count(*) from silver.transactions") == first == 2
 
 
 def test_the_bi_role_reads_gold_only_and_keeps_doing_so_after_a_rebuild(
     lake: str, database: str, tmp_path: Path
 ) -> None:
-    """dbt drops and recreates tables: the read-only role's privilege has to follow
-    the new ones (`alter default privileges`, postgres/init-roles.sh)."""
-    bi_password = os.environ.get("PFP_PG_BI_PASSWORD")
-    assert bi_password, "PFP_PG_BI_PASSWORD is needed to test the read-only role"
+    """The real `postgres/grants.sql` (the file the container's init script runs)
+    applied to the throwaway database, then a rebuild: dbt drops and recreates
+    tables, so the read-only role's privilege has to follow the new ones. The
+    cluster-level role comes from `init-roles.sh` when the Postgres volume is
+    first created; a volume made before T26 does not have it (`make poc-down`,
+    then `make pg-up`), and a BI password changed in `.env` afterwards no longer
+    matches."""
     _seed()
     assert _dbt_build(tmp_path, database).returncode == 0
     owner = os.environ["PFP_PG_USER"]
+    grants = _GRANTS.read_text().replace(':"owner"', f'"{owner}"')
+    grants = grants.replace(':"database"', f'"{database}"')
     with psycopg.connect(_conninfo(database), autocommit=True) as admin:
-        # The same grants postgres/init-roles.sh gives the main database.
-        admin.execute("grant usage on schema gold to pfp_bi")
-        admin.execute("grant select on all tables in schema gold to pfp_bi")
-        admin.execute(
-            f'alter default privileges for role "{owner}" in schema gold '
-            "grant select on tables to pfp_bi"
-        )
+        for statement in grants.split(";"):
+            if statement.strip():
+                admin.execute(statement)
     assert _dbt_build(tmp_path, database).returncode == 0  # recreates the tables
 
+    bi_password = os.environ["PFP_PG_BI_PASSWORD"]
     with psycopg.connect(_conninfo(database, "pfp_bi", bi_password)) as reader:
         assert reader.execute(
             "select count(*) from gold.fact_transactions"
@@ -167,3 +179,6 @@ def test_the_bi_role_reads_gold_only_and_keeps_doing_so_after_a_rebuild(
         reader.rollback()
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             reader.execute("create table gold.not_allowed (a int)")
+        reader.rollback()
+        with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
+            reader.execute("create temp table not_allowed (a int)")

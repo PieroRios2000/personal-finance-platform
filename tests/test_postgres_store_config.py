@@ -42,29 +42,53 @@ def test_the_data_lives_in_a_named_volume_that_down_removes() -> None:
     assert any(str(v).startswith("postgres-data:") for v in _postgres()["volumes"])
 
 
-def test_the_init_script_is_mounted_and_has_a_healthcheck() -> None:
+def test_the_init_script_and_the_grants_are_mounted() -> None:
     mounts = " ".join(str(v) for v in _postgres()["volumes"])
 
     assert "docker-entrypoint-initdb.d" in mounts
-    assert "pg_isready" in " ".join(_postgres()["healthcheck"]["test"])
+    assert "postgres/grants.sql" in mounts
+
+
+def test_the_healthcheck_uses_tcp_so_it_is_not_healthy_during_first_time_init() -> None:
+    """The entrypoint's temporary server (while init scripts run) listens on the
+    unix socket only: a socket check would let `--wait` return before init ends."""
+    command = " ".join(_postgres()["healthcheck"]["test"])
+
+    assert "pg_isready" in command
+    assert "-h 127.0.0.1" in command
+
+
+def _grants() -> str:
+    return (_ROOT / "postgres" / "grants.sql").read_text()
 
 
 def test_the_bi_role_can_read_gold_only_and_keeps_doing_so_for_new_tables() -> None:
+    grants = _grants()
+
+    assert "grant usage on schema gold to pfp_bi" in grants
+    assert "grant select on all tables in schema gold to pfp_bi" in grants
+    assert 'alter default privileges for role :"owner" in schema gold' in grants
+    assert "grant select on tables to pfp_bi" in grants
+    assert "silver" not in grants
+    assert not re.search(r"grant (all|insert|update|delete|create)", grants, re.I)
+
+
+def test_only_the_owner_and_the_bi_role_may_connect_to_the_database() -> None:
+    grants = _grants()
+
+    assert 'revoke connect on database :"database" from public' in grants
+    assert 'grant connect on database :"database" to pfp_bi' in grants
+
+
+def test_the_init_script_creates_the_role_once_read_only_and_applies_the_grants() -> (
+    None
+):
     script = (_ROOT / "postgres" / "init-roles.sh").read_text()
 
-    assert "grant usage on schema gold to pfp_bi" in script
-    assert "grant select on all tables in schema gold to pfp_bi" in script
-    assert "alter default privileges" in script
-    assert "in schema gold grant select on tables to pfp_bi" in script
-    assert "silver to pfp_bi" not in script
-    assert not re.search(r"grant (all|insert|update|delete|create)", script, re.I)
-
-
-def test_the_init_script_takes_the_bi_password_from_the_environment() -> None:
-    script = (_ROOT / "postgres" / "init-roles.sh").read_text()
-
-    assert "PFP_PG_BI_PASSWORD" in script
-    assert "bi_password" in script and ":'bi_password'" in script
+    assert "PFP_PG_BI_PASSWORD" in script and ":'bi_password'" in script
+    assert "not exists (select 1 from pg_roles where rolname = 'pfp_bi')" in script
+    assert "set default_transaction_read_only = on" in script
+    assert "/grants.sql" in script
 
 
 def _profile() -> dict[str, Any]:
@@ -86,6 +110,8 @@ def test_the_postgres_target_attaches_postgres_and_elementarys_own_file() -> Non
     attached = {a.get("type", "duckdb"): a for a in output["attach"]}
     assert "postgres" in attached
     assert "PFP_PG_PASSWORD" in attached["postgres"]["path"]
+    # libpq's own quoting: a backslash or a quote in the password must not break it
+    assert "replace" in attached["postgres"]["path"]
     assert output["database"] == attached["postgres"]["alias"]
     assert any(a["alias"] == "elem" for a in output["attach"])
     assert "postgres" in output["extensions"] and "delta" in output["extensions"]
