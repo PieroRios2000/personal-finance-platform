@@ -42,6 +42,10 @@ tables, and Elementary's end-of-run step that stores its results failed to copy 
   results upload do not work through the attach). Its anomaly test still reads silver in Postgres.
 - **The dashboard is Apache Superset**, in its own stack you start when you want to look at the data,
   reading Postgres. Streamlit stays reserved for the manual-data form ([Phase 5](../../PROJECT.md)).
+- **The switch is gradual:** T26 adds Postgres as an opt-in dbt target (`--target postgres`) and keeps the
+  DuckDB file as the default so every step leaves `develop` green; T27 flips the default when the readers
+  move. Because a build on the Postgres target cannot pass with Elementary's models in Postgres, T26 already
+  puts Elementary on its own DuckDB file for that target.
 - **This is done inside Phase 2**, as extra tasks (T26 onward in
   [`tasks/todo-phase2.md`](../../tasks/todo-phase2.md)), before Phase 3 (ML).
 

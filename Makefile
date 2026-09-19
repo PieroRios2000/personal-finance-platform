@@ -5,7 +5,7 @@
 
 BASE ?= origin/develop
 
-.PHONY: check-fast check-task check-full poc poc-up poc-down om-up om-sync om-down alert alert-digest
+.PHONY: check-fast check-task check-full poc poc-up poc-down pg-up pg-down om-up om-sync om-down alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -35,6 +35,15 @@ poc-up:
 
 poc-down:
 	docker compose -p pfp-poc down -v
+
+# PostgreSQL, dbt's store for silver and gold (ADR 0029, T26). Same project as the local
+# S3, so `poc-down` removes its volume too. `pg-down` only stops it (data kept).
+# Needs the PFP_PG_* variables in `.env`.
+pg-up:
+	set -a && . ./.env && set +a && docker compose -p pfp-poc up -d --wait postgres
+
+pg-down:
+	docker compose -p pfp-poc stop postgres
 
 # The same flow as CI's ephemeral-integration job (T17, ADR 0007), but against
 # Piero's own real PDFs instead of the synthetic fixture, and only once, locally.

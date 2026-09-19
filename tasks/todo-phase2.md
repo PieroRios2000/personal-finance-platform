@@ -301,17 +301,23 @@ first, not assumed.
 (`type: postgres`), so silver and gold are created there. DuckDB stays the engine reading bronze.
 
 **Acceptance criteria:**
-- [ ] `postgres` service in `docker-compose.yml` (pinned image, data in a volume removed by `down -v`,
-  bound to `127.0.0.1`), started by `make poc-up`; credentials only from `.env` (`PFP_PG_*`, added to
-  `.env.example`).
-- [ ] `dbt/profiles.yml` attaches Postgres; `dbt build` creates every silver and gold model there and
-  the incremental `MERGE` and its purge behave as today (proved by the existing T20 tests, unchanged).
-- [ ] A read-only role for BI tools, created at start-up, that can `select` on `gold` only.
-- [ ] `brain/decisions/0029-...md` (already written) confirmed against what was built; SETUP.md sections 4
-  and 6 updated.
+- [x] `postgres` service in `docker-compose.yml` (pinned image, data in a volume removed by `down -v`,
+  bound to `127.0.0.1`), started by `make pg-up`; credentials only from `.env` (`PFP_PG_*`, added to
+  `.env.example`). (Not by `make poc-up` yet: the default store flips in T27, so the real `pfp-poc`
+  instance is not disturbed until then.)
+- [x] `dbt/profiles.yml` has a `postgres` target (`--target postgres`, **opt-in**: the DuckDB file stays
+  the default until T27, so `develop` stays green); `dbt build` creates every silver and gold model in
+  Postgres, and the incremental `MERGE` and its purge behave as before (a second build changes
+  nothing). Elementary is moved to its own DuckDB file on this target here, because the build cannot
+  pass without it (the T28 task keeps the rest: `edr`, its tests and ADR 0022).
+- [x] A read-only role `pfp_bi`, created when the volume is first made, that can `select` on `gold` only,
+  including tables dbt recreates (tested).
+- [x] `brain/decisions/0029-...md` (already written) confirmed against what was built; SETUP.md section 6
+  updated; CI's `ephemeral-integration` brings up a Postgres and runs the new integration test.
 
-**Verification:** `make poc-up`, load the synthetic inbox, `dbt build`: every node passes and
-`select count(*) from gold.fact_transactions` in `psql` matches silver.
+**Verification:** `make pg-up` and the local S3, load the synthetic inbox, `dbt build --target postgres`:
+every node passes (139/139) and a second build changes nothing; `tests/test_dbt_postgres_integration.py`
+passes against a real Postgres and S3.
 
 **Dependencies:** T25 · **Files:** `docker-compose.yml`, `dbt/profiles.yml`, `.env.example`, `Makefile`,
 `SETUP.md`, `brain/**` · **Size:** M

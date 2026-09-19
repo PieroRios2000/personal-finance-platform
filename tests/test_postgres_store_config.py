@@ -70,7 +70,8 @@ def test_the_init_script_takes_the_bi_password_from_the_environment() -> None:
 def _profile() -> dict[str, Any]:
     text = (_ROOT / "dbt" / "profiles.yml").read_text()
     loaded: dict[str, Any] = yaml.safe_load(text)
-    return loaded["personal_finance_platform"]
+    profile: dict[str, Any] = loaded["personal_finance_platform"]
+    return profile
 
 
 def test_the_default_dbt_target_is_still_the_duckdb_file() -> None:

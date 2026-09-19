@@ -285,6 +285,14 @@ jobs:
       PFP_USER: ci
       PFP_INBOX_ROOT: /tmp/pfp-ci-inbox
       PFP_ARCHIVE_ROOT: /tmp/pfp-ci-archive
+      # T26 (ADR 0029): the PostgreSQL dbt can store silver and gold in. Local-only,
+      # non-real values, like the SeaweedFS ones above.
+      PFP_PG_HOST: 127.0.0.1
+      PFP_PG_PORT: "5432"
+      PFP_PG_DATABASE: pfp
+      PFP_PG_USER: pfp
+      PFP_PG_PASSWORD: pfp-ci-dummy-pg-password
+      PFP_PG_BI_PASSWORD: pfp-ci-dummy-bi-password
       DBT_SELECT: ${{ needs.changes.outputs.dbt_select }}
       DAGSTER_MODULE_NAME: orchestration.definitions
     steps:
@@ -299,7 +307,7 @@ jobs:
 
       - name: bring up the ephemeral environment
         run: |
-          docker compose -p "$COMPOSE_PROJECT" up -d --wait seaweedfs
+          docker compose -p "$COMPOSE_PROJECT" up -d --wait seaweedfs postgres
           docker compose -p "$COMPOSE_PROJECT" run --rm bucket-init
 
       # ADR 0008/0021: a change confined to dbt/ builds only what it touched and
