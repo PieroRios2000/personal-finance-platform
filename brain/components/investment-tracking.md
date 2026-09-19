@@ -28,9 +28,12 @@ columns and rules: [`docs/manual-data.md`](../../docs/manual-data.md).
 
 - `gain` = closing - opening - contributions + withdrawals. `return_pct` = gain / (opening + each flow
   weighted by the share of the month it was invested).
-- `return_pct` is shown only when `is_return_reliable`: the month **closes at a `valorizacion`** (its
-  last row), has capital to earn on, and follows the previous month (`months_since_previous` = 1) or
-  is a fund's first month starting with an `aporte`/`retiro`. The gain and balances are always shown.
+- The closing balance is the month's last row. `closing_basis` is `valuation` when that row is a
+  `valorizacion` and `last_movement` when it is not (months typed before valuations were added: the
+  owner accepted that basis). `return_pct` is shown when `is_return_reliable`: there is capital to
+  earn on, and the month follows the previous one (`months_since_previous` = 1) or is a fund's first
+  month starting with an `aporte`/`retiro`. The gain and balances are always shown. A dashboard
+  should show `closing_basis` beside the return.
 - Never mixed: each `place` and `currency` is its own series. Not part of `silver.transactions`,
   the transfer matching or the savings goal.
 

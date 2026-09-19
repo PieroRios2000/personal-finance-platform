@@ -31,12 +31,16 @@ have put money in. The measure has to separate the fund's own result from the ow
 - **Opening balance** is the previous month's closing balance; for a fund's first month it is the
   balance before its first row, so a fund already worth something when the records begin does not
   read as a huge first-month gain.
-- **A month is "reliable"** only if it **closes at a `valorizacion`** (its last row, by date and sheet
-  row), has capital to earn a return on, and follows the previous month directly; a fund's first
-  month also needs a contribution or withdrawal to mark where it starts (a first month of only a
-  valuation would read as a 0% artifact). Otherwise `return_pct` is null (the gain and the
-  balances are always there): a closing balance that is only "the balance at the last movement", a
-  month after a missing one (it spans several months) and a month with no capital are not returns.
+- **The closing balance is the month's last row** (by date and sheet row). If it is a `valorizacion`
+  the month closes at a real valuation (`closing_basis = 'valuation'`); if not, it is only "the balance
+  at the last movement" (`closing_basis = 'last_movement'`). The owner accepted that basis for the
+  months typed before valuations were added (2026-09-19): those months show a return, marked as such,
+  and from now on the owner types a valuation every month.
+- **A month is "reliable"** if it has capital to earn a return on and follows the previous month
+  directly; a fund's first month also needs a contribution or withdrawal to mark where it starts (a
+  first month of only a valuation would read as a 0% artifact). Otherwise `return_pct` is null (the
+  gain and the balances are always there): a month after a missing one (it spans several months) and
+  a month with no capital are not returns.
 - **Cumulative figures** (net contributed and total gain since the records begin) are kept beside
   the monthly ones, since with a few months of history they are what says most.
 - **Loading is idempotent and replaces:** each fund-currency-month has an identity independent of

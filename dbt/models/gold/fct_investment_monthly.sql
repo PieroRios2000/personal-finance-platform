@@ -9,10 +9,13 @@
 -- explain: closing - opening - contributions + withdrawals. Its *return* is the
 -- Modified Dietz return: gain / (opening + each flow weighted by the share of
 -- the month it was invested), the standard way to compare months when money
--- moves in and out during them. The month has to *close* at a `valorizacion` (its
--- last row, by date and sheet row): otherwise the closing balance is only "the
--- balance at the last movement". `return_pct` is shown only for a reliable month
--- (`is_return_reliable`); the gain and the balances are always there.
+-- moves in and out during them. The closing balance is the last row of the month
+-- (by date and sheet row). When that row is a `valorizacion` the month closes at a
+-- real valuation (`closing_basis = 'valuation'`); otherwise it is only the balance
+-- at the last movement (`'last_movement'`), which the owner accepted for the months
+-- typed before valuations were added: the return is shown, and the basis says how
+-- much to trust it. `return_pct` is shown for a reliable month (`is_return_reliable`);
+-- the gain and the balances are always there.
 --
 -- `opening_balance` is the previous month's closing balance; for the first month
 -- it is the balance before its first row (a fund already worth something when the
@@ -106,12 +109,13 @@ reliable as (
 
     select
         *,
-        -- Reliable: the month closes at a valuation, there is capital to earn a
-        -- return on, and the month follows the previous one directly -- or it
-        -- is the first month and a flow (not just a valuation) marks where the
-        -- fund starts, since a first month of only a valuation is a 0% artifact.
-        has_valuation
-        and time_weighted_capital > 0
+        -- Reliable: there is capital to earn a return on, and the month follows
+        -- the previous one directly -- or it is the first month and a flow (not
+        -- just a valuation) marks where the fund starts, since a first month of
+        -- only a valuation is a 0% artifact. Whether the month closes at a real
+        -- valuation is `closing_basis`, not a condition: until the owner types
+        -- month-end valuations, the last balance of the month is its closing one.
+        time_weighted_capital > 0
         and coalesce(
             months_since_previous = 1,
             first_row_kind in ('aporte', 'retiro')
@@ -133,6 +137,8 @@ select
     withdrawals::decimal(18, 2) as withdrawals,
     closing_balance::decimal(18, 2) as closing_balance,
     gain::decimal(18, 2) as gain,
+    case when has_valuation then 'valuation' else 'last_movement' end
+        as closing_basis,
     case when is_return_reliable then gain / time_weighted_capital end as return_pct,
     (
         initial_capital
