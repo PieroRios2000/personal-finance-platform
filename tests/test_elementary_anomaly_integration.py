@@ -84,12 +84,10 @@ def lake() -> Iterator[str]:
 
 
 def _seed_daily_statements(*, scenario: str, detection_day_count: int) -> None:
-    """One BCP checking account, one statement per day: 10 steady training
+    """One BCP account per day, one statement each: 10 steady training
     days ending yesterday - 1, then one detection day (yesterday) with
-    `detection_day_count` transactions. Each day's `opening_balance` chains
-    from the previous day's `closing_balance`, so `assert_statement_continuity`
-    (every dbt build already runs it) stays green throughout."""
-    account_id = hashlib.sha256(f"t22-elementary-{scenario}".encode()).hexdigest()
+    `detection_day_count` transactions. Each day is its own account so
+    `assert_statement_continuity` (every dbt build runs it) has nothing to chain."""
     today = date.today()
     training_days = [
         today - timedelta(days=offset)
@@ -101,6 +99,12 @@ def _seed_daily_statements(*, scenario: str, detection_day_count: int) -> None:
 
     opening_balance = Decimal("1000.00")
     for day, count in zip(days, counts, strict=True):
+        # One account per day: these are one-day statements, and continuity is
+        # one statement per account and month, so a shared account would (rightly)
+        # fail it. What is under test is the daily row count, not continuity.
+        account_id = hashlib.sha256(
+            f"t22-elementary-{scenario}-{day}".encode()
+        ).hexdigest()
         amounts = [Decimal("-1.00") for _ in range(count)]
         file_sha256 = hashlib.sha256(
             f"t22-elementary-{scenario}-{day}".encode()
