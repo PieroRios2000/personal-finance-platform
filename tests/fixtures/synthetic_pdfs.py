@@ -531,15 +531,15 @@ def scotiabank_account_pdf(
     pdf.set_font("Helvetica", size=9)
 
     start, end = period
-    pdf.text(435, 78, "Periodo")
-    pdf.text(458, 78, f"{start:%d}-{_SPANISH_MONTH_ABBR_UPPER[start.month - 1]}-")
-    pdf.text(488, 78, f"{start:%Y}")
-    pdf.text(507, 78, "Al")
-    pdf.text(518, 78, f"{end:%d}-{_SPANISH_MONTH_ABBR_UPPER[end.month - 1]}-{end:%Y}")
+    pdf.text(300, 78, "Periodo")
+    pdf.text(350, 78, f"{start:%d}-{_SPANISH_MONTH_ABBR_UPPER[start.month - 1]}-")
+    pdf.text(400, 78, f"{start:%Y}")
+    pdf.text(440, 78, "Al")
+    pdf.text(470, 78, f"{end:%d}-{_SPANISH_MONTH_ABBR_UPPER[end.month - 1]}-{end:%Y}")
     pdf.text(23, 261, "CUENTA DE AHORROS")
     pdf.text(144, 261, currency_words)
-    pdf.text(204, 261, "Nro.")
-    pdf.text(223, 261, _SCOTIA_ACCOUNT_NUMBER)
+    pdf.text(230, 261, "Nro.")
+    pdf.text(270, 261, _SCOTIA_ACCOUNT_NUMBER)
 
     pdf.text(29, 280, "FECHA")
     pdf.text(72, 280, "FECHA")
