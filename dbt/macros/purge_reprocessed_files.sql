@@ -34,13 +34,24 @@
   correctly updates that row in place instead. See transactions.sql's own
   docstring and ADR 0018 for the two cases side by side.
 
+  One more case: a file that bronze no longer has *any* transaction for (a
+  manual-Excel month corrected so it has only a balance marker, ADR 0027,
+  or a file removed from bronze). It has no fresh row to select above, so its
+  old silver rows would stay forever; silver rows whose `source_file_sha256`
+  is no longer in bronze at all are purged too, so silver never keeps a
+  movement bronze has dropped.
+
   A first run, or `dbt build --full-refresh` (`is_incremental()` false in
   both): nothing to purge, the target is being rebuilt from scratch anyway.
 #}
 {% macro purge_reprocessed_files() %}
 {% if is_incremental() %}
     delete from {{ this }}
-    where source_file_sha256 in (
+    where source_file_sha256 not in (
+        select distinct source_file_sha256
+        from {{ source('bronze', 'transactions') }}
+    )
+    or source_file_sha256 in (
         select distinct bronze_transactions.source_file_sha256
         from {{ source('bronze', 'transactions') }} as bronze_transactions
         where not exists (

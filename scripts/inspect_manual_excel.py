@@ -23,7 +23,8 @@ from typing import Any
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from scripts.make_manual_templates import INVESTMENT_COLUMNS, SAVINGS_COLUMNS
+from ingestion.manual_excel import SAVINGS_COLUMNS
+from scripts.make_manual_templates import INVESTMENT_COLUMNS
 
 _EXPECTED = {"Ahorros": SAVINGS_COLUMNS, "Inversiones": INVESTMENT_COLUMNS}
 _KNOWN_TYPES = ("aporte", "retiro", "valorizacion")

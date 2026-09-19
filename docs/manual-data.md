@@ -28,11 +28,11 @@ names, account numbers or other personal data in any cell.
 | `cuenta` | The account's name, always written the same way |
 | `fecha` | Date of the movement |
 | `descripcion` | Short text (deposit, interest, ...) |
-| `monto` | Signed: positive when money comes in, negative when it goes out |
+| `monto` | Signed (negative when money goes out) or unsigned: an unsigned amount whose balance went down is read as a withdrawal |
 | `moneda` | `PEN` or `USD` |
 | `saldo_final` | The account's balance after that movement |
 
-**A month with no movements** still needs one row: `descripcion` = `cierre de mes`, `monto` = 0
+Every row's balance must equal the previous row's balance plus or minus its amount; if it does not, the import stops and names the row (never the values). **A month with no movements** still needs one row: `descripcion` = `cierre de mes`, `monto` = 0
 and the balance at month end. That is how the platform knows the month exists and how it closed
 (months are checked one statement per account and month, like the PDFs). A row with amount 0 is a
 balance marker, not a transaction.
@@ -61,8 +61,40 @@ If a fund charges a fee or there are taxes, say so: a `comision` column would be
 - **Investments** are tracked separately to see each fund's return month by month. They are not
   part of the savings goal ([ADR 0027](../brain/decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md)).
 
-The importer that reads the workbook is not built yet. Its design starts from a **masked** description
-of your real file that you review before anyone reads it, the same loop the PDF parsers went
+## Loading it
+
+```bash
+uv run pfp import-manual ~/finance-data/manual/finanzas-manual.xlsx   # needs .env (PFP_USER, PFP_ACCOUNT_KEY, LAKEHOUSE_URI)
+```
+
+The `Ahorros` sheet is loaded into bronze; then run the pipeline as usual (`dbt build`). It is safe
+to run again and again: each account-month is **replaced**, not added, so you can keep adding rows
+to the same workbook and reload it, and correct an old row and reload. If any row does not
+reconcile the import stops and writes nothing, naming the row (never the values). The `Inversiones`
+sheet is not loaded yet.
+
+**Things to know**
+
+- A month that is **not in the workbook is left alone**, never deleted: you can load a workbook that
+  only has the newest months without touching the older ones. (There is no command to remove a
+  month yet; ask if you need one.)
+- The first row of each account has no previous balance to read its direction from: make it a
+  deposit (or a `cierre de mes`). An unsigned withdrawal typed *after* that is understood from the
+  balance; a deposit whose balance you mistyped as `previous - amount` would be read as a
+  withdrawal, so check the balances.
+- The account is identified by its **exact name** in `cuenta`: `Ripley` and `ripley` are two
+  accounts, and renaming one later starts a new account (the old months stay under the old name).
+- Amounts have at most 2 decimals. A formula cell must have been saved by Excel (open and save the
+  file): a formula with no saved value reads as empty. Hidden rows and columns are loaded.
+- Every import re-writes every month it reads (same content, new load time), so dbt re-merges that
+  slice each time; with a few hundred rows this is instant. The months are written one at a time:
+  if the process is interrupted, run the import again.
+
+## How it was designed
+
+The importer was built from the template's structure and checked against a real workbook by
+counting (rows, months, problems), never by printing values. When something needs adjusting, the
+**masked** description below is what you review and share, the same loop the PDF parsers went
 through:
 
 ```bash

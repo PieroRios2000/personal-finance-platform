@@ -20,10 +20,11 @@ from openpyxl.styles import Font
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.worksheet import Worksheet
 
+from ingestion.manual_excel import SAVINGS_COLUMNS
+
 DEFAULT_OUT_DIR = Path.home() / "finance-data" / "manual"
 TEMPLATE_NAME = "plantilla-finanzas-manual.xlsx"
 
-SAVINGS_COLUMNS = ("cuenta", "fecha", "descripcion", "monto", "moneda", "saldo_final")
 INVESTMENT_COLUMNS = (
     "lugar",
     "fecha",
@@ -73,7 +74,8 @@ _INSTRUCTIONS = (
     "cuenta: el nombre de la cuenta, escrito siempre igual.",
     "fecha: la fecha del movimiento.",
     "descripcion: texto corto del movimiento (deposito, intereses, ...).",
-    "monto: con signo. Positivo si entra dinero, negativo si sale.",
+    "monto: puede ir con signo (negativo si sale dinero) o sin signo: el sentido se "
+    "lee del saldo (si el saldo baja, fue un retiro).",
     "moneda: PEN o USD.",
     "saldo_final: el saldo de la cuenta despues de ese movimiento.",
     "cierre de mes: si en un mes no hubo movimientos, agrega una fila con "
