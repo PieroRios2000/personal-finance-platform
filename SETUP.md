@@ -108,6 +108,8 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | pytesseract | 0.3.13 | runtime | OCR (Spanish) for scanned pages with no text layer |
 | deltalake | 1.6.3 | runtime | Write and read bronze's Delta tables (T14, ADR 0006) |
 | pyarrow | 25.0.1 | runtime | Explicit table schemas for Delta writes (T14, ADR 0006) |
+| psycopg | 3.3.6 | dev | Talks to PostgreSQL from the integration tests (create a throwaway database, count rows, check the read-only role) (T26) |
+| types-PyYAML | 6.0.12 | dev | Type stubs for PyYAML (mypy strict) |
 | dbt-duckdb | 1.11.0 (dbt-core 1.12.4) | runtime | Builds silver from bronze (T16, ADR 0011). Runtime, not dev: `dbt build` is a step of the platform's own flow, not a check |
 | duckdb | 1.5.5 | runtime | The engine dbt runs on; reads Delta off S3 with `delta_scan()` (T16, ADR 0002) |
 | dagster | 1.13.23 | runtime | Orchestrates bronze + dbt as one DAG (T21). Runtime: `dagster asset materialize` is a way to run the platform's own flow, same as `pfp ingest` + `dbt build` by hand |
@@ -146,10 +148,36 @@ All green = the environment is ready.
 
 ## 6. Building silver with dbt (T16)
 
-> **Planned change (Phase 2 extension, T26–T33):** silver and gold move from `dbt/pfp.duckdb` to
-> PostgreSQL ([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). This section,
-> section 7 (DBeaver) and section 10 (OpenMetadata) describe the DuckDB-file version until each task
-> lands and updates them.
+> **Phase 2 extension (T26–T33):** silver and gold are moving from `dbt/pfp.duckdb` to PostgreSQL
+> ([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). **T26 added the
+> Postgres store as an opt-in target** (below); the DuckDB file is still the default until T27. This
+> section, section 7 (DBeaver) and section 10 (OpenMetadata) describe the DuckDB-file version until
+> each task lands and updates them.
+
+### PostgreSQL as dbt's store (T26, opt-in)
+
+```bash
+# 1. In .env, fill the PFP_PG_* variables (template: .env.example). Generate the two secrets,
+#    e.g. `openssl rand -hex 16`, with no quotes or backslashes in them.
+make pg-up                                              # PostgreSQL 16 on 127.0.0.1:${PFP_PG_PORT}
+set -a && source .env && set +a
+export PFP_ELEMENTARY_DUCKDB_PATH="$PWD/dbt/elementary.duckdb"   # optional, this is the default
+uv run dbt build --project-dir dbt --profiles-dir dbt --target postgres
+```
+
+DuckDB stays the engine (it reads bronze off S3); silver and gold are created in the Postgres
+database `PFP_PG_DATABASE`, schemas `silver` and `gold`. **Elementary keeps its own small DuckDB file**
+(`dbt/elementary.duckdb`, gitignored) because its views and its results upload do not work through
+the attach. The first time the Postgres volume is created it also makes the read-only role `pfp_bi`
+(password `PFP_PG_BI_PASSWORD`; its sessions are read-only), which can connect and `select` from
+`gold` and nothing else, including tables dbt recreates later (`postgres/grants.sql`): that is the
+login BI tools use. It can still see table and column *names* in Postgres's catalog, not their data.
+The role exists only in a volume created by this version: with an older volume, or after changing
+`PFP_PG_BI_PASSWORD`, run `make poc-down` (removes the volume, lake included) and `make pg-up` again.
+`make pg-down` only stops Postgres.
+
+The `edr` CLI (`elementary:` profile) still reads `dbt/pfp.duckdb`; on the Postgres target point
+`PFP_DUCKDB_PATH` at `dbt/elementary.duckdb` (T28 tidies this).
 
 `make check-task` doesn't cover this: dbt reads bronze's Delta tables straight off local S3, so
 it needs SeaweedFS running and `.env` exported into the shell. `profiles.yml` lives inside the

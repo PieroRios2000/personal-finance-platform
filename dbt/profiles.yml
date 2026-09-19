@@ -37,6 +37,31 @@ personal_finance_platform:
           url_style: path
           use_ssl: "{{ 'true' if env_var('AWS_ENDPOINT_URL').startswith('https') else 'false' }}"
 
+# T26 (ADR 0029): the same engine (DuckDB reading the lake), but silver and gold are
+# stored in PostgreSQL through DuckDB's `attach`. Opt in with `--target postgres`
+# (T27 makes it the default). `database:` is the alias of the attached Postgres, so
+# every relation (silver.*, gold.*) is created there. Elementary keeps its own small
+# DuckDB file (`elem`): its view models and its results upload do not work through
+# the attach. The connection string is built from `.env` (PFP_PG_*); the password is
+# escaped the way libpq expects (a backslash or quote in it is fine).
+    postgres:
+      <<: *duckdb_output
+      path: ":memory:"
+      database: "{{ env_var('PFP_PG_DATABASE') }}"
+      extensions:
+        - httpfs
+        - delta
+        - postgres
+      attach:
+        # A block scalar (no YAML escapes) so the Jinja filters below reach dbt as written:
+        # they escape `\` and `'` in the password the way libpq's quoted values expect.
+        - path: >-
+            dbname={{ env_var('PFP_PG_DATABASE') }} host={{ env_var('PFP_PG_HOST', '127.0.0.1') }} port={{ env_var('PFP_PG_PORT', '5432') }} user={{ env_var('PFP_PG_USER') }} password='{{ env_var('PFP_PG_PASSWORD') | replace('\\', '\\\\') | replace("'", "\\'") }}'
+          alias: "{{ env_var('PFP_PG_DATABASE') }}"
+          type: postgres
+        - path: "{{ env_var('PFP_ELEMENTARY_DUCKDB_PATH', 'dbt/elementary.duckdb') }}"
+          alias: elem
+
 # T22: the `elementary-data` CLI (`edr report`/`edr monitor`) runs its own
 # internal dbt project against a connection profile literally named
 # `elementary` -- confirmed directly (`edr report` fails with "Could not find
