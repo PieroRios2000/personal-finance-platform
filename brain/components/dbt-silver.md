@@ -116,7 +116,7 @@ other T18b model builds on:
 - **`unmatched_transfers`** — candidates with no mutual match, for a human to review, never
   dropped: the unpaired half of a real transfer (its counterpart hasn't been ingested, or lost a
   tie-break to a closer candidate), or a cross-currency near-miss (explicitly out of scope for
-  auto-matching — no FX conversion anywhere in this project — but still surfaced, not silently
+  auto-matching — no FX conversion in these layers — but still surfaced, not silently
   dropped or silently matched).
 - **`transactions.is_internal_transfer`** — a `left join` back to `internal_transfer_matches`
   plus `coalesce(..., false)`, so every transaction has a real boolean, never null.
