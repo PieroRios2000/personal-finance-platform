@@ -11,7 +11,7 @@ ingestion, schema validation, medallion modeling, CI/CD, and architectural docum
 
 ## What this is
 
-Bank statements (BCP, Scotiabank) come in as password-protected PDFs — some digital, some
+Bank statements (BCP, Scotiabank; Banco Ripley is planned) come in as password-protected PDFs — some digital, some
 scanned. This platform parses them, reconciles every number the PDF itself declares, and
 lands them in a bronze → silver → gold medallion lakehouse (a star schema at the end),
 orchestrated, quality-checked and catalogued — all runnable locally with `docker compose` and
@@ -62,7 +62,7 @@ date or an amount wrong while the balances still add up.
 | Layer | Status |
 |---|---|
 | PDF parsing & reconciliation (BCP) | ✅ Calibrated against real statements — see [below](#built-the-hard-way) |
-| PDF parsing & reconciliation (Scotiabank) | ✅ Built — pending real-data validation (dual-currency credit card, opposite sign convention from BCP, handled explicitly) |
+| PDF parsing & reconciliation (Scotiabank) | ✅ Calibrated against real statements, in both layouts the bank issues: the dual-currency credit card (opposite sign convention from BCP, handled explicitly) and the savings account (the bank declares totals, so they are checked for real) |
 | Account kind (asset vs. liability) | ✅ Threaded through parsers → bronze → silver, so cross-bank analysis never assumes one sign convention |
 | Currency-aware statement continuity | ✅ A credit-card statement billed in two currencies at once (Soles + Dólares) is still tracked correctly, period by period |
 | Inter-account transfer matching | ✅ A checking → credit-card payment (opposite sign conventions) and a same-bank transfer both matched correctly; unmatched candidates surfaced for review, never dropped |
@@ -88,11 +88,21 @@ date or an amount wrong while the balances still add up.
 | Catalog and column-level lineage | ✅ OpenMetadata (optional, local only, ~4.8 GiB at peak): `fact_transactions.amount` traces back to `bronze.transactions.amount` |
 | ML, categories, dashboard | Later phases — see [PROJECT.md](PROJECT.md) |
 
-**Not yet validated against real data:** everything above was verified with synthetic
-statements plus the owner's real BCP files. The Scotiabank parser, currency-aware
-continuity and transfer matching haven't seen real Scotiabank statements yet —
-[`docs/ingesting-your-own-pdfs.md`](docs/ingesting-your-own-pdfs.md) is the walkthrough for
-that step (and for running the platform on your own PDFs).
+### Planned
+
+| Phase | What |
+|---|---|
+| 6 — Savings-goal projection | Banco Ripley as a third bank, then a projection of how long it takes to reach a savings goal at the owner's real cash flow. Only liquid money in bank accounts counts; investments elsewhere (mutual funds) are deliberately left out — [ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md) |
+| 7 — Alerting | Errors and warnings from the pipeline sent by email or Microsoft Teams, carrying names and counts only, never real data |
+
+The order of what is next is in [`tasks/backlog.md`](tasks/backlog.md).
+
+**Validated against real data (2026-09):** all of the owner's real statements (60 BCP, 25
+Scotiabank) parse and reconcile, and running them through the lake exposed the problems
+synthetic data could not: a bank re-download with identical content, statement cycles that do
+not tile the calendar, and Scotiabank's second layout. Each one became a fix with a regression
+test. [`docs/ingesting-your-own-pdfs.md`](docs/ingesting-your-own-pdfs.md) is the walkthrough
+for running the platform on your own PDFs.
 
 Every decision behind these is written down as an ADR, not just implemented and forgotten —
 see [`brain/`](brain/README.md).
@@ -114,7 +124,7 @@ never showed up in a single test case:
 Each one was found by running the tool for real, diagnosed from a **masked** layout dump (no
 digit or name ever leaves the machine unmasked — see [ADR 0004](brain/decisions/0004-real-pdfs-never-leave-your-machine.md)),
 fixed with a regression test reproducing the exact failure, and verified against the real
-file before moving on. All four of the owner's real statements now parse and reconcile
+file before moving on. All of the owner's real BCP statements now parse and reconcile
 end to end. The full story, fix by fix, is in [`brain/components/bcp-parser.md`](brain/components/bcp-parser.md).
 
 ## Engineering practices this repo actually follows

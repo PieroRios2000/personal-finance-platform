@@ -8,7 +8,7 @@ Personal portfolio project to demonstrate **Data Lead / Data Engineer** skills: 
 
 ## Goal
 
-Ingest bank statement PDFs (BCP and Scotiabank), process and validate them, model them under a medallion architecture, orchestrate the flow, run ML models on top of it, and serve it through a dashboard — replicating in open source what corporate environments do with Azure Data Factory + ADLS + Synapse/Databricks.
+Ingest bank statement PDFs (BCP and Scotiabank today, Banco Ripley planned), process and validate them, model them under a medallion architecture, orchestrate the flow, run ML models on top of it, and serve it through a dashboard — replicating in open source what corporate environments do with Azure Data Factory + ADLS + Synapse/Databricks.
 
 **Equivalence the project demonstrates (for interviews):**
 
@@ -154,6 +154,24 @@ Every parser validates that the sum of the extracted transactions matches the ba
 - (Optional) Power BI connection.
 
 **Closes:** end-to-end delivery, a showcase for recruiters.
+
+### Phase 6 — Savings-goal projection *(planned, added 2026-09-19)*
+**Goal:** answer "given my real cash flow, how long until I reach my savings goal?"
+- Banco Ripley as a third bank (the owner's savings account, in soles): its own parser, calibrated against real statements like the other two.
+- A projection over the gold tables: time to reach a target amount at the observed monthly flow, leaving out transfers between the owner's own accounts.
+- **Scope decision:** only liquid money in bank accounts counts. Investments held on other platforms (mutual funds) are long term and market-dependent, so they are deliberately not part of the goal or the flow ([ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md)).
+
+**Closes:** turning the platform from "what happened" into "what happens next" on the owner's own data. Details and open questions: [`brain/phases/phase-6.md`](brain/phases/phase-6.md).
+
+### Phase 7 — Alerting *(planned, added 2026-09-19)*
+**Goal:** be told when something breaks instead of having to look.
+- Errors and warnings (dbt tests with `error`/`warn` severity, Dagster run failures, files that need review) delivered by **email or Microsoft Teams**.
+- Messages carry names and counts only, never data from a real statement ([ADR 0004](brain/decisions/0004-real-pdfs-never-leave-your-machine.md) applies to anything that leaves the process).
+- Includes the small `scripts/poc.py` fix so `make poc` shows dbt's result lines on real output.
+
+**Closes:** operations and observability. Details and open questions: [`brain/phases/phase-7.md`](brain/phases/phase-7.md).
+
+> **Order:** phases 6 and 7 were added after Phase 2 closed and do not renumber 3–5. The next steps in practice are listed in [`tasks/backlog.md`](tasks/backlog.md).
 
 > **Scope note:** the uploader stays at its minimal, functional version. None of the target job postings value frontend skills; the value is in what happens *after* the file comes in (parsing, reconciliation, MERGE, orchestration, ML).
 
