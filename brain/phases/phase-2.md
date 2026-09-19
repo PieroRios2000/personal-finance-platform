@@ -68,6 +68,7 @@ merged, and a clean clone follows the README's quickstart through to a materiali
 | 0021 | CI invokes the pipeline through Dagster | [ADR 0021](../decisions/0021-ci-invokes-the-dagster-pipeline.md) |
 | 0022 | Elementary's anomaly test, warn-mode scoping, where `dbt deps` had to go | [ADR 0022](../decisions/0022-elementary-anomaly-detection-and-warn-mode.md) |
 | 0023 | OpenMetadata catalog and column lineage from dbt artifacts | [ADR 0023](../decisions/0023-openmetadata-catalog-and-column-lineage-from-dbt-artifacts.md) |
+| 0024 | A regenerated PDF with identical content is a duplicate, not `_v2` (found on a real inbox, after the phase closed) | [ADR 0024](../decisions/0024-regenerated-pdfs-with-identical-content-are-duplicates.md) |
 
 ## Concepts
 

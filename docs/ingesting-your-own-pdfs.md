@@ -77,7 +77,7 @@ prints only pass/fail and counts — by construction never an amount, account or
 
 - `Archived: N  Duplicates: N  Needs review: N`
   - **Archived** — read correctly and filed under `~/finance-data/raw/`.
-  - **Duplicates** — same content as one already archived.
+  - **Duplicates** — same content as one already archived, even when the file's bytes differ (a bank re-download).
   - **Needs review** — could not be read or did not reconcile. **Aim for 0.**
 - `Bronze: N statement(s) written, M already ingested`
 - dbt's `PASS`/`FAIL` lines and `Done. PASS=.. WARN=.. ERROR=..`. A `WARN` from Elementary's
