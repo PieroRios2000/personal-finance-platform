@@ -228,3 +228,27 @@ def test_main_stops_before_touching_the_inbox_when_dbt_deps_fails(
     captured = capsys.readouterr()
     assert "poc: FAIL" in captured.out
     assert "deps: could not resolve" in captured.err
+
+
+# What real dbt prints: an ANSI colour, a timestamp, then the line. The lines
+# `_safe_dbt_lines` used to expect (starting with "Done." or containing " [FAIL")
+# never appeared, so `make poc` showed no dbt result at all on a real run.
+_REAL_DBT_OUTPUT = (
+    "\x1b[0m15:20:12  Running with dbt=1.11.0\n"
+    "\x1b[0m15:20:14  1 of 124 START test assert_statement_continuity ...... [RUN]\n"
+    "\x1b[0m15:20:15  17 of 124 \x1b[31mFAIL 4\x1b[0m assert_statement_continuity "
+    "................ [\x1b[31mFAIL 4\x1b[0m in 1.04s]\n"
+    "\x1b[0m15:20:16  18 of 124 \x1b[31mERROR\x1b[0m thing .......... "
+    "[\x1b[31mERROR\x1b[0m in 0.10s]\n"
+    "\x1b[0m15:20:17  \n"
+    "\x1b[0m15:20:17  Done. PASS=33 WARN=0 ERROR=1 SKIP=93 NO-OP=0 REUSED=0 TOTAL=127\n"
+)
+
+
+def test_dbt_filter_reads_real_coloured_and_timestamped_output() -> None:
+    assert _safe_dbt_lines(_REAL_DBT_OUTPUT) == [
+        "17 of 124 FAIL 4 assert_statement_continuity "
+        "................ [FAIL 4 in 1.04s]",
+        "18 of 124 ERROR thing .......... [ERROR in 0.10s]",
+        "Done. PASS=33 WARN=0 ERROR=1 SKIP=93 NO-OP=0 REUSED=0 TOTAL=127",
+    ]
