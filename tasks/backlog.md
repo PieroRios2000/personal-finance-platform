@@ -56,8 +56,8 @@ not which tests inside it. Options, in the order they are worth doing:
 - [ ] [Phase 6 — Savings-goal projection](../brain/phases/phase-6.md): the manual-Excel
       importer: Ripley savings and investment tracking (`Inversiones` sheet, monthly returns) **done**, then the cash-flow projection and its own sol/dólar exchange-rate section (the only
       place currencies are converted). Scope in [ADR 0025](../brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md).
-- [ ] **Dashboard (Phase 5), open-source BI, decision pending.** Proposal: Apache Superset over a
-      read-only snapshot of the DuckDB file (dbt holds the file exclusively while it builds, so the
-      dashboard must not open the live file). Alternatives: Metabase (lighter, community DuckDB
-      driver), Streamlit (Python, no BI server). Needs the owner's choice.
+- [ ] **Phase 2 extension, T26-T33: PostgreSQL as dbt's store, then Superset** (decided 2026-09-19,
+      [ADR 0029](../brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). Order and
+      acceptance criteria in [`todo-phase2.md`](todo-phase2.md). Then the owner tries the data
+      visualization, the dbt catalog and the architecture before Phase 3 (ML).
 - [ ] Phase 3 (ML), 4 (cloud), 5 (uploader): see [PROJECT.md](../PROJECT.md).

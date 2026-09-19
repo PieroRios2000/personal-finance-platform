@@ -41,3 +41,7 @@ is the Delta format: ACID transactions and MERGE for deduplication.
 - [Business key](../concepts/business-key.md) — the deduplication that needs MERGE.
 - [ADR 0003: SeaweedFS](0003-local-s3-with-seaweedfs.md) — where the tables live.
 - [Phase 1](../phases/phase-1.md)
+
+## Update 2026-09-19
+
+The engine choice stands (DuckDB + delta-rs before Spark). The *storage* half, "embedded, no Postgres", is superseded by [ADR 0029](0029-dbt-stores-silver-and-gold-in-postgres.md): dbt now writes silver and gold to PostgreSQL through DuckDB's attach, so BI tools, the catalog and Dagster can read while it builds.

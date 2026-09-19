@@ -146,6 +146,11 @@ All green = the environment is ready.
 
 ## 6. Building silver with dbt (T16)
 
+> **Planned change (Phase 2 extension, T26–T33):** silver and gold move from `dbt/pfp.duckdb` to
+> PostgreSQL ([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). This section,
+> section 7 (DBeaver) and section 10 (OpenMetadata) describe the DuckDB-file version until each task
+> lands and updates them.
+
 `make check-task` doesn't cover this: dbt reads bronze's Delta tables straight off local S3, so
 it needs SeaweedFS running and `.env` exported into the shell. `profiles.yml` lives inside the
 project directory, and dbt only searches `--profiles-dir`, `DBT_PROFILES_DIR`, the working
