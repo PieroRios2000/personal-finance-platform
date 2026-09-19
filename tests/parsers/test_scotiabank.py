@@ -82,6 +82,59 @@ def test_parse_sets_each_statements_own_currency(tmp_path: Path) -> None:
         assert all(t.currency == currency for t in statement.transactions)
 
 
+def test_parse_ignores_a_stray_tag_after_a_rows_amount(tmp_path: Path) -> None:
+    """Real rows sometimes end with a `(abc:12)` tag right of the amount. It
+    used to be the last token of the currency cell, so the row's amount was
+    never read and the statement's Total no longer matched."""
+    path = tmp_path / "statement.pdf"
+    path.write_bytes(scotiabank_statement_pdf(stray_tags=True))
+
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    by_currency = {s.currency: s for s in statements}
+    assert len(by_currency["PEN"].transactions) == 2
+    assert len(by_currency["USD"].transactions) == 1
+    assert by_currency["PEN"].closing_balance == Decimal("550.00")
+
+
+def test_parse_uses_only_the_last_total_line_as_the_closing_balance(
+    tmp_path: Path,
+) -> None:
+    """Real multi-page statements print a "Total" at the end of every page, but
+    only the last one is the closing balance (checked against real files: the
+    earlier ones are not the running balance). An earlier, different Total
+    must not fail a statement whose last Total is right."""
+    from fpdf import FPDF
+
+    pdf = FPDF(unit="pt")
+    for page_number in (1, 2):
+        pdf.add_page()
+        pdf.set_font("Helvetica", size=9)
+        pdf.text(40, 20, "00000000")
+        pdf.text(140, 20, "0000-0000-****-0000")
+        pdf.text(40, 50, "PERIODO DE TARJETA DEL 05-01-2026 AL 12-01-2026")
+        pdf.text(40, 70, "Saldo Anterior")
+        pdf.text(451, 70, "500.00")
+        pdf.text(40, 100, "Fecha")
+        pdf.text(140, 100, "Fecha")
+        pdf.text(240, 100, "Descripción")
+        pdf.text(451, 110, "Soles")
+        pdf.text(520, 110, "Dólares")
+        pdf.text(40, 130, "04/01/26" if page_number == 1 else "11/01/26")
+        pdf.text(140, 130, "05/01/26" if page_number == 1 else "12/01/26")
+        pdf.text(240, 130, f"PAGE {page_number} FICTICIA")
+        pdf.text(451, 130, "50.00")
+        pdf.text(40, 150, "Total")
+        # page 1: an intermediate figure; page 2: opening 500 + 50 + 50
+        pdf.text(451, 150, "123.45" if page_number == 1 else "600.00")
+    path = tmp_path / "two-totals.pdf"
+    path.write_bytes(bytes(pdf.output()))
+
+    statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert statements[0].closing_balance == Decimal("600.00")
+
+
 def test_parse_reads_the_debt_sign_convention(tmp_path: Path) -> None:
     """A charge has no suffix and adds to debt (positive); a payment ends in
     "-" and reduces it (negative) — the opposite of BCP's convention, since
@@ -138,28 +191,26 @@ def test_parse_rejects_a_currency_whose_total_does_not_add_up(
     tmp_path: Path,
 ) -> None:
     """`closing_balance` is *computed* here (opening + this parser's own
-    transaction sum — see the module docstring on why no independently
-    declared one was identifiable), so `reconcile()` itself can never
-    disagree with it: the two sides of that check are built from the same
-    formula. What actually catches a broken statement is the `Total`
-    cross-check, which fires first — a plain `ValueError`, not
-    `ReconciliationError`. `test_parse_reports_a_mismatched_declared_total`
+    transaction sum), so `reconcile()` itself can never disagree with it: the
+    two sides of that check are built from the same formula. What actually
+    catches a broken statement is the cross-check against the closing balance
+    the last `Total` line declares, which fires first — a plain `ValueError`,
+    not `ReconciliationError`. `test_parse_reports_a_mismatched_declared_total`
     covers the same failure built by hand; this one proves the fixture's own
     `reconciles=False` (mirroring `bcp_statement_pdf`'s contract) reaches it
     too."""
     path = tmp_path / "broken.pdf"
     path.write_bytes(scotiabank_statement_pdf(reconciles=False))
 
-    with pytest.raises(ValueError, match="does not match the sum"):
+    with pytest.raises(ValueError, match="does not match opening balance plus"):
         scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
 
 def test_parse_reports_a_mismatched_declared_total(tmp_path: Path) -> None:
-    """The per-page "Total" line is this parser's one independent cross-check
-    (no separate declared closing balance was ever identified — see the
-    module docstring): a fixture whose own per-row math is internally
-    consistent but whose printed Total doesn't match it must still fail,
-    loudly, not silently."""
+    """The last "Total" line is the statement's declared closing balance, this
+    parser's one independent cross-check: a fixture whose own per-row math is
+    internally consistent but whose printed Total doesn't match it must still
+    fail, loudly, not silently."""
     from fpdf import FPDF
 
     pdf = FPDF(unit="pt")
@@ -168,7 +219,7 @@ def test_parse_reports_a_mismatched_declared_total(tmp_path: Path) -> None:
     pdf.text(40, 20, "00000000")
     pdf.text(140, 20, "0000-0000-****-0000")
     pdf.text(40, 50, "PERIODO DE TARJETA DEL 05-01-2026 AL 05-01-2026")
-    pdf.text(40, 70, "SALDO ANTERIOR")
+    pdf.text(40, 70, "Saldo Anterior")
     pdf.text(451, 70, "500.00")
     pdf.text(520, 70, "0.00")
     pdf.text(40, 100, "Fecha")
@@ -181,11 +232,11 @@ def test_parse_reports_a_mismatched_declared_total(tmp_path: Path) -> None:
     pdf.text(240, 130, "COMPRA FICTICIA")
     pdf.text(451, 130, "150.00")
     pdf.text(40, 150, "Total")
-    pdf.text(451, 150, "999.99")  # doesn't match the one 150.00 charge above
+    pdf.text(451, 150, "999.99")  # not 500.00 + 150.00, the closing balance
     path = tmp_path / "bad-total.pdf"
     path.write_bytes(bytes(pdf.output()))
 
-    with pytest.raises(ValueError, match="does not match the sum"):
+    with pytest.raises(ValueError, match="does not match opening balance plus"):
         scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
 
@@ -218,7 +269,7 @@ def test_parse_keeps_rows_from_different_pages_separate(tmp_path: Path) -> None:
         pdf.text(40, 20, "00000000")
         pdf.text(140, 20, "0000-0000-****-0000")
         pdf.text(40, 50, "PERIODO DE TARJETA DEL 05-01-2026 AL 12-01-2026")
-        pdf.text(40, 70, "SALDO ANTERIOR")
+        pdf.text(40, 70, "Saldo Anterior")
         pdf.text(451, 70, "500.00")
         pdf.text(520, 70, "0.00")
         pdf.text(40, 100, "Fecha")
