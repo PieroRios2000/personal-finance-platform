@@ -378,9 +378,9 @@ Postgres attach. Give it a small DuckDB file of its own; its anomaly test still 
 directly.
 
 **Acceptance criteria:**
-- [ ] OpenMetadata ingests the Postgres `silver` and `gold` schemas with its native connector and the
+- [x] OpenMetadata ingests the Postgres `silver` and `gold` schemas with its native connector and the
   dbt artifacts, and `fact_transactions.amount` still traces back to `bronze.transactions.amount`.
-- [ ] `scripts/openmetadata_sync.py` is removed or reduced to what the connector does not cover; ADR 0023
+- [x] `scripts/openmetadata_sync.py` is removed or reduced to what the connector does not cover; ADR 0023
   and `brain/components/openmetadata.md` updated; SETUP.md section 10 updated.
 
 **Dependencies:** T26 · **Files:** `scripts/openmetadata_sync.py`, `docker-compose.openmetadata.yml`,
