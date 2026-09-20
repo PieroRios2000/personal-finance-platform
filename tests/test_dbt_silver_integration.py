@@ -25,6 +25,7 @@ import pytest
 
 from ingestion.schema import AccountKind, Currency, Statement, Transaction
 from lakehouse.storage import storage_options, table_uri
+from tests import pg_store
 
 pytestmark = pytest.mark.integration
 
@@ -57,6 +58,12 @@ _REQUIRED_ENV = (
 
 
 def _skip_reason() -> str | None:
+    missing_pg = pg_store.missing_env()
+    if missing_pg:
+        return (
+            f"missing Postgres env var(s): {', '.join(missing_pg)} "
+            "(make pg-up, see .env.example)"
+        )
     if not os.environ.get("LAKEHOUSE_URI", "").startswith("s3://"):
         return (
             "LAKEHOUSE_URI must be an s3://... URI for this test; "
@@ -76,6 +83,7 @@ def _wipe_test_lake() -> None:
     """
     from deltalake import DeltaTable
 
+    pg_store.reset_database()  # dbt's tables live in this worker's Postgres database
     options = storage_options()
     for name in ("transactions", "statements", "ingested_files", "investment_entries"):
         uri = table_uri(name)
@@ -193,7 +201,7 @@ def _dbt_build(
     every other node in the same invocation regardless of the dependency
     graph (confirmed directly against `manifest.json`'s `child_map`, empty
     for the singular tests here -- not a real dependency edge)."""
-    environment = {**os.environ, "PFP_DUCKDB_PATH": str(tmp_path / "pfp.duckdb")}
+    environment = pg_store.dbt_environment(tmp_path)
     command = [
         str(Path(sys.executable).parent / "dbt"),
         "build",
@@ -236,9 +244,7 @@ def test_silver_normalizes_the_description(lake: str, tmp_path: Path) -> None:
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         descriptions = connection.execute(
             "select description from silver.transactions"
         ).fetchall()
@@ -259,9 +265,7 @@ def test_silver_carries_account_kind_without_duplicating_rows(
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         rows = connection.execute(
             "select account_kind from silver.transactions"
         ).fetchall()

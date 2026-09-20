@@ -48,6 +48,9 @@ but `dagster-dbt`'s `DbtCliResource.cli()` runs that subprocess from `project_di
 outright (reproduced directly, not a hypothetical). `orchestration/assets/dbt_project.py` sets
 an absolute `PFP_DUCKDB_PATH` via `os.environ.setdefault(...)` at import time -- `setdefault`
 so a test's own `tmp_path`-scoped override, or an operator's own exported value, still wins.
+Since ADR 0029 the same module gives `PFP_ELEMENTARY_DUCKDB_PATH` (Elementary's own file, the one
+DuckDB file left in the default flow) an absolute default too; silver and gold are in Postgres, so
+the run needs the `PFP_PG_*` variables.
 
 ## Known, pre-existing: `deltalake` exit 134 during shutdown
 

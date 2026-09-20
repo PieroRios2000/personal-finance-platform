@@ -81,7 +81,8 @@ GitHub Actions PR run to confirm the wiring itself, since this session can't tri
   and weekly full run.
 - `pr-data-diff` (T17b, ADR 0014) shares its `LAKEHOUSE_URI` bucket and SeaweedFS instance
   between the two runs it needs — isolation is a URI prefix (`pr-diff-base` / `pr-diff-pr`)
-  and a `PFP_DUCKDB_PATH`, not a second `docker compose -p` — and always runs a **full**
+  and a `PFP_DUCKDB_PATH`, not a second `docker compose -p` — with `PFP_DBT_TARGET=local` since
+  T27 (the default target is now Postgres and this job has none until T29) — and always runs a **full**
   `dbt build` on both sides, never `DBT_SELECT`'s `state:modified+`: that narrowing only
   makes sense against a persisted target, and both runs here start from an empty `.duckdb`
   file. It carries `continue-on-error: true` at the **job** level and is never added to the

@@ -16,6 +16,7 @@ import pytest
 
 from ingestion.schema import Currency, InvestmentEntry, InvestmentKind, InvestmentMonth
 from lakehouse import bronze
+from tests import pg_store
 from tests.test_dbt_gold_integration import lake as _lake
 from tests.test_dbt_silver_integration import _USER_ID, _dbt_build
 
@@ -61,14 +62,13 @@ def _month(
 
 
 def _rows(tmp_path: Path) -> dict[tuple[str, str, int], dict[str, Any]]:
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         cursor = connection.execute(
             "select * from gold.fct_investment_monthly "
             "order by place, currency, month_start"
         )
-        names = [d[0] for d in cursor.description]
+        assert cursor.description is not None
+        names = [column.name for column in cursor.description]
         return {
             (
                 r[names.index("place")],

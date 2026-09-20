@@ -3,6 +3,7 @@ Compose service, the read-only role's init script, the dbt profile's target and
 `.env.example`. The live behaviour is proven by `test_dbt_postgres_integration.py`."""
 
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -98,8 +99,13 @@ def _profile() -> dict[str, Any]:
     return profile
 
 
-def test_the_default_dbt_target_is_still_the_duckdb_file() -> None:
-    assert _profile()["target"] == "local"
+def test_the_default_dbt_target_is_postgres_and_local_stays_selectable() -> None:
+    """T27: silver and gold live in Postgres by default; `PFP_DBT_TARGET=local`
+    still selects the DuckDB file (CI's data diff uses it until T29)."""
+    target = _profile()["target"]
+
+    assert "PFP_DBT_TARGET" in target and "'postgres'" in target
+    assert "local" in _profile()["outputs"]
 
 
 def test_the_postgres_target_attaches_postgres_and_elementarys_own_file() -> None:
@@ -152,5 +158,76 @@ def test_make_has_targets_to_start_and_stop_postgres_without_touching_the_lake()
 ):
     makefile = (_ROOT / "Makefile").read_text()
 
-    assert re.search(r"^pg-up:\n\t.*up -d --wait postgres", makefile, re.M)
+    assert re.search(r"^pg-up:.*\n\t.*up -d --wait postgres", makefile, re.M)
     assert re.search(r"^pg-down:\n\t.*stop postgres", makefile, re.M)
+
+
+def test_make_poc_up_starts_postgres_with_the_local_s3() -> None:
+    makefile = (_ROOT / "Makefile").read_text()
+
+    assert re.search(r"^poc-up:.*\n\t.*up -d --wait seaweedfs postgres", makefile, re.M)
+
+
+def test_the_orchestration_module_gives_elementary_an_absolute_file_by_default() -> (
+    None
+):
+    """Dagster runs dbt from the project directory, so a relative default would
+    resolve against the wrong cwd (the reason PFP_DUCKDB_PATH gets one too)."""
+    source = (_ROOT / "orchestration" / "assets" / "dbt_project.py").read_text()
+
+    assert re.search(r'setdefault\(\s*"PFP_ELEMENTARY_DUCKDB_PATH"', source)
+
+
+def test_starting_the_local_environment_checks_the_postgres_secrets_first() -> None:
+    """Otherwise compose starts Postgres with an empty password, the container
+    exits, and `make poc` aborts before its teardown trap with a generic error."""
+    makefile = (_ROOT / "Makefile").read_text()
+
+    assert re.search(r"^poc-up: .*pg-check", makefile, re.M)
+    assert re.search(r"^pg-up: .*pg-check", makefile, re.M)
+
+
+def _make_pg_check(tmp_path: Path, env_file: str) -> "subprocess.CompletedProcess[str]":
+    (tmp_path / ".env").write_text(env_file)
+    return subprocess.run(
+        ["make", "-f", str(_ROOT / "Makefile"), "pg-check"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_pg_check_names_the_missing_secrets_and_stops(tmp_path: Path) -> None:
+    result = _make_pg_check(tmp_path, "PFP_PG_PASSWORD=\nPFP_PG_BI_PASSWORD=x\n")
+
+    assert result.returncode != 0
+    assert "PFP_PG_PASSWORD" in result.stdout + result.stderr
+
+
+def test_pg_check_passes_when_both_secrets_are_set(tmp_path: Path) -> None:
+    result = _make_pg_check(tmp_path, "PFP_PG_PASSWORD=a\nPFP_PG_BI_PASSWORD=b\n")
+
+    assert result.returncode == 0
+
+
+def test_poc_down_also_forgets_elementarys_file_so_it_matches_the_fresh_database() -> (
+    None
+):
+    makefile = (_ROOT / "Makefile").read_text()
+
+    assert re.search(
+        r"^poc-down:\n(\t.*\n)*\t.*rm -f dbt/elementary\.duckdb", makefile, re.M
+    )
+
+
+def test_every_postgres_variable_in_the_profile_has_a_default() -> None:
+    """dbt renders the target while it only *parses* (the Dagster import and the
+    `tests` job run `dbt parse` with no PFP_PG_* set, and no database is contacted):
+    a variable without a default would fail every such parse."""
+    profile = (_ROOT / "dbt" / "profiles.yml").read_text()
+
+    calls = re.findall(r"env_var\('PFP_PG_\w+'[^)]*\)", profile)
+
+    assert calls, "the postgres target reads PFP_PG_* variables"
+    assert all("," in call for call in calls), [c for c in calls if "," not in c]

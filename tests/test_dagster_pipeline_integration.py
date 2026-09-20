@@ -32,6 +32,7 @@ from dagster_dbt import DbtCliResource
 
 from orchestration.assets.bronze import BronzeIngestConfig, bronze
 from orchestration.assets.dbt_project import dbt_models, dbt_project
+from tests import pg_store
 from tests.fixtures.synthetic_pdfs import DEFAULT_MOVEMENTS, bcp_statement_pdf
 from tests.test_dbt_silver_integration import (
     _TEST_LAKE_SUFFIX,
@@ -88,10 +89,12 @@ def _materialize_whole_pipeline(
     inbox.mkdir(parents=True, exist_ok=True)
     (inbox / "statement.pdf").write_bytes(pdf_bytes)
 
-    # Isolated from both the repo's own dbt/pfp.duckdb and any other test's
-    # duckdb file -- the same reason _dbt_build() in
-    # test_dbt_silver_integration.py always overrides this per test.
-    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
+    # Isolated from the owner's real database and from any other test's: this
+    # worker's own Postgres database and Elementary file, the same reason
+    # _dbt_build() in test_dbt_silver_integration.py always overrides them.
+    for name, value in pg_store.dbt_environment(tmp_path).items():
+        if name in ("PFP_PG_DATABASE", "PFP_ELEMENTARY_DUCKDB_PATH"):
+            monkeypatch.setenv(name, value)
 
     return dg.materialize(
         [bronze, dbt_models],
@@ -119,9 +122,7 @@ def test_whole_pipeline_materializes_through_dagster_with_matching_row_counts(
     assert bronze_metadata["archived"].value == 1
     assert bronze_metadata["statements_written"].value == 1
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         row = connection.execute("select count(*) from silver.transactions").fetchone()
 
     assert row is not None

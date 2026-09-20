@@ -15,7 +15,9 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from psycopg.conninfo import make_conninfo
 
+from tests import pg_store
 from tests.test_dbt_gold_integration import lake as _lake
 from tests.test_dbt_silver_integration import _FEBRUARY, _JANUARY, _REPO_ROOT, _write
 
@@ -24,8 +26,6 @@ pytestmark = pytest.mark.integration
 lake = _lake
 
 _REQUIRED = (
-    "PFP_PG_HOST",
-    "PFP_PG_PORT",
     "PFP_PG_DATABASE",
     "PFP_PG_USER",
     "PFP_PG_PASSWORD",
@@ -45,11 +45,12 @@ def _redacted(result: subprocess.CompletedProcess[str]) -> str:
 def _conninfo(
     database: str, user: str | None = None, password: str | None = None
 ) -> str:
-    return (
-        f"host={os.environ['PFP_PG_HOST']} port={os.environ['PFP_PG_PORT']} "
-        f"dbname={database} user={user or os.environ['PFP_PG_USER']} "
-        f"password={password or os.environ['PFP_PG_PASSWORD']}"
-    )
+    settings = pg_store.pg_settings(database)
+    if user:
+        settings["user"] = user
+    if password:
+        settings["password"] = password
+    return make_conninfo(**settings)
 
 
 @pytest.fixture

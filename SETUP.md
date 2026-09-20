@@ -148,22 +148,24 @@ All green = the environment is ready.
 
 ## 6. Building silver with dbt (T16)
 
-> **Phase 2 extension (T26–T33):** silver and gold are moving from `dbt/pfp.duckdb` to PostgreSQL
-> ([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). **T26 added the
-> Postgres store as an opt-in target** (below); the DuckDB file is still the default until T27. This
-> section, section 7 (DBeaver) and section 10 (OpenMetadata) describe the DuckDB-file version until
-> each task lands and updates them.
+> **Phase 2 extension (T26–T33):** silver and gold live in **PostgreSQL**, not in `dbt/pfp.duckdb`
+> ([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). Since T27 that is the
+> **default**: `make poc-up` starts the local S3 *and* Postgres, and every `dbt build` below writes
+> there. Sections 7 (DBeaver) and 10 (OpenMetadata) still describe the DuckDB-file version until
+> T30 and this section's own leftovers are updated.
 
-### PostgreSQL as dbt's store (T26, opt-in)
+### PostgreSQL as dbt's store (T26, default since T27)
 
 ```bash
 # 1. In .env, fill the PFP_PG_* variables (template: .env.example). Generate the two secrets,
 #    e.g. `openssl rand -hex 16`, with no quotes or backslashes in them.
-make pg-up                                              # PostgreSQL 16 on 127.0.0.1:${PFP_PG_PORT}
+make poc-up                                             # local S3 + PostgreSQL 16 on 127.0.0.1:${PFP_PG_PORT}
 set -a && source .env && set +a
-export PFP_ELEMENTARY_DUCKDB_PATH="$PWD/dbt/elementary.duckdb"   # optional, this is the default
-uv run dbt build --project-dir dbt --profiles-dir dbt --target postgres
+uv run dbt build --project-dir dbt --profiles-dir dbt   # default target: postgres
 ```
+
+`PFP_DBT_TARGET=local` selects the old DuckDB file instead (`dbt/pfp.duckdb`); CI's base-versus-PR
+data diff still uses it until T29. `make pg-up` starts only Postgres (the local S3 stays as it is).
 
 DuckDB stays the engine (it reads bronze off S3); silver and gold are created in the Postgres
 database `PFP_PG_DATABASE`, schemas `silver` and `gold`. **Elementary keeps its own small DuckDB file**
@@ -176,8 +178,8 @@ The role exists only in a volume created by this version: with an older volume, 
 `PFP_PG_BI_PASSWORD`, run `make poc-down` (removes the volume, lake included) and `make pg-up` again.
 `make pg-down` only stops Postgres.
 
-The `edr` CLI (`elementary:` profile) still reads `dbt/pfp.duckdb`; on the Postgres target point
-`PFP_DUCKDB_PATH` at `dbt/elementary.duckdb` (T28 tidies this).
+The `edr` CLI (`elementary:` profile) reads the file in `PFP_DUCKDB_PATH`: point it at
+`dbt/elementary.duckdb` (absolute path, section "Elementary" below; T28 tidies this).
 
 `make check-task` doesn't cover this: dbt reads bronze's Delta tables straight off local S3, so
 it needs SeaweedFS running and `.env` exported into the shell. `profiles.yml` lives inside the
@@ -202,9 +204,11 @@ caches the install. `dagster asset materialize` (section 9) and a plain `pytest`
 the explicit command above is only needed for a bare `dbt build`/`dbt parse`/`sqlfluff` call like
 the ones on this line, which never import that module.
 
-`dbt build` writes `dbt/pfp.duckdb` (gitignored), so the built tables can be inspected
-afterwards: `duckdb dbt/pfp.duckdb -c "select count(*) from silver.transactions"`. Set
-`PFP_DUCKDB_PATH` to put that file somewhere else.
+`dbt build` writes silver and gold to Postgres, so the built tables can be inspected afterwards
+with any Postgres client, e.g. `PGPASSWORD=... psql -h 127.0.0.1 -p $PFP_PG_PORT -U pfp -d pfp -c
+"select count(*) from silver.transactions"`. The integration tests each use their own throwaway
+database (`pfp_test_<worker>`), so they never touch `pfp`; a few empty ones may remain in the volume.
+With `PFP_DBT_TARGET=local` the tables are in `dbt/pfp.duckdb` (`PFP_DUCKDB_PATH` moves that file).
 
 `sqlfluff` uses the **dbt** templater, so it compiles the project and needs the same
 environment variables `dbt build` does; without them it fails to connect rather than linting a

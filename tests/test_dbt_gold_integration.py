@@ -35,6 +35,7 @@ import pytest
 
 from ingestion.schema import AccountKind, Currency, Statement, Transaction
 from lakehouse import bronze
+from tests import pg_store
 from tests.test_dbt_silver_integration import (
     _ACCOUNT_ID,
     _FEBRUARY,
@@ -215,9 +216,7 @@ def test_fact_transactions_row_count_matches_silver_transactions_exactly(
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         silver_count = _row_count(connection, "silver.transactions")
         fact_count = _row_count(connection, "gold.fact_transactions")
 
@@ -294,9 +293,7 @@ def test_flow_type_mapping_follows_account_kind_and_sign_not_raw_bank_convention
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         rows = dict(
             connection.execute(
                 "select account_id, flow_type from gold.fact_transactions"
@@ -322,9 +319,7 @@ def test_cross_bank_egreso_sum_excludes_the_internal_transfer(
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         # sum(abs(amount)), not abs(sum(amount)): BCP's egreso amounts are
         # negative (asset) and Scotiabank's are positive (liability) --
         # summing the raw signed amounts would partly cancel them out
@@ -374,9 +369,7 @@ def test_spend_by_bank_by_month_query_joins_all_four_dimensions(
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         rows = connection.execute(
             """
             select

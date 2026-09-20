@@ -33,7 +33,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import duckdb
+import psycopg
 
 
 def _safe_ingest_lines(output: str) -> list[str]:
@@ -103,10 +103,23 @@ def _send_alerts(needs_review: int, dbt_returncode: int) -> None:
         print(f"poc: could not run alerting ({type(error).__name__})", file=sys.stderr)
 
 
-def _transfer_match_summary(duckdb_path: str) -> str:
+_POSTGRES_VARIABLES = (
+    "PFP_PG_DATABASE",
+    "PFP_PG_USER",
+    "PFP_PG_PASSWORD",
+)
+
+
+def _transfer_counts() -> tuple[int, int]:
     """T18b: how many internal transfers matched, and how many candidates
-    didn't -- row counts only, never an amount, account or date."""
-    with duckdb.connect(duckdb_path, read_only=True) as connection:
+    didn't, read from dbt's Postgres store (ADR 0029) -- row counts only."""
+    with psycopg.connect(
+        host=os.environ.get("PFP_PG_HOST", "127.0.0.1"),
+        port=os.environ.get("PFP_PG_PORT", "5432"),
+        dbname=os.environ["PFP_PG_DATABASE"],
+        user=os.environ["PFP_PG_USER"],
+        password=os.environ["PFP_PG_PASSWORD"],
+    ) as connection:
         matched = connection.execute(
             "select count(*) from silver.internal_transfers"
         ).fetchone()
@@ -114,9 +127,15 @@ def _transfer_match_summary(duckdb_path: str) -> str:
             "select count(*) from silver.unmatched_transfers"
         ).fetchone()
     assert matched is not None and unmatched is not None
+    return int(matched[0]), int(unmatched[0])
+
+
+def _transfer_match_summary() -> str:
+    """The counts above as a report line: never an amount, account or date."""
+    matched, unmatched = _transfer_counts()
     return (
-        f"Internal transfers: {matched[0]} matched pair(s), "
-        f"{unmatched[0]} unmatched candidate(s)"
+        f"Internal transfers: {matched} matched pair(s), "
+        f"{unmatched} unmatched candidate(s)"
     )
 
 
@@ -124,6 +143,14 @@ def main() -> int:
     user = os.environ.get("PFP_USER")
     if not user:
         print("poc: PFP_USER is not set (see .env.example)", file=sys.stderr)
+        return 2
+    missing = [name for name in _POSTGRES_VARIABLES if not os.environ.get(name)]
+    if missing:
+        print(
+            f"poc: {', '.join(missing)} not set (silver and gold live in "
+            "PostgreSQL, see .env.example and SETUP.md section 6)",
+            file=sys.stderr,
+        )
         return 2
 
     # T22: Elementary is a dbt package, and dbt/dbt_packages is gitignored, so a
@@ -172,8 +199,11 @@ def main() -> int:
         print(f"  {line}")
 
     if dbt.returncode == 0:
-        duckdb_path = os.environ.get("PFP_DUCKDB_PATH", "dbt/pfp.duckdb")
-        print(f"  {_transfer_match_summary(duckdb_path)}")
+        try:
+            print(f"  {_transfer_match_summary()}")
+        except psycopg.Error:
+            # The build passed: a hiccup while counting must not skip the report.
+            print("  could not read the transfer counts from Postgres")
 
     _send_alerts(_needs_review_count(ingest.stdout), dbt.returncode)
 
