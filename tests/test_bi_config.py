@@ -86,7 +86,9 @@ def test_the_cash_flow_chart_excludes_internal_transfers_and_splits_currencies()
 ):
     cash_flow = _builder().CHARTS[0][3]
 
-    filters = [f["sqlExpression"] for f in cash_flow["adhoc_filters"]]
+    filters = [
+        f["sqlExpression"] for f in cash_flow["adhoc_filters"] if "sqlExpression" in f
+    ]
     assert "NOT is_internal_transfer" in filters
     assert "currency" in cash_flow["groupby"]
 
@@ -161,3 +163,29 @@ def test_every_chart_in_the_layout_is_tied_to_its_chart_by_uuid() -> None:
     cells = [v for k, v in layout.items() if k.startswith("CHART-")]
     assert len(cells) == len(names)
     assert {c["meta"]["uuid"] for c in cells} == set(uuids)
+
+
+def test_every_dated_chart_has_a_time_range_filter_for_the_date_range() -> None:
+    """Superset's Date range filter only narrows a chart that already has a time-range
+    (TEMPORAL_RANGE) filter on its date column; without one it silently does nothing."""
+    builder = _builder()
+    date_columns = {"date", "month_start"}
+
+    for _, name, _, params in builder.CHARTS:
+        column = params.get("x_axis") or next(
+            (c for c in params.get("all_columns", []) if c in date_columns), None
+        )
+        assert column, name
+        ranges = [
+            f for f in params["adhoc_filters"] if f.get("operator") == "TEMPORAL_RANGE"
+        ]
+        assert [f["subject"] for f in ranges] == [column], name
+
+
+def test_the_time_grain_filter_names_a_dataset_to_take_its_options_from() -> None:
+    grain = next(
+        f for f in _builder().native_filters(_DATASETS) if f["name"] == "Time grain"
+    )
+
+    # Without a dataset the filter has no grains to offer and shows blank values.
+    assert grain["targets"] == [{"datasetId": _DATASETS["fact_transactions"]}]

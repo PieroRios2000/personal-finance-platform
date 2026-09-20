@@ -5,6 +5,12 @@ certification_details: null
 viz_type: table
 params:
   query_mode: raw
+  adhoc_filters:
+  - expressionType: SIMPLE
+    subject: month_start
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    clause: WHERE
   all_columns:
   - month_start
   - place
@@ -22,6 +28,6 @@ params:
   viz_type: table
 query_context: null
 cache_timeout: null
-uuid: 46e7c38e-909b-473e-b8a2-509d34946f7e
+uuid: 1d410045-9b39-42b5-b5bc-227fc22a1a60
 version: 1.0.0
-dataset_uuid: e41c065e-aaaa-4ce3-878a-3d8e5cc35092
+dataset_uuid: 8dbb27ad-d9fd-4a29-a15f-976798d38dd4

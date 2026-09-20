@@ -14,6 +14,11 @@ params:
   - place
   - currency
   adhoc_filters:
+  - expressionType: SIMPLE
+    subject: month_start
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    clause: WHERE
   - expressionType: SQL
     sqlExpression: is_return_reliable
     clause: WHERE
@@ -25,6 +30,6 @@ params:
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null
-uuid: cde5a388-53c2-43ef-a72e-7aa61eaeb7e3
+uuid: 82b21229-e3d6-4037-812c-60e99366bdc6
 version: 1.0.0
-dataset_uuid: e41c065e-aaaa-4ce3-878a-3d8e5cc35092
+dataset_uuid: 8dbb27ad-d9fd-4a29-a15f-976798d38dd4

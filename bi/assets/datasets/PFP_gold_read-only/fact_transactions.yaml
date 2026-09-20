@@ -14,7 +14,7 @@ fetch_values_predicate: null
 extra: null
 normalize_columns: false
 always_filter_main_dttm: false
-uuid: 57c35384-836a-453d-a844-95628540877a
+uuid: 8c239285-716f-44a4-8562-8618c9cf59da
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
@@ -159,4 +159,4 @@ columns:
   python_date_format: null
   extra: null
 version: 1.0.0
-database_uuid: e17a1574-73b5-4c91-885f-2fbd15bcd5ad
+database_uuid: 1e0de8d2-3ff7-4189-bfa3-9e970859b9cd
