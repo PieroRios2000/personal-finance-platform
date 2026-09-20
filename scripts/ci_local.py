@@ -184,12 +184,24 @@ def ports_in_use(ports: tuple[int, ...]) -> list[int]:
     return busy
 
 
+def github_files(directory: Path) -> dict[str, str]:
+    """The files GitHub hands every step (`$GITHUB_STEP_SUMMARY`, ...): scripts
+    append to them, so they must exist."""
+    variables = {}
+    for name in ("GITHUB_STEP_SUMMARY", "GITHUB_ENV", "GITHUB_OUTPUT"):
+        path = directory / name.lower()
+        path.touch()
+        variables[name] = str(path)
+    return variables
+
+
 def _runner(job_plan: Plan, clone: Path, job: str) -> Callable[[Step], int]:
     base = {
         name: os.environ[name]
         for name in ("HOME", "PATH", "LANG")
         if name in os.environ
     }
+    base.update(github_files(clone.parent))
 
     def run(step: Step) -> int:
         print(f"\n==> [{job}] {step.name}", flush=True)
