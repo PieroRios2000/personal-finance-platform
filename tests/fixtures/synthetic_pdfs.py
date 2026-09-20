@@ -14,6 +14,8 @@ from decimal import Decimal
 from fpdf import FPDF
 from PIL import Image, ImageDraw, ImageFont
 
+from ingestion.schema import Currency
+
 
 @dataclass(frozen=True)
 class Movement:
@@ -69,6 +71,7 @@ def bcp_statement_pdf(
     closing_balance: Decimal | None = None,
     reconciles: bool = True,
     account_number: str = _ACCOUNT_NUMBER,
+    currency: Currency | None = "PEN",
 ) -> bytes:
     """Render a fictional BCP-style statement as PDF bytes.
 
@@ -113,6 +116,7 @@ def bcp_statement_pdf(
 
     pdf.text(40, 50, "ESTADO DE CUENTA")
     pdf.text(40, 65, f"CUENTA NRO. {account_number}")
+    pdf.text(300, 65, f"MONEDA {_CURRENCY_WORD[currency]}")
     pdf.text(40, 80, f"PERIODO DEL {period_start:%d/%m/%Y} AL {period_end:%d/%m/%Y}")
     pdf.text(40, 100, f"SALDO ANTERIOR {_money(opening_balance)}")
 
@@ -223,6 +227,14 @@ _SPANISH_MONTH_ABBR = {
 
 _REAL_ACCOUNT_NUMBER = "000-00000000-0-00"
 
+# The word BCP prints for an account's currency (under "MONEDA").
+# `None` prints no currency at all (a layout the parser cannot read).
+_CURRENCY_WORD: dict[Currency | None, str] = {
+    "PEN": "SOLES",
+    "USD": "DOLARES",
+    None: "",
+}
+
 
 def bcp_real_layout_statement_pdf(
     *,
@@ -231,6 +243,7 @@ def bcp_real_layout_statement_pdf(
     closing_balance: Decimal | None = None,
     reconciles: bool = True,
     account_number: str = _REAL_ACCOUNT_NUMBER,
+    currency: Currency | None = "PEN",
     row_description_x: float = 240,
     zero_and_real_row: Decimal | None = None,
     garble_first_row_charge: bool = False,
@@ -304,7 +317,7 @@ def bcp_real_layout_statement_pdf(
 
     pdf.text(40, 50, "ESTADO DE CUENTA")
     pdf.text(40, 65, "TIPO DE CUENTA MONEDA")
-    pdf.text(40, 80, f"{account_number} SOLES")
+    pdf.text(40, 80, f"{account_number} {_CURRENCY_WORD[currency]}")
     pdf.text(
         40,
         95,
@@ -637,6 +650,7 @@ def bcp_scanned_statement_pdf(
     pdf.set_font("Helvetica", size=9)
     pdf.text(40, 50, "ESTADO DE CUENTA")
     pdf.text(40, 65, f"CUENTA NRO. {_ACCOUNT_NUMBER}")
+    pdf.text(300, 65, f"MONEDA {_CURRENCY_WORD['PEN']}")
     pdf.text(40, 80, f"PERIODO DEL {period_start:%d/%m/%Y} AL {period_end:%d/%m/%Y}")
     pdf.text(40, 100, f"SALDO ANTERIOR {_money(opening_balance)}")
     pdf.text(40, 115, f"SALDO ACTUAL {_money(printed_closing)}")
