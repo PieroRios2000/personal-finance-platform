@@ -371,6 +371,13 @@ this env var — confirmed by reading `dagster`'s own CLI source
 `dagster dev` (the local web UI, not required for CI or `make poc`) does use the
 `pyproject.toml` block, so it needs no extra flag or env var: `uv run dagster dev`.
 
+**What to look at (T31).** Open the *Assets* graph: `bronze` (the lake, Delta on S3) feeds the dbt
+models (silver, then gold). After a materialization, click a dbt model and its latest
+materialization shows `dagster/table_name` (`silver.transactions`, `gold.fact_transactions`: the
+schema and table in Postgres) and `dagster/row_count` (measured in Postgres right after the build).
+That is the lake, dbt and the database in one view. With `PFP_DBT_TARGET=local` (the DuckDB file)
+only the table name is shown, since there is no Postgres to count in.
+
 ## 10. Browsing the catalog and lineage in OpenMetadata (T24)
 
 Optional. `openmetadata/docker-compose.yml` runs OpenMetadata 2.0.2 with PostgreSQL and

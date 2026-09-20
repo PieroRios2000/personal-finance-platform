@@ -132,6 +132,28 @@ def test_whole_pipeline_materializes_through_dagster_with_matching_row_counts(
     assert row[0] == len(DEFAULT_MOVEMENTS)
 
 
+def test_dbt_assets_carry_their_postgres_table_and_row_count(
+    lake: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T31: the graph says where each model is stored and how big it is."""
+    result = _materialize_whole_pipeline(tmp_path, monkeypatch, pdf_bytes=_bcp_pdf())
+
+    assert result.success
+
+    by_key = {}
+    for event in result.get_asset_materialization_events():
+        materialization = event.step_materialization_data.materialization
+        by_key[materialization.asset_key.to_user_string()] = materialization.metadata
+    transactions = by_key["transactions"]
+    assert transactions["dagster/row_count"].value == len(DEFAULT_MOVEMENTS)
+    assert transactions["dagster/table_name"].value == "silver.transactions"
+    # dagster-dbt's own metadata is kept, not replaced by the two keys above.
+    assert len(transactions) > 2
+    fact = by_key["gold/fact_transactions"]
+    assert fact["dagster/row_count"].value == len(DEFAULT_MOVEMENTS)
+    assert fact["dagster/table_name"].value == "gold.fact_transactions"
+
+
 def test_second_materialization_of_the_whole_pipeline_adds_nothing_new(
     lake: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
