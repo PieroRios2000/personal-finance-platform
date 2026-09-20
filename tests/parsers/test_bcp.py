@@ -122,7 +122,7 @@ def test_parse_refuses_a_statement_whose_currency_it_cannot_read(
     """A wrong currency silently lands in the wrong totals; an unreadable one goes to
     the review folder instead of being guessed."""
     path = tmp_path / "no-currency.pdf"
-    path.write_bytes(bcp_real_layout_statement_pdf().replace(b"SOLES", b"XXXXX"))
+    path.write_bytes(bcp_real_layout_statement_pdf(currency=None))
 
     with pytest.raises(ValueError, match="currency"):
         bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
