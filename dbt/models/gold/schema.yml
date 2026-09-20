@@ -3,9 +3,10 @@ version: 2
 models:
   - name: dim_date
     description: >
-      Gold (T23): one row per calendar date that appears in
-      silver.transactions -- this dimension's grain. Not a generated
-      calendar spine; see the model's own docstring for why.
+      Gold (T23, widened in T34): the shared calendar, one row per day from the
+      first day of the first month to the last day of the last month any fact has
+      data for (movements, statement months, investment months). Continuous, so a
+      month with no activity still has its days. See the model's own docstring.
     columns:
       - name: date
         description: The calendar date itself; this dimension's grain and primary key.
@@ -31,6 +32,17 @@ models:
         data_tests:
           - not_null
       - name: is_weekend
+        data_tests:
+          - not_null
+      - name: month_start
+        data_tests:
+          - not_null
+      - name: month_label
+        description: Year and month like `2026-03`, for a month filter or axis.
+        data_tests:
+          - not_null
+      - name: year_quarter
+        description: Year and quarter like `2026-Q1`.
         data_tests:
           - not_null
 
@@ -120,6 +132,8 @@ models:
               arguments:
                 to: ref('dim_account')
                 field: account_id
+      - name: account_last4
+        description: The account's last four digits, to tell accounts apart on a chart (not a key).
       - name: bank
         description: The bank the statement came from, e.g. BCP.
         data_tests:
@@ -206,6 +220,11 @@ models:
       - name: month_start
         data_tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date
+
       - name: closing_balance
         data_tests:
           - not_null
@@ -230,6 +249,43 @@ models:
       - name: month_start
         data_tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date
+
       - name: closing_balance
+        data_tests:
+          - not_null
+
+  - name: rpt_movements
+    description: >
+      Reporting table (T34): `fact_transactions` with the shared calendar's
+      `calendar_year`, `calendar_quarter`, `calendar_month`, `calendar_month_name`
+      and `calendar_day_name`. What the BI dashboard's movement charts read.
+    columns:
+      - name: calendar_month
+        data_tests:
+          - not_null
+
+  - name: rpt_balances
+    description: >
+      Reporting table (T34): `fct_account_balance_monthly` with the same
+      `calendar_*` columns as every other reporting table, plus `month_recency`
+      (1 = the latest month of the data, 2 = the one before).
+    columns:
+      - name: calendar_month
+        data_tests:
+          - not_null
+      - name: month_recency
+        data_tests:
+          - not_null
+
+  - name: rpt_investments
+    description: >
+      Reporting table (T34): `fct_investment_monthly` with the same `calendar_*`
+      columns as every other reporting view.
+    columns:
+      - name: calendar_month
         data_tests:
           - not_null

@@ -1,0 +1,36 @@
+slice_name: Statement balances (check against your statements)
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  adhoc_filters:
+  - expressionType: SIMPLE
+    subject: month_start
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    clause: WHERE
+  all_columns:
+  - month_start
+  - closing_date
+  - bank
+  - account_last4
+  - account_kind
+  - currency
+  - closing_balance
+  order_by_cols:
+  - '["closing_date", false]'
+  column_config:
+    closing_balance:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+  row_limit: 1000
+  include_search: true
+  datasource: 2__table
+  viz_type: table
+query_context: null
+cache_timeout: null
+uuid: aac5310a-924b-4fd4-be81-0848517456af
+version: 1.0.0
+dataset_uuid: 4bea080f-76b3-484a-9110-231133233bd7

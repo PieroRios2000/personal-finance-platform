@@ -1,4 +1,4 @@
-slice_name: Savings balance per month (asset accounts)
+slice_name: Balance per month (asset accounts)
 description: null
 certified_by: null
 certification_details: null
@@ -12,18 +12,30 @@ params:
     label: Closing balance
   groupby:
   - bank
-  - currency
+  - account_last4
   adhoc_filters:
+  - expressionType: SIMPLE
+    subject: month_start
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    clause: WHERE
   - expressionType: SQL
     sqlExpression: account_kind = 'asset'
     clause: WHERE
-  x_axis_time_format: '%Y-%m-%d'
+  area: true
+  opacity: 0.25
+  markerEnabled: true
+  markerSize: 6
+  seriesType: smooth
+  x_axis_time_format: '%d %b %Y'
+  y_axis_format: ',.0f'
+  rich_tooltip: true
   row_limit: 10000
   show_legend: true
   datasource: 2__table
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null
-uuid: 9eb1d4e8-269f-44f5-8936-558889ac6ccf
+uuid: 3a908e70-237d-4415-aadf-c0926740ae76
 version: 1.0.0
-dataset_uuid: 639575b8-1e5d-4059-90cf-a7b775e655d6
+dataset_uuid: 4bea080f-76b3-484a-9110-231133233bd7

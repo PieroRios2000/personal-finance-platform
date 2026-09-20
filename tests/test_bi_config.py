@@ -3,6 +3,7 @@ The live behaviour (import, connection as the read-only role, sample rows) is th
 verification; these keep the configuration from drifting."""
 
 import importlib.util
+import json
 import re
 import sys
 from pathlib import Path
@@ -12,6 +13,9 @@ import yaml
 
 _ROOT = Path(__file__).resolve().parent.parent
 _BI = _ROOT / "bi"
+
+
+_DATASETS = {"rpt_movements": 2, "rpt_investments": 1, "rpt_balances": 3}
 
 
 def _compose() -> dict[str, Any]:
@@ -65,55 +69,145 @@ def test_the_dashboard_connects_as_the_read_only_role_to_gold_only() -> None:
         assert yaml.safe_load(dataset.read_text())["schema"] == "gold"
 
 
-def test_the_return_table_shows_closing_basis_right_beside_the_return() -> None:
-    (chart,) = [c for c in _builder().CHARTS if c[2] == "table"]
-    columns = chart[3]["all_columns"]
-
-    assert columns.index("closing_basis") == columns.index("return_pct") + 1
+def _charts() -> dict[str, tuple[str, str, str, dict[str, Any]]]:
+    return {c[1]: c for c in _builder().CHARTS}
 
 
-def test_the_cash_flow_chart_excludes_internal_transfers_and_splits_currencies() -> (
-    None
-):
-    cash_flow = _builder().CHARTS[0][3]
-
-    filters = [f["sqlExpression"] for f in cash_flow["adhoc_filters"]]
-    assert "NOT is_internal_transfer" in filters
-    assert "currency" in cash_flow["groupby"]
+def _filters() -> dict[str, dict[str, Any]]:
+    return {f["name"]: f for f in _builder().native_filters(_DATASETS)}
 
 
-def test_every_chart_reads_a_gold_table_the_dashboard_exports() -> None:
-    exported = {p.stem for p in (_BI / "assets" / "datasets").rglob("*.yaml")}
+def test_the_dashboard_has_calendar_and_slicing_filters() -> None:
+    filters = _filters()
 
-    assert {c[0] for c in _builder().CHARTS} == exported
+    assert filters["Date range"]["filterType"] == "filter_time"
+    assert filters["Time grain"]["filterType"] == "filter_timegrain"
+    columns = {
+        name: f["targets"][0]["column"]["name"]
+        for name, f in filters.items()
+        if f["filterType"] == "filter_select"
+    }
+    assert columns == {
+        "Currency": "currency",
+        "Year": "calendar_year",
+        "Quarter": "calendar_quarter",
+        "Month": "calendar_month",
+        "Bank": "bank",
+        "Account": "account_last4",
+        "Flow type": "flow_type",
+        "Internal transfer": "is_internal_transfer",
+        "Fund": "place",
+    }
 
 
-def test_the_dashboard_has_filters_for_dates_grain_bank_currency_and_fund() -> None:
-    filters = _builder().native_filters(
-        {"fact_transactions": 2, "fct_investment_monthly": 1}
-    )
+def test_currency_is_one_value_at_a_time_and_starts_on_soles() -> None:
+    """Currencies are never added: the filter is single-select, required, PEN first."""
+    currency = _filters()["Currency"]
 
-    by_name = {f["name"]: f for f in filters}
-    assert by_name["Date range"]["filterType"] == "filter_time"
-    assert by_name["Time grain"]["filterType"] == "filter_timegrain"
-    assert by_name["Bank"]["targets"][0]["column"]["name"] == "bank"
-    assert by_name["Currency"]["targets"][0]["column"]["name"] == "currency"
-    assert by_name["Fund"]["targets"][0]["column"]["name"] == "place"
+    assert currency["controlValues"]["multiSelect"] is False
+    assert currency["controlValues"]["enableEmptyFilter"] is True
+    assert currency["defaultDataMask"]["filterState"]["value"] == ["PEN"]
 
 
-def test_the_time_grain_starts_monthly_and_the_axis_shows_the_full_date() -> None:
-    builder = _builder()
-    grain = next(
-        f
-        for f in builder.native_filters(
-            {"fact_transactions": 2, "fct_investment_monthly": 1}
-        )
-        if f["name"] == "Time grain"
-    )
+def test_the_time_grain_starts_monthly_and_takes_its_options_from_a_dataset() -> None:
+    grain = _filters()["Time grain"]
 
     assert grain["defaultDataMask"]["extraFormData"] == {"time_grain_sqla": "P1M"}
+    # Without a dataset the filter has no grains to offer and shows blank values.
+    assert grain["targets"] == [{"datasetId": _DATASETS["rpt_movements"]}]
+
+
+def test_every_chart_reads_a_reporting_table_the_dashboard_exports() -> None:
+    exported = {p.stem for p in (_BI / "assets" / "datasets").rglob("*.yaml")}
+    used = {c[0] for c in _builder().CHARTS}
+
+    assert used == exported
+    assert all(name.startswith("rpt_") for name in used)
+
+
+def test_every_dated_chart_has_a_time_range_filter_for_the_date_range() -> None:
+    """Superset's Date range filter only narrows a chart that already has a time-range
+    (TEMPORAL_RANGE) filter on its date column; without one it does nothing."""
+    for name, chart in _charts().items():
+        ranges = [
+            f
+            for f in chart[3]["adhoc_filters"]
+            if f.get("operator") == "TEMPORAL_RANGE"
+        ]
+        assert [f["subject"] for f in ranges] in (["date"], ["month_start"]), name
+
+
+def test_the_timeseries_axes_show_the_full_date() -> None:
     # `smart_date` prints a January 1st as just the year: it read as a yearly total.
-    timeseries = [c for c in builder.CHARTS if c[2].startswith("echarts_timeseries")]
-    assert timeseries and all(
-        c[3]["x_axis_time_format"] == "%Y-%m-%d" for c in timeseries
+    series = [c for c in _builder().CHARTS if c[2].startswith("echarts_timeseries")]
+
+    assert series
+    assert all(c[3]["x_axis_time_format"] == "%d %b %Y" for c in series)
+
+
+def test_the_cash_flow_chart_excludes_internal_transfers() -> None:
+    chart = _charts()["Cash flow: income and spending"][3]
+    filters = [
+        f["sqlExpression"] for f in chart["adhoc_filters"] if "sqlExpression" in f
+    ]
+
+    assert "NOT is_internal_transfer" in filters
+    # Income and spending get fixed colours by label (set on the dashboard).
+    assert chart["label_colors"] == {"ingreso": "#1f9d6b", "egreso": "#e5484d"}
+
+
+def test_the_investments_table_shows_closing_basis_right_beside_the_return() -> None:
+    table = _charts()["Investments: return and how each month closed"][3]
+    template = table["handlebarsTemplate"]
+
+    assert "closing_basis" in table["groupby"]
+    assert template.index("{{return_pct}}") < template.index("{{closing_basis}}")
+    assert template.index("{{closing_basis}}") < template.index("{{gain}}")
+
+
+def test_the_movements_and_balances_tables_exist_to_check_against_the_statements() -> (
+    None
+):
+    charts = _charts()
+
+    movements = charts["Movements (check against your statements)"]
+    assert movements[0] == "rpt_movements"
+    assert {"date", "bank", "currency", "flow_type", "amount", "description"} <= set(
+        movements[3]["all_columns"]
     )
+    balances = charts["Statement balances (check against your statements)"]
+    assert balances[0] == "rpt_balances"
+    assert {"closing_date", "account_last4", "closing_balance"} <= set(
+        balances[3]["all_columns"]
+    )
+
+
+def test_no_sql_expression_uses_a_sub_query_which_superset_refuses() -> None:
+    for name, chart in _charts().items():
+        text = json.dumps(chart[3]).lower()
+        assert "(select" not in text, name
+
+
+def test_every_chart_has_a_cell_in_the_layout() -> None:
+    builder = _builder()
+    names = [c[1] for c in builder.CHARTS]
+    prefixes = [p for row in builder.LAYOUT for p, _, _ in row if p != builder.NOTE]
+
+    for name in names:
+        assert sum(name.startswith(p) for p in prefixes) == 1, name
+    for prefix in prefixes:
+        assert sum(n.startswith(prefix) for n in names) == 1, prefix
+
+
+def test_every_chart_in_the_layout_is_tied_to_its_chart_by_uuid() -> None:
+    """Without the uuid, the import cannot map a layout cell to its imported chart and
+    Superset appends every chart again in an extra row at the bottom."""
+    builder = _builder()
+    names = [c[1] for c in builder.CHARTS]
+    uuids = [f"uuid-{i}" for i in range(len(names))]
+
+    layout = builder._position(list(range(len(names))), names, uuids)
+
+    cells = [v for k, v in layout.items() if k.startswith("CHART-")]
+    assert len(cells) == len(names)
+    assert {c["meta"]["uuid"] for c in cells} == set(uuids)

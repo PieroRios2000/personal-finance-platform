@@ -1,34 +1,62 @@
--- gold.dim_date: one row per calendar date that appears in
--- silver.transactions (T23).
+-- gold.dim_date: the calendar every BI filter and chart shares (T23, widened in
+-- T34).
 --
--- Grain: one row per distinct `date`. Derived straight from the dates that
--- actually occur, not a generated calendar spine -- the same "no columns or
--- rows nothing asked for" discipline dbt-silver.md documents for
--- silver.transactions itself. A spine would need an arbitrary start/end
--- range to generate for a project with no fixed reporting horizon; this
--- dimension only ever needs to resolve fact_transactions' own `date`
--- values, which selecting them straight out of the source already
--- guarantees, with no gap possible.
+-- Grain: one row per calendar day from the first day of the first month to the last
+-- day of the last month that any fact has data for: a movement date
+-- (silver.transactions), a statement month (fct_account_balance_monthly) or an
+-- investment month (fct_investment_monthly). It started as only the dates that had a
+-- movement; the range is now continuous, so a month or a day with no activity still
+-- exists (a chart can show it empty, a filter can select it), and the balances and
+-- investments join the same calendar as the movements. The range comes from the data,
+-- not from a hard-coded start and end.
 --
--- The date-part columns below are standard, cheap-to-derive attributes a BI
--- tool or a "spend by month" query wants without re-deriving them per query
--- -- nothing speculative beyond that (no fiscal calendar, no holidays).
+-- The date-part columns are the attributes a BI tool wants without re-deriving them
+-- per query (`month_label` like `2026-03`, `year_quarter` like `2026-Q1`) --
+-- nothing speculative beyond that (no fiscal calendar, no holidays).
 
-with distinct_dates as (
+with data_range as (
 
-    select distinct date
-    from {{ ref('transactions') }}
+    select
+        min(seen) as first_date,
+        max(seen) as last_date
+    from (
+        select date as seen from {{ ref('transactions') }}
+        union all
+        select month_start as seen from {{ ref('fct_account_balance_monthly') }}
+        union all
+        select month_start as seen from {{ ref('fct_investment_monthly') }}
+    ) as seen_dates
+
+),
+
+calendar (date) as (
+
+    select
+        cast(
+            unnest(
+                generate_series(
+                    date_trunc('month', first_date),
+                    last_day(last_date),
+                    interval 1 day
+                )
+            ) as date
+        )
+    from data_range
 
 )
 
 select
     date,
+    cast(date_trunc('month', date) as date) as month_start,
     extract(year from date) as year_number,
     extract(quarter from date) as quarter_number,
     extract(month from date) as month_number,
     strftime(date, '%B') as month_name,
     extract(day from date) as day_number,
     strftime(date, '%A') as day_name,
+    strftime(date, '%Y-%m') as month_label,
     -- DuckDB's dayofweek(): 0 = Sunday .. 6 = Saturday.
-    dayofweek(date) in (0, 6) as is_weekend
-from distinct_dates
+    dayofweek(date) in (0, 6) as is_weekend,
+    strftime(date, '%Y') || '-Q' || cast(extract(quarter from date) as varchar)
+        as year_quarter
+from calendar

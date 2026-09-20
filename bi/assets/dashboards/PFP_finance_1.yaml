@@ -1,11 +1,15 @@
 dashboard_title: PFP finance
 description: null
-css: null
+css: ".dashboard-content { background: #f3f5f9; }\n.dashboard-component-chart-holder\
+  \ {\n  border-radius: 14px; border: 1px solid #e6eaf2 !important;\n  box-shadow:\
+  \ 0 1px 2px rgba(16, 24, 40, .06);\n}\n.dashboard-component-chart-holder .header-title\
+  \ { font-weight: 600; color: #1b2437; }\n.dashboard-header-container { background:\
+  \ #ffffff; }\n"
 slug: pfp-finance
 certified_by: null
 certification_details: null
 published: true
-uuid: ea72165e-b70e-499c-b979-949147a7cbdb
+uuid: 931829d1-aa09-43dc-889a-110413efd1f5
 position:
   DASHBOARD_VERSION_KEY: v2
   ROOT_ID:
@@ -19,7 +23,10 @@ position:
     children:
     - ROW-0
     - ROW-1
-    - ROW-N-TWHANHZT
+    - ROW-2
+    - ROW-3
+    - ROW-4
+    - ROW-5
     parents:
     - ROOT_ID
   HEADER_ID:
@@ -36,10 +43,11 @@ position:
     - GRID_ID
     - ROW-0
     meta:
-      width: 6
-      height: 50
+      width: 8
+      height: 22
       chartId: 1
-      sliceName: 'Monthly cash flow: income and spending (no internal transfers)'
+      uuid: 9005a9cf-d6e7-4494-8b96-5aa0d425097f
+      sliceName: Cash flow summary
   CHART-1:
     type: CHART
     id: CHART-1
@@ -49,10 +57,11 @@ position:
     - GRID_ID
     - ROW-0
     meta:
-      width: 6
-      height: 50
+      width: 4
+      height: 22
       chartId: 2
-      sliceName: Savings balance per month (asset accounts)
+      uuid: afd81f2b-2a55-4fd9-b991-44e5f596b656
+      sliceName: Balance summary
   ROW-0:
     type: ROW
     id: ROW-0
@@ -76,7 +85,8 @@ position:
       width: 6
       height: 50
       chartId: 3
-      sliceName: 'Investments: return and how each month closed'
+      uuid: 0e96267e-283b-4c9f-81ef-3dcb0d2df9e7
+      sliceName: 'Cash flow: income and spending'
   CHART-3:
     type: CHART
     id: CHART-3
@@ -89,7 +99,8 @@ position:
       width: 6
       height: 50
       chartId: 4
-      sliceName: 'Investments: return per fund over time'
+      uuid: 3a908e70-237d-4415-aadf-c0926740ae76
+      sliceName: Balance per month (asset accounts)
   ROW-1:
     type: ROW
     id: ROW-1
@@ -101,78 +112,159 @@ position:
     - GRID_ID
     meta:
       background: BACKGROUND_TRANSPARENT
-  ROW-N-TWHANHZT:
-    children:
-    - CHART-24T4W2Z6
-    - CHART-AZT79JJT
-    - CHART-EXCU0CXG
-    - CHART-BPUHV6D4
-    id: ROW-N-TWHANHZT
-    meta:
-      '0': ROOT_ID
-      background: BACKGROUND_TRANSPARENT
-    type: ROW
-    parents:
-    - ROOT_ID
-    - GRID_ID
-  CHART-24T4W2Z6:
-    children: []
-    id: CHART-24T4W2Z6
-    meta:
-      chartId: 2
-      height: 50
-      sliceName: Savings balance per month (asset accounts)
-      uuid: 9eb1d4e8-269f-44f5-8936-558889ac6ccf
-      width: 4
+  CHART-4:
     type: CHART
+    id: CHART-4
+    children: []
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-TWHANHZT
-  CHART-AZT79JJT:
-    children: []
-    id: CHART-AZT79JJT
+    - ROW-2
     meta:
-      chartId: 1
-      height: 50
-      sliceName: 'Monthly cash flow: income and spending (no internal transfers)'
-      uuid: 4ac33bb5-24f4-4b15-b072-fbd1fb728375
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-TWHANHZT
-  CHART-EXCU0CXG:
-    children: []
-    id: CHART-EXCU0CXG
-    meta:
-      chartId: 3
-      height: 50
+      width: 12
+      height: 32
+      chartId: 5
+      uuid: 44590ce6-6f7e-45f3-b956-a0eeacc66941
       sliceName: 'Investments: return and how each month closed'
-      uuid: 109c9235-17f4-446c-b038-e0b24ce6239b
-      width: 4
-    type: CHART
+  ROW-2:
+    type: ROW
+    id: ROW-2
+    children:
+    - CHART-4
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-TWHANHZT
-  CHART-BPUHV6D4:
-    children: []
-    id: CHART-BPUHV6D4
     meta:
-      chartId: 4
-      height: 50
-      sliceName: 'Investments: return per fund over time'
-      uuid: 45e99467-f4c0-487a-a6c9-0ba703591580
-      width: 4
+      background: BACKGROUND_TRANSPARENT
+  CHART-5:
     type: CHART
+    id: CHART-5
+    children: []
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-TWHANHZT
+    - ROW-3
+    meta:
+      width: 8
+      height: 50
+      chartId: 6
+      uuid: 22ef997b-2569-46b8-bfc8-f9486c55c3db
+      sliceName: 'Investments: return per fund over time'
+  MARKDOWN-note:
+    type: MARKDOWN
+    id: MARKDOWN-note
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-3
+    meta:
+      width: 4
+      height: 50
+      code: '### How to read the returns
+
+
+        - **valuation**: the month closed at a real month-end value.
+
+        - **last_movement**: only the balance at the last movement; the return is
+        shown but trust it less.
+
+
+        A return is shown only for a *reliable* month (`is_return_reliable`); the
+        gain and the balances are always there.
+
+
+        One currency at a time: use the **Currency** filter.'
+  ROW-3:
+    type: ROW
+    id: ROW-3
+    children:
+    - CHART-5
+    - MARKDOWN-note
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-6:
+    type: CHART
+    id: CHART-6
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-4
+    meta:
+      width: 12
+      height: 60
+      chartId: 7
+      uuid: 0e46c611-655e-483b-8736-f5feee80f14d
+      sliceName: Movements (check against your statements)
+  ROW-4:
+    type: ROW
+    id: ROW-4
+    children:
+    - CHART-6
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-7:
+    type: CHART
+    id: CHART-7
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-5
+    meta:
+      width: 12
+      height: 60
+      chartId: 8
+      uuid: aac5310a-924b-4fd4-be81-0848517456af
+      sliceName: Statement balances (check against your statements)
+  ROW-5:
+    type: ROW
+    id: ROW-5
+    children:
+    - CHART-7
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
 metadata:
   native_filter_configuration:
+  - id: NATIVE_FILTER-currency
+    name: Currency
+    filterType: filter_select
+    targets:
+    - column:
+        name: currency
+      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+    controlValues:
+      multiSelect: false
+      enableEmptyFilter: true
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState:
+        value:
+        - PEN
+      extraFormData:
+        filters:
+        - col: currency
+          op: IN
+          val:
+          - PEN
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
   - id: NATIVE_FILTER-date-range
     name: Date range
     filterType: filter_time
@@ -192,7 +284,7 @@ metadata:
     name: Time grain
     filterType: filter_timegrain
     targets:
-    - {}
+    - datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
     controlValues: {}
     defaultDataMask:
       filterState:
@@ -206,13 +298,13 @@ metadata:
       - ROOT_ID
       excluded: []
     type: NATIVE_FILTER
-  - id: NATIVE_FILTER-bank
-    name: Bank
+  - id: NATIVE_FILTER-year
+    name: Year
     filterType: filter_select
     targets:
     - column:
-        name: bank
-      datasetUuid: bc0f0aec-a4dc-4f1b-a3ee-f46d96548c28
+        name: calendar_year
+      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -228,13 +320,123 @@ metadata:
       - ROOT_ID
       excluded: []
     type: NATIVE_FILTER
-  - id: NATIVE_FILTER-currency
-    name: Currency
+  - id: NATIVE_FILTER-quarter
+    name: Quarter
     filterType: filter_select
     targets:
     - column:
-        name: currency
-      datasetUuid: bc0f0aec-a4dc-4f1b-a3ee-f46d96548c28
+        name: calendar_quarter
+      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+    controlValues:
+      multiSelect: true
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-month
+    name: Month
+    filterType: filter_select
+    targets:
+    - column:
+        name: calendar_month
+      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+    controlValues:
+      multiSelect: true
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-bank
+    name: Bank
+    filterType: filter_select
+    targets:
+    - column:
+        name: bank
+      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+    controlValues:
+      multiSelect: true
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-account
+    name: Account
+    filterType: filter_select
+    targets:
+    - column:
+        name: account_last4
+      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+    controlValues:
+      multiSelect: true
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-flow-type
+    name: Flow type
+    filterType: filter_select
+    targets:
+    - column:
+        name: flow_type
+      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+    controlValues:
+      multiSelect: true
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-internal-transfer
+    name: Internal transfer
+    filterType: filter_select
+    targets:
+    - column:
+        name: is_internal_transfer
+      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -256,7 +458,7 @@ metadata:
     targets:
     - column:
         name: place
-      datasetUuid: 8c223749-effb-4885-bf91-11fa75c23a55
+      datasetUuid: d7159e4d-b826-4531-8e9a-5533bdf50612
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -272,11 +474,13 @@ metadata:
       - ROOT_ID
       excluded: []
     type: NATIVE_FILTER
+  label_colors:
+    ingreso: '#1f9d6b'
+    egreso: '#e5484d'
   timed_refresh_immune_slices: []
   expanded_slices: {}
   refresh_frequency: 0
   color_scheme: ''
-  label_colors: {}
   shared_label_colors: []
   map_label_colors: {}
   color_scheme_domain: []

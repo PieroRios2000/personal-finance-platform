@@ -414,6 +414,16 @@ read-only role, plus the first dashboards.
 **Dependencies:** T26 · **Files:** `bi/**` (compose, Dockerfile, assets), `Makefile`, `SETUP.md`,
 `brain/**` · **Size:** L
 
+### T34: Shared calendar and a richer dashboard — `feat/bi-calendar-and-visuals`
+
+**Description:** After real use of the T32 dashboard: one calendar that filters every chart, one
+currency at a time, HTML cards and styled tables, formatted numbers.
+
+- [x] `dim_date` is a continuous calendar over all facts; `gold.rpt_*` tables share `calendar_*` columns.
+- [x] Currency is a required single-select filter; Year/Quarter/Month/Date range/Time grain apply to every chart.
+- [x] Summary cards and the investments table are Handlebars (HTML/CSS); numbers formatted.
+- [x] Verified by clicking with a headless browser (Currency, Month and Time grain change every chart).
+
 ### T33: Phase 2 re-close — `docs/phase-2-extension-close`
 
 **Description:** Leave the extended phase presentable, as T25 did.

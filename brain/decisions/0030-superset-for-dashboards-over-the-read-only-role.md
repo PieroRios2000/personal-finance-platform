@@ -67,3 +67,26 @@ balance per month, and each fund's monthly return next to how the month was clos
 [ADR 0029](0029-dbt-stores-silver-and-gold-in-postgres.md) (Postgres store and the `pfp_bi` role),
 [ADR 0028](0028-investment-return-is-modified-dietz-per-fund-and-month.md) (`closing_basis`),
 [ADR 0007](0007-ephemeral-per-pr-environments.md) (optional stacks stay out of CI).
+
+## Update 2026-09-20 (T34): calendar, one currency at a time, and HTML cards
+
+After the owner used the dashboard on real data:
+
+- **Calendar.** Superset has no relationships between datasets, so a filter only acts on charts
+  whose dataset has the same column. Every dataset is now a `gold.rpt_*` table (a fact joined to the
+  continuous `dim_date`, [ADR 0020](0020-gold-star-schema-flow-type-and-dim-account-grain.md)) with
+  the same `calendar_*` and `currency` columns; the Date range, Time grain, Year, Quarter and Month
+  filters therefore narrow every chart (verified by clicking, with a headless browser).
+- **Currency** is a required single-select filter (PEN by default), so no chart adds soles and
+  dollars.
+- **HTML.** The summary cards and the investments table are **Handlebars** charts: our own HTML and
+  CSS (`bi/templates/`) over the query's rows, numbers formatted in SQL. This needs two settings in
+  `bi/superset_config.py`: `HTML_SANITIZATION_SCHEMA_EXTENSIONS` (allow a `<style>` block and CSS
+  classes) and a Content-Security-Policy with `'unsafe-eval'` for scripts (Handlebars compiles
+  templates with `new Function`). The trade-off: whoever can edit a chart can write HTML/CSS and the
+  page tolerates `eval`. Acceptable for a single local owner; for several users, keep chart editing to
+  admins (Dex, later) or move the cards to a chart plugin.
+- Superset refuses sub-queries in SQL expressions, so "latest month" is a column
+  (`rpt_balances.month_recency`), not a `(select max(...))`.
+- Superset's table chart can colour only numeric columns; string badges (`closing_basis`) are why
+  the investments table is a Handlebars chart.

@@ -12,19 +12,26 @@ params:
     label: Return
   groupby:
   - place
-  - currency
   adhoc_filters:
+  - expressionType: SIMPLE
+    subject: month_start
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    clause: WHERE
   - expressionType: SQL
     sqlExpression: is_return_reliable
     clause: WHERE
+  markerEnabled: true
+  seriesType: smooth
   y_axis_format: .2%
-  x_axis_time_format: '%Y-%m-%d'
+  x_axis_time_format: '%d %b %Y'
+  rich_tooltip: true
   row_limit: 10000
   show_legend: true
   datasource: 3__table
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null
-uuid: 45e99467-f4c0-487a-a6c9-0ba703591580
+uuid: 22ef997b-2569-46b8-bfc8-f9486c55c3db
 version: 1.0.0
-dataset_uuid: 8c223749-effb-4885-bf91-11fa75c23a55
+dataset_uuid: d7159e4d-b826-4531-8e9a-5533bdf50612

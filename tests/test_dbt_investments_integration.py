@@ -23,6 +23,9 @@ from tests.test_dbt_silver_integration import _USER_ID, _dbt_build
 pytestmark = pytest.mark.integration
 
 _SELECT = "fct_investment_monthly+ investment_entries"
+# Not the shared calendar and what hangs off it (`dim_date+`): it also reads
+# silver.transactions, which these tests do not write.
+_EXCLUDE = "dim_date+"
 
 
 # The same wiped, per-worker test lake every dbt integration file uses.
@@ -100,7 +103,7 @@ def test_a_months_return_is_the_gain_over_the_time_weighted_capital(
 ) -> None:
     _seed_fund_a()
 
-    result = _dbt_build(tmp_path, select=_SELECT)
+    result = _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE)
     assert result.returncode == 0, result.stdout
     rows = _rows(tmp_path)
 
@@ -125,7 +128,7 @@ def test_cumulative_figures_track_net_contributions_and_total_gain(
 ) -> None:
     _seed_fund_a()
 
-    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    assert _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE).returncode == 0
     february = _rows(tmp_path)[("Fondo A", "PEN", 2)]
 
     assert february["cumulative_net_contributed"] == Decimal("50.00")
@@ -140,7 +143,7 @@ def test_a_month_without_a_valuation_uses_the_last_balance_and_says_so(
     apart from a month closed by a real valuation."""
     _seed_fund_a()
 
-    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    assert _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE).returncode == 0
     rows = _rows(tmp_path)
     march = rows[("Fondo A", "PEN", 3)]
 
@@ -164,7 +167,7 @@ def test_a_missing_month_makes_the_next_return_unreliable(
     )
     _month("Fondo B", 2026, 3, [(31, "valorizacion", "0", "103")])
 
-    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    assert _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE).returncode == 0
     rows = _rows(tmp_path)
 
     assert rows[("Fondo B", "PEN", 1)]["is_return_reliable"] is True
@@ -188,7 +191,7 @@ def test_currencies_and_funds_are_never_mixed(lake: str, tmp_path: Path) -> None
         currency="USD",
     )
 
-    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    assert _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE).returncode == 0
     rows = _rows(tmp_path)
 
     assert rows[("Fondo C", "PEN", 1)]["closing_balance"] == Decimal("101.00")
@@ -207,7 +210,7 @@ def test_the_first_months_opening_is_the_balance_before_the_first_movement(
         [(5, "aporte", "100", "610"), (31, "valorizacion", "0", "612")],
     )
 
-    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    assert _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE).returncode == 0
     january = _rows(tmp_path)[("Fondo D", "PEN", 1)]
 
     assert january["opening_balance"] == Decimal("510.00")
@@ -221,7 +224,7 @@ def test_a_lake_with_no_investments_still_builds_with_empty_tables(
     lake: str, tmp_path: Path
 ) -> None:
     """The bronze table only exists once an investments sheet has been loaded."""
-    result = _dbt_build(tmp_path, select=_SELECT)
+    result = _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE)
 
     assert result.returncode == 0, result.stdout
     assert _rows(tmp_path) == {}
@@ -238,7 +241,7 @@ def test_a_trailing_slash_in_the_lake_uri_still_finds_the_table(
     )
     monkeypatch.setenv("LAKEHOUSE_URI", os.environ["LAKEHOUSE_URI"] + "/")
 
-    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    assert _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE).returncode == 0
 
     assert ("Fondo E", "PEN", 1) in _rows(tmp_path)
 
@@ -255,7 +258,7 @@ def test_a_flow_on_the_last_day_has_no_weight_and_a_zero_capital_has_no_return(
         [(31, "aporte", "100", "100"), (31, "valorizacion", "0", "100")],
     )
 
-    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    assert _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE).returncode == 0
     january = _rows(tmp_path)[("Fondo F", "PEN", 1)]
 
     assert january["return_pct"] is None
@@ -275,7 +278,7 @@ def test_a_valuation_followed_by_a_contribution_closes_at_the_last_movement(
         [(3, "valorizacion", "0", "100"), (10, "aporte", "10", "112")],
     )
 
-    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    assert _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE).returncode == 0
     january = _rows(tmp_path)[("Fondo G", "PEN", 1)]
 
     assert january["has_valuation"] is False
@@ -301,7 +304,7 @@ def test_same_day_rows_are_ordered_by_their_row_in_the_sheet(
         [(31, "valorizacion", "0", "111"), (31, "aporte", "10", "121")],
     )
 
-    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    assert _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE).returncode == 0
     rows = _rows(tmp_path)
 
     assert rows[("Fondo H", "PEN", 1)]["closing_balance"] == Decimal("111.00")
@@ -314,7 +317,7 @@ def test_a_first_month_with_only_a_valuation_is_not_a_return(
     """No flow marks where the fund starts: gain 0 would read as a 0% month."""
     _month("Fondo J", 2026, 1, [(31, "valorizacion", "0", "500")])
 
-    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    assert _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE).returncode == 0
     january = _rows(tmp_path)[("Fondo J", "PEN", 1)]
 
     assert january["is_return_reliable"] is False
@@ -332,7 +335,7 @@ def test_a_month_with_only_a_valuation_after_a_first_month_is_a_real_return(
     )
     _month("Fondo K", 2026, 2, [(28, "valorizacion", "0", "103")])
 
-    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    assert _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE).returncode == 0
     february = _rows(tmp_path)[("Fondo K", "PEN", 2)]
 
     assert february["gain"] == Decimal("3.00")
@@ -349,7 +352,7 @@ def test_a_return_after_a_missing_month_is_not_shown(lake: str, tmp_path: Path) 
     )
     _month("Fondo L", 2026, 3, [(31, "valorizacion", "0", "103")])
 
-    assert _dbt_build(tmp_path, select=_SELECT).returncode == 0
+    assert _dbt_build(tmp_path, select=_SELECT, exclude=_EXCLUDE).returncode == 0
     march = _rows(tmp_path)[("Fondo L", "PEN", 3)]
 
     assert march["return_pct"] is None

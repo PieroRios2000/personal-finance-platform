@@ -69,8 +69,8 @@ it doesn't need. A small, deliberate amount of the "outrigger" shape a strict si
 schema would avoid — justified here because the acceptance criteria's own verification query is
 exactly a bank-level, not account-level, aggregate.
 
-**`dim_date` is derived from the dates that actually occur in `silver.transactions`, not a
-generated calendar spine.** A spine needs an arbitrary start/end range to generate for a
+**(Superseded in T34, see below) `dim_date` is derived from the dates that actually occur in
+`silver.transactions`, not a generated calendar spine.** A spine needs an arbitrary start/end range to generate for a
 project with no fixed reporting horizon; this project's own "no columns or rows nothing asked
 for" discipline (already stated for silver in `brain/components/dbt-silver.md`) applies the
 same way here. The standard date-part columns (year/quarter/month/day, names, weekend flag)
@@ -156,3 +156,15 @@ behavior for a model that opts in, which today is only `dbt/models/gold/**`.
 - [dbt silver](../components/dbt-silver.md) — the source this whole layer reads from.
 - [Phase 1](../phases/phase-1.md) — `brain/phases/phase-2.md` doesn't exist yet at the time of
   this PR; see `brain/components/dbt-gold.md`'s own note on why this PR doesn't create it.
+
+## Update 2026-09-20 (T34): `dim_date` is now a continuous calendar
+
+The "no spine" call above assumed one fact. With three facts (movements, statement balances,
+investment months) sharing one BI dashboard, the calendar has to cover all of them, and a month
+without a movement still has to exist. `dim_date` is now one row per day from the first day of the
+first month to the last day of the last month **any** fact has data for: the range comes from the
+data, so the original objection (an arbitrary hard-coded start and end) still does not apply. The
+balances and investments join it on `month_start`; a `relationships` test guards that every fact
+date resolves. `gold.rpt_movements`, `rpt_balances` and `rpt_investments` join each fact to it and
+expose the same `calendar_year`, `calendar_quarter` and `calendar_month` columns, so one BI filter
+applies to every chart (a Superset dataset has no relationships of its own).
