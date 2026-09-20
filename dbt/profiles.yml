@@ -45,11 +45,14 @@ personal_finance_platform:
 # every relation (silver.*, gold.*) is created there. Elementary keeps its own small
 # DuckDB file (`elem`): its view models and its results upload do not work through
 # the attach. The connection string is built from `.env` (PFP_PG_*); the password is
-# escaped the way libpq expects (a backslash or quote in it is fine).
+# escaped the way libpq expects (a backslash or quote in it is fine). Every variable has a
+# default because dbt renders the target even when it only *parses* (Dagster's import, CI's
+# `tests` job): the database and user default to `pfp`, the password to empty, and a real
+# build with a wrong or missing one fails at connection time with Postgres's own message.
     postgres:
       <<: *duckdb_output
       path: ":memory:"
-      database: "{{ env_var('PFP_PG_DATABASE') }}"
+      database: "{{ env_var('PFP_PG_DATABASE', 'pfp') }}"
       extensions:
         - httpfs
         - delta
@@ -58,8 +61,8 @@ personal_finance_platform:
         # A block scalar (no YAML escapes) so the Jinja filters below reach dbt as written:
         # they escape `\` and `'` in the password the way libpq's quoted values expect.
         - path: >-
-            dbname={{ env_var('PFP_PG_DATABASE') }} host={{ env_var('PFP_PG_HOST', '127.0.0.1') }} port={{ env_var('PFP_PG_PORT', '5432') }} user={{ env_var('PFP_PG_USER') }} password='{{ env_var('PFP_PG_PASSWORD') | replace('\\', '\\\\') | replace("'", "\\'") }}'
-          alias: "{{ env_var('PFP_PG_DATABASE') }}"
+            dbname={{ env_var('PFP_PG_DATABASE', 'pfp') }} host={{ env_var('PFP_PG_HOST', '127.0.0.1') }} port={{ env_var('PFP_PG_PORT', '5432') }} user={{ env_var('PFP_PG_USER', 'pfp') }} password='{{ env_var('PFP_PG_PASSWORD', '') | replace('\\', '\\\\') | replace("'", "\\'") }}'
+          alias: "{{ env_var('PFP_PG_DATABASE', 'pfp') }}"
           type: postgres
         - path: "{{ env_var('PFP_ELEMENTARY_DUCKDB_PATH', 'dbt/elementary.duckdb') }}"
           alias: elem
