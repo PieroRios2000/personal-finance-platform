@@ -84,5 +84,21 @@ elementary:
   target: local
   outputs:
     local:
-      <<: *duckdb_output
+      type: duckdb
+      # T28 (ADR 0029): `edr` reads Elementary's own DuckDB file, the one dbt writes it
+      # to on the Postgres target (the attached `elem` above): no lake credentials, no
+      # Postgres. The file is attached under the alias `elem` here too, because the views
+      # dbt created inside it are stored with that catalog name in their definitions:
+      # opened on its own (catalog named after the file), they fail with `Catalog "elem"
+      # does not exist`. `schema: elementary`, not `silver`: `edr` resolves where
+      # Elementary's tables are from *this* profile's default schema, and
+      # `dbt_project.yml`'s `elementary: +schema: "elementary"` puts them there (T22:
+      # `edr report` failed until this matched). Absolute path needed for `edr`
+      # (SETUP.md): it runs from its own installed package directory.
+      path: ":memory:"
+      database: elem
       schema: elementary
+      threads: 4
+      attach:
+        - path: "{{ env_var('PFP_ELEMENTARY_DUCKDB_PATH', 'dbt/elementary.duckdb') }}"
+          alias: elem

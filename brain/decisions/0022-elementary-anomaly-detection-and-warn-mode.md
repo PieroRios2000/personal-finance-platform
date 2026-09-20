@@ -186,3 +186,14 @@ config for this), not work around the process's exit code downstream.
   why the main build gets `dbt deps` for free and these three places don't.
 - [Quality bar](../components/quality-bar.md) — CONSTRAINTS.md's warn-then-block pattern this
   task's own scoping is modeled on.
+
+## Update 2026-09-19 (T28)
+
+Where Elementary lives changed with [ADR 0029](0029-dbt-stores-silver-and-gold-in-postgres.md): silver and
+gold are in PostgreSQL, but Elementary's own tables (its views and its end-of-run results upload do not
+work through DuckDB's Postgres attach) live in a small DuckDB file of their own,
+`dbt/elementary.duckdb` (`PFP_ELEMENTARY_DUCKDB_PATH`). The anomaly test itself is unchanged: it still
+reads `silver.transactions`, now in Postgres, and records its result in that file. `edr` gets its own
+profile pointing at the file, attached under the alias `elem` (the catalog name the views inside it were
+created with, so the file may have any name). The absolute-path rule for `edr` above now applies to
+`PFP_ELEMENTARY_DUCKDB_PATH` instead of `PFP_DUCKDB_PATH`.

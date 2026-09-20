@@ -226,3 +226,48 @@ def test_elementarys_own_models_build_alongside_silver_and_gold(
     assert elementary_row_count > 0
     assert silver_row_count > 0
     assert gold_row_count > 0
+
+
+def test_edr_renders_its_report_from_elementarys_own_file(
+    lake: str, tmp_path: Path
+) -> None:
+    """T28: the report reads only the file dbt wrote Elementary's results to
+    (ADR 0029), through its own profile: no lake, no Postgres."""
+    import subprocess
+    import sys
+
+    _seed_daily_statements(
+        scenario="edr", detection_day_count=_NORMAL_DETECTION_DAY_COUNT
+    )
+    assert _dbt_build(tmp_path).returncode == 0
+    report = tmp_path / "report.html"
+    environment = {
+        "HOME": os.environ.get("HOME", ""),
+        "PATH": os.environ["PATH"],
+        "PFP_ELEMENTARY_DUCKDB_PATH": str(tmp_path / "elementary.duckdb"),
+    }
+
+    result = subprocess.run(
+        [
+            str(Path(sys.executable).parent / "edr"),
+            "report",
+            "--project-dir",
+            "dbt",
+            "--profiles-dir",
+            "dbt",
+            "--config-dir",
+            "dbt/.edr",
+            "--open-browser",
+            "false",
+            "--file-path",
+            str(report),
+        ],
+        cwd=Path(__file__).resolve().parent.parent,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert report.stat().st_size > 100_000

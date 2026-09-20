@@ -423,15 +423,12 @@ jobs:
       # reasoning as the test step above: this is observability tooling, not
       # a correctness gate, so a bad `edr` release shouldn't block the job.
       #
-      # PFP_DUCKDB_PATH must be absolute here: `edr` runs its own internal
-      # dbt project from inside its own installed package directory, not
-      # this repo -- a relative path would resolve against *that* directory
-      # instead (confirmed directly). Since T27 what `edr` reads is Elementary's
-      # own DuckDB file (silver and gold are in Postgres), so it points there.
+      # `edr` runs its own internal dbt project from inside its own installed
+      # package directory, not this repo, so its profile needs an absolute
+      # path: the job-level PFP_ELEMENTARY_DUCKDB_PATH (T28, ADR 0029), the
+      # very file dbt wrote Elementary's results to.
       - name: elementary report (warn-mode, see CONSTRAINTS.md)
         continue-on-error: true
-        env:
-          PFP_DUCKDB_PATH: ${{ github.workspace }}/dbt/elementary.duckdb
         run: |
           uv run edr report --project-dir dbt --profiles-dir dbt \
             --config-dir dbt/.edr --open-browser false \
