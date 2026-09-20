@@ -231,3 +231,28 @@ def test_every_postgres_variable_in_the_profile_has_a_default() -> None:
 
     assert calls, "the postgres target reads PFP_PG_* variables"
     assert all("," in call for call in calls), [c for c in calls if "," not in c]
+
+
+def test_the_edr_profile_reads_elementarys_own_file_and_nothing_else() -> None:
+    """T28: `edr` gets its own connection: Elementary's DuckDB file (the one dbt
+    writes it to on the Postgres target), with no lake credentials and no
+    Postgres."""
+    text = (_ROOT / "dbt" / "profiles.yml").read_text()
+    profile: dict[str, Any] = yaml.safe_load(text)["elementary"]["outputs"]["local"]
+
+    assert profile["type"] == "duckdb"
+    assert "PFP_ELEMENTARY_DUCKDB_PATH" in profile["path"]
+    assert profile["schema"] == "elementary"
+    assert "secrets" not in profile and "attach" not in profile
+    assert "PFP_DUCKDB_PATH" not in str(profile)
+
+
+def test_ci_points_edr_at_the_same_elementary_file_dbt_wrote() -> None:
+    """One absolute path for the whole job (`PFP_ELEMENTARY_DUCKDB_PATH`), so the
+    `edr` step needs no override of its own."""
+    ci = (_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    step = ci[ci.index("- name: elementary report") :]
+    step = step[: step.index("- name: save logs")]
+
+    assert "PFP_DUCKDB_PATH" not in step
+    assert "PFP_ELEMENTARY_DUCKDB_PATH: ${{ github.workspace }}" in ci
