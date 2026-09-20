@@ -353,7 +353,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     reports = [
         render_markdown(diffs, schema) for schema, diffs in by_schema.items() if diffs
     ]
-    print("\n".join(reports) if reports else render_markdown([]))
+    print("\n\n".join(reports) if reports else render_markdown([]))
     return 0
 
 

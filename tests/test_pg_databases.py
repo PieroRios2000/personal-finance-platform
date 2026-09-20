@@ -66,7 +66,10 @@ def test_the_password_is_quoted_by_the_connection_string_builder(
     assert "password='a\\'b c'" in conninfo
 
 
-@pytest.mark.parametrize("name", ["pfp; drop database x", "pfp-diff", "", "a b"])
+@pytest.mark.parametrize(
+    "name",
+    ["pfp; drop database x", "pfp-diff", "", "a b", "postgres", "template1", "pfp"],
+)
 def test_a_name_that_is_not_a_plain_identifier_is_refused(
     environment: None, name: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
