@@ -137,6 +137,17 @@ services:
       - ingestion-volume-dags:/opt/airflow/dags
       - ingestion-volume-tmp:/tmp
       - ./artifacts:/opt/pfp-artifacts:ro
+    # T30: joins the network PFP's own Postgres runs in (project pfp-poc by default), so
+    # the native Postgres connector reaches it as `postgres:5432`. `make om-up` checks
+    # it exists first. Override the name with PFP_NETWORK for another project.
+    networks:
+      - default
+      - pfp
+
+networks:
+  pfp:
+    name: ${PFP_NETWORK:-pfp-poc_default}
+    external: true
 
 volumes:
   postgres-data:

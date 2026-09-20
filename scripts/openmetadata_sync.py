@@ -1,39 +1,41 @@
-"""dbt artifacts -> OpenMetadata: tables, columns and lineage (T24, ADR 0023).
+"""dbt artifacts -> OpenMetadata: tables, columns and lineage (T24, ADR 0023; T30).
 
-OpenMetadata 2.0.2 has no DuckDB connector, and its dbt workflow only *enriches* tables
-that already exist in the catalog, so this script covers the two gaps around it:
+Silver and gold live in PostgreSQL (ADR 0029), so OpenMetadata reads them with its own
+Postgres connector. What that connector cannot see, this script covers:
 
-1. `sync` registers what a database connector would have: a service, the `pfp`
-   database, the bronze/silver/gold schemas and their tables with typed columns.
-   Silver and gold come from dbt's `catalog.json` (DuckDB's own information schema,
-   read by `dbt docs generate`); bronze comes from the pyarrow schemas
-   `lakehouse.bronze` writes with, because `delta_scan()` isn't a DuckDB relation and
-   dbt's catalog can't see it. Elementary's own models are left out: they're its
-   monitoring tables, not project data.
-2. `sync` also writes what the ingestion container reads: a copy of `manifest.json`
-   whose compiled SQL says `"pfp"."bronze"."transactions"` instead of
-   `delta_scan('s3://.../bronze/transactions')` (OpenMetadata's SQL parser can't resolve
-   a table function to a table, so without this the bronze -> silver column lineage is
-   never derived), `catalog.json`, and the ingestion workflow config.
+1. `sync` registers the Postgres service (native connection, using the `PFP_PG_*`
+   variables), the `pfp` database and the **bronze** schema and tables, which are Delta
+   tables in the lake, not Postgres relations. Their columns come from the pyarrow
+   schemas `lakehouse.bronze` writes with. Elementary's tables are not in Postgres and
+   so are not catalogued.
+2. `sync` also writes what the ingestion container reads: the Postgres connector's
+   workflow config, a copy of `manifest.json` whose compiled SQL says
+   `"pfp"."bronze"."transactions"` instead of `delta_scan('s3://.../bronze/transactions')`
+   (OpenMetadata's SQL parser can't resolve a table function to a table, so without this
+   the bronze -> silver column lineage is never derived), `catalog.json`, and the dbt
+   workflow config.
 
-The lineage itself is still OpenMetadata's own: `metadata ingest` parses each model's
+The lineage itself is still OpenMetadata's own: the dbt workflow parses each model's
 compiled SQL. `check` then asks the running server for `gold.fact_transactions.amount`'s
 upstream lineage and fails unless it reaches `bronze.transactions.amount` column by
 column.
 
     uv run python -m scripts.openmetadata_sync sync    # after `dbt docs generate`
     docker compose -f openmetadata/docker-compose.yml -p pfp-om exec ingestion \\
+        metadata ingest -c /opt/pfp-artifacts/postgres-workflow.yaml
+    docker compose -f openmetadata/docker-compose.yml -p pfp-om exec ingestion \\
         metadata ingest -c /opt/pfp-artifacts/dbt-workflow.yaml
     uv run python -m scripts.openmetadata_sync check
 
-`make om-sync` runs the three in order. Exit codes: 0 done, 1 `check` found no column
-lineage, 2 could not reach OpenMetadata or read the artifacts.
+`make om-sync` runs them in order. Exit codes: 0 done, 1 `check` found no column
+lineage, 2 could not reach OpenMetadata or read the artifacts or the credentials.
 """
 
 import argparse
 import base64
 import copy
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -48,8 +50,11 @@ import pyarrow as pa
 
 from lakehouse import bronze
 
-SERVICE = "pfp_duckdb"
+SERVICE = "pfp_postgres"
 SCHEMAS = ("bronze", "silver", "gold")
+# Where the ingestion container finds PFP's Postgres: it joins the Compose network the
+# Postgres runs in (openmetadata/docker-compose.yml), where the port is always 5432.
+POSTGRES_HOST_PORT = "postgres:5432"
 # The ingestion container mounts openmetadata/artifacts read-only at this path
 # (openmetadata/docker-compose.yml).
 CONTAINER_ARTIFACTS = "/opt/pfp-artifacts"
@@ -104,28 +109,12 @@ def om_column(name: str, duckdb_type: str, position: int) -> dict[str, Any]:
     return column
 
 
-def catalog_tables(manifest: dict[str, Any], catalog: dict[str, Any]) -> list[Table]:
-    """Silver and gold tables from `catalog.json`, minus Elementary's own models."""
-    tables = []
-    for unique_id, node in catalog["nodes"].items():
-        if manifest["nodes"][unique_id]["package_name"] == "elementary":
-            continue
-        columns = sorted(node["columns"].values(), key=lambda c: c["index"])
-        tables.append(
-            Table(
-                schema=node["metadata"]["schema"],
-                name=node["metadata"]["name"],
-                columns=[om_column(c["name"], c["type"], c["index"]) for c in columns],
-            )
-        )
-    return tables
-
-
 def bronze_tables(manifest: dict[str, Any]) -> list[Table]:
     """Every dbt source, typed from the pyarrow schema bronze is written with."""
     schemas = {
         "transactions": bronze._TRANSACTIONS_SCHEMA,
         "statements": bronze._STATEMENTS_SCHEMA,
+        "investment_entries": bronze._INVESTMENT_ENTRIES_SCHEMA,
     }
     tables = []
     for source in manifest["sources"].values():
@@ -164,6 +153,17 @@ def resolve_sources(manifest: dict[str, Any]) -> dict[str, Any]:
     return resolved
 
 
+def _workflow_config(token: str) -> dict[str, Any]:
+    return {
+        "loggerLevel": "INFO",
+        "openMetadataServerConfig": {
+            "hostPort": "http://openmetadata-server:8585/api",
+            "authProvider": "openmetadata",
+            "securityConfig": {"jwtToken": token},
+        },
+    }
+
+
 def workflow_config(service: str, database: str, token: str) -> dict[str, Any]:
     """The `metadata ingest` config for the dbt workflow, with the container's paths."""
     return {
@@ -186,45 +186,89 @@ def workflow_config(service: str, database: str, token: str) -> dict[str, Any]:
             },
         },
         "sink": {"type": "metadata-rest", "config": {}},
-        "workflowConfig": {
-            "loggerLevel": "INFO",
-            "openMetadataServerConfig": {
-                "hostPort": "http://openmetadata-server:8585/api",
-                "authProvider": "openmetadata",
-                "securityConfig": {"jwtToken": token},
-            },
+        "workflowConfig": _workflow_config(token),
+    }
+
+
+def postgres_service(
+    name: str, *, database: str, host_port: str, user: str, password: str
+) -> dict[str, Any]:
+    """The database service body for PFP's Postgres (native connector)."""
+    return {
+        "name": name,
+        "serviceType": "Postgres",
+        "connection": {
+            "config": {
+                "type": "Postgres",
+                "hostPort": host_port,
+                "username": user,
+                "authType": {"password": password},
+                "database": database,
+            }
         },
     }
 
 
-def register(
-    client: Client, service: str, database: str, tables: Sequence[Table]
-) -> None:
-    """Create-or-update the service, database, schemas and tables (idempotent PUTs)."""
-    client.put(
-        "/services/databaseServices",
-        {
-            "name": service,
-            "serviceType": "CustomDatabase",
-            "connection": {
-                "config": {"type": "CustomDatabase", "sourcePythonClass": "not.used"}
+def postgres_workflow(
+    service: str,
+    *,
+    database: str,
+    host_port: str,
+    user: str,
+    password: str,
+    token: str,
+) -> dict[str, Any]:
+    """The `metadata ingest` config for the native Postgres connector (silver, gold)."""
+    return {
+        "source": {
+            "type": "postgres",
+            "serviceName": service,
+            "serviceConnection": postgres_service(
+                service,
+                database=database,
+                host_port=host_port,
+                user=user,
+                password=password,
+            )["connection"],
+            "sourceConfig": {
+                "config": {
+                    "type": "DatabaseMetadata",
+                    # Bronze is not in Postgres: leaving it out keeps the connector
+                    # from touching the tables `sync` registered for it.
+                    "schemaFilterPattern": {
+                        "includes": [f"^{s}$" for s in SCHEMAS if s != "bronze"]
+                    },
+                    "includeViews": False,
+                    "markDeletedTables": False,
+                }
             },
         },
-    )
-    client.put("/databases", {"name": database, "service": service})
+        "sink": {"type": "metadata-rest", "config": {}},
+        "workflowConfig": _workflow_config(token),
+    }
+
+
+def register_bronze(
+    client: Client, service: dict[str, Any], database: str, tables: Sequence[Table]
+) -> None:
+    """Create-or-update the service, database, bronze schema and its tables (idempotent
+    PUTs); the Postgres connector fills in silver and gold under the same database."""
+    name = service["name"]
+    client.put("/services/databaseServices", service)
+    client.put("/databases", {"name": database, "service": name})
     seen: set[str] = set()
     for table in tables:
         if table.schema not in seen:
             seen.add(table.schema)
             client.put(
                 "/databaseSchemas",
-                {"name": table.schema, "database": f"{service}.{database}"},
+                {"name": table.schema, "database": f"{name}.{database}"},
             )
         client.put(
             "/tables",
             {
                 "name": table.name,
-                "databaseSchema": f"{service}.{database}.{table.schema}",
+                "databaseSchema": f"{name}.{database}.{table.schema}",
                 "columns": table.columns,
             },
         )
@@ -301,22 +345,34 @@ class OpenMetadata:
 def _sync(args: argparse.Namespace) -> int:
     manifest = json.loads((args.target_path / "manifest.json").read_text())
     catalog_path = args.target_path / "catalog.json"
-    catalog = json.loads(catalog_path.read_text())
+    json.loads(
+        catalog_path.read_text()
+    )  # fail here, not in the container, if unreadable
     database = next(iter(manifest["sources"].values()))["database"]
 
     client = OpenMetadata(args.host)
     token = client.login()
-    tables = bronze_tables(manifest) + catalog_tables(manifest, catalog)
-    register(client, SERVICE, database, tables)
+    postgres = {
+        "database": database,
+        "host_port": POSTGRES_HOST_PORT,
+        "user": os.environ["PFP_PG_USER"],
+        "password": os.environ["PFP_PG_PASSWORD"],
+    }
+    tables = bronze_tables(manifest)
+    register_bronze(client, postgres_service(SERVICE, **postgres), database, tables)
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "manifest.json").write_text(json.dumps(resolve_sources(manifest)))
     (args.out / "catalog.json").write_text(catalog_path.read_text())
-    # JSON is valid YAML, and it's what `metadata ingest -c` reads.
+    # JSON is valid YAML, and it's what `metadata ingest -c` reads. The Postgres one
+    # holds the password, like the dbt one holds the token: `artifacts/` is gitignored.
+    (args.out / "postgres-workflow.yaml").write_text(
+        json.dumps(postgres_workflow(SERVICE, token=token, **postgres), indent=2)
+    )
     (args.out / "dbt-workflow.yaml").write_text(
         json.dumps(workflow_config(SERVICE, database, token), indent=2)
     )
-    print(f"registered {len(tables)} tables in {SERVICE}.{database}")
+    print(f"registered {len(tables)} bronze tables in {SERVICE}.{database}")
     print(f"ingestion inputs written to {args.out}")
     return 0
 

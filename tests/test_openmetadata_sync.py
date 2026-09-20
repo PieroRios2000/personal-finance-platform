@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from scripts import openmetadata_sync as om
 
@@ -394,3 +395,22 @@ def test_check_exits_2_when_the_server_reply_is_not_usable(
 
     monkeypatch.setattr(om, "OpenMetadata", _Broken)
     assert om.main(["check"]) == 2
+
+
+def test_bronze_tables_covers_every_source_dbt_declares() -> None:
+    declared = yaml.safe_load(
+        (Path(__file__).resolve().parent.parent / "dbt/models/sources.yml").read_text()
+    )["sources"][0]
+    manifest = {
+        "sources": {
+            f"source.x.{t['name']}": {
+                "database": "pfp",
+                "schema": "bronze",
+                "identifier": t["name"],
+            }
+            for t in declared["tables"]
+        }
+    }
+    assert {t.name for t in om.bronze_tables(manifest)} == {
+        t["name"] for t in declared["tables"]
+    }
