@@ -24,13 +24,18 @@ could not even open the two databases (matches `scripts/floor_guard.py`'s
 """
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 import duckdb
+from psycopg.conninfo import make_conninfo
 
+# T29: silver and gold are both in the store, so both are compared; a schema
+# neither side has is left out of the report.
+SCHEMAS = ("silver", "gold")
 DEFAULT_SCHEMA = "silver"
 DEFAULT_SAMPLE_LIMIT = 5
 
@@ -83,6 +88,31 @@ def connect(base_path: Path | str, pr_path: Path | str) -> duckdb.DuckDBPyConnec
     con = duckdb.connect(":memory:")
     con.execute(f"ATTACH '{base_path}' AS {_BASE} (READ_ONLY)")
     con.execute(f"ATTACH '{pr_path}' AS {_PR} (READ_ONLY)")
+    return con
+
+
+def postgres_attach(alias: str, database: str) -> str:
+    """`ATTACH` statement for one PostgreSQL database, read-only, from `PFP_PG_*`.
+    The password is quoted for libpq and then for the SQL literal."""
+    conninfo = make_conninfo(
+        dbname=database,
+        host=os.environ.get("PFP_PG_HOST", "127.0.0.1"),
+        port=os.environ.get("PFP_PG_PORT", "5432"),
+        user=os.environ["PFP_PG_USER"],
+        password=os.environ["PFP_PG_PASSWORD"],
+    )
+    literal = conninfo.replace("'", "''")
+    return f"ATTACH '{literal}' AS {alias} (TYPE postgres, READ_ONLY)"
+
+
+def connect_postgres(base_database: str, pr_database: str) -> duckdb.DuckDBPyConnection:
+    """One in-memory connection with both PostgreSQL databases attached read-only,
+    as `base` and `pr`. Raises `duckdb.Error` if either cannot be reached."""
+    con = duckdb.connect(":memory:")
+    con.execute("INSTALL postgres")
+    con.execute("LOAD postgres")
+    con.execute(postgres_attach(_BASE, base_database))
+    con.execute(postgres_attach(_PR, pr_database))
     return con
 
 
@@ -232,9 +262,10 @@ def _render_sample(diff: ModelDiff) -> list[str]:
     return lines
 
 
-def render_markdown(diffs: list[ModelDiff]) -> str:
+def render_markdown(diffs: list[ModelDiff], schema: str | None = None) -> str:
     """The base-vs-PR comparison as Markdown for `$GITHUB_STEP_SUMMARY`."""
-    lines = ["### data-diff: base vs. PR (T17b)", ""]
+    where = f" -- `{schema}`" if schema else ""
+    lines = [f"### data-diff: base vs. PR (T17b){where}", ""]
 
     # Distinct from "no changes": an empty `diffs` means neither side's dbt
     # build put a single model in the schema (e.g. both runs failed before
@@ -284,10 +315,10 @@ def render_markdown(diffs: list[ModelDiff]) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--base", type=Path, required=True, help="base branch's .duckdb file"
-    )
-    parser.add_argument("--pr", type=Path, required=True, help="PR's .duckdb file")
+    parser.add_argument("--base", type=Path, help="base branch's .duckdb file")
+    parser.add_argument("--pr", type=Path, help="PR's .duckdb file")
+    parser.add_argument("--base-database", help="base branch's PostgreSQL database")
+    parser.add_argument("--pr-database", help="PR's PostgreSQL database")
     parser.add_argument(
         "--sample-limit",
         type=int,
@@ -296,17 +327,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    files = (args.base, args.pr)
+    databases = (args.base_database, args.pr_database)
+    if all(files) == all(databases) or any(files) and any(databases):
+        parser.error(
+            "give either --base and --pr, or --base-database and --pr-database"
+        )
+
     try:
-        con = connect(args.base, args.pr)
+        if all(files):
+            con = connect(args.base, args.pr)
+        else:
+            con = connect_postgres(args.base_database, args.pr_database)
     except duckdb.Error as error:
         print(
-            f"data-diff: could not open {args.base} or {args.pr}: {error}",
+            f"data-diff: could not open the base or the PR database: {error}",
             file=sys.stderr,
         )
         return 2
 
-    diffs = diff_all(con, sample_limit=args.sample_limit)
-    print(render_markdown(diffs))
+    by_schema = {
+        schema: diff_all(con, schema, sample_limit=args.sample_limit)
+        for schema in SCHEMAS
+    }
+    reports = [
+        render_markdown(diffs, schema) for schema, diffs in by_schema.items() if diffs
+    ]
+    print("\n\n".join(reports) if reports else render_markdown([]))
     return 0
 
 

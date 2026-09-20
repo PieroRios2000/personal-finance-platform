@@ -334,8 +334,8 @@ passes against a real Postgres and S3.
   (`tests/pg_store.py`); each parallel pytest-xdist worker gets its own database, dropped and recreated
   with the test lake, so the parallel runner keeps working.
 - [x] The default dbt target is Postgres (`PFP_DBT_TARGET`); `local` (the DuckDB file) stays selectable
-  because CI's base-versus-PR data diff still needs it until T29. `PFP_DUCKDB_PATH` is now only that
-  target's and `edr`'s (T28).
+  because CI's base-versus-PR data diff still needed it until T29 (now on Postgres too). `PFP_DUCKDB_PATH`
+  is now only that target's and `edr`'s (T28).
 
 **Verification:** the whole integration suite passes with `-n 4` against a real Postgres and S3.
 
@@ -362,11 +362,12 @@ Postgres attach. Give it a small DuckDB file of its own; its anomaly test still 
 **Description:** The ephemeral environment (ADR 0007) and the base-versus-PR data diff work on Postgres.
 
 **Acceptance criteria:**
-- [ ] `ephemeral-integration` brings up Postgres with SeaweedFS, runs the Dagster job and the integration
-  tests, and tears both down (`down -v`).
-- [ ] `scripts/data_diff.py` and `pr-data-diff` compare Postgres schemas (base and PR) instead of two
-  DuckDB files; ADR 0014 updated.
-- [ ] The job stays within its time budget (backlog, "CI speed").
+- [x] `ephemeral-integration` brings up Postgres with SeaweedFS, runs the Dagster job and the integration
+  tests, and tears both down (`down -v`) (done in T27).
+- [x] `scripts/data_diff.py` and `pr-data-diff` compare Postgres databases (base and PR, `silver` and
+  `gold`) instead of two DuckDB files; ADR 0014 updated. `scripts/pg_databases.py` creates the two
+  throwaway databases.
+- [ ] The job stays within its time budget (backlog, "CI speed") -- checked on this PR's own run.
 
 **Dependencies:** T27, T28 · **Files:** `.github/workflows/ci.yml`, `scripts/data_diff.py`,
 `brain/**` · **Size:** M

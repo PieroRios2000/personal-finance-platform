@@ -260,3 +260,22 @@ def test_ci_points_edr_at_the_same_elementary_file_dbt_wrote() -> None:
 
     assert "PFP_DUCKDB_PATH" not in step
     assert "PFP_ELEMENTARY_DUCKDB_PATH: ${{ github.workspace }}" in ci
+
+
+def _job(name: str) -> dict[str, Any]:
+    ci = yaml.safe_load((_ROOT / ".github" / "workflows" / "ci.yml").read_text())
+    job: dict[str, Any] = ci["jobs"][name]
+    return job
+
+
+def test_the_pr_data_diff_builds_into_two_postgres_databases_not_duckdb_files() -> None:
+    """T29: the base and PR builds each go to a database of the job's Postgres."""
+    job = _job("pr-data-diff")
+    text = yaml.safe_dump(job)
+
+    assert "PFP_DBT_TARGET" not in job.get("env", {})
+    assert "PFP_DUCKDB_PATH" not in text
+    assert "seaweedfs postgres" in text
+    assert "scripts.pg_databases" in text
+    assert "--base-database" in text and "--pr-database" in text
+    assert job["env"]["PFP_PG_PASSWORD"]  # local-only dummy, like the other job

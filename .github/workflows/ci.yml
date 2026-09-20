@@ -497,9 +497,9 @@ jobs:
   # T17b: what dbt build actually *produces* differs between the base branch
   # and the PR, not just whether it succeeds -- the same gap ADR 0007's own
   # "Compare" bullet calls out. Runs ingest + dbt build twice against the same
-  # SeaweedFS instance, isolated by a LAKEHOUSE_URI prefix and a
-  # PFP_DUCKDB_PATH per run (ADR 0014), then diffs the two DuckDB files with
-  # scripts/data_diff.py. Gated on the same `integration` output as
+  # SeaweedFS instance, isolated by a LAKEHOUSE_URI prefix and a Postgres
+  # database per run (ADR 0014, amended by T29), then diffs the two databases
+  # with scripts/data_diff.py. Gated on the same `integration` output as
   # ephemeral-integration (same paths can change the data), and runs in
   # parallel with it, not after: the two jobs build into entirely separate
   # places, so there is nothing to wait for.
@@ -529,9 +529,14 @@ jobs:
       AWS_REGION: us-east-1
       PFP_ACCOUNT_KEY: pfp-ci-dummy-account-key-0000000000000000
       PFP_USER: ci
-      # T27: this job's two builds still go to a DuckDB file each (ADR 0014); it has no
-      # Postgres. It moves to Postgres schemas in T29.
-      PFP_DBT_TARGET: local
+      # T29 (ADR 0029): each build goes to its own database of this job's Postgres
+      # (`pfp_diff_base`, `pfp_diff_pr`), created below. Local-only, non-real values.
+      PFP_PG_HOST: 127.0.0.1
+      PFP_PG_PORT: "5432"
+      PFP_PG_DATABASE: pfp
+      PFP_PG_USER: pfp
+      PFP_PG_PASSWORD: pfp-ci-dummy-pg-password
+      PFP_PG_BI_PASSWORD: pfp-ci-dummy-bi-password
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -552,8 +557,9 @@ jobs:
 
       - name: bring up the ephemeral environment
         run: |
-          docker compose -p "$COMPOSE_PROJECT" up -d --wait seaweedfs
+          docker compose -p "$COMPOSE_PROJECT" up -d --wait seaweedfs postgres
           docker compose -p "$COMPOSE_PROJECT" run --rm bucket-init
+          uv run python -m scripts.pg_databases pfp_diff_base pfp_diff_pr
 
       # ingestion/lakehouse: same idiom as the benchmarks job (T15), swap the
       # base ref's code in over the PR's -- safe there because Python only
@@ -590,7 +596,8 @@ jobs:
         continue-on-error: true
         env:
           LAKEHOUSE_URI: s3://lakehouse/pr-diff-base
-          PFP_DUCKDB_PATH: /tmp/pfp-ci-diff-base.duckdb
+          PFP_PG_DATABASE: pfp_diff_base
+          PFP_ELEMENTARY_DUCKDB_PATH: /tmp/pfp-ci-diff-base-elementary.duckdb
           PFP_INBOX_ROOT: /tmp/pfp-ci-diff-base-inbox
           PFP_ARCHIVE_ROOT: /tmp/pfp-ci-diff-base-archive
         run: |
@@ -612,7 +619,8 @@ jobs:
         continue-on-error: true
         env:
           LAKEHOUSE_URI: s3://lakehouse/pr-diff-pr
-          PFP_DUCKDB_PATH: /tmp/pfp-ci-diff-pr.duckdb
+          PFP_PG_DATABASE: pfp_diff_pr
+          PFP_ELEMENTARY_DUCKDB_PATH: /tmp/pfp-ci-diff-pr-elementary.duckdb
           PFP_INBOX_ROOT: /tmp/pfp-ci-diff-pr-inbox
           PFP_ARCHIVE_ROOT: /tmp/pfp-ci-diff-pr-archive
         run: |
@@ -625,7 +633,7 @@ jobs:
       - name: base-vs-PR data diff
         run: |
           uv run python -m scripts.data_diff \
-            --base /tmp/pfp-ci-diff-base.duckdb --pr /tmp/pfp-ci-diff-pr.duckdb \
+            --base-database pfp_diff_base --pr-database pfp_diff_pr \
             >> "$GITHUB_STEP_SUMMARY"
 
       - name: tear down the ephemeral environment
