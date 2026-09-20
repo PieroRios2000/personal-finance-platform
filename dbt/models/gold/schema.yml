@@ -120,6 +120,8 @@ models:
               arguments:
                 to: ref('dim_account')
                 field: account_id
+      - name: account_last4
+        description: The account's last four digits, to tell accounts apart on a chart (not a key).
       - name: bank
         description: The bank the statement came from, e.g. BCP.
         data_tests:

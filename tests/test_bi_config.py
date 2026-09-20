@@ -14,6 +14,13 @@ _ROOT = Path(__file__).resolve().parent.parent
 _BI = _ROOT / "bi"
 
 
+_DATASETS = {
+    "fact_transactions": 2,
+    "fct_investment_monthly": 1,
+    "fct_account_balance_monthly": 3,
+}
+
+
 def _compose() -> dict[str, Any]:
     loaded: dict[str, Any] = yaml.safe_load((_BI / "docker-compose.yml").read_text())
     return loaded
@@ -66,7 +73,9 @@ def test_the_dashboard_connects_as_the_read_only_role_to_gold_only() -> None:
 
 
 def test_the_return_table_shows_closing_basis_right_beside_the_return() -> None:
-    (chart,) = [c for c in _builder().CHARTS if c[2] == "table"]
+    (chart,) = [
+        c for c in _builder().CHARTS if c[1].startswith("Investments: return and")
+    ]
     columns = chart[3]["all_columns"]
 
     assert columns.index("closing_basis") == columns.index("return_pct") + 1
@@ -89,9 +98,7 @@ def test_every_chart_reads_a_gold_table_the_dashboard_exports() -> None:
 
 
 def test_the_dashboard_has_filters_for_dates_grain_bank_currency_and_fund() -> None:
-    filters = _builder().native_filters(
-        {"fact_transactions": 2, "fct_investment_monthly": 1}
-    )
+    filters = _builder().native_filters(_DATASETS)
 
     by_name = {f["name"]: f for f in filters}
     assert by_name["Date range"]["filterType"] == "filter_time"
@@ -104,11 +111,7 @@ def test_the_dashboard_has_filters_for_dates_grain_bank_currency_and_fund() -> N
 def test_the_time_grain_starts_monthly_and_the_axis_shows_the_full_date() -> None:
     builder = _builder()
     grain = next(
-        f
-        for f in builder.native_filters(
-            {"fact_transactions": 2, "fct_investment_monthly": 1}
-        )
-        if f["name"] == "Time grain"
+        f for f in builder.native_filters(_DATASETS) if f["name"] == "Time grain"
     )
 
     assert grain["defaultDataMask"]["extraFormData"] == {"time_grain_sqla": "P1M"}
@@ -117,3 +120,44 @@ def test_the_time_grain_starts_monthly_and_the_axis_shows_the_full_date() -> Non
     assert timeseries and all(
         c[3]["x_axis_time_format"] == "%Y-%m-%d" for c in timeseries
     )
+
+
+def test_there_are_filters_to_slice_movements_for_validation() -> None:
+    by_name = {f["name"]: f for f in _builder().native_filters(_DATASETS)}
+
+    assert by_name["Flow type"]["targets"][0]["column"]["name"] == "flow_type"
+    assert by_name["Internal transfer"]["targets"][0]["column"]["name"] == (
+        "is_internal_transfer"
+    )
+    assert by_name["Account"]["targets"][0]["column"]["name"] == "account_last4"
+
+
+def test_the_movements_and_balances_tables_exist_to_check_against_the_statements() -> (
+    None
+):
+    tables = {c[1]: c for c in _builder().CHARTS if c[2] == "table"}
+
+    movements = tables["Movements (check against your statements)"]
+    assert movements[0] == "fact_transactions"
+    assert {"date", "bank", "currency", "flow_type", "amount", "description"} <= set(
+        movements[3]["all_columns"]
+    )
+    balances = tables["Statement balances (check against your statements)"]
+    assert balances[0] == "fct_account_balance_monthly"
+    assert {"closing_date", "account_last4", "closing_balance"} <= set(
+        balances[3]["all_columns"]
+    )
+
+
+def test_every_chart_in_the_layout_is_tied_to_its_chart_by_uuid() -> None:
+    """Without the uuid, the import cannot map a layout cell to its imported chart and
+    Superset appends every chart again in an extra row at the bottom."""
+    builder = _builder()
+    names = [c[1] for c in builder.CHARTS]
+    uuids = [f"uuid-{i}" for i in range(len(names))]
+
+    layout = builder._position(list(range(len(names))), names, uuids)
+
+    cells = [v for k, v in layout.items() if k.startswith("CHART-")]
+    assert len(cells) == len(names)
+    assert {c["meta"]["uuid"] for c in cells} == set(uuids)

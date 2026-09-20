@@ -447,9 +447,16 @@ transfers), the savings balance per month, and each fund's monthly return -- as 
 balance at the last movement) and as a line per fund. Currencies are never added: every chart splits
 by currency.
 
-The filter bar (left side of the dashboard) has **Date range**, **Time grain** (month by default; pick
-day, week or year), **Bank**, **Currency** and **Fund**. Dates on the axes are full dates
-(`2026-03-01`), so a month is never read as a year.
+The filter bar (left side of the dashboard; open it with the arrow on its edge) has **Date range**,
+**Time grain** (month by default; day, week or year on demand), **Bank**, **Account** (last four
+digits), **Currency**, **Flow type** (ingreso / egreso / pago), **Internal transfer** and **Fund**.
+Dates on the axes are full dates (`2026-03-01`), so a month is never read as a year.
+
+To check the numbers against your statements, the bottom of the dashboard has two tables:
+**Movements** (every gold movement: date, bank, account, currency, flow type, amount, internal transfer,
+description) and **Statement balances** (each account's declared closing balance per month). Filter to
+one bank, account, currency and month and compare with the PDF. The descriptions are real: they
+never leave your machine, so don't screenshot them into a chat.
 
 - **`relation "gold.fct_account_balance_monthly" does not exist`** (or another gold table): the dashboard
   needs models added after your last `dbt build`. Pull `develop`, run `uv run dbt build --project-dir dbt
