@@ -86,7 +86,9 @@ def test_the_cash_flow_chart_excludes_internal_transfers_and_splits_currencies()
 ):
     cash_flow = _builder().CHARTS[0][3]
 
-    filters = [f["sqlExpression"] for f in cash_flow["adhoc_filters"]]
+    filters = [
+        f["sqlExpression"] for f in cash_flow["adhoc_filters"] if "sqlExpression" in f
+    ]
     assert "NOT is_internal_transfer" in filters
     assert "currency" in cash_flow["groupby"]
 

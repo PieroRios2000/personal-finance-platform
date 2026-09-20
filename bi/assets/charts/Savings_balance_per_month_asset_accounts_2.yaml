@@ -14,6 +14,11 @@ params:
   - bank
   - currency
   adhoc_filters:
+  - expressionType: SIMPLE
+    subject: month_start
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    clause: WHERE
   - expressionType: SQL
     sqlExpression: account_kind = 'asset'
     clause: WHERE
@@ -24,6 +29,6 @@ params:
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null
-uuid: bc035f06-4e3b-4f74-bd8c-01d31ac6bc80
+uuid: f5bad50e-e0ad-452a-bd38-3c65029cb9c5
 version: 1.0.0
-dataset_uuid: 5838f40f-059e-4891-b38c-e61c8b878b8e
+dataset_uuid: 34d8ad94-56be-4a58-a990-2f21dead4cb8

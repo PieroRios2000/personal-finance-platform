@@ -5,6 +5,12 @@ certification_details: null
 viz_type: table
 params:
   query_mode: raw
+  adhoc_filters:
+  - expressionType: SIMPLE
+    subject: month_start
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    clause: WHERE
   all_columns:
   - month_start
   - closing_date
@@ -21,6 +27,6 @@ params:
   viz_type: table
 query_context: null
 cache_timeout: null
-uuid: 18d25919-7311-4733-b7d3-6804b779d897
+uuid: 054dd1b7-6ab6-44c1-9ec1-85e82ad07ac7
 version: 1.0.0
-dataset_uuid: 5838f40f-059e-4891-b38c-e61c8b878b8e
+dataset_uuid: 34d8ad94-56be-4a58-a990-2f21dead4cb8

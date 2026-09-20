@@ -37,6 +37,18 @@ def _sql_metric(expression: str, label: str) -> dict[str, Any]:
     return {"expressionType": "SQL", "sqlExpression": expression, "label": label}
 
 
+def _time_range(column: str) -> dict[str, Any]:
+    """The chart's time-range filter on `column`, unbounded until a dashboard filter
+    narrows it: Superset's Date range filter only acts on a chart that has one."""
+    return {
+        "expressionType": "SIMPLE",
+        "subject": column,
+        "operator": "TEMPORAL_RANGE",
+        "comparator": "No filter",
+        "clause": "WHERE",
+    }
+
+
 def _where(expression: str) -> dict[str, Any]:
     return {"expressionType": "SQL", "sqlExpression": expression, "clause": "WHERE"}
 
@@ -56,6 +68,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "metrics": [_sql_metric("SUM(ABS(amount))", "Amount")],
             "groupby": ["flow_type", "currency"],
             "adhoc_filters": [
+                _time_range("date"),
                 _where("NOT is_internal_transfer"),
                 _where("flow_type IN ('ingreso', 'egreso')"),
             ],
@@ -74,7 +87,10 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "time_grain_sqla": "P1M",
             "metrics": [_sql_metric("SUM(closing_balance)", "Closing balance")],
             "groupby": ["bank", "currency"],
-            "adhoc_filters": [_where("account_kind = 'asset'")],
+            "adhoc_filters": [
+                _time_range("month_start"),
+                _where("account_kind = 'asset'"),
+            ],
             "x_axis_time_format": _DATE_FORMAT,
             "row_limit": 10000,
             "show_legend": True,
@@ -86,6 +102,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         "table",
         {
             "query_mode": "raw",
+            "adhoc_filters": [_time_range("month_start")],
             # closing_basis sits right next to the return: `valuation` is a real
             # month-end value, `last_movement` only the balance at the last movement.
             "all_columns": [
@@ -112,7 +129,10 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "time_grain_sqla": "P1M",
             "metrics": [_sql_metric("MAX(return_pct)", "Return")],
             "groupby": ["place", "currency"],
-            "adhoc_filters": [_where("is_return_reliable")],
+            "adhoc_filters": [
+                _time_range("month_start"),
+                _where("is_return_reliable"),
+            ],
             "y_axis_format": ".2%",
             "x_axis_time_format": _DATE_FORMAT,
             "row_limit": 10000,
@@ -125,6 +145,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         "table",
         {
             "query_mode": "raw",
+            "adhoc_filters": [_time_range("date")],
             "all_columns": [
                 "date",
                 "bank",
@@ -146,6 +167,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         "table",
         {
             "query_mode": "raw",
+            "adhoc_filters": [_time_range("month_start")],
             "all_columns": [
                 "month_start",
                 "closing_date",
@@ -239,7 +261,12 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
         }
         return item
 
-    grain = base("Time grain", "filter_timegrain", {})
+    # The dataset is where the filter takes its grains from; without one it is blank.
+    grain = base(
+        "Time grain",
+        "filter_timegrain",
+        {"datasetId": datasets["fact_transactions"]},
+    )
     grain["defaultDataMask"] = {
         "filterState": {"value": ["P1M"]},
         "extraFormData": {"time_grain_sqla": "P1M"},
@@ -333,7 +360,11 @@ def _sample_rows(client: Superset, dataset: int, params: dict[str, Any]) -> int:
         ]
         if column
     ]
-    where = " AND ".join(f["sqlExpression"] for f in params.get("adhoc_filters", []))
+    where = " AND ".join(
+        f["sqlExpression"]
+        for f in params.get("adhoc_filters", [])
+        if f["expressionType"] == "SQL"
+    )
     query = {
         "columns": columns,
         "metrics": [],
