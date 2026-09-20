@@ -490,7 +490,7 @@ def test_every_reporting_view_shares_the_same_calendar_columns(
                 row[0]
                 for row in connection.execute(
                     "select column_name from information_schema.columns "
-                    "where table_schema = 'gold' and table_name = %s",
+                    "where table_schema = 'gold' and table_name = ?",
                     (view,),
                 ).fetchall()
             }
