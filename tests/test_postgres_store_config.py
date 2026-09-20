@@ -158,7 +158,7 @@ def test_make_has_targets_to_start_and_stop_postgres_without_touching_the_lake()
 ):
     makefile = (_ROOT / "Makefile").read_text()
 
-    assert re.search(r"^pg-up:\n\t.*up -d --wait postgres", makefile, re.M)
+    assert re.search(r"^pg-up:.*\n\t.*up -d --wait postgres", makefile, re.M)
     assert re.search(r"^pg-down:\n\t.*stop postgres", makefile, re.M)
 
 

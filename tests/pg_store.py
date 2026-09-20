@@ -16,10 +16,9 @@ from pathlib import Path
 from typing import Any
 
 import psycopg
+from psycopg.conninfo import make_conninfo
 
 REQUIRED_ENV = (
-    "PFP_PG_HOST",
-    "PFP_PG_PORT",
     "PFP_PG_DATABASE",
     "PFP_PG_USER",
     "PFP_PG_PASSWORD",
@@ -34,17 +33,24 @@ def worker_database() -> str:
     return f"pfp_test_{os.environ.get('PYTEST_XDIST_WORKER', 'main')}"
 
 
-def _conninfo(database: str) -> str:
-    return (
-        f"host={os.environ['PFP_PG_HOST']} port={os.environ['PFP_PG_PORT']} "
-        f"dbname={database} user={os.environ['PFP_PG_USER']} "
-        f"password={os.environ['PFP_PG_PASSWORD']}"
-    )
+def pg_settings(database: str) -> dict[str, str]:
+    """Connection settings as keywords (psycopg quotes them: a password with a
+    space, quote or backslash needs no escaping). Host and port default like
+    dbt/profiles.yml's."""
+    return {
+        "host": os.environ.get("PFP_PG_HOST", "127.0.0.1"),
+        "port": os.environ.get("PFP_PG_PORT", "5432"),
+        "dbname": database,
+        "user": os.environ["PFP_PG_USER"],
+        "password": os.environ["PFP_PG_PASSWORD"],
+    }
 
 
 def translate_placeholders(sql: str, params: Sequence[Any] | None) -> str:
     """DuckDB's `?` to psycopg's `%s`; a literal `%` is doubled when there are
-    parameters (psycopg would read it as a placeholder)."""
+    parameters (psycopg would read it as a placeholder). A plain text replace: a
+    `?` inside a SQL string literal would be rewritten too, so keep literals with
+    a question mark out of parameterised queries."""
     if params is None:
         return sql
     return sql.replace("%", "%%").replace("?", "%s")
@@ -63,7 +69,7 @@ class _Connection:
 @contextmanager
 def connect() -> Iterator[_Connection]:
     """A read connection to this worker's database."""
-    with psycopg.connect(_conninfo(worker_database())) as connection:
+    with psycopg.connect(make_conninfo(**pg_settings(worker_database()))) as connection:
         yield _Connection(connection)
 
 
@@ -71,17 +77,10 @@ def reset_database() -> None:
     """Drop and recreate this worker's database (empty, no schemas)."""
     name = worker_database()
     with psycopg.connect(
-        _conninfo(os.environ["PFP_PG_DATABASE"]), autocommit=True
+        make_conninfo(**pg_settings(os.environ["PFP_PG_DATABASE"])), autocommit=True
     ) as admin:
         admin.execute(f'drop database if exists "{name}" with (force)')
         admin.execute(f'create database "{name}"')
-
-
-def drop_database() -> None:
-    with psycopg.connect(
-        _conninfo(os.environ["PFP_PG_DATABASE"]), autocommit=True
-    ) as admin:
-        admin.execute(f'drop database if exists "{worker_database()}" with (force)')
 
 
 def dbt_environment(tmp_path: Path) -> dict[str, str]:

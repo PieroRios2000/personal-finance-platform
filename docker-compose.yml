@@ -29,8 +29,7 @@ services:
   # lake and writes here through DuckDB's `attach`. Bound to localhost only; the
   # credentials come from `.env` (PFP_PG_*), nothing is hardcoded. `init-roles.sh`
   # creates the schemas and the read-only BI role the first time the volume is made.
-  # Not started by `make poc-up` until T27 flips the default store: opt in with
-  # `make pg-up`.
+  # Started by `make poc-up` with the local S3; `make pg-up` starts only this one.
   postgres:
     image: postgres:16.10-alpine
     environment:

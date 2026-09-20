@@ -104,8 +104,6 @@ def _send_alerts(needs_review: int, dbt_returncode: int) -> None:
 
 
 _POSTGRES_VARIABLES = (
-    "PFP_PG_HOST",
-    "PFP_PG_PORT",
     "PFP_PG_DATABASE",
     "PFP_PG_USER",
     "PFP_PG_PASSWORD",
@@ -115,12 +113,13 @@ _POSTGRES_VARIABLES = (
 def _transfer_counts() -> tuple[int, int]:
     """T18b: how many internal transfers matched, and how many candidates
     didn't, read from dbt's Postgres store (ADR 0029) -- row counts only."""
-    conninfo = (
-        f"host={os.environ['PFP_PG_HOST']} port={os.environ['PFP_PG_PORT']} "
-        f"dbname={os.environ['PFP_PG_DATABASE']} user={os.environ['PFP_PG_USER']} "
-        f"password={os.environ['PFP_PG_PASSWORD']}"
-    )
-    with psycopg.connect(conninfo) as connection:
+    with psycopg.connect(
+        host=os.environ.get("PFP_PG_HOST", "127.0.0.1"),
+        port=os.environ.get("PFP_PG_PORT", "5432"),
+        dbname=os.environ["PFP_PG_DATABASE"],
+        user=os.environ["PFP_PG_USER"],
+        password=os.environ["PFP_PG_PASSWORD"],
+    ) as connection:
         matched = connection.execute(
             "select count(*) from silver.internal_transfers"
         ).fetchone()
@@ -200,7 +199,11 @@ def main() -> int:
         print(f"  {line}")
 
     if dbt.returncode == 0:
-        print(f"  {_transfer_match_summary()}")
+        try:
+            print(f"  {_transfer_match_summary()}")
+        except psycopg.Error:
+            # The build passed: a hiccup while counting must not skip the report.
+            print("  could not read the transfer counts from Postgres")
 
     _send_alerts(_needs_review_count(ingest.stdout), dbt.returncode)
 
