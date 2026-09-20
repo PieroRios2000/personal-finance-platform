@@ -18,6 +18,7 @@ params:
   - currency
   - flow_type
   - amount
+  - signed_amount
   - is_internal_transfer
   - description
   order_by_cols:
@@ -26,13 +27,18 @@ params:
     amount:
       d3NumberFormat: ',.2f'
       horizontalAlign: right
+      customColumnName: amount (as in the PDF)
+    signed_amount:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+      customColumnName: effect on you
   conditional_formatting:
   - colorScheme: '#c6f0dc'
-    column: amount
+    column: signed_amount
     operator: '>'
     targetValue: 0
   - colorScheme: '#fbd0d2'
-    column: amount
+    column: signed_amount
     operator: <
     targetValue: 0
   row_limit: 1000
@@ -41,6 +47,6 @@ params:
   viz_type: table
 query_context: null
 cache_timeout: null
-uuid: 0e46c611-655e-483b-8736-f5feee80f14d
+uuid: ea3b1b01-1b67-4bf6-b3a3-ed3067371322
 version: 1.0.0
-dataset_uuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+dataset_uuid: 4ee68312-89f8-4a60-9930-8b54153e52aa

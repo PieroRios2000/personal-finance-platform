@@ -509,3 +509,75 @@ def test_every_reporting_view_shares_the_same_calendar_columns(
     # 1 = the latest month of the data, 2 = the one before: a BI tool reads "latest
     # balance" and "change vs previous month" from it, with no sub-query.
     assert recency == [("2026-01", 3), ("2026-02", 2), ("2026-03", 1)]
+
+
+def test_signed_amount_is_the_effect_on_you_the_same_on_every_bank(
+    lake: str, tmp_path: Path
+) -> None:
+    """`amount` keeps each bank's own sign (a credit card charge is positive: debt
+    grows). `signed_amount` is what the movement does to your position, so the same
+    everywhere: money in and debt paid down are positive, money out and new debt are
+    negative."""
+    cases: list[tuple[str, str, AccountKind, str, str]] = [
+        (_ASSET_INGRESO_ACCOUNT_ID, "BCP", "asset", "500.00", "500.00"),
+        (_ASSET_EGRESO_ACCOUNT_ID, "BCP", "asset", "-75.00", "-75.00"),
+        (_LIABILITY_EGRESO_ACCOUNT_ID, "Scotiabank", "liability", "60.00", "-60.00"),
+        (_LIABILITY_PAGO_ACCOUNT_ID, "Scotiabank", "liability", "-40.00", "40.00"),
+    ]
+    for account_id, bank, kind, raw, _ in cases:
+        _write(
+            date(2026, 2, 1),
+            date(2026, 2, 1),
+            "0.00",
+            raw,
+            bank=bank,
+            account_id=account_id,
+            account_kind=kind,
+        )
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    with pg_store.connect() as connection:
+        rows = {
+            account_id: (str(amount), str(signed))
+            for account_id, amount, signed in connection.execute(
+                "select account_id, amount, signed_amount from gold.fact_transactions"
+            ).fetchall()
+        }
+
+    assert rows == {
+        account_id: (raw, signed) for account_id, _, _, raw, signed in cases
+    }
+
+
+def test_a_debt_balance_is_negative_in_signed_closing_balance(
+    lake: str, tmp_path: Path
+) -> None:
+    """A credit card's closing balance is the debt owed (positive as printed). Its
+    `signed_closing_balance` is your position: negative for a debt, so assets minus
+    debts adds up to what you have. An asset account is unchanged."""
+    _write(*_JANUARY)  # BCP asset: closing 900.00
+    _write(
+        date(2026, 1, 1),
+        date(2026, 1, 31),
+        "0.00",
+        "300.00",  # 300 of charges: 300.00 owed
+        bank="Scotiabank",
+        account_id=_LIABILITY_EGRESO_ACCOUNT_ID,
+        account_kind="liability",
+    )
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    with pg_store.connect() as connection:
+        rows = {
+            kind: (str(closing), str(signed))
+            for kind, closing, signed in connection.execute(
+                "select account_kind, closing_balance, signed_closing_balance "
+                "from gold.fct_account_balance_monthly"
+            ).fetchall()
+        }
+
+    assert rows == {"asset": ("900.00", "900.00"), "liability": ("300.00", "-300.00")}

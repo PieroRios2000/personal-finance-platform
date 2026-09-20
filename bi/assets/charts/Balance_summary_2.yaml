@@ -12,8 +12,8 @@ params:
     label: currency
   - expressionType: SQL
     sqlExpression: CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-'
-      ELSE to_char(COALESCE(SUM(closing_balance) FILTER (WHERE account_kind = 'asset'
-      AND month_recency = 1), 0), 'FM999,999,999,990.00') END
+      ELSE to_char(COALESCE(SUM(signed_closing_balance) FILTER (WHERE month_recency
+      = 1), 0), 'FM999,999,999,990.00') END
     label: balance
   - expressionType: SQL
     sqlExpression: to_char(MAX(month_start) FILTER (WHERE month_recency = 1), 'Mon
@@ -21,16 +21,14 @@ params:
     label: month
   - expressionType: SQL
     sqlExpression: CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-'
-      ELSE to_char(ABS((COALESCE(SUM(closing_balance) FILTER (WHERE account_kind =
-      'asset' AND month_recency = 1), 0) - COALESCE(SUM(closing_balance) FILTER (WHERE
-      account_kind = 'asset' AND month_recency = 2), 0))), 'FM999,999,999,990.00')
-      END
+      ELSE to_char(ABS((COALESCE(SUM(signed_closing_balance) FILTER (WHERE month_recency
+      = 1), 0) - COALESCE(SUM(signed_closing_balance) FILTER (WHERE month_recency
+      = 2), 0))), 'FM999,999,999,990.00') END
     label: change
   - expressionType: SQL
-    sqlExpression: CASE WHEN (COALESCE(SUM(closing_balance) FILTER (WHERE account_kind
-      = 'asset' AND month_recency = 1), 0) - COALESCE(SUM(closing_balance) FILTER
-      (WHERE account_kind = 'asset' AND month_recency = 2), 0)) >= 0 THEN 1 ELSE 0
-      END
+    sqlExpression: CASE WHEN (COALESCE(SUM(signed_closing_balance) FILTER (WHERE month_recency
+      = 1), 0) - COALESCE(SUM(signed_closing_balance) FILTER (WHERE month_recency
+      = 2), 0)) >= 0 THEN 1 ELSE 0 END
     label: change_positive
   adhoc_filters:
   - expressionType: SIMPLE
@@ -40,10 +38,11 @@ params:
     clause: WHERE
   row_limit: 1
   handlebarsTemplate: "{{#each data}}\n<div class=\"kpis\">\n  <div class=\"kpi bal\"\
-    ><div class=\"label\">Balance, latest month</div>\n    <div class=\"value\">{{currency}}\
-    \ {{balance}}</div>\n    <div class=\"note\">{{month}} &middot; {{#if change_positive}}<span\
-    \ class=\"up\">&#9650;{{else}}<span class=\"down\">&#9660;{{/if}} {{change}}</span>\
-    \ vs previous month</div></div>\n</div>\n{{/each}}\n"
+    ><div class=\"label\">Net position, latest month</div>\n    <div class=\"value\"\
+    >{{currency}} {{balance}}</div>\n    <div class=\"note\">{{month}} &middot; {{#if\
+    \ change_positive}}<span class=\"up\">&#9650;{{else}}<span class=\"down\">&#9660;{{/if}}\
+    \ {{change}}</span> vs previous month (assets minus debt)</div></div>\n</div>\n\
+    {{/each}}\n"
   styleTemplate: ".kpis { display: flex; gap: 10px; height: 100%; align-items: stretch;\
     \ font-family: inherit; }\n.kpi { flex: 1; border-radius: 12px; padding: 12px\
     \ 14px; display: flex;\n       flex-direction: column; justify-content: center;\
@@ -60,6 +59,6 @@ params:
   viz_type: handlebars
 query_context: null
 cache_timeout: null
-uuid: afd81f2b-2a55-4fd9-b991-44e5f596b656
+uuid: 638d726d-06f1-4afb-83ae-2e958cb91098
 version: 1.0.0
-dataset_uuid: 4bea080f-76b3-484a-9110-231133233bd7
+dataset_uuid: 558afd57-a095-4fe1-8a8f-b12e21f44261

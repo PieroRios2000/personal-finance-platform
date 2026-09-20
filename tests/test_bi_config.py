@@ -145,15 +145,30 @@ def test_the_timeseries_axes_show_the_full_date() -> None:
     assert all(c[3]["x_axis_time_format"] == "%d %b %Y" for c in series)
 
 
-def test_the_cash_flow_chart_excludes_internal_transfers() -> None:
-    chart = _charts()["Cash flow: income and spending"][3]
-    filters = [
-        f["sqlExpression"] for f in chart["adhoc_filters"] if "sqlExpression" in f
-    ]
+def test_cash_flow_uses_signed_amount_and_counts_transfers_between_accounts() -> None:
+    """Money in and out is `signed_amount` (ADR 0031), the same on every bank; movements
+    between your own accounts count on both sides, so a fee between banks shows."""
+    chart = _charts()["Cash flow: money in and out"][3]
+    text = json.dumps(chart)
 
-    assert "NOT is_internal_transfer" in filters
-    # Income and spending get fixed colours by label (set on the dashboard).
-    assert chart["label_colors"] == {"ingreso": "#1f9d6b", "egreso": "#e5484d"}
+    assert chart["metrics"][0]["sqlExpression"] == "SUM(signed_amount)"
+    assert "is_internal_transfer" not in text
+    assert "flow_type" not in text
+    assert chart["label_colors"] == {"in": "#1f9d6b", "out": "#e5484d"}
+    summary = json.dumps(_charts()["Cash flow summary"][3])
+    assert "signed_amount" in summary and "is_internal_transfer" not in summary
+
+
+def test_balances_use_the_signed_closing_balance_so_debt_is_negative() -> None:
+    charts = _charts()
+    line = charts["Balance per month (debt is negative)"][3]
+    summary = json.dumps(charts["Balance summary"][3])
+
+    assert line["metrics"][0]["sqlExpression"] == "SUM(signed_closing_balance)"
+    assert "account_kind" not in json.dumps(line)  # debts are in, not filtered out
+    assert "signed_closing_balance" in summary and "account_kind" not in summary
+    table = charts["Statement balances (check against your statements)"][3]
+    assert {"closing_balance", "signed_closing_balance"} <= set(table["all_columns"])
 
 
 def test_the_investments_table_shows_closing_basis_right_beside_the_return() -> None:
@@ -172,9 +187,19 @@ def test_the_movements_and_balances_tables_exist_to_check_against_the_statements
 
     movements = charts["Movements (check against your statements)"]
     assert movements[0] == "rpt_movements"
-    assert {"date", "bank", "currency", "flow_type", "amount", "description"} <= set(
-        movements[3]["all_columns"]
-    )
+    assert {
+        "date",
+        "bank",
+        "currency",
+        "flow_type",
+        "amount",
+        "signed_amount",
+        "description",
+    } <= set(movements[3]["all_columns"])
+    # Colours follow the effect on you, not each bank's own sign.
+    assert {f["column"] for f in movements[3]["conditional_formatting"]} == {
+        "signed_amount"
+    }
     balances = charts["Statement balances (check against your statements)"]
     assert balances[0] == "rpt_balances"
     assert {"closing_date", "account_last4", "closing_balance"} <= set(

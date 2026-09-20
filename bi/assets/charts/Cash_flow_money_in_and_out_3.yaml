@@ -1,4 +1,4 @@
-slice_name: 'Cash flow: income and spending'
+slice_name: 'Cash flow: money in and out'
 description: null
 certified_by: null
 certification_details: null
@@ -8,28 +8,24 @@ params:
   time_grain_sqla: P1M
   metrics:
   - expressionType: SQL
-    sqlExpression: SUM(ABS(amount))
+    sqlExpression: SUM(signed_amount)
     label: Amount
   groupby:
-  - flow_type
+  - expressionType: SQL
+    sqlExpression: CASE WHEN signed_amount >= 0 THEN 'in' ELSE 'out' END
+    label: direction
   adhoc_filters:
   - expressionType: SIMPLE
     subject: date
     operator: TEMPORAL_RANGE
     comparator: No filter
     clause: WHERE
-  - expressionType: SQL
-    sqlExpression: NOT is_internal_transfer
-    clause: WHERE
-  - expressionType: SQL
-    sqlExpression: flow_type IN ('ingreso', 'egreso')
-    clause: WHERE
   label_colors:
-    ingreso: '#1f9d6b'
-    egreso: '#e5484d'
+    in: '#1f9d6b'
+    out: '#e5484d'
+  stack: Stack
   x_axis_time_format: '%d %b %Y'
   y_axis_format: ',.0f'
-  show_value: true
   rich_tooltip: true
   row_limit: 10000
   orientation: vertical
@@ -38,6 +34,6 @@ params:
   viz_type: echarts_timeseries_bar
 query_context: null
 cache_timeout: null
-uuid: 0e96267e-283b-4c9f-81ef-3dcb0d2df9e7
+uuid: 3dd72a9d-8159-4c7a-b167-f0ced56b477a
 version: 1.0.0
-dataset_uuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+dataset_uuid: 4ee68312-89f8-4a60-9930-8b54153e52aa

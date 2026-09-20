@@ -9,7 +9,7 @@ slug: pfp-finance
 certified_by: null
 certification_details: null
 published: true
-uuid: 931829d1-aa09-43dc-889a-110413efd1f5
+uuid: cc70c826-fa8b-4c4c-90d5-0f5db1e11661
 position:
   DASHBOARD_VERSION_KEY: v2
   ROOT_ID:
@@ -46,7 +46,7 @@ position:
       width: 8
       height: 22
       chartId: 1
-      uuid: 9005a9cf-d6e7-4494-8b96-5aa0d425097f
+      uuid: 9c189570-bd26-4769-b522-572bc840c068
       sliceName: Cash flow summary
   CHART-1:
     type: CHART
@@ -60,7 +60,7 @@ position:
       width: 4
       height: 22
       chartId: 2
-      uuid: afd81f2b-2a55-4fd9-b991-44e5f596b656
+      uuid: 638d726d-06f1-4afb-83ae-2e958cb91098
       sliceName: Balance summary
   ROW-0:
     type: ROW
@@ -85,8 +85,8 @@ position:
       width: 6
       height: 50
       chartId: 3
-      uuid: 0e96267e-283b-4c9f-81ef-3dcb0d2df9e7
-      sliceName: 'Cash flow: income and spending'
+      uuid: 3dd72a9d-8159-4c7a-b167-f0ced56b477a
+      sliceName: 'Cash flow: money in and out'
   CHART-3:
     type: CHART
     id: CHART-3
@@ -99,8 +99,8 @@ position:
       width: 6
       height: 50
       chartId: 4
-      uuid: 3a908e70-237d-4415-aadf-c0926740ae76
-      sliceName: Balance per month (asset accounts)
+      uuid: 2684e319-9700-4266-8aee-3e889b544270
+      sliceName: Balance per month (debt is negative)
   ROW-1:
     type: ROW
     id: ROW-1
@@ -124,7 +124,7 @@ position:
       width: 12
       height: 32
       chartId: 5
-      uuid: 44590ce6-6f7e-45f3-b956-a0eeacc66941
+      uuid: ede915ad-6ccc-4069-bf55-78c65425e2fd
       sliceName: 'Investments: return and how each month closed'
   ROW-2:
     type: ROW
@@ -148,7 +148,7 @@ position:
       width: 8
       height: 50
       chartId: 6
-      uuid: 22ef997b-2569-46b8-bfc8-f9486c55c3db
+      uuid: 0c37ec9b-5f2b-4053-bfaf-3ea7e6c8ee40
       sliceName: 'Investments: return per fund over time'
   MARKDOWN-note:
     type: MARKDOWN
@@ -198,7 +198,7 @@ position:
       width: 12
       height: 60
       chartId: 7
-      uuid: 0e46c611-655e-483b-8736-f5feee80f14d
+      uuid: ea3b1b01-1b67-4bf6-b3a3-ed3067371322
       sliceName: Movements (check against your statements)
   ROW-4:
     type: ROW
@@ -222,7 +222,7 @@ position:
       width: 12
       height: 60
       chartId: 8
-      uuid: aac5310a-924b-4fd4-be81-0848517456af
+      uuid: 1f79a91a-8b77-41bf-9c5f-702d4e5ab684
       sliceName: Statement balances (check against your statements)
   ROW-5:
     type: ROW
@@ -242,7 +242,7 @@ metadata:
     targets:
     - column:
         name: currency
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 4ee68312-89f8-4a60-9930-8b54153e52aa
     controlValues:
       multiSelect: false
       enableEmptyFilter: true
@@ -284,7 +284,7 @@ metadata:
     name: Time grain
     filterType: filter_timegrain
     targets:
-    - datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+    - datasetUuid: 4ee68312-89f8-4a60-9930-8b54153e52aa
     controlValues: {}
     defaultDataMask:
       filterState:
@@ -304,7 +304,7 @@ metadata:
     targets:
     - column:
         name: calendar_year
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 4ee68312-89f8-4a60-9930-8b54153e52aa
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -326,7 +326,7 @@ metadata:
     targets:
     - column:
         name: calendar_quarter
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 4ee68312-89f8-4a60-9930-8b54153e52aa
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -348,7 +348,7 @@ metadata:
     targets:
     - column:
         name: calendar_month
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 4ee68312-89f8-4a60-9930-8b54153e52aa
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -370,7 +370,7 @@ metadata:
     targets:
     - column:
         name: bank
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 4ee68312-89f8-4a60-9930-8b54153e52aa
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -392,7 +392,7 @@ metadata:
     targets:
     - column:
         name: account_last4
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 4ee68312-89f8-4a60-9930-8b54153e52aa
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -414,7 +414,7 @@ metadata:
     targets:
     - column:
         name: flow_type
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 4ee68312-89f8-4a60-9930-8b54153e52aa
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -436,7 +436,7 @@ metadata:
     targets:
     - column:
         name: is_internal_transfer
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 4ee68312-89f8-4a60-9930-8b54153e52aa
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -458,7 +458,7 @@ metadata:
     targets:
     - column:
         name: place
-      datasetUuid: d7159e4d-b826-4531-8e9a-5533bdf50612
+      datasetUuid: 48678c06-e719-43d6-ab1f-4ec1e7eace54
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -475,8 +475,8 @@ metadata:
       excluded: []
     type: NATIVE_FILTER
   label_colors:
-    ingreso: '#1f9d6b'
-    egreso: '#e5484d'
+    in: '#1f9d6b'
+    out: '#e5484d'
   timed_refresh_immune_slices: []
   expanded_slices: {}
   refresh_frequency: 0
