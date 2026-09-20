@@ -391,10 +391,11 @@ make om-sync                         # docs generate, register bronze, ingest si
 
 Since T30 OpenMetadata reads silver and gold with its **native Postgres connector**: the `ingestion`
 container joins the Docker network of your Postgres (`pfp-poc_default`; `make om-up` stops with a clear
-message if `make poc-up` has not run, and `PFP_NETWORK` selects another project's network) and connects
+message if `make poc-up` has not run, and `PFP_NETWORK` -- exported in your shell, not set in `.env` -- selects another project's network, whose Postgres service must be named `postgres`) and connects
 as `postgres:5432` with the `PFP_PG_USER`/`PFP_PG_PASSWORD` from `.env`. Those credentials are written to
 `openmetadata/artifacts/postgres-workflow.yaml` (gitignored, removed by `make om-down`), next to the
-short-lived token the dbt workflow already needs. Only bronze -- Delta tables the connector cannot see --
+short-lived token the dbt workflow already needs. Run `make om-down` before `make poc-down`: while the
+`ingestion` container is attached, Docker cannot remove the `pfp-poc_default` network. Only bronze -- Delta tables the connector cannot see --
 is still registered by `scripts/openmetadata_sync.py`, from `lakehouse/bronze.py`'s schemas.
 
 `make om-sync` ends with `OK: 1 column-level path(s) from ...bronze.transactions.amount`, or
@@ -412,7 +413,8 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 ```
 
 Re-run `make om-sync` after any `dbt build` that changes models; it is idempotent. `make om-down`
-when done. Elementary's own models (a separate DuckDB file, not in Postgres) are not catalogued and dbt tests are not ingested.
+when done. Elementary's own models (a separate DuckDB file, not in Postgres) are not
+catalogued and dbt tests are not ingested.
 
 ## 11. Alerts by email or Microsoft Teams (Phase 7)
 

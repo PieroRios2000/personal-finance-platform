@@ -344,10 +344,7 @@ class OpenMetadata:
 
 def _sync(args: argparse.Namespace) -> int:
     manifest = json.loads((args.target_path / "manifest.json").read_text())
-    catalog_path = args.target_path / "catalog.json"
-    json.loads(
-        catalog_path.read_text()
-    )  # fail here, not in the container, if unreadable
+    catalog = (args.target_path / "catalog.json").read_text()
     database = next(iter(manifest["sources"].values()))["database"]
 
     client = OpenMetadata(args.host)
@@ -363,7 +360,7 @@ def _sync(args: argparse.Namespace) -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "manifest.json").write_text(json.dumps(resolve_sources(manifest)))
-    (args.out / "catalog.json").write_text(catalog_path.read_text())
+    (args.out / "catalog.json").write_text(catalog)
     # JSON is valid YAML, and it's what `metadata ingest -c` reads. The Postgres one
     # holds the password, like the dbt one holds the token: `artifacts/` is gitignored.
     (args.out / "postgres-workflow.yaml").write_text(
