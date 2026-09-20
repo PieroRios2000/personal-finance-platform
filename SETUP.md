@@ -450,6 +450,28 @@ many rows, how many files need review), never an amount, an account or a file na
    delivery fails is not retried: the failure is printed and the exit code is 1, so look at
    `dbt/target/run_results.json` or re-run `make alert`.
 
+## Reproducing CI locally (`make ci-local`)
+
+A PR can fail in CI for a reason that never shows on your machine: a variable CI does not set, a
+file that only exists in your working copy (`dbt/target`, `dbt/dbt_packages`, `.env`). `make ci-local`
+removes that surprise by running CI's own jobs the way CI runs them:
+
+```bash
+git commit ...                 # CI only sees what is committed; uncommitted changes are refused
+make ci-local                  # lint-types, tests, architecture, floor-guard (~3 min)
+make ci-local-full             # + ephemeral-integration (~20 min; Docker; ports 8333 and 5432 free)
+uv run python -m scripts.ci_local tests   # one job by name; --keep leaves the clean clone to inspect
+```
+
+The steps and the environment are read from `.github/workflows/ci.yml` itself (one definition, not a
+copy), and they run in a **clean clone of your last commit** with `env -i`-style isolation: only `HOME`,
+`PATH` and that job's own variables. So `tests`, which has no Postgres variables, runs without them,
+exactly as in CI. Skipped with a printed reason: steps with an `if:` condition other than `always()`
+and steps that need `sudo` (install Tesseract yourself if `tests` needs it). `ephemeral-integration`
+binds ports 8333 and 5432, so it refuses to start while your `make poc-up` stack is running
+(`make poc-down` first: that also removes the lake and Postgres volumes). Not covered: the
+`security` job (gitleaks and pip-audit run as their own actions), `benchmarks` and `pr-data-diff`.
+
 ## Reviewing CI
 
 Every PR runs `.github/workflows/ci.yml`: `lint-types`, `tests`, `security`, `architecture`

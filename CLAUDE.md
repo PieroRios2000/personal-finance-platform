@@ -56,6 +56,12 @@ Start with your task in `tasks/todo.md` and read only what you need:
   `requirements.txt`. `pyproject.toml` and `uv.lock` are committed together.
 - Checks: `uv run ruff check . && uv run ruff format --check . && uv run mypy . && uv run pytest`
   and `pre-commit run --all-files`, or `make check-task` (lint + types + tests + floor-guard + architecture).
+- **`make ci-local` before opening or updating a PR**: it runs CI's own jobs (their steps and
+  environment come from `.github/workflows/ci.yml`) in a clean clone of what is committed, with only
+  each job's own variables, so a difference between your machine and CI (a missing variable, a file
+  that only exists locally) fails there and not on the PR. `make ci-local-full` adds
+  `ephemeral-integration` (Docker, ports 8333 and 5432 free) for changes to `dbt/`, `ingestion/`,
+  `lakehouse/`, `docker-compose.yml`, `Makefile` or CI itself.
 - Skills by kind of work: see "Ways of working" in `tasks/plan.md`.
 - The simplest thing that meets the criteria; nothing speculative.
 
@@ -64,7 +70,7 @@ Start with your task in `tasks/todo.md` and read only what you need:
 The full list is in `tasks/plan.md` and the PR template. In short:
 
 - Task acceptance criteria met and their boxes checked in `tasks/todo.md`.
-- Checks green locally and in CI; behavior verified by running it, not just tests.
+- Checks green locally (`make ci-local` included) and in CI; behavior verified by running it, not just tests.
 - New tests fail without the change and pass with it.
 - No real data or secrets in the diff.
 - **Brain updated on every PR:** the component or concept note it touches,
