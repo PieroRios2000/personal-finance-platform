@@ -71,22 +71,19 @@ _CASH_FLOW_KPI = (_TEMPLATES / "cash_flow_kpi.hbs").read_text()
 _BALANCE_KPI = (_TEMPLATES / "balance_kpi.hbs").read_text()
 
 
-_MOVEMENT_INCOME = (
-    "COALESCE(SUM(ABS(amount)) FILTER (WHERE flow_type = 'ingreso' "
-    "AND NOT is_internal_transfer), 0)"
-)
-_MOVEMENT_SPENDING = (
-    "COALESCE(SUM(ABS(amount)) FILTER (WHERE flow_type = 'egreso' "
-    "AND NOT is_internal_transfer), 0)"
-)
+# Money in and out are read from `signed_amount` (ADR 0031): the effect on you, the same
+# on every bank. Movements between your own accounts count too (out on one side, in on
+# the other), so a fee or an exchange difference between banks shows up.
+_MONEY_IN = "COALESCE(SUM(signed_amount) FILTER (WHERE signed_amount > 0), 0)"
+_MONEY_OUT = "COALESCE(-SUM(signed_amount) FILTER (WHERE signed_amount < 0), 0)"
 _MONEY = "'FM999,999,999,990.00'"
-_NET = f"({_MOVEMENT_INCOME} - {_MOVEMENT_SPENDING})"
+_NET = "COALESCE(SUM(signed_amount), 0)"
 
 
 def _balance_at(recency: int) -> str:
     return (
-        "COALESCE(SUM(closing_balance) FILTER (WHERE account_kind = 'asset' "
-        f"AND month_recency = {recency}), 0)"
+        "COALESCE(SUM(signed_closing_balance) FILTER "
+        f"(WHERE month_recency = {recency}), 0)"
     )
 
 
@@ -113,16 +110,11 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "groupby": [],
             "metrics": [
                 _sql_metric("MAX(currency)", "currency"),
-                _sql_metric(f"to_char({_MOVEMENT_INCOME}, {_MONEY})", "income"),
-                _sql_metric(f"to_char({_MOVEMENT_SPENDING}, {_MONEY})", "spending"),
+                _sql_metric(f"to_char({_MONEY_IN}, {_MONEY})", "money_in"),
+                _sql_metric(f"to_char({_MONEY_OUT}, {_MONEY})", "money_out"),
                 _sql_metric(f"to_char({_NET}, {_MONEY})", "net"),
                 _sql_metric(f"CASE WHEN {_NET} >= 0 THEN 1 ELSE 0 END", "net_positive"),
-                _sql_metric(
-                    "to_char(CASE WHEN "
-                    f"{_MOVEMENT_INCOME} = 0 THEN 0 "
-                    f"ELSE 100 * {_NET} / {_MOVEMENT_INCOME} END, 'FM990.0')",
-                    "rate",
-                ),
+                _sql_metric("to_char(COUNT(*), 'FM999,999,990')", "movements"),
             ],
             "adhoc_filters": [_time_range("date")],
             "row_limit": 1,
@@ -160,25 +152,26 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
     ),
     (
         "rpt_movements",
-        "Cash flow: income and spending",
+        "Cash flow: money in and out",
         "echarts_timeseries_bar",
         {
             "x_axis": "date",
             "time_grain_sqla": "P1M",
-            # Spending is negative on asset accounts and positive on liabilities
-            # (ADR 0015): ABS() puts every movement on one scale, and flow_type says
-            # which way it went. One currency at a time (the Currency filter).
-            "metrics": [_sql_metric("SUM(ABS(amount))", "Amount")],
-            "groupby": ["flow_type"],
-            "adhoc_filters": [
-                _time_range("date"),
-                _where("NOT is_internal_transfer"),
-                _where("flow_type IN ('ingreso', 'egreso')"),
+            # `signed_amount` (ADR 0031): in is positive, out is negative, the same on
+            # every bank, and movements between your own accounts count on both sides.
+            # One currency at a time (the Currency filter).
+            "metrics": [_sql_metric("SUM(signed_amount)", "Amount")],
+            "groupby": [
+                _sql_column(
+                    "CASE WHEN signed_amount >= 0 THEN 'in' ELSE 'out' END",
+                    "direction",
+                )
             ],
-            "label_colors": {"ingreso": _GREEN, "egreso": _RED},
+            "adhoc_filters": [_time_range("date")],
+            "label_colors": {"in": _GREEN, "out": _RED},
+            "stack": "Stack",
             "x_axis_time_format": _DATE_FORMAT,
             "y_axis_format": ",.0f",
-            "show_value": True,
             "rich_tooltip": True,
             "row_limit": 10000,
             "orientation": "vertical",
@@ -187,17 +180,16 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
     ),
     (
         "rpt_balances",
-        "Balance per month (asset accounts)",
+        "Balance per month (debt is negative)",
         "echarts_timeseries_line",
         {
             "x_axis": "month_start",
             "time_grain_sqla": "P1M",
-            "metrics": [_sql_metric("SUM(closing_balance)", "Closing balance")],
+            # `signed_closing_balance`: a credit card's debt is negative, so the lines
+            # add up to what you have.
+            "metrics": [_sql_metric("SUM(signed_closing_balance)", "Closing balance")],
             "groupby": ["bank", "account_last4"],
-            "adhoc_filters": [
-                _time_range("month_start"),
-                _where("account_kind = 'asset'"),
-            ],
+            "adhoc_filters": [_time_range("month_start")],
             "area": True,
             "opacity": 0.25,
             "markerEnabled": True,
@@ -333,10 +325,15 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
                 "account_kind",
                 "currency",
                 "closing_balance",
+                "signed_closing_balance",
             ],
             "order_by_cols": ['["closing_date", false]'],
             "column_config": {
                 "closing_balance": {
+                    "d3NumberFormat": ",.2f",
+                    "horizontalAlign": "right",
+                },
+                "signed_closing_balance": {
                     "d3NumberFormat": ",.2f",
                     "horizontalAlign": "right",
                 },
@@ -472,7 +469,7 @@ NOTE_TEXT = (
 # The grid: (chart name prefix, width out of 12, height) per cell, row by row.
 LAYOUT: list[list[tuple[str, int, int]]] = [
     [("Cash flow summary", 8, 22), ("Balance summary", 4, 22)],
-    [("Cash flow: income", 6, 50), ("Balance per month", 6, 50)],
+    [("Cash flow: money", 6, 50), ("Balance per month", 6, 50)],
     [("Investments: return and", 12, 32)],
     [("Investments: return per", 8, 50), (NOTE, 4, 50)],
     [("Movements", 12, 60)],
@@ -682,7 +679,7 @@ def build(client: Superset, bi_password: str) -> int:
                 {
                     "native_filter_configuration": native_filters(datasets),
                     # Series colours are a dashboard setting in Superset, by label.
-                    "label_colors": {"ingreso": _GREEN, "egreso": _RED},
+                    "label_colors": {"in": _GREEN, "out": _RED},
                 }
             ),
             "css": DASHBOARD_CSS,

@@ -11,31 +11,22 @@ params:
     sqlExpression: MAX(currency)
     label: currency
   - expressionType: SQL
-    sqlExpression: to_char(COALESCE(SUM(ABS(amount)) FILTER (WHERE flow_type = 'ingreso'
-      AND NOT is_internal_transfer), 0), 'FM999,999,999,990.00')
-    label: income
+    sqlExpression: to_char(COALESCE(SUM(signed_amount) FILTER (WHERE signed_amount
+      > 0), 0), 'FM999,999,999,990.00')
+    label: money_in
   - expressionType: SQL
-    sqlExpression: to_char(COALESCE(SUM(ABS(amount)) FILTER (WHERE flow_type = 'egreso'
-      AND NOT is_internal_transfer), 0), 'FM999,999,999,990.00')
-    label: spending
+    sqlExpression: to_char(COALESCE(-SUM(signed_amount) FILTER (WHERE signed_amount
+      < 0), 0), 'FM999,999,999,990.00')
+    label: money_out
   - expressionType: SQL
-    sqlExpression: to_char((COALESCE(SUM(ABS(amount)) FILTER (WHERE flow_type = 'ingreso'
-      AND NOT is_internal_transfer), 0) - COALESCE(SUM(ABS(amount)) FILTER (WHERE
-      flow_type = 'egreso' AND NOT is_internal_transfer), 0)), 'FM999,999,999,990.00')
+    sqlExpression: to_char(COALESCE(SUM(signed_amount), 0), 'FM999,999,999,990.00')
     label: net
   - expressionType: SQL
-    sqlExpression: CASE WHEN (COALESCE(SUM(ABS(amount)) FILTER (WHERE flow_type =
-      'ingreso' AND NOT is_internal_transfer), 0) - COALESCE(SUM(ABS(amount)) FILTER
-      (WHERE flow_type = 'egreso' AND NOT is_internal_transfer), 0)) >= 0 THEN 1 ELSE
-      0 END
+    sqlExpression: CASE WHEN COALESCE(SUM(signed_amount), 0) >= 0 THEN 1 ELSE 0 END
     label: net_positive
   - expressionType: SQL
-    sqlExpression: to_char(CASE WHEN COALESCE(SUM(ABS(amount)) FILTER (WHERE flow_type
-      = 'ingreso' AND NOT is_internal_transfer), 0) = 0 THEN 0 ELSE 100 * (COALESCE(SUM(ABS(amount))
-      FILTER (WHERE flow_type = 'ingreso' AND NOT is_internal_transfer), 0) - COALESCE(SUM(ABS(amount))
-      FILTER (WHERE flow_type = 'egreso' AND NOT is_internal_transfer), 0)) / COALESCE(SUM(ABS(amount))
-      FILTER (WHERE flow_type = 'ingreso' AND NOT is_internal_transfer), 0) END, 'FM990.0')
-    label: rate
+    sqlExpression: to_char(COUNT(*), 'FM999,999,990')
+    label: movements
   adhoc_filters:
   - expressionType: SIMPLE
     subject: date
@@ -44,15 +35,15 @@ params:
     clause: WHERE
   row_limit: 1
   handlebarsTemplate: "{{#each data}}\n<div class=\"kpis\">\n  <div class=\"kpi income\"\
-    ><div class=\"label\">Income</div>\n    <div class=\"value\">{{currency}} {{income}}</div><div\
-    \ class=\"note\">without internal transfers</div></div>\n  <div class=\"kpi spend\"\
-    ><div class=\"label\">Spending</div>\n    <div class=\"value\">{{currency}} {{spending}}</div><div\
-    \ class=\"note\">without internal transfers</div></div>\n  <div class=\"kpi net\
-    \ {{#if net_positive}}pos{{else}}neg{{/if}}\"><div class=\"label\">Net</div>\n\
-    \    <div class=\"value\">{{currency}} {{net}}</div><div class=\"note\">income\
-    \ minus spending</div></div>\n  <div class=\"kpi rate\"><div class=\"label\">Savings\
-    \ rate</div>\n    <div class=\"value\">{{rate}}%</div><div class=\"note\">net\
-    \ / income</div></div>\n</div>\n{{/each}}\n"
+    ><div class=\"label\">Money in</div>\n    <div class=\"value\">{{currency}} {{money_in}}</div><div\
+    \ class=\"note\">incl. transfers between your accounts</div></div>\n  <div class=\"\
+    kpi spend\"><div class=\"label\">Money out</div>\n    <div class=\"value\">{{currency}}\
+    \ {{money_out}}</div><div class=\"note\">incl. transfers between your accounts</div></div>\n\
+    \  <div class=\"kpi net {{#if net_positive}}pos{{else}}neg{{/if}}\"><div class=\"\
+    label\">Net</div>\n    <div class=\"value\">{{currency}} {{net}}</div><div class=\"\
+    note\">in minus out</div></div>\n  <div class=\"kpi rate\"><div class=\"label\"\
+    >Movements</div>\n    <div class=\"value\">{{movements}}</div><div class=\"note\"\
+    >in the filtered period</div></div>\n</div>\n{{/each}}\n"
   styleTemplate: ".kpis { display: flex; gap: 10px; height: 100%; align-items: stretch;\
     \ font-family: inherit; }\n.kpi { flex: 1; border-radius: 12px; padding: 12px\
     \ 14px; display: flex;\n       flex-direction: column; justify-content: center;\
@@ -69,6 +60,6 @@ params:
   viz_type: handlebars
 query_context: null
 cache_timeout: null
-uuid: 75777fe5-7fe0-4ec0-955a-169255149e5d
+uuid: 9c189570-bd26-4769-b522-572bc840c068
 version: 1.0.0
-dataset_uuid: 50f398ba-7414-4b91-b12e-b8515edc252b
+dataset_uuid: 4ee68312-89f8-4a60-9930-8b54153e52aa

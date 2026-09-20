@@ -1,4 +1,4 @@
-slice_name: Balance per month (asset accounts)
+slice_name: Balance per month (debt is negative)
 description: null
 certified_by: null
 certification_details: null
@@ -8,7 +8,7 @@ params:
   time_grain_sqla: P1M
   metrics:
   - expressionType: SQL
-    sqlExpression: SUM(closing_balance)
+    sqlExpression: SUM(signed_closing_balance)
     label: Closing balance
   groupby:
   - bank
@@ -18,9 +18,6 @@ params:
     subject: month_start
     operator: TEMPORAL_RANGE
     comparator: No filter
-    clause: WHERE
-  - expressionType: SQL
-    sqlExpression: account_kind = 'asset'
     clause: WHERE
   area: true
   opacity: 0.25
@@ -36,6 +33,6 @@ params:
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null
-uuid: 1f681c96-0b1a-4f9c-b3f6-77ad5c0751e7
+uuid: 2684e319-9700-4266-8aee-3e889b544270
 version: 1.0.0
-dataset_uuid: 9e3c8afc-aebf-4a09-8d57-1e8c59ecdef0
+dataset_uuid: 558afd57-a095-4fe1-8a8f-b12e21f44261

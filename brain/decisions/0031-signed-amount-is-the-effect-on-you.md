@@ -43,3 +43,18 @@ it is `-amount`.
 
 [ADR 0015](0015-account-kind-asset-or-liability.md), [ADR 0020](0020-gold-star-schema-flow-type-and-dim-account-grain.md)
 (`flow_type`), [ADR 0030](0030-superset-for-dashboards-over-the-read-only-role.md).
+
+## Update 2026-09-20: every chart uses it, transfers count, debt is negative
+
+The owner asked that the dashboard show what really came in and went out:
+
+- **Cash flow and the summary cards read `signed_amount`**, not `flow_type` with the absolute value.
+  Money in is the sum of the positive `signed_amount`, money out the sum of the negative ones.
+- **Movements between your own accounts count on both sides** (out of one account, in to the other),
+  no longer excluded. The two sides do not always match (a fee between banks, an exchange difference),
+  and that difference now shows in the net. `is_internal_transfer` stays as a filter for whoever wants
+  them left out. This supersedes the "no internal transfers" wording of the T32 charts.
+- **Debt is negative in balances too:** `fct_account_balance_monthly.signed_closing_balance` is
+  `-closing_balance` for a liability. The balance chart and the "net position" card add every account,
+  so assets plus debts is what you have; `closing_balance` stays as the statement prints it.
+- `flow_type` and the Flow type filter are unchanged; only the sums stopped depending on them.

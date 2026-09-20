@@ -32,6 +32,6 @@ params:
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null
-uuid: 05060db0-e357-4354-b5ee-cc327430b944
+uuid: 0c37ec9b-5f2b-4053-bfaf-3ea7e6c8ee40
 version: 1.0.0
-dataset_uuid: 6ab16323-1774-4d8f-8acf-84801990b701
+dataset_uuid: 48678c06-e719-43d6-ab1f-4ec1e7eace54

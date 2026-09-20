@@ -443,10 +443,13 @@ make bi-up                           # builds the image the first time (~2 minut
 Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admin`, password
 `PFP_BI_ADMIN_PASSWORD`, then *Dashboards* -> **PFP finance**. From the top:
 
-- **Summary cards** (HTML made with Superset's Handlebars chart): income, spending, net and savings
-  rate for the filtered period, and the latest balance with its change against the previous month.
-- **Cash flow** (income green, spending red; internal transfers excluded) and **balance per month**
-  per account.
+- **Summary cards** (HTML made with Superset's Handlebars chart): money in, money out, net and the
+  number of movements for the filtered period, and your net position (assets minus debt) in the
+  latest month with its change against the previous month.
+- **Cash flow** (money in green, out red) and **balance per month** per account. Both use the
+  *effect on you* (`signed_amount`, ADR 0031): a credit card charge is out, a payment is in, debt is
+  a negative balance, and transfers between your own accounts count on both sides (a fee between
+  banks shows in the net; filter *Internal transfer* to leave them out).
 - **Investments**: a styled table with each fund's return, and `closing_basis` as a badge right
   beside it (`valuation` = a real month-end value, `last_movement` = only the balance at the last
   movement), plus the return per fund over time and a note on how to read it.
