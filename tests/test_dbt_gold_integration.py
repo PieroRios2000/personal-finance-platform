@@ -443,3 +443,69 @@ def test_fact_transactions_carries_the_account_last4_for_filtering(
         ).fetchall()
 
     assert rows == [(_LAST4,)]
+
+
+def test_dim_date_is_a_continuous_calendar_over_the_data_range(
+    lake: str, tmp_path: Path
+) -> None:
+    """The calendar has every day between the first and last month of the data, not
+    only the days with a movement, so a BI filter or a month with no activity still
+    has its dates."""
+    for period in (_JANUARY, _FEBRUARY, _MARCH):
+        _write(*period)  # one movement each, on the first day of the month
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    with pg_store.connect() as connection:
+        row = connection.execute(
+            "select count(*), min(date), max(date), count(distinct month_label) "
+            "from gold.dim_date"
+        ).fetchone()
+
+    assert row is not None
+    assert (row[0], str(row[1]), str(row[2]), row[3]) == (
+        90,
+        "2026-01-01",
+        "2026-03-31",
+        3,
+    )
+
+
+def test_every_reporting_view_shares_the_same_calendar_columns(
+    lake: str, tmp_path: Path
+) -> None:
+    """One calendar filter in the BI tool applies to every chart because the reporting
+    views expose the same column names, filled from dim_date."""
+    for period in (_JANUARY, _FEBRUARY, _MARCH):
+        _write(*period)
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    calendar_columns = {"calendar_year", "calendar_quarter", "calendar_month"}
+    with pg_store.connect() as connection:
+        for view in ("rpt_movements", "rpt_balances", "rpt_investments"):
+            columns = {
+                row[0]
+                for row in connection.execute(
+                    "select column_name from information_schema.columns "
+                    "where table_schema = 'gold' and table_name = ?",
+                    (view,),
+                ).fetchall()
+            }
+            assert calendar_columns <= columns, view
+        months = connection.execute(
+            "select distinct calendar_month from gold.rpt_movements order by 1"
+        ).fetchall()
+
+    assert months == [("2026-01",), ("2026-02",), ("2026-03",)]
+
+    with pg_store.connect() as connection:
+        recency = connection.execute(
+            "select calendar_month, month_recency from gold.rpt_balances "
+            "order by calendar_month"
+        ).fetchall()
+    # 1 = the latest month of the data, 2 = the one before: a BI tool reads "latest
+    # balance" and "change vs previous month" from it, with no sub-query.
+    assert recency == [("2026-01", 3), ("2026-02", 2), ("2026-03", 1)]

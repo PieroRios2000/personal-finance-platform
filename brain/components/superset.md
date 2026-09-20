@@ -7,8 +7,8 @@ task: T32
 
 # Superset
 
-Dashboards over the gold schema: monthly cash flow, savings balance, and each fund's monthly return
-with `closing_basis`. Optional local infrastructure; CI never runs it. Design in
+Dashboards over the gold reporting tables: summary cards, cash flow, balances, and each fund's monthly
+return with `closing_basis`, all under one calendar filter bar. Optional local infrastructure; CI never runs it. Design in
 [ADR 0030](../decisions/0030-superset-for-dashboards-over-the-read-only-role.md).
 
 ## Pieces
@@ -20,7 +20,8 @@ with `closing_basis`. Optional local infrastructure; CI never runs it. Design in
 | [`bi/superset_config.py`](../../bi/superset_config.py) | Secret key and metadata database URI, from the environment |
 | [`bi/init-metadata.sh`](../../bi/init-metadata.sh) | Idempotent: the `superset` role and database in PFP's Postgres |
 | [`bi/start.sh`](../../bi/start.sh) | Migrate, create admin, import `bi/assets` (password filled in from the environment), serve |
-| [`bi/assets/`](../../bi/assets) | The dashboards as code: Superset's export YAML (database, three datasets, four charts, one dashboard) |
+| [`bi/assets/`](../../bi/assets) | The dashboards as code: Superset's export YAML (database, three `rpt_*` datasets, eight charts, one dashboard with its filters and CSS) |
+| [`bi/templates/`](../../bi/templates) | The HTML (Handlebars) and CSS of the summary cards and the investments table, and the dashboard-wide CSS |
 | [`bi/build_dashboards.py`](../../bi/build_dashboards.py) | How the export is authored: REST API, then export. `make bi-export` |
 | [`dbt/models/gold/fct_account_balance_monthly.sql`](../../dbt/models/gold/fct_account_balance_monthly.sql) | Closing balance per account, currency and month, for the savings chart |
 | `make bi-up` / `bi-down` / `bi-reset` / `bi-export` | Start, stop, forget Superset's own state, re-export the dashboards |

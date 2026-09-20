@@ -441,22 +441,35 @@ make bi-up                           # builds the image the first time (~2 minut
 ```
 
 Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admin`, password
-`PFP_BI_ADMIN_PASSWORD`, then *Dashboards* -> **PFP finance**. It has four charts: monthly cash flow (income and spending, without internal
-transfers), the savings balance per month, and each fund's monthly return -- as a table with
-`closing_basis` next to the return (`valuation` = a real month-end value, `last_movement` = only the
-balance at the last movement) and as a line per fund. Currencies are never added: every chart splits
-by currency.
+`PFP_BI_ADMIN_PASSWORD`, then *Dashboards* -> **PFP finance**. From the top:
 
-The filter bar (left side of the dashboard; open it with the arrow on its edge) has **Date range**,
-**Time grain** (month by default; day, week or year on demand), **Bank**, **Account** (last four
-digits), **Currency**, **Flow type** (ingreso / egreso / pago), **Internal transfer** and **Fund**.
-Dates on the axes are full dates (`2026-03-01`), so a month is never read as a year.
+- **Summary cards** (HTML made with Superset's Handlebars chart): income, spending, net and savings
+  rate for the filtered period, and the latest balance with its change against the previous month.
+- **Cash flow** (income green, spending red; internal transfers excluded) and **balance per month**
+  per account.
+- **Investments**: a styled table with each fund's return, and `closing_basis` as a badge right
+  beside it (`valuation` = a real month-end value, `last_movement` = only the balance at the last
+  movement), plus the return per fund over time and a note on how to read it.
+- **Movements** and **Statement balances**: every gold movement (real descriptions: they never
+  leave your machine, so don't screenshot them into a chat) and each account's declared closing
+  balance per month, to check against the PDFs. Filter to one bank, account, currency and month and
+  compare.
 
-To check the numbers against your statements, the bottom of the dashboard has two tables:
-**Movements** (every gold movement: date, bank, account, currency, flow type, amount, internal transfer,
-description) and **Statement balances** (each account's declared closing balance per month). Filter to
-one bank, account, currency and month and compare with the PDF. The descriptions are real: they
-never leave your machine, so don't screenshot them into a chat.
+The filter bar (left side; open it with the arrow on its edge) applies to **every** chart:
+**Currency** (one at a time, PEN first: currencies are never added), **Date range**, **Time grain**
+(month by default; day, week, year on demand), **Year**, **Quarter**, **Month**, **Bank**,
+**Account** (last four digits), **Flow type**, **Internal transfer** and **Fund**. The calendar
+filters work on all charts because every dataset is a `gold.rpt_*` table carrying the same
+`calendar_*` columns from the shared calendar (`gold.dim_date`, continuous from the first to the
+last month of your data). The "latest balance" card shows `-` if the filters leave out the latest
+month of the data.
+
+The KPI cards need Superset to allow a `<style>` block, CSS classes and script evaluation for the
+Handlebars template (`bi/superset_config.py`: `HTML_SANITIZATION_SCHEMA_EXTENSIONS` and
+`TALISMAN_CONFIG`). Only people who can edit charts can write such HTML; keep that to admins.
+
+**After pulling this change:** `uv run dbt build --project-dir dbt --profiles-dir dbt` (new `rpt_*`
+tables and a continuous `dim_date`), then `make bi-down && make bi-up`.
 
 - **`relation "gold.fct_account_balance_monthly" does not exist`** (or another gold table): the dashboard
   needs models added after your last `dbt build`. Pull `develop`, run `uv run dbt build --project-dir dbt

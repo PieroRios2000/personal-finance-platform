@@ -24,16 +24,21 @@ import zipfile
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 DATABASE_NAME = "PFP gold (read-only)"
 DASHBOARD_SLUG = "pfp-finance"
 # `smart_date` (the default) prints a January 1st as just the year, which reads as a
-# yearly total; the full date is unambiguous at any grain.
-_DATE_FORMAT = "%Y-%m-%d"
+# yearly total; day, month and year together are unambiguous at any grain.
+_DATE_FORMAT = "%d %b %Y"
 
 
 def _sql_metric(expression: str, label: str) -> dict[str, Any]:
+    return {"expressionType": "SQL", "sqlExpression": expression, "label": label}
+
+
+def _sql_column(expression: str, label: str) -> dict[str, Any]:
     return {"expressionType": "SQL", "sqlExpression": expression, "label": label}
 
 
@@ -53,94 +58,213 @@ def _where(expression: str) -> dict[str, Any]:
     return {"expressionType": "SQL", "sqlExpression": expression, "clause": "WHERE"}
 
 
+_GREEN, _RED, _AMBER = "#1f9d6b", "#e5484d", "#f5a524"
+
+
+# Dashboard-wide CSS (Superset stores it on the dashboard) and the KPI strips:
+# Handlebars charts, HTML and CSS of our own over the query's single row
+# (bi/templates/). Numbers are formatted in SQL (to_char), so templates stay plain.
+_TEMPLATES = Path(__file__).resolve().parent / "templates"
+DASHBOARD_CSS = (_TEMPLATES / "dashboard.css").read_text()
+_KPI_STYLE = (_TEMPLATES / "kpi.css").read_text()
+_CASH_FLOW_KPI = (_TEMPLATES / "cash_flow_kpi.hbs").read_text()
+_BALANCE_KPI = (_TEMPLATES / "balance_kpi.hbs").read_text()
+
+
+_MOVEMENT_INCOME = (
+    "COALESCE(SUM(ABS(amount)) FILTER (WHERE flow_type = 'ingreso' "
+    "AND NOT is_internal_transfer), 0)"
+)
+_MOVEMENT_SPENDING = (
+    "COALESCE(SUM(ABS(amount)) FILTER (WHERE flow_type = 'egreso' "
+    "AND NOT is_internal_transfer), 0)"
+)
+_MONEY = "'FM999,999,999,990.00'"
+_NET = f"({_MOVEMENT_INCOME} - {_MOVEMENT_SPENDING})"
+
+
+def _balance_at(recency: int) -> str:
+    return (
+        "COALESCE(SUM(closing_balance) FILTER (WHERE account_kind = 'asset' "
+        f"AND month_recency = {recency}), 0)"
+    )
+
+
+def _or_dash(expression: str) -> str:
+    """A dash instead of a number when the filters leave out the latest month, so the
+    card never shows a misleading 0.00."""
+    return (
+        "CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-' "
+        f"ELSE {expression} END"
+    )
+
+
+_CHANGE = f"({_balance_at(1)} - {_balance_at(2)})"
+
+
 # (dataset, chart name, viz type, params). `datasource` and `viz_type` are added later.
 CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
     (
-        "fact_transactions",
-        "Monthly cash flow: income and spending (no internal transfers)",
+        "rpt_movements",
+        "Cash flow summary",
+        "handlebars",
+        {
+            "query_mode": "aggregate",
+            "groupby": [],
+            "metrics": [
+                _sql_metric("MAX(currency)", "currency"),
+                _sql_metric(f"to_char({_MOVEMENT_INCOME}, {_MONEY})", "income"),
+                _sql_metric(f"to_char({_MOVEMENT_SPENDING}, {_MONEY})", "spending"),
+                _sql_metric(f"to_char({_NET}, {_MONEY})", "net"),
+                _sql_metric(f"CASE WHEN {_NET} >= 0 THEN 1 ELSE 0 END", "net_positive"),
+                _sql_metric(
+                    "to_char(CASE WHEN "
+                    f"{_MOVEMENT_INCOME} = 0 THEN 0 "
+                    f"ELSE 100 * {_NET} / {_MOVEMENT_INCOME} END, 'FM990.0')",
+                    "rate",
+                ),
+            ],
+            "adhoc_filters": [_time_range("date")],
+            "row_limit": 1,
+            "handlebarsTemplate": _CASH_FLOW_KPI,
+            "styleTemplate": _KPI_STYLE,
+        },
+    ),
+    (
+        "rpt_balances",
+        "Balance summary",
+        "handlebars",
+        {
+            "query_mode": "aggregate",
+            "groupby": [],
+            "metrics": [
+                _sql_metric("MAX(currency)", "currency"),
+                _sql_metric(
+                    _or_dash(f"to_char({_balance_at(1)}, {_MONEY})"), "balance"
+                ),
+                _sql_metric(
+                    "to_char(MAX(month_start) FILTER "
+                    "(WHERE month_recency = 1), 'Mon YYYY')",
+                    "month",
+                ),
+                _sql_metric(_or_dash(f"to_char(ABS({_CHANGE}), {_MONEY})"), "change"),
+                _sql_metric(
+                    f"CASE WHEN {_CHANGE} >= 0 THEN 1 ELSE 0 END", "change_positive"
+                ),
+            ],
+            "adhoc_filters": [_time_range("month_start")],
+            "row_limit": 1,
+            "handlebarsTemplate": _BALANCE_KPI,
+            "styleTemplate": _KPI_STYLE,
+        },
+    ),
+    (
+        "rpt_movements",
+        "Cash flow: income and spending",
         "echarts_timeseries_bar",
         {
             "x_axis": "date",
             "time_grain_sqla": "P1M",
             # Spending is negative on asset accounts and positive on liabilities
             # (ADR 0015): ABS() puts every movement on one scale, and flow_type says
-            # which way it went. Currencies are never added together.
+            # which way it went. One currency at a time (the Currency filter).
             "metrics": [_sql_metric("SUM(ABS(amount))", "Amount")],
-            "groupby": ["flow_type", "currency"],
+            "groupby": ["flow_type"],
             "adhoc_filters": [
                 _time_range("date"),
                 _where("NOT is_internal_transfer"),
                 _where("flow_type IN ('ingreso', 'egreso')"),
             ],
+            "label_colors": {"ingreso": _GREEN, "egreso": _RED},
             "x_axis_time_format": _DATE_FORMAT,
+            "y_axis_format": ",.0f",
+            "show_value": True,
+            "rich_tooltip": True,
             "row_limit": 10000,
             "orientation": "vertical",
             "show_legend": True,
         },
     ),
     (
-        "fct_account_balance_monthly",
-        "Savings balance per month (asset accounts)",
+        "rpt_balances",
+        "Balance per month (asset accounts)",
         "echarts_timeseries_line",
         {
             "x_axis": "month_start",
             "time_grain_sqla": "P1M",
             "metrics": [_sql_metric("SUM(closing_balance)", "Closing balance")],
-            "groupby": ["bank", "currency"],
+            "groupby": ["bank", "account_last4"],
             "adhoc_filters": [
                 _time_range("month_start"),
                 _where("account_kind = 'asset'"),
             ],
+            "area": True,
+            "opacity": 0.25,
+            "markerEnabled": True,
+            "markerSize": 6,
+            "seriesType": "smooth",
             "x_axis_time_format": _DATE_FORMAT,
+            "y_axis_format": ",.0f",
+            "rich_tooltip": True,
             "row_limit": 10000,
             "show_legend": True,
         },
     ),
     (
-        "fct_investment_monthly",
+        "rpt_investments",
         "Investments: return and how each month closed",
-        "table",
+        "handlebars",
         {
-            "query_mode": "raw",
-            "adhoc_filters": [_time_range("month_start")],
-            # closing_basis sits right next to the return: `valuation` is a real
-            # month-end value, `last_movement` only the balance at the last movement.
-            "all_columns": [
-                "month_start",
+            "query_mode": "aggregate",
+            # Formatted in SQL so the template stays plain. `closing_basis` sits next
+            # to the return: `valuation` is a real month-end value, `last_movement`
+            # only the balance at the last movement.
+            "groupby": [
+                "calendar_month",
                 "place",
                 "currency",
-                "return_pct",
                 "closing_basis",
                 "is_return_reliable",
-                "gain",
-                "closing_balance",
+                _sql_column(
+                    "COALESCE(to_char(return_pct * 100, 'FM990.00') || '%', '-')",
+                    "return_pct",
+                ),
+                _sql_column(f"to_char(gain, {_MONEY})", "gain"),
+                _sql_column(f"to_char(closing_balance, {_MONEY})", "closing_balance"),
             ],
-            "order_by_cols": ['["month_start", false]'],
-            "row_limit": 1000,
-            "include_search": True,
+            "metrics": [_sql_metric("MAX(month_start)", "sort_key")],
+            "timeseries_limit_metric": _sql_metric("MAX(month_start)", "sort_key"),
+            "order_desc": True,
+            "adhoc_filters": [_time_range("month_start")],
+            "row_limit": 500,
+            "handlebarsTemplate": (_TEMPLATES / "investments_table.hbs").read_text(),
+            "styleTemplate": (_TEMPLATES / "investments_table.css").read_text(),
         },
     ),
     (
-        "fct_investment_monthly",
+        "rpt_investments",
         "Investments: return per fund over time",
         "echarts_timeseries_line",
         {
             "x_axis": "month_start",
             "time_grain_sqla": "P1M",
             "metrics": [_sql_metric("MAX(return_pct)", "Return")],
-            "groupby": ["place", "currency"],
+            "groupby": ["place"],
             "adhoc_filters": [
                 _time_range("month_start"),
                 _where("is_return_reliable"),
             ],
+            "markerEnabled": True,
+            "seriesType": "smooth",
             "y_axis_format": ".2%",
             "x_axis_time_format": _DATE_FORMAT,
+            "rich_tooltip": True,
             "row_limit": 10000,
             "show_legend": True,
         },
     ),
     (
-        "fact_transactions",
+        "rpt_movements",
         "Movements (check against your statements)",
         "table",
         {
@@ -157,12 +281,30 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
                 "description",
             ],
             "order_by_cols": ['["date", false]'],
+            "column_config": {
+                "amount": {"d3NumberFormat": ",.2f", "horizontalAlign": "right"},
+            },
+            # Only numeric columns can be coloured: income green, spending red.
+            "conditional_formatting": [
+                {
+                    "colorScheme": "#c6f0dc",
+                    "column": "amount",
+                    "operator": ">",
+                    "targetValue": 0,
+                },
+                {
+                    "colorScheme": "#fbd0d2",
+                    "column": "amount",
+                    "operator": "<",
+                    "targetValue": 0,
+                },
+            ],
             "row_limit": 1000,
             "include_search": True,
         },
     ),
     (
-        "fct_account_balance_monthly",
+        "rpt_balances",
         "Statement balances (check against your statements)",
         "table",
         {
@@ -178,6 +320,12 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
                 "closing_balance",
             ],
             "order_by_cols": ['["closing_date", false]'],
+            "column_config": {
+                "closing_balance": {
+                    "d3NumberFormat": ",.2f",
+                    "horizontalAlign": "right",
+                },
+            },
             "row_limit": 1000,
             "include_search": True,
         },
@@ -225,13 +373,18 @@ class Superset:
         ]
         self._headers["Referer"] = self._api
 
-    def raw(self, path: str) -> bytes:
-        return self._call("GET", path)
+    def raw(self, path: str, method: str = "GET") -> bytes:
+        return self._call(method, path)
 
 
 def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
-    """The dashboard's filter bar: dates, time grain (month by default), bank,
-    currency and fund. Each applies to every chart that has the column."""
+    """The dashboard's filter bar. The calendar filters (date range, time grain, year,
+    quarter, month) and bank, account, currency, flow type and fund. A filter applies
+    to every chart whose dataset has the column, and the reporting tables share the
+    same `calendar_*` and `currency` column names. Currency is one value at a time
+    (PEN by default): currencies are never added together."""
+
+    movements = datasets["rpt_movements"]
 
     def base(name: str, filter_type: str, target: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -246,15 +399,17 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
             "type": "NATIVE_FILTER",
         }
 
-    def select(name: str, table: str, column: str) -> dict[str, Any]:
+    def select(
+        name: str, table: str, column: str, *, multi: bool = True
+    ) -> dict[str, Any]:
         item = base(
             name,
             "filter_select",
             {"datasetId": datasets[table], "column": {"name": column}},
         )
         item["controlValues"] = {
-            "multiSelect": True,
-            "enableEmptyFilter": False,
+            "multiSelect": multi,
+            "enableEmptyFilter": not multi,
             "defaultToFirstItem": False,
             "searchAllOptions": False,
             "inverseSelection": False,
@@ -262,31 +417,58 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
         return item
 
     # The dataset is where the filter takes its grains from; without one it is blank.
-    grain = base(
-        "Time grain",
-        "filter_timegrain",
-        {"datasetId": datasets["fact_transactions"]},
-    )
+    grain = base("Time grain", "filter_timegrain", {"datasetId": movements})
     grain["defaultDataMask"] = {
         "filterState": {"value": ["P1M"]},
         "extraFormData": {"time_grain_sqla": "P1M"},
     }
+    currency = select("Currency", "rpt_movements", "currency", multi=False)
+    currency["defaultDataMask"] = {
+        "filterState": {"value": ["PEN"]},
+        "extraFormData": {"filters": [{"col": "currency", "op": "IN", "val": ["PEN"]}]},
+    }
     return [
+        currency,
         base("Date range", "filter_time", {}),
         grain,
-        select("Bank", "fact_transactions", "bank"),
-        select("Account", "fact_transactions", "account_last4"),
-        select("Currency", "fact_transactions", "currency"),
-        select("Flow type", "fact_transactions", "flow_type"),
-        select("Internal transfer", "fact_transactions", "is_internal_transfer"),
-        select("Fund", "fct_investment_monthly", "place"),
+        select("Year", "rpt_movements", "calendar_year"),
+        select("Quarter", "rpt_movements", "calendar_quarter"),
+        select("Month", "rpt_movements", "calendar_month"),
+        select("Bank", "rpt_movements", "bank"),
+        select("Account", "rpt_movements", "account_last4"),
+        select("Flow type", "rpt_movements", "flow_type"),
+        select("Internal transfer", "rpt_movements", "is_internal_transfer"),
+        select("Fund", "rpt_investments", "place"),
     ]
+
+
+# A text cell in the grid (Markdown), next to the investments chart: how to read it.
+NOTE = "@note"
+NOTE_TEXT = (
+    "### How to read the returns\n\n"
+    "- **valuation**: the month closed at a real month-end value.\n"
+    "- **last_movement**: only the balance at the last movement; the return is shown "
+    "but trust it less.\n\n"
+    "A return is shown only for a *reliable* month (`is_return_reliable`); the gain "
+    "and the balances are always there.\n\n"
+    "One currency at a time: use the **Currency** filter."
+)
+
+# The grid: (chart name prefix, width out of 12, height) per cell, row by row.
+LAYOUT: list[list[tuple[str, int, int]]] = [
+    [("Cash flow summary", 8, 22), ("Balance summary", 4, 22)],
+    [("Cash flow: income", 6, 50), ("Balance per month", 6, 50)],
+    [("Investments: return and", 12, 32)],
+    [("Investments: return per", 8, 50), (NOTE, 4, 50)],
+    [("Movements", 12, 60)],
+    [("Statement balances", 12, 60)],
+]
 
 
 def _position(
     chart_ids: Sequence[int], names: Sequence[str], uuids: Sequence[str]
 ) -> dict[str, Any]:
-    """A two-column grid, two charts per row, in the order given."""
+    """The dashboard grid, from LAYOUT: each cell finds its chart by name prefix."""
     layout: dict[str, Any] = {
         "DASHBOARD_VERSION_KEY": "v2",
         "ROOT_ID": {"type": "ROOT", "id": "ROOT_ID", "children": ["GRID_ID"]},
@@ -302,29 +484,32 @@ def _position(
             "meta": {"text": "PFP finance"},
         },
     }
-    # Charts two to a row; the tables for checking against statements get a whole row.
-    rows: list[list[int]] = []
-    for i, name in enumerate(names):
-        if (
-            "check against" in name
-            or not rows
-            or len(rows[-1]) == 2
-            or ("check against" in names[rows[-1][0]])
-        ):
-            rows.append([])
-        rows[-1].append(i)
-    for row_number, members in enumerate(rows):
+    for row_number, cells in enumerate(LAYOUT):
         row_id = f"ROW-{row_number}"
         layout["GRID_ID"]["children"].append(row_id)
-        for i in members:
-            layout[f"CHART-{i}"] = {
+        children = []
+        for prefix, width, height in cells:
+            if prefix == NOTE:
+                layout["MARKDOWN-note"] = {
+                    "type": "MARKDOWN",
+                    "id": "MARKDOWN-note",
+                    "children": [],
+                    "parents": ["ROOT_ID", "GRID_ID", row_id],
+                    "meta": {"width": width, "height": height, "code": NOTE_TEXT},
+                }
+                children.append("MARKDOWN-note")
+                continue
+            i = next(n for n, name in enumerate(names) if name.startswith(prefix))
+            cell_id = f"CHART-{i}"
+            children.append(cell_id)
+            layout[cell_id] = {
                 "type": "CHART",
-                "id": f"CHART-{i}",
+                "id": cell_id,
                 "children": [],
                 "parents": ["ROOT_ID", "GRID_ID", row_id],
                 "meta": {
-                    "width": 12 if len(members) == 1 else 6,
-                    "height": 60 if len(members) == 1 else 50,
+                    "width": width,
+                    "height": height,
                     "chartId": chart_ids[i],
                     "uuid": uuids[i],
                     "sliceName": names[i],
@@ -333,7 +518,7 @@ def _position(
         layout[row_id] = {
             "type": "ROW",
             "id": row_id,
-            "children": [f"CHART-{i}" for i in members],
+            "children": children,
             "parents": ["ROOT_ID", "GRID_ID"],
             "meta": {"background": "BACKGROUND_TRANSPARENT"},
         }
@@ -367,7 +552,7 @@ def _sample_rows(client: Superset, dataset: int, params: dict[str, Any]) -> int:
     )
     query = {
         "columns": columns,
-        "metrics": [],
+        "metrics": [] if columns else params.get("metrics", []),
         "orderby": [],
         "row_limit": 5,
         "extras": {"where": where},
@@ -385,7 +570,37 @@ def _sample_rows(client: Superset, dataset: int, params: dict[str, Any]) -> int:
     return int(result["rowcount"])
 
 
+def _reset(client: Superset) -> None:
+    """Delete what a previous run made (our dashboard, its charts and datasets and the
+    connection), so the script can be run again on the same Superset."""
+
+    def ids(kind: str, column: str, operator: str, value: str) -> list[int]:
+        query = (
+            f"(columns:!(id),filters:!((col:{column},opr:{operator},value:'{value}')))"
+        )
+        return [
+            row["id"]
+            for row in client.json("GET", f"/{kind}/?q={quote(query, safe='')}")[
+                "result"
+            ]
+        ]
+
+    for dashboard in ids("dashboard", "slug", "eq", DASHBOARD_SLUG):
+        client.raw(f"/dashboard/{dashboard}", method="DELETE")
+    for database in ids("database", "database_name", "eq", DATABASE_NAME):
+        datasets = ids("dataset", "database", "rel_o_m", str(database))
+        for dataset in datasets:
+            charts = ids("chart", "datasource_id", "eq", str(dataset))
+            if charts:
+                client.raw(
+                    f"/chart/?q=!({','.join(map(str, charts))})", method="DELETE"
+                )
+            client.raw(f"/dataset/{dataset}", method="DELETE")
+        client.raw(f"/database/{database}", method="DELETE")
+
+
 def build(client: Superset, bi_password: str) -> int:
+    _reset(client)
     database = client.json(
         "POST",
         "/database/",
@@ -449,8 +664,13 @@ def build(client: Superset, bi_password: str) -> int:
                 )
             ),
             "json_metadata": json.dumps(
-                {"native_filter_configuration": native_filters(datasets)}
+                {
+                    "native_filter_configuration": native_filters(datasets),
+                    # Series colours are a dashboard setting in Superset, by label.
+                    "label_colors": {"ingreso": _GREEN, "egreso": _RED},
+                }
             ),
+            "css": DASHBOARD_CSS,
         },
     )
     return int(dashboard)

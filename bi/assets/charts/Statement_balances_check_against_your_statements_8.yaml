@@ -1,4 +1,4 @@
-slice_name: Movements (check against your statements)
+slice_name: Statement balances (check against your statements)
 description: null
 certified_by: null
 certification_details: null
@@ -7,27 +7,30 @@ params:
   query_mode: raw
   adhoc_filters:
   - expressionType: SIMPLE
-    subject: date
+    subject: month_start
     operator: TEMPORAL_RANGE
     comparator: No filter
     clause: WHERE
   all_columns:
-  - date
+  - month_start
+  - closing_date
   - bank
   - account_last4
+  - account_kind
   - currency
-  - flow_type
-  - amount
-  - is_internal_transfer
-  - description
+  - closing_balance
   order_by_cols:
-  - '["date", false]'
+  - '["closing_date", false]'
+  column_config:
+    closing_balance:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
   row_limit: 1000
   include_search: true
-  datasource: 1__table
+  datasource: 2__table
   viz_type: table
 query_context: null
 cache_timeout: null
-uuid: 8ab7aec5-c291-4df2-8d31-fc4745c101aa
+uuid: aac5310a-924b-4fd4-be81-0848517456af
 version: 1.0.0
-dataset_uuid: 8c239285-716f-44a4-8562-8618c9cf59da
+dataset_uuid: 4bea080f-76b3-484a-9110-231133233bd7

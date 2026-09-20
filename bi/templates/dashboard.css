@@ -1,0 +1,7 @@
+.dashboard-content { background: #f3f5f9; }
+.dashboard-component-chart-holder {
+  border-radius: 14px; border: 1px solid #e6eaf2 !important;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .06);
+}
+.dashboard-component-chart-holder .header-title { font-weight: 600; color: #1b2437; }
+.dashboard-header-container { background: #ffffff; }

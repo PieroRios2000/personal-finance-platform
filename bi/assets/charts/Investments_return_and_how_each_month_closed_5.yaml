@@ -1,0 +1,63 @@
+slice_name: 'Investments: return and how each month closed'
+description: null
+certified_by: null
+certification_details: null
+viz_type: handlebars
+params:
+  query_mode: aggregate
+  groupby:
+  - calendar_month
+  - place
+  - currency
+  - closing_basis
+  - is_return_reliable
+  - expressionType: SQL
+    sqlExpression: COALESCE(to_char(return_pct * 100, 'FM990.00') || '%', '-')
+    label: return_pct
+  - expressionType: SQL
+    sqlExpression: to_char(gain, 'FM999,999,999,990.00')
+    label: gain
+  - expressionType: SQL
+    sqlExpression: to_char(closing_balance, 'FM999,999,999,990.00')
+    label: closing_balance
+  metrics:
+  - expressionType: SQL
+    sqlExpression: MAX(month_start)
+    label: sort_key
+  timeseries_limit_metric:
+    expressionType: SQL
+    sqlExpression: MAX(month_start)
+    label: sort_key
+  order_desc: true
+  adhoc_filters:
+  - expressionType: SIMPLE
+    subject: month_start
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    clause: WHERE
+  row_limit: 500
+  handlebarsTemplate: "<table class=\"inv\">\n  <thead>\n    <tr><th>Month</th><th>Fund</th><th>Currency</th><th\
+    \ class=\"num\">Return</th>\n      <th>Closed at</th><th class=\"num\">Gain</th><th\
+    \ class=\"num\">Balance</th></tr>\n  </thead>\n  <tbody>\n  {{#each data}}\n \
+    \   <tr>\n      <td>{{calendar_month}}</td><td>{{place}}</td><td>{{currency}}</td>\n\
+    \      <td class=\"num ret {{#if is_return_reliable}}ok{{else}}na{{/if}}\">{{return_pct}}</td>\n\
+    \      <td><span class=\"badge {{closing_basis}}\">{{closing_basis}}</span></td>\n\
+    \      <td class=\"num\">{{gain}}</td><td class=\"num\">{{closing_balance}}</td>\n\
+    \    </tr>\n  {{/each}}\n  </tbody>\n</table>\n"
+  styleTemplate: ".inv { width: 100%; border-collapse: collapse; font-size: 13px;\
+    \ color: #1b2437; }\n.inv th { text-align: left; font-size: 11px; text-transform:\
+    \ uppercase; letter-spacing: .05em;\n          color: #667085; padding: 8px 10px;\
+    \ border-bottom: 2px solid #e6eaf2; }\n.inv td { padding: 9px 10px; border-bottom:\
+    \ 1px solid #eef1f6; }\n.inv .num { text-align: right; font-variant-numeric: tabular-nums;\
+    \ }\n.inv .ret.ok { font-weight: 700; color: #1f9d6b; }\n.inv .ret.na { color:\
+    \ #98a2b3; }\n.inv tbody tr:hover { background: #f7f9fc; }\n.badge { padding:\
+    \ 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }\n.badge.valuation\
+    \ { background: #d5f3e5; color: #147a52; }\n.badge.last_movement { background:\
+    \ #fdebc0; color: #9a6a00; }\n"
+  datasource: 3__table
+  viz_type: handlebars
+query_context: null
+cache_timeout: null
+uuid: 44590ce6-6f7e-45f3-b956-a0eeacc66941
+version: 1.0.0
+dataset_uuid: d7159e4d-b826-4531-8e9a-5533bdf50612

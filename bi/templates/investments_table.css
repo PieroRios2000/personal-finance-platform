@@ -1,0 +1,11 @@
+.inv { width: 100%; border-collapse: collapse; font-size: 13px; color: #1b2437; }
+.inv th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+          color: #667085; padding: 8px 10px; border-bottom: 2px solid #e6eaf2; }
+.inv td { padding: 9px 10px; border-bottom: 1px solid #eef1f6; }
+.inv .num { text-align: right; font-variant-numeric: tabular-nums; }
+.inv .ret.ok { font-weight: 700; color: #1f9d6b; }
+.inv .ret.na { color: #98a2b3; }
+.inv tbody tr:hover { background: #f7f9fc; }
+.badge { padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.badge.valuation { background: #d5f3e5; color: #147a52; }
+.badge.last_movement { background: #fdebc0; color: #9a6a00; }

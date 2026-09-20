@@ -1,4 +1,4 @@
-slice_name: Savings balance per month (asset accounts)
+slice_name: 'Investments: return per fund over time'
 description: null
 certified_by: null
 certification_details: null
@@ -8,11 +8,10 @@ params:
   time_grain_sqla: P1M
   metrics:
   - expressionType: SQL
-    sqlExpression: SUM(closing_balance)
-    label: Closing balance
+    sqlExpression: MAX(return_pct)
+    label: Return
   groupby:
-  - bank
-  - currency
+  - place
   adhoc_filters:
   - expressionType: SIMPLE
     subject: month_start
@@ -20,15 +19,19 @@ params:
     comparator: No filter
     clause: WHERE
   - expressionType: SQL
-    sqlExpression: account_kind = 'asset'
+    sqlExpression: is_return_reliable
     clause: WHERE
-  x_axis_time_format: '%Y-%m-%d'
+  markerEnabled: true
+  seriesType: smooth
+  y_axis_format: .2%
+  x_axis_time_format: '%d %b %Y'
+  rich_tooltip: true
   row_limit: 10000
   show_legend: true
-  datasource: 2__table
+  datasource: 3__table
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null
-uuid: f5bad50e-e0ad-452a-bd38-3c65029cb9c5
+uuid: 22ef997b-2569-46b8-bfc8-f9486c55c3db
 version: 1.0.0
-dataset_uuid: 34d8ad94-56be-4a58-a990-2f21dead4cb8
+dataset_uuid: d7159e4d-b826-4531-8e9a-5533bdf50612
