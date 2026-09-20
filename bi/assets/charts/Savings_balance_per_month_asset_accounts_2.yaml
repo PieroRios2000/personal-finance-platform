@@ -1,0 +1,28 @@
+slice_name: Savings balance per month (asset accounts)
+description: null
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_line
+params:
+  x_axis: month_start
+  time_grain_sqla: P1M
+  metrics:
+  - expressionType: SQL
+    sqlExpression: SUM(closing_balance)
+    label: Closing balance
+  groupby:
+  - bank
+  - currency
+  adhoc_filters:
+  - expressionType: SQL
+    sqlExpression: account_kind = 'asset'
+    clause: WHERE
+  row_limit: 10000
+  show_legend: true
+  datasource: 2__table
+  viz_type: echarts_timeseries_line
+query_context: null
+cache_timeout: null
+uuid: c8f86a2b-c692-4af1-9512-2da77fa127e8
+version: 1.0.0
+dataset_uuid: 0f877c95-4d9b-443d-b820-72a51b348e20

@@ -1,0 +1,32 @@
+slice_name: 'Monthly cash flow: income and spending (no internal transfers)'
+description: null
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  x_axis: date
+  time_grain_sqla: P1M
+  metrics:
+  - expressionType: SQL
+    sqlExpression: SUM(ABS(amount))
+    label: Amount
+  groupby:
+  - flow_type
+  - currency
+  adhoc_filters:
+  - expressionType: SQL
+    sqlExpression: NOT is_internal_transfer
+    clause: WHERE
+  - expressionType: SQL
+    sqlExpression: flow_type IN ('ingreso', 'egreso')
+    clause: WHERE
+  row_limit: 10000
+  orientation: vertical
+  show_legend: true
+  datasource: 1__table
+  viz_type: echarts_timeseries_bar
+query_context: null
+cache_timeout: null
+uuid: 00a743f9-76a0-4dcb-8660-369558f4e2c5
+version: 1.0.0
+dataset_uuid: 5cf189d9-7204-443f-85e3-88ff16c604f0

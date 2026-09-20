@@ -1,0 +1,17 @@
+database_name: PFP gold (read-only)
+sqlalchemy_uri: postgresql+psycopg2://pfp_bi:XXXXXXXXXX@postgres:5432/pfp
+cache_timeout: null
+expose_in_sqllab: true
+allow_run_async: false
+allow_ctas: false
+allow_cvas: false
+allow_dml: false
+allow_file_upload: false
+extra:
+  metadata_params: {}
+  engine_params: {}
+  metadata_cache_timeout: {}
+  schemas_allowed_for_file_upload: []
+impersonate_user: false
+uuid: ee284b64-5661-4da8-8dd2-48c043878c66
+version: 1.0.0
