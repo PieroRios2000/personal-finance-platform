@@ -14,6 +14,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import psycopg
 import pytest
 
 from scripts import poc
@@ -23,6 +24,8 @@ from scripts.poc import (
     _transfer_match_summary,
     main,
 )
+
+_REAL_TRANSFER_COUNTS = poc._transfer_counts
 
 
 @pytest.fixture(autouse=True)
@@ -182,7 +185,8 @@ def test_the_counts_are_read_from_postgres_with_no_amount_column(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake = _FakePostgres([7, 4])
-    monkeypatch.setattr(poc.psycopg, "connect", lambda *args, **kwargs: fake)
+    monkeypatch.setattr(poc, "_transfer_counts", _REAL_TRANSFER_COUNTS)
+    monkeypatch.setattr(psycopg, "connect", lambda *args, **kwargs: fake)
 
     assert poc._transfer_counts() == (7, 4)
     assert fake.queries == [

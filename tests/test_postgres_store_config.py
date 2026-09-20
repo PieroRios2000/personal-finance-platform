@@ -174,4 +174,4 @@ def test_the_orchestration_module_gives_elementary_an_absolute_file_by_default()
     resolve against the wrong cwd (the reason PFP_DUCKDB_PATH gets one too)."""
     source = (_ROOT / "orchestration" / "assets" / "dbt_project.py").read_text()
 
-    assert 'os.environ.setdefault("PFP_ELEMENTARY_DUCKDB_PATH"' in source
+    assert re.search(r'setdefault\(\s*"PFP_ELEMENTARY_DUCKDB_PATH"', source)

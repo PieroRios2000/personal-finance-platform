@@ -327,11 +327,15 @@ passes against a real Postgres and S3.
 **Description:** Everything that opened `dbt/pfp.duckdb` reads Postgres instead.
 
 **Acceptance criteria:**
-- [ ] `scripts/poc.py` (transfer-match counts), the Dagster wiring and the count helpers read Postgres.
-- [ ] The integration tests that query the built tables read Postgres through one shared helper; each
-  parallel pytest-xdist worker gets its own schema/database, wiped before and after, so the parallel
-  runner keeps working.
-- [ ] `PFP_DUCKDB_PATH` disappears from the flow (Elementary's own file arrives in T28).
+- [x] `scripts/poc.py` (transfer-match counts) reads Postgres; `make poc-up` starts it and `make poc`
+  fails clearly without the `PFP_PG_*` variables; the Dagster module gives Elementary an absolute
+  DuckDB path by default.
+- [x] The integration tests that query the built tables read Postgres through one shared helper
+  (`tests/pg_store.py`); each parallel pytest-xdist worker gets its own database, dropped and recreated
+  with the test lake, so the parallel runner keeps working.
+- [x] The default dbt target is Postgres (`PFP_DBT_TARGET`); `local` (the DuckDB file) stays selectable
+  because CI's base-versus-PR data diff still needs it until T29. `PFP_DUCKDB_PATH` is now only that
+  target's and `edr`'s (T28).
 
 **Verification:** the whole integration suite passes with `-n 4` against a real Postgres and S3.
 

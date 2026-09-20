@@ -34,7 +34,7 @@ acceptance criteria in [`tasks/todo-phase2.md`](../../tasks/todo-phase2.md). Pha
 | Task | What | Status |
 |---|---|---|
 | T26 | PostgreSQL service and the dbt connection (opt-in `--target postgres`; read-only BI role; Elementary on its own file for this target) | done — [ADR 0029](../decisions/0029-dbt-stores-silver-and-gold-in-postgres.md) |
-| T27 | Scripts, Dagster wiring and tests read PostgreSQL instead of the DuckDB file | planned |
+| T27 | Scripts, Dagster wiring and tests read PostgreSQL instead of the DuckDB file; Postgres is the default dbt target | done |
 | T28 | Elementary keeps its own small DuckDB file | planned |
 | T29 | CI's ephemeral environment and the PR data diff on PostgreSQL | planned |
 | T30 | OpenMetadata reads PostgreSQL natively (retires the DuckDB workaround of ADR 0023) | planned |

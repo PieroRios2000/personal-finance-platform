@@ -293,6 +293,9 @@ jobs:
       PFP_PG_USER: pfp
       PFP_PG_PASSWORD: pfp-ci-dummy-pg-password
       PFP_PG_BI_PASSWORD: pfp-ci-dummy-bi-password
+      # T27: silver and gold are in Postgres; Elementary keeps its own DuckDB file,
+      # absolute so every step (dbt, Dagster, `edr`) resolves the same one.
+      PFP_ELEMENTARY_DUCKDB_PATH: ${{ github.workspace }}/dbt/elementary.duckdb
       DBT_SELECT: ${{ needs.changes.outputs.dbt_select }}
       DAGSTER_MODULE_NAME: orchestration.definitions
     steps:
@@ -422,14 +425,13 @@ jobs:
       #
       # PFP_DUCKDB_PATH must be absolute here: `edr` runs its own internal
       # dbt project from inside its own installed package directory, not
-      # this repo -- profiles.yml's relative default (`dbt/pfp.duckdb`)
-      # would resolve against *that* directory instead and fail to find the
-      # database `dbt build` just wrote (confirmed directly: reproducible
-      # every time with no override, gone with one).
+      # this repo -- a relative path would resolve against *that* directory
+      # instead (confirmed directly). Since T27 what `edr` reads is Elementary's
+      # own DuckDB file (silver and gold are in Postgres), so it points there.
       - name: elementary report (warn-mode, see CONSTRAINTS.md)
         continue-on-error: true
         env:
-          PFP_DUCKDB_PATH: ${{ github.workspace }}/dbt/pfp.duckdb
+          PFP_DUCKDB_PATH: ${{ github.workspace }}/dbt/elementary.duckdb
         run: |
           uv run edr report --project-dir dbt --profiles-dir dbt \
             --config-dir dbt/.edr --open-browser false \
@@ -530,6 +532,9 @@ jobs:
       AWS_REGION: us-east-1
       PFP_ACCOUNT_KEY: pfp-ci-dummy-account-key-0000000000000000
       PFP_USER: ci
+      # T27: this job's two builds still go to a DuckDB file each (ADR 0014); it has no
+      # Postgres. It moves to Postgres schemas in T29.
+      PFP_DBT_TARGET: local
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

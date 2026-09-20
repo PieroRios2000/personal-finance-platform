@@ -44,6 +44,7 @@ import pytest
 
 from ingestion.schema import Statement, Transaction
 from lakehouse import bronze
+from tests import pg_store
 from tests.test_dbt_silver_integration import (
     _TEST_LAKE_SUFFIX,
     _USER_ID,
@@ -145,10 +146,13 @@ def _elementary_test_status(tmp_path: Path) -> str:
     """The anomaly test's own recorded status ('pass' or 'warn') straight out
     of Elementary's `elementary_test_results` table -- a stronger proof than
     parsing `dbt build`'s own console text, since it comes from the same
-    table `edr report` (criterion 3) reads to render its report."""
+    table `edr report` (criterion 3) reads to render its report. Elementary
+    keeps its own DuckDB file (ADR 0029), not Postgres."""
     import duckdb
 
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with duckdb.connect(
+        str(tmp_path / "elementary.duckdb"), read_only=True
+    ) as connection:
         row = connection.execute(
             "select status from elementary.elementary_test_results "
             "where test_name = ? order by detected_at desc limit 1",
@@ -208,8 +212,11 @@ def test_elementarys_own_models_build_alongside_silver_and_gold(
 
     import duckdb
 
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
-        elementary_row_count = _row_count(connection, "elementary.dbt_run_results")
+    with duckdb.connect(
+        str(tmp_path / "elementary.duckdb"), read_only=True
+    ) as elementary:
+        elementary_row_count = _row_count(elementary, "elementary.dbt_run_results")
+    with pg_store.connect() as connection:
         silver_row_count = _row_count(connection, "silver.transactions")
         gold_row_count = _row_count(connection, "gold.fact_transactions")
 

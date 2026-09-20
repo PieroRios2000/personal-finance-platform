@@ -49,6 +49,12 @@ _DBT_PROJECT_DIR = _REPO_ROOT / "dbt"
 # own `tmp_path`-scoped override, `PFP_DUCKDB_PATH` already exported in the shell)
 # always wins.
 os.environ.setdefault("PFP_DUCKDB_PATH", str(_DBT_PROJECT_DIR / "pfp.duckdb"))
+# Same reason for Elementary's own DuckDB file (ADR 0029): silver and gold are in
+# PostgreSQL, but Elementary keeps a file, and its relative default would resolve
+# against `dbt/` here.
+os.environ.setdefault(
+    "PFP_ELEMENTARY_DUCKDB_PATH", str(_DBT_PROJECT_DIR / "elementary.duckdb")
+)
 
 dbt_project = DbtProject(project_dir=_DBT_PROJECT_DIR, profiles_dir=_DBT_PROJECT_DIR)
 

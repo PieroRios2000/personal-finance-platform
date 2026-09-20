@@ -30,7 +30,7 @@ check-full: check-task
 # fine for one developer's machine; T17 gives each CI job its own project name.
 # bucket-init runs separately (`run --rm`, not part of `up`'s set): see docker-compose.yml.
 poc-up:
-	docker compose -p pfp-poc up -d --wait seaweedfs
+	docker compose -p pfp-poc up -d --wait seaweedfs postgres
 	docker compose -p pfp-poc run --rm bucket-init
 
 poc-down:

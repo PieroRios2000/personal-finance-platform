@@ -7,7 +7,9 @@
 # fail loudly here, exactly as it does in `storage_options()` (ADR 0006).
 
 personal_finance_platform:
-  target: local
+  # T27 (ADR 0029): silver and gold live in PostgreSQL. `PFP_DBT_TARGET=local` selects the
+  # old DuckDB file (`dbt/pfp.duckdb`), which CI's base-vs-PR data diff still uses (T29).
+  target: "{{ env_var('PFP_DBT_TARGET', 'postgres') }}"
   outputs:
     local: &duckdb_output
       type: duckdb
