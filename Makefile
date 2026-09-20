@@ -5,7 +5,7 @@
 
 BASE ?= origin/develop
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down om-up om-sync om-down alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down om-up om-sync om-down bi-up bi-down bi-reset bi-export alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -99,6 +99,34 @@ om-sync:
 om-down:
 	$(OM_COMPOSE) down -v
 	rm -rf openmetadata/artifacts
+
+# Apache Superset (T32, ADR 0030): optional, local only, never run by CI. Its own project
+# (`pfp-bi`), started by hand, not by `make poc-up`. It joins the network of PFP's Postgres
+# (start that first) and reads gold as the read-only role; its metadata is in a `superset`
+# database of the same Postgres. `bi-down` removes only Superset's container and image
+# layers; its dashboards are in bi/assets (committed) and come back on the next `bi-up`.
+BI_COMPOSE = docker compose -f bi/docker-compose.yml -p pfp-bi
+
+bi-up:
+	set -a && . ./.env && set +a && \
+	{ docker network inspect "$${PFP_NETWORK:-pfp-poc_default}" >/dev/null 2>&1 || \
+		{ echo "No Docker network $${PFP_NETWORK:-pfp-poc_default}: run 'make poc-up' first (PFP's Postgres must be up)." >&2; exit 1; }; } && \
+	$(BI_COMPOSE) up -d --build --wait
+	@echo "Superset: http://localhost:8088 (user admin, password PFP_BI_ADMIN_PASSWORD from .env)"
+
+bi-down:
+	set -a && . ./.env && set +a && $(BI_COMPOSE) down
+
+# DROPS the `superset` database in PFP's Postgres: Superset's users and dashboards (only
+# re-importable state; `pfp` is untouched). The next `bi-up` re-imports bi/assets. Needed
+# before `make bi-export` re-authors them.
+bi-reset: bi-down
+	set -a && . ./.env && set +a && docker compose -f docker-compose.yml -p pfp-poc exec -T postgres \
+		psql -U "$$PFP_PG_USER" -d "$$PFP_PG_DATABASE" -c 'drop database if exists superset with (force)'
+
+# Rewrites bi/assets from a fresh Superset: `rm bi/assets/*`, `make bi-reset bi-up`, this.
+bi-export:
+	set -a && . ./.env && set +a && uv run python bi/build_dashboards.py
 
 # Phase 7 (alerting, SETUP.md section 11): send the errors of the last `dbt build`
 # now and queue its warnings; `alert-digest` sends the queued warnings as one

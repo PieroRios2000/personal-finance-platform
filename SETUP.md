@@ -19,6 +19,7 @@ if something breaks, fall back to these.
 | make | 4.4 | Check shortcuts (`make check-task`) | T4 |
 | Docker Desktop | 4.43.2 (Engine 28.3.2, Compose 2.38) | Local S3 with SeaweedFS | T13 |
 | OpenMetadata stack (optional, `openmetadata/docker-compose.yml`) | OpenMetadata 2.0.2 (server, ingestion, PostgreSQL) + Elasticsearch 9.3.0 | Catalog and column-level lineage over the dbt project (T24). **Needs ~4.6 GiB of RAM at idle (measured: ~4.8 GiB peak while ingesting) and up to ~4.5 of 6 vCPUs while ingesting**, on top of SeaweedFS; the official minimum is 6 GiB and 4 vCPUs given to Docker. ~12 GiB of images. Measured on WSL2 with `memory=11GB processors=6 swap=4GB` in `C:\Users\<you>\.wslconfig` (Docker then sees 14.88 GiB); not measured at 7.4 GiB. Never run by CI | T24 |
+| Superset stack (optional, `bi/docker-compose.yml`) | Apache Superset 5.0.0 + `psycopg2-binary` 2.9.10 | Dashboards over the gold schema (T32). **Measured: 335 MiB of RAM idle and after loading every chart**; the image is 3.7 GB on disk. Never run by CI | T32 |
 | Tesseract OCR + Spanish language pack | 5.5 | OCR for scanned PDFs | T11b |
 | GitHub CLI (`gh`) | 2.46 | PRs from the terminal | Optional |
 
@@ -422,6 +423,42 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 Re-run `make om-sync` after any `dbt build` that changes models; it is idempotent. `make om-down`
 when done. Elementary's own models (a separate DuckDB file, not in Postgres) are not
 catalogued and dbt tests are not ingested.
+
+## 12. Dashboards in Apache Superset (T32)
+
+Optional, like OpenMetadata: `bi/docker-compose.yml` runs Superset 5.0.0 under its own project
+(`pfp-bi`). CI never runs it and `make poc-up` does not start it. **Measured: 335 MiB idle and after
+loading every chart** (one container; the image is 3.7 GB on disk), far below OpenMetadata's ~4.6 GiB,
+so no `.wslconfig` change is needed on top of section 10's.
+
+```bash
+make poc-up                          # local S3 and Postgres, as in section 6
+# fill in .env (see .env.example): PFP_BI_DB_PASSWORD, PFP_BI_ADMIN_PASSWORD, PFP_BI_SECRET_KEY
+set -a && source .env && set +a
+uv run pfp ingest --user "$PFP_USER"                    # your data, as in section 6
+uv run dbt build --project-dir dbt --profiles-dir dbt   # gold tables the charts read
+make bi-up                           # builds the image the first time (~2 minutes)
+```
+
+Open <http://localhost:8088>, user `admin`, password `PFP_BI_ADMIN_PASSWORD`, then *Dashboards* ->
+**PFP finance**. It has four charts: monthly cash flow (income and spending, without internal
+transfers), the savings balance per month, and each fund's monthly return -- as a table with
+`closing_basis` next to the return (`valuation` = a real month-end value, `last_movement` = only the
+balance at the last movement) and as a line per fund. Currencies are never added: every chart splits
+by currency.
+
+- Superset reads Postgres as the read-only role `pfp_bi`: it sees `gold` and nothing else, so it
+  cannot read `silver` or change data.
+- Its own users and dashboards live in a `superset` database of the same Postgres (created by
+  `bi/init-metadata.sh`). `make bi-down` stops it; `make bi-reset` also forgets that state, and the next
+  `make bi-up` re-imports the committed dashboards from `bi/assets/`.
+- Run `make bi-down` (and `make om-down`) before `make poc-down`: while they are attached, Docker cannot
+  remove the Postgres network.
+- **Changing a dashboard:** edit `bi/build_dashboards.py`, then `rm -r bi/assets/*`, `make bi-reset bi-up`,
+  `make bi-export`, and commit the new `bi/assets/`.
+- If `pfp_bi` cannot log in: its password is only read when the Postgres volume is first created
+  (`postgres/init-roles.sh`); if you changed `PFP_PG_BI_PASSWORD` since, either recreate the volume or
+  `alter role pfp_bi password '...'`.
 
 ## 11. Alerts by email or Microsoft Teams (Phase 7)
 

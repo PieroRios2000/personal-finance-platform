@@ -212,3 +212,24 @@ models:
       - name: is_return_reliable
         data_tests:
           - not_null
+
+  - name: fct_account_balance_monthly
+    description: >
+      Gold (T32): one row per account, currency and calendar month, with the
+      closing balance the statement declares (reconciled at ingestion). For the
+      savings-balance chart; `account_kind` says whether the balance is money held
+      (`asset`) or debt owed (`liability`). Currencies are never mixed.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [account_id, currency, month_start]
+    columns:
+      - name: account_id
+        data_tests:
+          - not_null
+      - name: month_start
+        data_tests:
+          - not_null
+      - name: closing_balance
+        data_tests:
+          - not_null

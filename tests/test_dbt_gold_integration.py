@@ -400,3 +400,28 @@ def test_spend_by_bank_by_month_query_joins_all_four_dimensions(
         ("BCP", 2026, 1, Decimal("50.00")),
         ("Scotiabank", 2026, 1, Decimal("165.00")),
     ]
+
+
+def test_account_balance_monthly_has_the_closing_balance_of_each_account_and_month(
+    lake: str, tmp_path: Path
+) -> None:
+    """T32: the savings-balance chart reads one closing balance per account, currency
+    and calendar month (the continuity test allows one statement per month)."""
+    for period in (_JANUARY, _FEBRUARY, _MARCH):
+        _write(*period)
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    with pg_store.connect() as connection:
+        rows = connection.execute(
+            "select month_start, closing_balance, bank, account_kind, currency "
+            "from gold.fct_account_balance_monthly order by month_start"
+        ).fetchall()
+
+    assert [(str(r[0]), str(r[1])) for r in rows] == [
+        ("2026-01-01", "900.00"),
+        ("2026-02-01", "950.00"),
+        ("2026-03-01", "900.00"),
+    ]
+    assert {(r[2], r[3], r[4]) for r in rows} == {("BCP", "asset", "PEN")}
