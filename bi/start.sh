@@ -4,16 +4,29 @@
 set -e
 
 superset db upgrade
+# create-admin fails when the user already exists; reset-password then makes sure
+# the password is the current PFP_BI_ADMIN_PASSWORD (and fails if there is no admin).
 superset fab create-admin --username admin --firstname PFP --lastname Admin \
     --email admin@example.com --password "$PFP_BI_ADMIN_PASSWORD" || true
+superset fab reset-password --username admin --password "$PFP_BI_ADMIN_PASSWORD"
 superset init
 
 # The committed export masks the connection's password; put the real one (the read-only
-# role's) into a throwaway copy, never into the repository. No export yet (a fresh
-# checkout that has not run `make bi-export`): start empty.
+# role's, URL-encoded) into a throwaway copy of the database file, never into the
+# repository. No export yet (a fresh checkout that has not run `make bi-export`): start
+# empty.
 if [ -f /app/pfp-assets/metadata.yaml ]; then
     rm -rf /tmp/assets && cp -r /app/pfp-assets /tmp/assets
-    find /tmp/assets -name '*.yaml' -exec sed -i "s/XXXXXXXXXX/${PFP_PG_BI_PASSWORD}/g" {} +
+    python - <<'PY'
+import glob
+import os
+from urllib.parse import quote
+
+password = quote(os.environ["PFP_PG_BI_PASSWORD"], safe="")
+for path in glob.glob("/tmp/assets/databases/*.yaml"):
+    text = open(path).read()
+    open(path, "w").write(text.replace("XXXXXXXXXX", password))
+PY
     superset import-directory /tmp/assets --overwrite
 fi
 

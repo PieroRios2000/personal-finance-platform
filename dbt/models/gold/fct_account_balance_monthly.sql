@@ -1,7 +1,9 @@
--- gold.fct_account_balance_monthly: an account's closing balance at the end of
--- each calendar month, for the savings-balance chart (T32).
+-- gold.fct_account_balance_monthly: an account's closing balance for each calendar
+-- month, for the savings-balance chart (T32).
 --
--- Grain: one row per account, currency and calendar month with a statement. The
+-- Grain: one row per account, currency and calendar month in which a statement ends
+-- (`closing_date` is that statement's end: a statement running Jan 20 to Feb 19 is
+-- February's, and a month with no statement ending in it has no row). The
 -- balance is the `closing_balance` the statement declares, reconciled against its
 -- movements at ingestion (ADR 0005), so it is never recomputed here. The continuity
 -- test allows one statement per account and month; if a month ever had two, it

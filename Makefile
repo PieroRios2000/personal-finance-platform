@@ -108,18 +108,20 @@ om-down:
 BI_COMPOSE = docker compose -f bi/docker-compose.yml -p pfp-bi
 
 bi-up:
-	@docker network inspect "$${PFP_NETWORK:-pfp-poc_default}" >/dev/null 2>&1 || \
-		{ echo "No Docker network $${PFP_NETWORK:-pfp-poc_default}: run 'make poc-up' first (PFP's Postgres must be up)." >&2; exit 1; }
-	set -a && . ./.env && set +a && $(BI_COMPOSE) up -d --build --wait
+	set -a && . ./.env && set +a && \
+	{ docker network inspect "$${PFP_NETWORK:-pfp-poc_default}" >/dev/null 2>&1 || \
+		{ echo "No Docker network $${PFP_NETWORK:-pfp-poc_default}: run 'make poc-up' first (PFP's Postgres must be up)." >&2; exit 1; }; } && \
+	$(BI_COMPOSE) up -d --build --wait
 	@echo "Superset: http://localhost:8088 (user admin, password PFP_BI_ADMIN_PASSWORD from .env)"
 
 bi-down:
-	set -a && . ./.env && set +a && $(BI_COMPOSE) down -v
+	set -a && . ./.env && set +a && $(BI_COMPOSE) down
 
-# Forget Superset's users and dashboards too (its `superset` database in PFP's Postgres);
-# the next `bi-up` re-imports bi/assets. Needed before `make bi-export` re-authors them.
+# DROPS the `superset` database in PFP's Postgres: Superset's users and dashboards (only
+# re-importable state; `pfp` is untouched). The next `bi-up` re-imports bi/assets. Needed
+# before `make bi-export` re-authors them.
 bi-reset: bi-down
-	set -a && . ./.env && set +a && docker compose -p pfp-poc exec -T postgres \
+	set -a && . ./.env && set +a && docker compose -f docker-compose.yml -p pfp-poc exec -T postgres \
 		psql -U "$$PFP_PG_USER" -d "$$PFP_PG_DATABASE" -c 'drop database if exists superset with (force)'
 
 # Rewrites bi/assets from a fresh Superset: `rm bi/assets/*`, `make bi-reset bi-up`, this.
