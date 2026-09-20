@@ -152,3 +152,7 @@ gold.fact_transactions.amount`), `flow_type` (`bronze.statements.account_kind` +
 - [ADR 0007](0007-ephemeral-per-pr-environments.md) — the ephemeral, project-named, `down -v`
   pattern the compose file follows.
 - [ADR 0011](0011-delta-scan-as-a-dbt-source.md) — why bronze isn't a DuckDB table.
+
+## Update 2026-09-19
+
+The DuckDB workaround this ADR describes (no DuckDB connector in OpenMetadata, hence a script registering the tables) is retired by task T30 of the Phase 2 extension: once dbt stores silver and gold in PostgreSQL ([ADR 0029](0029-dbt-stores-silver-and-gold-in-postgres.md)), OpenMetadata reads them with its native connector. The column-level lineage from dbt's artifacts stays.

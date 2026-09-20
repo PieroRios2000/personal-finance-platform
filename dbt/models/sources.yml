@@ -26,3 +26,10 @@ sources:
           0012), so the continuity test partitions by `currency` too, not just
           `user_id`/`account_id`. `silver.transactions` joins this table on
           `account_id` for `account_kind`.
+      - name: investment_entries
+        description: >
+          The manual Excel's `Inversiones` sheet (ADR 0027, 0028): one row per
+          contribution, withdrawal or month-end valuation of a fund or
+          platform, in one currency. Only exists once a workbook with that sheet
+          has been loaded (`pfp import-manual`); models on it use
+          `bronze_table_exists` so a lake without it still builds.

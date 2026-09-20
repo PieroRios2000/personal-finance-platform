@@ -288,6 +288,143 @@ first, not assumed.
 **Dependencies:** T20, T21, T22, T23, T24 · **Files:** `README.md`, `brain/**`, `PROJECT.md` ·
 **Size:** S
 
-### ✅ Final checkpoint (Phase 2)
+### Phase 2 extension: PostgreSQL as dbt's store, then the dashboard (added 2026-09-19)
+
+> Why and what: [ADR 0029](../brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md). Phase 2
+> was closed at T25; these tasks reopen it on purpose, because BI, the catalog and Dagster have to read
+> what dbt builds while it builds (a DuckDB file has one writer). Order matters: each task leaves
+> `develop` green and every task updates the brain notes it touches. Phase 3 (ML) starts after T33.
+
+### T26: PostgreSQL service and the dbt connection — `infra/postgres-dbt-store`
+
+**Description:** Add PostgreSQL to `docker-compose.yml` and point dbt-duckdb at it with `attach`
+(`type: postgres`), so silver and gold are created there. DuckDB stays the engine reading bronze.
+
+**Acceptance criteria:**
+- [x] `postgres` service in `docker-compose.yml` (pinned image, data in a volume removed by `down -v`,
+  bound to `127.0.0.1`), started by `make pg-up`; credentials only from `.env` (`PFP_PG_*`, added to
+  `.env.example`). (Not by `make poc-up` yet: the default store flips in T27, so the real `pfp-poc`
+  instance is not disturbed until then.)
+- [x] `dbt/profiles.yml` has a `postgres` target (`--target postgres`, **opt-in**: the DuckDB file stays
+  the default until T27, so `develop` stays green); `dbt build` creates every silver and gold model in
+  Postgres, and the incremental `MERGE` and its purge behave as before (a second build changes
+  nothing). Elementary is moved to its own DuckDB file on this target here, because the build cannot
+  pass without it (the T28 task keeps the rest: `edr`, its tests and ADR 0022).
+- [x] A read-only role `pfp_bi`, created when the volume is first made, that can `select` on `gold` only,
+  including tables dbt recreates (tested).
+- [x] `brain/decisions/0029-...md` (already written) confirmed against what was built; SETUP.md section 6
+  updated; CI's `ephemeral-integration` brings up a Postgres and runs the new integration test.
+
+**Verification:** `make pg-up` and the local S3, load the synthetic inbox, `dbt build --target postgres`:
+every node passes (139/139) and a second build changes nothing; `tests/test_dbt_postgres_integration.py`
+passes against a real Postgres and S3.
+
+**Dependencies:** T25 · **Files:** `docker-compose.yml`, `dbt/profiles.yml`, `.env.example`, `Makefile`,
+`SETUP.md`, `brain/**` · **Size:** M
+
+### T27: Readers move from the DuckDB file to PostgreSQL — `refactor/readers-on-postgres`
+
+**Description:** Everything that opened `dbt/pfp.duckdb` reads Postgres instead.
+
+**Acceptance criteria:**
+- [x] `scripts/poc.py` (transfer-match counts) reads Postgres; `make poc-up` starts it and `make poc`
+  fails clearly without the `PFP_PG_*` variables; the Dagster module gives Elementary an absolute
+  DuckDB path by default.
+- [x] The integration tests that query the built tables read Postgres through one shared helper
+  (`tests/pg_store.py`); each parallel pytest-xdist worker gets its own database, dropped and recreated
+  with the test lake, so the parallel runner keeps working.
+- [x] The default dbt target is Postgres (`PFP_DBT_TARGET`); `local` (the DuckDB file) stays selectable
+  because CI's base-versus-PR data diff still needs it until T29. `PFP_DUCKDB_PATH` is now only that
+  target's and `edr`'s (T28).
+
+**Verification:** the whole integration suite passes with `-n 4` against a real Postgres and S3.
+
+**Dependencies:** T26 · **Files:** `scripts/poc.py`, `orchestration/**`, `tests/**` · **Size:** L
+
+### T28: Elementary on its own DuckDB file — `fix/elementary-own-duckdb`
+
+**Description:** Elementary's view models and its end-of-run results upload do not work through the
+Postgres attach. Give it a small DuckDB file of its own; its anomaly test still reads silver in Postgres.
+
+**Acceptance criteria:**
+- [x] Elementary's models and results land in a DuckDB file (`elementary` schema), not in Postgres (done
+  in T26, which the Postgres target needed).
+- [x] `volume_anomalies` still passes/warns as in T22 (its tests read the file), and `edr report` still
+  renders: `edr` has its own profile on that file (integration test renders the report), and CI's `edr`
+  step uses the same absolute path as dbt.
+- [x] ADR 0022 (update section), `brain/components/elementary.md` and SETUP.md updated (where it lives now).
+
+**Dependencies:** T27 · **Files:** `dbt/**`, `tests/test_elementary_anomaly_integration.py`,
+`brain/**` · **Size:** M
+
+### T29: CI on PostgreSQL — `ci/ephemeral-postgres`
+
+**Description:** The ephemeral environment (ADR 0007) and the base-versus-PR data diff work on Postgres.
+
+**Acceptance criteria:**
+- [ ] `ephemeral-integration` brings up Postgres with SeaweedFS, runs the Dagster job and the integration
+  tests, and tears both down (`down -v`).
+- [ ] `scripts/data_diff.py` and `pr-data-diff` compare Postgres schemas (base and PR) instead of two
+  DuckDB files; ADR 0014 updated.
+- [ ] The job stays within its time budget (backlog, "CI speed").
+
+**Dependencies:** T27, T28 · **Files:** `.github/workflows/ci.yml`, `scripts/data_diff.py`,
+`brain/**` · **Size:** M
+
+### T30: OpenMetadata reads PostgreSQL natively — `infra/openmetadata-postgres`
+
+**Description:** Retire the custom DuckDB registration script now that OpenMetadata can read the tables
+directly.
+
+**Acceptance criteria:**
+- [ ] OpenMetadata ingests the Postgres `silver` and `gold` schemas with its native connector and the
+  dbt artifacts, and `fact_transactions.amount` still traces back to `bronze.transactions.amount`.
+- [ ] `scripts/openmetadata_sync.py` is removed or reduced to what the connector does not cover; ADR 0023
+  and `brain/components/openmetadata.md` updated; SETUP.md section 10 updated.
+
+**Dependencies:** T26 · **Files:** `scripts/openmetadata_sync.py`, `docker-compose.openmetadata.yml`,
+`SETUP.md`, `brain/**` · **Size:** M
+
+### T31: Dagster shows the Postgres tables — `feat/dagster-postgres-assets`
+
+**Description:** The Dagster asset graph shows bronze, each dbt model and where it is stored, so the
+lake, dbt and the database are seen as one thing.
+
+**Acceptance criteria:**
+- [ ] The dbt assets carry their Postgres schema, table and row count as asset metadata after a run.
+- [ ] The graph is documented (README/SETUP) with what to look at.
+
+**Dependencies:** T27 · **Files:** `orchestration/**`, `brain/components/dagster.md` · **Size:** S
+
+### T32: Superset over PostgreSQL — `infra/superset`
+
+**Description:** Apache Superset (open source, no cost) in its own Compose stack, reading Postgres with the
+read-only role, plus the first dashboards.
+
+**Acceptance criteria:**
+- [ ] `make bi-up` / `make bi-down` start and stop Superset (its metadata in its own database of the same
+  Postgres); it is not started by `make poc-up`, like OpenMetadata.
+- [ ] A Postgres database connection with the read-only role; dashboards as code (exported and committed):
+  monthly cash flow (income and spending, no internal transfers), savings balance per month, and each
+  fund's monthly return **with `closing_basis` beside the return**.
+- [ ] The RAM it needs is measured against `.wslconfig` and written down (like T24).
+- [ ] An ADR records Superset over Metabase and Streamlit; SETUP.md gets a section.
+
+**Dependencies:** T26 · **Files:** `docker-compose.superset.yml`, `bi/**`, `Makefile`, `SETUP.md`,
+`brain/**` · **Size:** L
+
+### T33: Phase 2 re-close — `docs/phase-2-extension-close`
+
+**Description:** Leave the extended phase presentable, as T25 did.
+
+**Acceptance criteria:**
+- [ ] README, PROJECT.md, `brain/phases/phase-2.md` and the architecture diagram reflect Postgres, Superset
+  and the extension; nothing still says "embedded, no Postgres" as a current fact.
+- [ ] A clean clone follows the README to a running dashboard.
+- [ ] Links and anchors checked with a script.
+
+**Dependencies:** T26-T32 · **Size:** S
+
+### ✅ Final checkpoint (Phase 2, including the extension T26-T33)
 - [ ] All criteria met · [ ] `develop → main` release PR "Phase 2 — Orchestration + Governance"
   · [ ] merged by Piero

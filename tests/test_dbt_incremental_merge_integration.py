@@ -33,6 +33,7 @@ import pytest
 
 from ingestion.schema import Statement, Transaction
 from lakehouse import bronze
+from tests import pg_store
 from tests.test_dbt_silver_integration import (
     _ACCOUNT_ID,
     _BANK,
@@ -122,9 +123,8 @@ def _silver_snapshot(tmp_path: Path) -> list[tuple[Any, ...]]:
     """Every column of every `silver.transactions` row, in a stable order --
     used to prove a rebuild changed *nothing* (not just that row counts
     match, which a delete-one/insert-one pair would also satisfy)."""
-    import duckdb
 
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         return connection.execute(
             "select user_id, bank, account_id, account_last4, date, amount, "
             "currency, source_file_sha256, ingested_at, occurrence_number, "
@@ -135,9 +135,8 @@ def _silver_snapshot(tmp_path: Path) -> list[tuple[Any, ...]]:
 
 
 def _descriptions(tmp_path: Path) -> list[str]:
-    import duckdb
 
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         rows = connection.execute(
             "select description from silver.transactions order by description"
         ).fetchall()
@@ -160,9 +159,7 @@ def test_two_identical_transactions_in_one_statement_land_as_two_silver_rows(
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         rows = connection.execute(
             "select description, occurrence_number from silver.transactions "
             "where account_id = ? and amount = -25.00 order by occurrence_number",
@@ -350,9 +347,7 @@ def test_regenerated_file_with_the_same_business_key_updates_in_place(
     assert scoped_build.returncode == 0, scoped_build.stdout
     assert "OK created sql incremental model silver.transactions" in scoped_build.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         rows = connection.execute(
             "select source_file_sha256 from silver.transactions "
             "where account_id = ? and amount = -30.00",

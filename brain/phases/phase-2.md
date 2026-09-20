@@ -1,10 +1,10 @@
 ---
 type: phase
 phase: 2
-status: closed
+status: extended
 ---
 
-# Phase 2 — Orchestration + Governance (closed)
+# Phase 2 — Orchestration + Governance (closed 2026-09-18, extended 2026-09-19)
 
 The same PDFs now flow through one orchestrated DAG (Dagster), silver is an incremental `MERGE`
 keyed on each transaction's business key, gold is a star schema, Elementary watches silver for
@@ -22,6 +22,28 @@ anomalies, and OpenMetadata (optional, local) shows column-level lineage back to
 | T23 | Gold star schema: `fact_transactions` + four dimensions, `flow_type` | done (#70) — [ADR 0020](../decisions/0020-gold-star-schema-flow-type-and-dim-account-grain.md) |
 | T24 | OpenMetadata catalog and column-level lineage (optional, not in CI) | done (#73) — [ADR 0023](../decisions/0023-openmetadata-catalog-and-column-lineage-from-dbt-artifacts.md) |
 | T25 | Phase close: README, this note, PROJECT.md, the walkthrough for real PDFs, `make poc` installs dbt packages | done |
+
+### Extension: PostgreSQL as dbt's store, then the dashboard (T26–T33, planned)
+
+Added after the phase closed, on the owner's decision: BI, the catalog and Dagster must read what dbt
+builds *while it builds*, and a DuckDB file has a single writer. dbt keeps DuckDB as the **engine** (it
+reads bronze from the lake) and stores silver and gold in **PostgreSQL**; Apache Superset then reads it.
+Decision, feasibility check and consequences: [ADR 0029](../decisions/0029-dbt-stores-silver-and-gold-in-postgres.md);
+acceptance criteria in [`tasks/todo-phase2.md`](../../tasks/todo-phase2.md). Phase 3 (ML) starts after T33.
+
+| Task | What | Status |
+|---|---|---|
+| T26 | PostgreSQL service and the dbt connection (opt-in `--target postgres`; read-only BI role; Elementary on its own file for this target) | done — [ADR 0029](../decisions/0029-dbt-stores-silver-and-gold-in-postgres.md) |
+| T27 | Scripts, Dagster wiring and tests read PostgreSQL instead of the DuckDB file; Postgres is the default dbt target | done |
+| T28 | Elementary keeps its own small DuckDB file; `edr` reads it through its own profile | done |
+| T29 | CI's ephemeral environment and the PR data diff on PostgreSQL | planned |
+| T30 | OpenMetadata reads PostgreSQL natively (retires the DuckDB workaround of ADR 0023) | planned |
+| T31 | Dagster shows where each model is stored | planned |
+| T32 | Superset over a read-only role on gold: cash flow, savings, each fund's monthly return | planned |
+| T33 | Phase 2 re-close | planned |
+
+Until each task lands, the notes below describe the DuckDB-file version; each task updates the notes it
+touches.
 
 Also integrated during the phase: `ephemeral-integration` made genuinely required through an
 always-run gate job (#69, [ADR 0019](../decisions/0019-ephemeral-integration-required-via-gate-job.md)),

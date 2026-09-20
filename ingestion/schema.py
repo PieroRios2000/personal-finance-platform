@@ -202,3 +202,60 @@ class Statement(BaseModel):
                     "same user, bank, account and currency as the statement"
                 )
         return self
+
+
+InvestmentKind = Literal["aporte", "retiro", "valorizacion"]
+
+
+class InvestmentEntry(BaseModel):
+    """One row of the manual Excel's `Inversiones` sheet (ADR 0027, 0028): money
+    put in (`aporte`), taken out (`retiro`) or a month-end `valorizacion` (amount
+    0), with the investment's total balance after it. `position` is the row's
+    order in the sheet, to tell same-day rows apart."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    date: date
+    kind: InvestmentKind
+    amount: Decimal
+    balance: Decimal
+    detail: str | None = None
+    position: int
+
+    @field_validator("amount", "balance")
+    @classmethod
+    def _validate_money(cls, value: Decimal) -> Decimal:
+        return _quantize_money(value)
+
+    @model_validator(mode="after")
+    def _validate_amount_for_kind(self) -> "InvestmentEntry":
+        if self.kind == "valorizacion" and self.amount != 0:
+            raise ValueError("a valorizacion has amount 0")
+        if self.kind != "valorizacion" and self.amount <= 0:
+            raise ValueError("an aporte or retiro has an amount greater than 0")
+        return self
+
+
+class InvestmentMonth(BaseModel):
+    """One investment (a fund or platform) in one currency for one calendar
+    month. `month_key` identifies it independently of its content, so loading a
+    corrected workbook replaces the month (like `Statement`'s file hash does for
+    a manual savings month)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    user_id: str = Field(min_length=1)
+    place: str = Field(min_length=1)
+    currency: Currency
+    year: int
+    month: int = Field(ge=1, le=12)
+    month_key: str = Field(pattern=_SHA256_HEX_PATTERN)
+    entries: list[InvestmentEntry] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_entries_in_month(self) -> "InvestmentMonth":
+        if any(
+            (e.date.year, e.date.month) != (self.year, self.month) for e in self.entries
+        ):
+            raise ValueError("every entry must fall in the month it belongs to")
+        return self

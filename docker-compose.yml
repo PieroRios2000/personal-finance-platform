@@ -25,6 +25,34 @@ services:
       retries: 10
       start_period: 10s
 
+  # dbt's store for silver and gold (ADR 0029, T26). dbt-duckdb reads bronze from the
+  # lake and writes here through DuckDB's `attach`. Bound to localhost only; the
+  # credentials come from `.env` (PFP_PG_*), nothing is hardcoded. `init-roles.sh`
+  # creates the schemas and the read-only BI role the first time the volume is made.
+  # Started by `make poc-up` with the local S3; `make pg-up` starts only this one.
+  postgres:
+    image: postgres:16.10-alpine
+    environment:
+      POSTGRES_USER: ${PFP_PG_USER:-}
+      POSTGRES_PASSWORD: ${PFP_PG_PASSWORD:-}
+      POSTGRES_DB: ${PFP_PG_DATABASE:-}
+      PFP_PG_BI_PASSWORD: ${PFP_PG_BI_PASSWORD:-}
+    ports:
+      - "127.0.0.1:${PFP_PG_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-init-roles.sh:ro
+      - ./postgres/grants.sql:/etc/pfp/grants.sql:ro
+    healthcheck:
+      # TCP (`-h 127.0.0.1`), not the unix socket: while the entrypoint runs the init
+      # scripts its temporary server listens on the socket only, so a socket check
+      # would report healthy before init has finished.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
   # One-shot: waits for the S3 gateway to be healthy, then creates the "lakehouse"
   # bucket (a directory under the filer's /buckets, no S3 credentials needed for
   # this step) and exits. Safe to run repeatedly: creating an existing bucket is a
@@ -43,3 +71,4 @@ services:
 
 volumes:
   seaweedfs-data:
+  postgres-data:

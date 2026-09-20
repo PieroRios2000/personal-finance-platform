@@ -305,3 +305,50 @@ def test_normalize_description_same_movement_from_two_statements_matches() -> No
 def test_normalize_description_is_idempotent() -> None:
     once = normalize_description("  Compra   Pos.... Tienda ")
     assert normalize_description(once) == once
+
+
+def test_a_valorizacion_has_no_amount_and_an_aporte_or_retiro_does() -> None:
+    from decimal import Decimal
+
+    from pydantic import ValidationError
+
+    from ingestion.schema import InvestmentEntry
+
+    common: dict[str, Any] = {
+        "date": date(2026, 7, 5),
+        "balance": Decimal("10"),
+        "position": 2,
+    }
+    InvestmentEntry(kind="valorizacion", amount=Decimal("0"), **common)
+    InvestmentEntry(kind="aporte", amount=Decimal("5"), **common)
+    with pytest.raises(ValidationError):
+        InvestmentEntry(kind="valorizacion", amount=Decimal("5"), **common)
+    with pytest.raises(ValidationError):
+        InvestmentEntry(kind="retiro", amount=Decimal("0"), **common)
+
+
+def test_an_investment_month_only_holds_entries_of_its_own_month() -> None:
+    from decimal import Decimal
+
+    from pydantic import ValidationError
+
+    from ingestion.schema import InvestmentEntry, InvestmentMonth
+
+    entry = InvestmentEntry(
+        date=date(2026, 8, 5),
+        kind="aporte",
+        amount=Decimal("5"),
+        balance=Decimal("5"),
+        position=2,
+    )
+
+    with pytest.raises(ValidationError):
+        InvestmentMonth(
+            user_id="u",
+            place="Fondo",
+            currency="PEN",
+            year=2026,
+            month=7,
+            month_key="a" * 64,
+            entries=[entry],
+        )

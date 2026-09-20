@@ -28,6 +28,9 @@ models:
   # never `silver_elementary.dbt_run_results`.
   elementary:
     +schema: "elementary"
+    # T26 (ADR 0029): on the Postgres target Elementary lives in its own DuckDB file
+    # (`elem`, profiles.yml), not in Postgres.
+    +database: "{{ 'elem' if target.name == 'postgres' else target.database }}"
 
 # T18b: internal-transfer matching tolerances, both overridable per run with
 # `--vars '{internal_transfer_day_window_days: 5}'`. The defaults match the

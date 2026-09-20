@@ -14,15 +14,34 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-import duckdb
+import psycopg
 import pytest
 
+from scripts import poc
 from scripts.poc import (
     _safe_dbt_lines,
     _safe_ingest_lines,
     _transfer_match_summary,
     main,
 )
+
+_REAL_TRANSFER_COUNTS = poc._transfer_counts
+
+
+@pytest.fixture(autouse=True)
+def postgres_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`make poc` needs Postgres (ADR 0029): dummy connection variables, and the
+    count query stubbed so no test needs a live database."""
+    for name, value in {
+        "PFP_PG_HOST": "127.0.0.1",
+        "PFP_PG_PORT": "5432",
+        "PFP_PG_DATABASE": "pfp",
+        "PFP_PG_USER": "pfp",
+        "PFP_PG_PASSWORD": "not-a-real-password",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(poc, "_transfer_counts", lambda: (0, 0))
+
 
 _LEAKY_INGEST_REPORT = """Inbox: /home/piero/finance-data/inbox/piero
 Archived: 1  Duplicates: 0  Needs review: 1
@@ -112,8 +131,6 @@ def test_main_reports_pass_when_both_steps_succeed(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("PFP_USER", "piero")
-    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
-    _seed_transfer_tables(tmp_path / "pfp.duckdb", matched=0, unmatched=0)
     monkeypatch.setattr(subprocess, "run", _fake_run(0, 0))
 
     assert main() == 0
@@ -132,28 +149,84 @@ def test_main_reports_fail_when_dbt_build_fails(
     assert "poc: FAIL" in capsys.readouterr().out
 
 
-def _seed_transfer_tables(duckdb_path: Path, *, matched: int, unmatched: int) -> None:
-    """A minimal on-disk duckdb file shaped like dbt's own build output (T18b):
-    a `silver` schema with `internal_transfers`/`unmatched_transfers` tables,
-    `matched`/`unmatched` rows each -- only their row counts matter here, so
-    their columns carry no real data."""
-    with duckdb.connect(str(duckdb_path)) as connection:
-        connection.execute("create schema silver")
-        connection.execute("create table silver.internal_transfers (id int)")
-        connection.execute("create table silver.unmatched_transfers (id int)")
-        for i in range(matched):
-            connection.execute("insert into silver.internal_transfers values (?)", [i])
-        for i in range(unmatched):
-            connection.execute("insert into silver.unmatched_transfers values (?)", [i])
+def test_transfer_match_summary_reports_counts_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(poc, "_transfer_counts", lambda: (3, 2))
+
+    assert (
+        _transfer_match_summary()
+        == "Internal transfers: 3 matched pair(s), 2 unmatched candidate(s)"
+    )
 
 
-def test_transfer_match_summary_reports_counts_only(tmp_path: Path) -> None:
-    duckdb_path = tmp_path / "pfp.duckdb"
-    _seed_transfer_tables(duckdb_path, matched=3, unmatched=2)
+class _FakePostgres:
+    """Stands in for psycopg.connect(): answers each count query in order."""
 
-    summary = _transfer_match_summary(str(duckdb_path))
+    def __init__(self, counts: list[int]) -> None:
+        self.counts = counts
+        self.queries: list[str] = []
 
-    assert summary == "Internal transfers: 3 matched pair(s), 2 unmatched candidate(s)"
+    def __enter__(self) -> "_FakePostgres":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def execute(self, query: str) -> "_FakePostgres":
+        self.queries.append(query)
+        return self
+
+    def fetchone(self) -> tuple[int]:
+        return (self.counts.pop(0),)
+
+
+def test_the_counts_are_read_from_postgres_with_no_amount_column(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakePostgres([7, 4])
+    monkeypatch.setattr(poc, "_transfer_counts", _REAL_TRANSFER_COUNTS)
+    monkeypatch.setattr(psycopg, "connect", lambda *args, **kwargs: fake)
+
+    assert poc._transfer_counts() == (7, 4)
+    assert fake.queries == [
+        "select count(*) from silver.internal_transfers",
+        "select count(*) from silver.unmatched_transfers",
+    ]
+
+
+def test_main_fails_clearly_without_the_postgres_variables(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("PFP_USER", "piero")
+    monkeypatch.delenv("PFP_PG_PASSWORD")
+
+    def _unexpected_call(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("subprocess.run must not be called without Postgres")
+
+    monkeypatch.setattr(subprocess, "run", _unexpected_call)
+
+    assert main() == 2
+    assert "PFP_PG_PASSWORD" in capsys.readouterr().err
+
+
+def test_unreadable_counts_never_stop_the_report_or_the_alerts(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The build passed: a Postgres hiccup while counting transfers must not turn
+    into a traceback that skips the PASS line and the alerting after it."""
+    monkeypatch.setenv("PFP_USER", "piero")
+
+    def _refuse() -> tuple[int, int]:
+        raise psycopg.OperationalError("connection refused")
+
+    monkeypatch.setattr(poc, "_transfer_counts", _refuse)
+    monkeypatch.setattr(subprocess, "run", _fake_run(0, 0))
+
+    assert main() == 0
+    out = capsys.readouterr().out
+    assert "could not read the transfer counts from Postgres" in out
+    assert "poc: PASS" in out
 
 
 def test_main_prints_the_transfer_summary_when_dbt_build_succeeds(
@@ -162,8 +235,7 @@ def test_main_prints_the_transfer_summary_when_dbt_build_succeeds(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("PFP_USER", "piero")
-    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
-    _seed_transfer_tables(tmp_path / "pfp.duckdb", matched=1, unmatched=4)
+    monkeypatch.setattr(poc, "_transfer_counts", lambda: (1, 4))
     monkeypatch.setattr(subprocess, "run", _fake_run(0, 0))
 
     assert main() == 0
@@ -178,7 +250,11 @@ def test_main_does_not_query_transfer_tables_when_dbt_build_fails(
     querying them here would be misleading at best, an unhandled error at
     worst."""
     monkeypatch.setenv("PFP_USER", "piero")
-    monkeypatch.setenv("PFP_DUCKDB_PATH", "/nonexistent/pfp.duckdb")
+
+    def _must_not_query() -> tuple[int, int]:
+        raise AssertionError("the tables must not be queried after a failed build")
+
+    monkeypatch.setattr(poc, "_transfer_counts", _must_not_query)
     monkeypatch.setattr(subprocess, "run", _fake_run(0, 1))
 
     assert main() == 1
@@ -201,8 +277,6 @@ def test_main_installs_dbt_packages_before_ingesting_and_building(
     (dbt/dbt_packages is gitignored) a bare `dbt build` fails, so `make poc` has to
     install the packages itself, first."""
     monkeypatch.setenv("PFP_USER", "piero")
-    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
-    _seed_transfer_tables(tmp_path / "pfp.duckdb", matched=0, unmatched=0)
     calls: list[list[str]] = []
     monkeypatch.setattr(subprocess, "run", _recording(_fake_run(0, 0), calls))
 
@@ -260,9 +334,7 @@ def test_main_sends_alerts_after_the_build_when_a_channel_is_configured(
     """Errors are sent the moment they appear (Phase 7): `make poc` hands the
     build's results and the count of files needing review to `alerting`."""
     monkeypatch.setenv("PFP_USER", "piero")
-    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
     monkeypatch.setenv("ALERT_TEAMS_WEBHOOK_URL", "https://teams.example.test/hook")
-    _seed_transfer_tables(tmp_path / "pfp.duckdb", matched=0, unmatched=0)
     calls: list[list[str]] = []
     monkeypatch.setattr(subprocess, "run", _recording(_fake_run(0, 1), calls))
 
@@ -322,9 +394,7 @@ def test_a_missing_alerting_program_never_breaks_poc(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("PFP_USER", "piero")
-    monkeypatch.setenv("PFP_DUCKDB_PATH", str(tmp_path / "pfp.duckdb"))
     monkeypatch.setenv("ALERT_TEAMS_WEBHOOK_URL", "https://teams.example.test/hook")
-    _seed_transfer_tables(tmp_path / "pfp.duckdb", matched=0, unmatched=0)
 
     def run(cmd: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         if "alerting" in cmd:

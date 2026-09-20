@@ -7,7 +7,7 @@ ingestion, schema validation, medallion modeling, CI/CD, and architectural docum
 
 [![CI](https://github.com/PieroRios2000/personal-finance-platform/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/PieroRios2000/personal-finance-platform/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
-![status](https://img.shields.io/badge/phase%202-orchestration%20%2B%20governance%20closed-brightgreen)
+![status](https://img.shields.io/badge/phase%202-extension%20in%20progress:%20postgres%20store%20%2B%20dashboard-yellow)
 
 ## What this is
 
@@ -22,8 +22,8 @@ to one person's real financial data, with the same engineering discipline:
 |---|---|
 | Azure Data Factory / ADLS | A Python ingestion CLI + SeaweedFS (S3-compatible) |
 | Delta/Parquet in the lake | Delta Lake, written with `delta-rs` |
-| Synapse / Databricks | DuckDB, embedded — no JVM, no cluster |
-| A modeling layer (dbt on Databricks) | dbt-duckdb, reading Delta straight off S3 |
+| Synapse / Databricks | DuckDB as the engine — no JVM, no cluster — with PostgreSQL as the store for silver and gold (Phase 2 extension) |
+| A modeling layer (dbt on Databricks) | dbt-duckdb, reading Delta straight off S3 and writing silver and gold to PostgreSQL |
 | An orchestrator (Airflow / ADF pipelines) | Dagster, running the same functions the CLI calls and the dbt project as assets |
 | Data quality and a data catalog (Purview, Great Expectations) | Elementary (dbt-native anomaly detection) and OpenMetadata (column-level lineage) |
 | A CI/CD quality gate | GitHub Actions: lint, types, tests, security, architecture contracts, impact-based performance benchmarks |
@@ -87,13 +87,35 @@ date or an amount wrong while the balances still add up.
 | Quality and observability | ✅ Elementary as a dbt package: a row-count anomaly test on silver (warn-mode) and a local HTML report |
 | Catalog and column-level lineage | ✅ OpenMetadata (optional, local only, ~4.8 GiB at peak): `fact_transactions.amount` traces back to `bronze.transactions.amount` |
 | Alerting (Phase 7) | ✅ Errors sent the moment they appear, warnings in a weekly digest, by email and/or Microsoft Teams; names and counts only, never real data ([ADR 0026](brain/decisions/0026-alerts-errors-now-warnings-weekly-names-and-counts-only.md)) |
-| ML, categories, dashboard | Later phases — see [PROJECT.md](PROJECT.md) |
+| ML, categories | Later phases — see [PROJECT.md](PROJECT.md) |
+
+#### Phase 2 extension (in progress, added 2026-09-19): PostgreSQL store and dashboard
+
+Phase 2 was reopened on purpose: the owner wants an open-source BI tool, the catalog and Dagster to
+read what dbt builds *while it builds*, and a DuckDB file has a single writer. So dbt keeps DuckDB as
+the engine (it reads bronze from the lake) and stores silver and gold in **PostgreSQL**
+([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)); then **Apache Superset**
+(open source, zero cost) reads them. Eight tasks, T26–T33, in dependency order:
+
+| Task | What |
+|---|---|
+| T26 | PostgreSQL service and the dbt connection (done: `dbt build --target postgres`, opt-in until T27) |
+| T27 | Scripts, Dagster wiring and tests read PostgreSQL instead of the DuckDB file (done: Postgres is the default target) |
+| T28 | Elementary keeps its own small DuckDB file (done, `edr` included) |
+| T29 | CI's ephemeral environment and the PR data diff on PostgreSQL |
+| T30 | OpenMetadata reads PostgreSQL natively |
+| T31 | Dagster shows where each model is stored |
+| T32 | Superset over a read-only role: cash flow, savings, each fund's monthly return |
+| T33 | Phase 2 re-close |
+
+Until these land, everything below about `dbt/pfp.duckdb` (exploring the data, DBeaver) is how it works
+today; each task updates its own instructions. Details: [`tasks/todo-phase2.md`](tasks/todo-phase2.md).
 
 ### Planned
 
 | Phase | What |
 |---|---|
-| 6 — Savings-goal projection | Banco Ripley savings and investment tracking through a manual Excel ([template and columns](docs/manual-data.md)), then a projection of how long it takes to reach a savings goal at the owner's real cash flow. Goals can be in soles or dollars, with a sol/dólar exchange-rate projection that exists only in this phase (the lake itself never converts currencies). Only liquid money in bank accounts counts; investments elsewhere (mutual funds) are deliberately left out — [ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md) |
+| 6 — Savings-goal projection | Banco Ripley savings and investment tracking through a manual Excel ([template and columns](docs/manual-data.md)), then a projection of how long it takes to reach a savings goal at the owner's real cash flow. Goals can be in soles or dollars, with a sol/dólar exchange-rate projection that exists only in this phase (the lake itself never converts currencies). Only liquid money in bank accounts counts; investments elsewhere (mutual funds) are deliberately left out of the goal, and tracked separately for their monthly return ([ADR 0028](brain/decisions/0028-investment-return-is-modified-dietz-per-fund-and-month.md)) — [ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md) |
 
 
 The order of what is next is in [`tasks/backlog.md`](tasks/backlog.md).
@@ -144,7 +166,7 @@ end to end. The full story, fix by fix, is in [`brain/components/bcp-parser.md`]
 
 ## Exploring the data
 
-**The data:** `dbt build`'s own output, `dbt/pfp.duckdb`, is a real on-disk DuckDB database —
+**The data** (*this changes with the Phase 2 extension: silver and gold move to PostgreSQL, see above*): `dbt build`'s own output, `dbt/pfp.duckdb`, is a real on-disk DuckDB database —
 it opens directly in [DBeaver](https://dbeaver.io/) (or any DuckDB-aware SQL client), silver
 with zero setup and bronze's raw Delta tables with a one-time DuckDB persistent-secret step.
 Exact commands: **[SETUP.md §7](SETUP.md#7-browsing-the-lake-in-dbeaver)**.

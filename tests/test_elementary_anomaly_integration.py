@@ -44,6 +44,7 @@ import pytest
 
 from ingestion.schema import Statement, Transaction
 from lakehouse import bronze
+from tests import pg_store
 from tests.test_dbt_silver_integration import (
     _TEST_LAKE_SUFFIX,
     _USER_ID,
@@ -145,12 +146,16 @@ def _elementary_test_status(tmp_path: Path) -> str:
     """The anomaly test's own recorded status ('pass' or 'warn') straight out
     of Elementary's `elementary_test_results` table -- a stronger proof than
     parsing `dbt build`'s own console text, since it comes from the same
-    table `edr report` (criterion 3) reads to render its report."""
+    table `edr report` (criterion 3) reads to render its report. Elementary
+    keeps its own DuckDB file (ADR 0029), not Postgres; the file's catalog is named
+    after it (`elementary`), hence the doubled qualifier."""
     import duckdb
 
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with duckdb.connect(
+        str(tmp_path / "elementary.duckdb"), read_only=True
+    ) as connection:
         row = connection.execute(
-            "select status from elementary.elementary_test_results "
+            "select status from elementary.elementary.elementary_test_results "
             "where test_name = ? order by detected_at desc limit 1",
             [_TEST_NAME],
         ).fetchone()
@@ -208,11 +213,61 @@ def test_elementarys_own_models_build_alongside_silver_and_gold(
 
     import duckdb
 
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
-        elementary_row_count = _row_count(connection, "elementary.dbt_run_results")
+    with duckdb.connect(
+        str(tmp_path / "elementary.duckdb"), read_only=True
+    ) as elementary:
+        elementary_row_count = _row_count(
+            elementary, "elementary.elementary.dbt_run_results"
+        )
+    with pg_store.connect() as connection:
         silver_row_count = _row_count(connection, "silver.transactions")
         gold_row_count = _row_count(connection, "gold.fact_transactions")
 
     assert elementary_row_count > 0
     assert silver_row_count > 0
     assert gold_row_count > 0
+
+
+def test_edr_renders_its_report_from_elementarys_own_file(
+    lake: str, tmp_path: Path
+) -> None:
+    """T28: the report reads only the file dbt wrote Elementary's results to
+    (ADR 0029), through its own profile: no lake, no Postgres."""
+    import subprocess
+    import sys
+
+    _seed_daily_statements(
+        scenario="edr", detection_day_count=_NORMAL_DETECTION_DAY_COUNT
+    )
+    assert _dbt_build(tmp_path).returncode == 0
+    report = tmp_path / "report.html"
+    environment = {
+        "HOME": os.environ.get("HOME", ""),
+        "PATH": os.environ["PATH"],
+        "PFP_ELEMENTARY_DUCKDB_PATH": str(tmp_path / "elementary.duckdb"),
+    }
+
+    result = subprocess.run(
+        [
+            str(Path(sys.executable).parent / "edr"),
+            "report",
+            "--project-dir",
+            "dbt",
+            "--profiles-dir",
+            "dbt",
+            "--config-dir",
+            "dbt/.edr",
+            "--open-browser",
+            "false",
+            "--file-path",
+            str(report),
+        ],
+        cwd=Path(__file__).resolve().parent.parent,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert report.stat().st_size > 100_000

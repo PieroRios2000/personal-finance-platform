@@ -12,7 +12,7 @@ the bank gives no statements) into the same `Statement`s the PDF parsers produce
 through bronze, silver and gold. Decision and reasons:
 [ADR 0027](../decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md); the
 sheet's columns and rules: [`docs/manual-data.md`](../../docs/manual-data.md). The `Inversiones`
-sheet is **not** imported yet (investment tracking is the next piece).
+sheet is read by the same command; see [Investment tracking](investment-tracking.md).
 
 ## Pieces
 
@@ -49,7 +49,6 @@ sheet is **not** imported yet (investment tracking is the next piece).
 
 ## Not built
 
-- The `Inversiones` sheet (contributions, withdrawals, month-end valuations, monthly return).
 - A form to type movements without opening Excel (Phase 5).
 - Fees and taxes.
 

@@ -54,7 +54,10 @@ not which tests inside it. Options, in the order they are worth doing:
 
 - [x] [Phase 7 — Alerting](../brain/phases/phase-7.md): built. Left: Dagster-triggered alerts.
 - [ ] [Phase 6 — Savings-goal projection](../brain/phases/phase-6.md): the manual-Excel
-      importer: Ripley savings **done** (`pfp import-manual`), investment tracking (the
-      `Inversiones` sheet and monthly returns) next, then the cash-flow projection and its own sol/dólar exchange-rate section (the only
+      importer: Ripley savings and investment tracking (`Inversiones` sheet, monthly returns) **done**, then the cash-flow projection and its own sol/dólar exchange-rate section (the only
       place currencies are converted). Scope in [ADR 0025](../brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md).
-- [ ] Phase 3 (ML), 4 (cloud), 5 (dashboard): see [PROJECT.md](../PROJECT.md).
+- [ ] **Phase 2 extension, T26-T33: PostgreSQL as dbt's store, then Superset** (decided 2026-09-19,
+      [ADR 0029](../brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). Order and
+      acceptance criteria in [`todo-phase2.md`](todo-phase2.md). Then the owner tries the data
+      visualization, the dbt catalog and the architecture before Phase 3 (ML).
+- [ ] Phase 3 (ML), 4 (cloud), 5 (uploader): see [PROJECT.md](../PROJECT.md).

@@ -20,20 +20,11 @@ from openpyxl.styles import Font
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.worksheet import Worksheet
 
-from ingestion.manual_excel import SAVINGS_COLUMNS
+from ingestion.manual_excel import INVESTMENT_COLUMNS, SAVINGS_COLUMNS
 
 DEFAULT_OUT_DIR = Path.home() / "finance-data" / "manual"
 TEMPLATE_NAME = "plantilla-finanzas-manual.xlsx"
 
-INVESTMENT_COLUMNS = (
-    "lugar",
-    "fecha",
-    "tipo",
-    "monto",
-    "moneda",
-    "saldo_final",
-    "nota",
-)
 
 _PLACES = ("Tyba fondo 1", "Tyba fondo 2", "Tyba fondo 3", "Flip")
 _TYPES = ("aporte", "retiro", "valorizacion")

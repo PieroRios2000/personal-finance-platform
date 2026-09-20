@@ -35,6 +35,7 @@ import pytest
 
 from ingestion.schema import AccountKind, Currency, Statement, Transaction
 from lakehouse import bronze
+from tests import pg_store
 from tests.test_dbt_silver_integration import (
     _ACCOUNT_ID,
     _BANK,
@@ -194,9 +195,7 @@ def test_asset_to_liability_transfer_matches_on_the_same_sign(
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         assert _is_internal_transfer(connection, _ACCOUNT_ID, "-300.00") is True
         assert (
             _is_internal_transfer(connection, _SCOTIABANK_ACCOUNT_ID, "-300.00") is True
@@ -219,9 +218,7 @@ def test_two_asset_accounts_transfer_matches_on_opposite_signs(
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         assert _is_internal_transfer(connection, _ACCOUNT_ID, "-250.00") is True
         assert _is_internal_transfer(connection, _BCP_ACCOUNT_B_ID, "250.00") is True
 
@@ -243,9 +240,7 @@ def test_transfer_at_day_window_boundary_matches_one_day_more_does_not(
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         assert _is_internal_transfer(connection, _ACCOUNT_ID, "-111.11") is True
         assert _is_internal_transfer(connection, _BCP_ACCOUNT_B_ID, "111.11") is True
         assert _is_internal_transfer(connection, _BCP_ACCOUNT_C_ID, "-222.22") is False
@@ -273,9 +268,7 @@ def test_three_same_amount_candidates_produce_at_most_one_pair_each(
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         assert _is_internal_transfer(connection, _ACCOUNT_ID, "-100.00") is True
         assert _is_internal_transfer(connection, _BCP_ACCOUNT_B_ID, "100.00") is True
         assert _is_internal_transfer(connection, _BCP_ACCOUNT_C_ID, "100.00") is False
@@ -301,9 +294,7 @@ def test_an_ordinary_transaction_with_no_plausible_partner_is_not_a_candidate(
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         assert _is_internal_transfer(connection, _ACCOUNT_ID, "-19.90") is False
         assert _ACCOUNT_ID not in _unmatched_account_ids(connection)
 
@@ -332,9 +323,7 @@ def test_cross_currency_same_amount_is_not_matched_but_lands_in_unmatched(
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         assert _is_internal_transfer(connection, _ACCOUNT_ID, "-100.00") is False
         assert (
             _is_internal_transfer(connection, _SCOTIABANK_ACCOUNT_ID, "-100.00")
@@ -360,9 +349,7 @@ def test_duplicate_bronze_rows_do_not_multiply_silver_transactions_rows(
     result = _dbt_build(tmp_path)
     assert result.returncode == 0, result.stdout
 
-    import duckdb
-
-    with duckdb.connect(str(tmp_path / "pfp.duckdb"), read_only=True) as connection:
+    with pg_store.connect() as connection:
         rows = connection.execute(
             "select is_internal_transfer from silver.transactions "
             "where account_id = ? and amount = ?",

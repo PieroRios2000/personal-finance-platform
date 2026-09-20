@@ -5,7 +5,7 @@
 
 BASE ?= origin/develop
 
-.PHONY: check-fast check-task check-full poc poc-up poc-down om-up om-sync om-down alert alert-digest
+.PHONY: check-fast check-task check-full poc poc-up poc-down pg-check pg-up pg-down om-up om-sync om-down alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -29,12 +29,32 @@ check-full: check-task
 # Local S3 (SeaweedFS) for the lakehouse (ADR 0003, ADR 0007). Fixed project name:
 # fine for one developer's machine; T17 gives each CI job its own project name.
 # bucket-init runs separately (`run --rm`, not part of `up`'s set): see docker-compose.yml.
-poc-up:
-	docker compose -p pfp-poc up -d --wait seaweedfs
+# `pg-check` first: with an empty PFP_PG_PASSWORD compose would start Postgres, it would
+# exit, and `make poc` would abort before its teardown trap with a generic error.
+poc-up: pg-check
+	docker compose -p pfp-poc up -d --wait seaweedfs postgres
 	docker compose -p pfp-poc run --rm bucket-init
 
 poc-down:
 	docker compose -p pfp-poc down -v
+	# Elementary's file holds baselines for a database that no longer exists.
+	rm -f dbt/elementary.duckdb
+
+# PostgreSQL, dbt's store for silver and gold (ADR 0029, T26). Same project as the local
+# S3, so `poc-down` removes its volume too. `pg-down` only stops it (data kept).
+# Needs the PFP_PG_* variables in `.env`.
+pg-check:
+	@set -a && . ./.env && set +a && \
+	missing="" && \
+	{ [ -n "$$PFP_PG_PASSWORD" ] || missing="$$missing PFP_PG_PASSWORD"; } && \
+	{ [ -n "$$PFP_PG_BI_PASSWORD" ] || missing="$$missing PFP_PG_BI_PASSWORD"; } && \
+	{ [ -z "$$missing" ] || { echo "set$$missing in .env (see .env.example, SETUP.md section 6)" >&2; exit 2; }; }
+
+pg-up: pg-check
+	set -a && . ./.env && set +a && docker compose -p pfp-poc up -d --wait postgres
+
+pg-down:
+	docker compose -p pfp-poc stop postgres
 
 # The same flow as CI's ephemeral-integration job (T17, ADR 0007), but against
 # Piero's own real PDFs instead of the synthetic fixture, and only once, locally.

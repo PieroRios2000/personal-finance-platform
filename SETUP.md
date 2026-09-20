@@ -108,6 +108,8 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | pytesseract | 0.3.13 | runtime | OCR (Spanish) for scanned pages with no text layer |
 | deltalake | 1.6.3 | runtime | Write and read bronze's Delta tables (T14, ADR 0006) |
 | pyarrow | 25.0.1 | runtime | Explicit table schemas for Delta writes (T14, ADR 0006) |
+| psycopg | 3.3.6 | dev | Talks to PostgreSQL from the integration tests (create a throwaway database, count rows, check the read-only role) (T26) |
+| types-PyYAML | 6.0.12 | dev | Type stubs for PyYAML (mypy strict) |
 | dbt-duckdb | 1.11.0 (dbt-core 1.12.4) | runtime | Builds silver from bronze (T16, ADR 0011). Runtime, not dev: `dbt build` is a step of the platform's own flow, not a check |
 | duckdb | 1.5.5 | runtime | The engine dbt runs on; reads Delta off S3 with `delta_scan()` (T16, ADR 0002) |
 | dagster | 1.13.23 | runtime | Orchestrates bronze + dbt as one DAG (T21). Runtime: `dagster asset materialize` is a way to run the platform's own flow, same as `pfp ingest` + `dbt build` by hand |
@@ -146,6 +148,38 @@ All green = the environment is ready.
 
 ## 6. Building silver with dbt (T16)
 
+> **Phase 2 extension (T26–T33):** silver and gold live in **PostgreSQL**, not in `dbt/pfp.duckdb`
+> ([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). Since T27 that is the
+> **default**: `make poc-up` starts the local S3 *and* Postgres, and every `dbt build` below writes
+> there. Sections 7 (DBeaver) and 10 (OpenMetadata) still describe the DuckDB-file version until
+> T30 and this section's own leftovers are updated.
+
+### PostgreSQL as dbt's store (T26, default since T27)
+
+```bash
+# 1. In .env, fill the PFP_PG_* variables (template: .env.example). Generate the two secrets,
+#    e.g. `openssl rand -hex 16`, with no quotes or backslashes in them.
+make poc-up                                             # local S3 + PostgreSQL 16 on 127.0.0.1:${PFP_PG_PORT}
+set -a && source .env && set +a
+uv run dbt build --project-dir dbt --profiles-dir dbt   # default target: postgres
+```
+
+`PFP_DBT_TARGET=local` selects the old DuckDB file instead (`dbt/pfp.duckdb`); CI's base-versus-PR
+data diff still uses it until T29. `make pg-up` starts only Postgres (the local S3 stays as it is).
+
+DuckDB stays the engine (it reads bronze off S3); silver and gold are created in the Postgres
+database `PFP_PG_DATABASE`, schemas `silver` and `gold`. **Elementary keeps its own small DuckDB file**
+(`dbt/elementary.duckdb`, gitignored) because its views and its results upload do not work through
+the attach. The first time the Postgres volume is created it also makes the read-only role `pfp_bi`
+(password `PFP_PG_BI_PASSWORD`; its sessions are read-only), which can connect and `select` from
+`gold` and nothing else, including tables dbt recreates later (`postgres/grants.sql`): that is the
+login BI tools use. It can still see table and column *names* in Postgres's catalog, not their data.
+The role exists only in a volume created by this version: with an older volume, or after changing
+`PFP_PG_BI_PASSWORD`, run `make poc-down` (removes the volume, lake included) and `make pg-up` again.
+`make pg-down` only stops Postgres.
+
+The `edr` CLI reads Elementary's own file (`PFP_ELEMENTARY_DUCKDB_PATH`, section "Elementary" below).
+
 `make check-task` doesn't cover this: dbt reads bronze's Delta tables straight off local S3, so
 it needs SeaweedFS running and `.env` exported into the shell. `profiles.yml` lives inside the
 project directory, and dbt only searches `--profiles-dir`, `DBT_PROFILES_DIR`, the working
@@ -169,9 +203,11 @@ caches the install. `dagster asset materialize` (section 9) and a plain `pytest`
 the explicit command above is only needed for a bare `dbt build`/`dbt parse`/`sqlfluff` call like
 the ones on this line, which never import that module.
 
-`dbt build` writes `dbt/pfp.duckdb` (gitignored), so the built tables can be inspected
-afterwards: `duckdb dbt/pfp.duckdb -c "select count(*) from silver.transactions"`. Set
-`PFP_DUCKDB_PATH` to put that file somewhere else.
+`dbt build` writes silver and gold to Postgres, so the built tables can be inspected afterwards
+with any Postgres client, e.g. `PGPASSWORD=... psql -h 127.0.0.1 -p $PFP_PG_PORT -U pfp -d pfp -c
+"select count(*) from silver.transactions"`. The integration tests each use their own throwaway
+database (`pfp_test_<worker>`), so they never touch `pfp`; a few empty ones may remain in the volume.
+With `PFP_DBT_TARGET=local` the tables are in `dbt/pfp.duckdb` (`PFP_DUCKDB_PATH` moves that file).
 
 `sqlfluff` uses the **dbt** templater, so it compiles the project and needs the same
 environment variables `dbt build` does; without them it fails to connect rather than linting a
@@ -192,20 +228,22 @@ is how you try things out without touching your real bronze.
 anomaly shows up as `WARN` in `dbt build`'s own output, but doesn't fail the build yet.
 
 `edr report` (from the `elementary-data` package above) renders a local HTML report from what
-that build already wrote — same prerequisites as `dbt build`:
+that build already wrote. Elementary's tables live in **their own DuckDB file**
+(`dbt/elementary.duckdb`, gitignored; silver and gold are in Postgres, ADR 0029), so `edr` needs
+only that file, not the lake or Postgres:
 
 ```bash
-export PFP_DUCKDB_PATH="$PWD/dbt/pfp.duckdb"   # must be absolute for edr, see below
+export PFP_ELEMENTARY_DUCKDB_PATH="$PWD/dbt/elementary.duckdb"   # must be absolute for edr, see below
 uv run edr report --project-dir dbt --profiles-dir dbt --config-dir dbt/.edr \
   --file-path dbt/elementary_report.html
 ```
 
-`PFP_DUCKDB_PATH` has to be absolute here, unlike every `dbt build`/`dbt test` command above:
-`edr` runs its own internal dbt project from inside its own installed package directory, not this
-repo, so `profiles.yml`'s relative default (`dbt/pfp.duckdb`) would resolve against *that*
-directory instead and fail to find the database `dbt build` just wrote (confirmed directly:
-`edr report` fails with `Cannot open file ".../site-packages/elementary/.../dbt/pfp.duckdb"` with
-no override, and finds the right file with one).
+The path has to be absolute here, unlike every `dbt build`/`dbt test` command above: `edr` runs its
+own internal dbt project from inside its own installed package directory, not this repo, so a
+relative path would resolve against *that* directory and `edr report` would fail to find the file
+`dbt build` just wrote. (The default for `dbt build` and Dagster is `dbt/elementary.duckdb`; Dagster
+sets an absolute one itself.) `make poc-down` deletes the file together with the database it
+described.
 
 `--config-dir dbt/.edr` opts out of Elementary's own anonymous usage tracking (`dbt/.edr/config.yml`,
 committed) — without it the generated report embeds a PostHog project key that would let it phone
@@ -213,8 +251,9 @@ home when opened in a browser (ADR 0004, ADR 0022). Drop `--open-browser false` 
 open automatically; `dbt/*.html` is gitignored.
 
 `edr` needs its own connection profile literally named `elementary` in `dbt/profiles.yml` (not the
-project's own `personal_finance_platform` profile) — already there, pointed at the same DuckDB
-file and S3 secrets so it reads what `dbt build` just wrote, not a second database.
+project's own `personal_finance_platform` profile) — already there, pointing at Elementary's DuckDB
+file (attached under the alias `elem`, the catalog name dbt's views were created with, so the file
+can have any name).
 
 ### `make poc`: the whole flow against your real PDFs (T17)
 

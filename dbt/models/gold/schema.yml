@@ -186,3 +186,29 @@ models:
           - accepted_values:
               arguments:
                 values: ["ingreso", "egreso", "pago"]
+
+  - name: fct_investment_monthly
+    description: >
+      Gold (ADR 0028): one row per investment (`place`), currency and calendar
+      month of the manual Excel, with the month's gain (the balance change the
+      owner's own contributions and withdrawals do not explain) and its
+      Modified Dietz return. `return_pct` is null and `is_return_reliable` false
+      for a month without a month-end valuation or one that follows a missing
+      month. Funds and currencies are never mixed.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, place, currency, month_start]
+    columns:
+      - name: place
+        data_tests:
+          - not_null
+      - name: month_start
+        data_tests:
+          - not_null
+      - name: closing_balance
+        data_tests:
+          - not_null
+      - name: is_return_reliable
+        data_tests:
+          - not_null

@@ -39,7 +39,7 @@ Ingest bank statement PDFs (BCP and Scotiabank today, Banco Ripley planned), pro
 | Ingestion / PDF parsing | `pdfplumber`, `pikepdf`, `pytesseract` | `pikepdf` unlocks password-protected PDFs; `pytesseract` reads scanned pages (pdfplumber already renders pages to an image, so PyMuPDF isn't needed) |
 | Schema validation | `pydantic` | `Transaction` schema shared across all banks |
 | Storage / lakehouse | SeaweedFS + Delta Lake | Parquet + ACID transactions + MERGE + time-travel. SeaweedFS replaces MinIO, whose Community edition went unmaintained in 2025 |
-| Processing | DuckDB (embedded) + delta-rs | Phase 1 with no JVM, no cluster, no Postgres; Spark (PySpark) comes in once volume or a demo gives a measurable reason |
+| Processing | DuckDB (engine) + delta-rs | No JVM, no cluster; Spark (PySpark) comes in once volume or a demo gives a measurable reason. Since the Phase 2 extension DuckDB is only the engine: silver and gold are stored in PostgreSQL ([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)) |
 | Transformation | dbt | Medallion bronze/silver/gold; `incremental` materialization with a `merge` strategy |
 | Orchestration | Dagster | (Alternative: Airflow, if ATS recognition is a priority) |
 | Data quality | dbt tests + Great Expectations / Elementary | Quality tests and expectations |
@@ -104,7 +104,7 @@ Every parser validates that the sum of the extracted transactions matches the ba
 
 ### Phase 1 — Foundation
 **Goal:** show discipline and good practices from the very first commit.
-- Repo structure, `docker-compose` (SeaweedFS as local S3; embedded DuckDB, no Postgres), `.gitignore` + `gitleaks`.
+- Repo structure, `docker-compose` (SeaweedFS as local S3; embedded DuckDB, no Postgres at the time: PostgreSQL arrived in the Phase 2 extension), `.gitignore` + `gitleaks`.
 - `Transaction` schema (pydantic) and BCP/Scotiabank parsers with `pdfplumber` + `pikepdf`; OCR with `pytesseract` for scanned pages.
 - File hash (file-level dedup) + basic reconciliation.
 - Bronze layer in Delta (delta-rs) on SeaweedFS.
@@ -113,7 +113,7 @@ Every parser validates that the sum of the extracted transactions matches the ba
 
 **Closes:** modeling, basic quality, CI/CD, data security.
 
-### Phase 2 — Orchestration + Governance
+### Phase 2 — Orchestration + Governance *(closed 2026-09-18; extended 2026-09-19: PostgreSQL store and dashboard, T26–T33)*
 **Goal:** the most important gap for data-leadership roles.
 - Dagster orchestrating: ingestion → dbt → tests → refresh.
 - Incremental MERGE by business key (transaction-level dedup) in silver.
@@ -130,6 +130,12 @@ Every parser validates that the sum of the extracted transactions matches the ba
 - Quality: **Elementary** was chosen over Great Expectations (the plan left it open); a single row-count anomaly test on silver, in warn-mode.
 - Catalog: **OpenMetadata** was chosen over DataHub. It is optional and local (not in CI) and needs a ~4.8 GiB peak; OpenMetadata 2.0.2 has no DuckDB connector, so a small script registers the tables (ADR 0023).
 - Still open: real-data validation of the Scotiabank parser, and the numeric CI rules leaving warn-mode on 2026-09-26.
+
+**Extension (added 2026-09-19, T26–T33): PostgreSQL as dbt's store, then the dashboard.** The owner wants to look at the data in an open-source BI tool, and the catalog (OpenMetadata) and the pipeline (Dagster) related to it, while dbt builds. A DuckDB file has a single writer, so this phase was reopened on purpose ([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)):
+- dbt keeps DuckDB as the engine (it reads bronze from the lake) and stores silver and gold in **PostgreSQL** (T26); the scripts, Dagster wiring and tests that opened the DuckDB file read Postgres (T27); Elementary keeps its own small DuckDB file (T28); CI's ephemeral environment and the PR data diff run on Postgres (T29).
+- OpenMetadata reads Postgres with its native connector, retiring the DuckDB workaround (T30); Dagster shows where each model is stored (T31).
+- **Apache Superset** (open source, zero cost, its own stack) over a read-only role on gold, with dashboards for cash flow, savings and each fund's monthly return (T32).
+- Phase 3 (ML) starts after T33. Details: [`tasks/todo-phase2.md`](tasks/todo-phase2.md).
 
 ### Phase 3 — ML in production
 **Goal:** deploy and monitor, not just train.
@@ -149,16 +155,15 @@ Every parser validates that the sum of the extracted transactions matches the ba
 
 ### Phase 5 — Serving + Uploader
 **Goal:** make the repo demonstrable and operable.
-- Streamlit dashboard over the gold tables.
-- Minimal uploader (`st.file_uploader`) → saves to SeaweedFS → triggers the pipeline.
-- (Optional) Power BI connection.
+- The dashboard is **Apache Superset**, built in the Phase 2 extension (T32), not here: open source and zero cost, the owner will not use Power BI (2026-09-19).
+- Minimal uploader (`st.file_uploader`) → saves to SeaweedFS → triggers the pipeline; a form to type the manual Excel's movements and balances could live here too.
 
 **Closes:** end-to-end delivery, a showcase for recruiters.
 
 ### Phase 6 — Savings-goal projection *(planned, added 2026-09-19)*
 **Goal:** answer "given my real cash flow, how long until I reach my savings goal?"
 - Banco Ripley as a third source (the owner's savings account, in soles). It gives no statements, so its movements come from a **manual Excel** typed month by month, with the same reconciliation rules ([ADR 0027](brain/decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md), [`docs/manual-data.md`](docs/manual-data.md)).
-- **Investment tracking** (three Tyba funds and Flip), from a second sheet of the same Excel: contributions, withdrawals and month-end valuations, to see each fund's monthly return. Tracked separately from the goal.
+- **Investment tracking** (three Tyba funds and Flip), from a second sheet of the same Excel: contributions, withdrawals and month-end valuations, to see each fund's monthly return (Modified Dietz, `gold.fct_investment_monthly`, [ADR 0028](brain/decisions/0028-investment-return-is-modified-dietz-per-fund-and-month.md)). Tracked separately from the goal. **Built.**
 - A projection over the gold tables: time to reach a target amount (in soles or dollars) at the observed monthly flow, leaving out transfers between the owner's own accounts.
 - A **sol/dólar exchange-rate projection** section so dollar accounts and dollar goals can be converted. It exists **only in this phase**: bronze, silver and gold keep never converting currencies; the projection converts on its own, on top of gold.
 - **Scope decision:** only liquid money in bank accounts counts. Investments held on other platforms (mutual funds) are long term and market-dependent, so they are deliberately not part of the goal or the flow ([ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md)).

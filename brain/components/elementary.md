@@ -22,7 +22,7 @@ decisions table). Design decisions in
 | `on-run-end: - "{{ elementary.on_run_end() }}"` in `dbt_project.yml` | After every `dbt build`/`dbt run`/`dbt test`, uploads that invocation's own results into Elementary's tables — what `edr report` reads |
 | `vars: disable_tracking: true` and `vars: clean_elementary_temp_tables: false` in `dbt_project.yml` | The first opts the dbt package out of its own anonymous usage reporting (ADR 0004's privacy stance, applied to any telemetry this project doesn't control). The second works around a real, reproducible crash — see "Known issue" below |
 | [`dbt/models/silver/schema.yml`](../../dbt/models/silver/schema.yml)'s `elementary.volume_anomalies` test on `transactions` | The one real anomaly test T22's acceptance criteria ask for: a row-count anomaly, bucketed by day on `date`, `severity: warn` |
-| [`dbt/profiles.yml`](../../dbt/profiles.yml)'s `elementary:` profile | The `edr` CLI runs its own internal dbt project against a connection profile literally named `elementary` (confirmed directly — `edr report` fails with "Could not find profile named 'elementary'" without it), pointed at the same DuckDB file and S3 secrets as `personal_finance_platform`'s own profile, `schema: elementary` (not `silver`) so `edr` finds where the models above actually landed |
+| [`dbt/profiles.yml`](../../dbt/profiles.yml)'s `elementary:` profile | The `edr` CLI runs its own internal dbt project against a connection profile literally named `elementary` (confirmed directly — `edr report` fails with "Could not find profile named 'elementary'" without it). Since T28 (ADR 0029) it points at **Elementary's own DuckDB file** (`PFP_ELEMENTARY_DUCKDB_PATH`, attached as `elem`, the catalog name dbt's views inside it were created with), `schema: elementary` (not `silver`: `edr` looks for its tables in the profile's default schema). Silver and gold are in Postgres; the file holds only Elementary's tables |
 | [`dbt/.edr/config.yml`](../../dbt/.edr/config.yml) (committed) | `anonymous_usage_tracking: false` — without it, `edr report`'s generated HTML embeds a PostHog project key that would let the report itself phone home when opened in a browser |
 | `elementary-data` in `pyproject.toml`'s dev deps | The `edr` CLI (`edr report`/`edr monitor`) — a Python package, `uv add --dev`'d, separate from the dbt package above (which `dbt deps` installs) |
 
@@ -69,7 +69,7 @@ make poc-up
 set -a && source .env && set +a
 uv run dbt deps --project-dir dbt --profiles-dir dbt    # once, or after packages.yml changes
 uv run dbt build --project-dir dbt --profiles-dir dbt   # builds Elementary's own models + runs the anomaly test
-export PFP_DUCKDB_PATH="$PWD/dbt/pfp.duckdb"            # must be absolute for edr -- see SETUP.md
+export PFP_ELEMENTARY_DUCKDB_PATH="$PWD/dbt/elementary.duckdb"   # absolute for edr -- see SETUP.md
 uv run edr report --project-dir dbt --profiles-dir dbt --config-dir dbt/.edr \
   --file-path dbt/elementary_report.html                # local HTML report
 ```

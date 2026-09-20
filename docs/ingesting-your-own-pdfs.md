@@ -59,7 +59,7 @@ cp .env.example .env && chmod 600 .env    # only if you don't have one yet
 make poc
 ```
 
-It brings up a local S3 (SeaweedFS), installs the dbt packages, runs `pfp ingest` over your
+It brings up a local S3 (SeaweedFS) and PostgreSQL (where dbt stores silver and gold), installs the dbt packages, runs `pfp ingest` over your
 inbox, runs `dbt build`, and **tears everything down at the end**, success or failure. It
 prints only pass/fail and counts — by construction never an amount, account or description
 (see `scripts/poc.py`).
@@ -68,10 +68,11 @@ prints only pass/fail and counts — by construction never an amount, account or
 > processed PDF under `~/finance-data/raw/<user>/...` (never deleting it). Sections 5 and 6
 > say how to ingest again afterwards.
 >
-> `make poc` uses the fixed Docker Compose project `pfp-poc`. If you already started one
-> with `make poc-up`, it is shut down (with its volume, i.e. the lake) when `make poc`
-> finishes. Your archived PDFs in `~/finance-data/raw/` and the tables dbt already built in
-> `dbt/pfp.duckdb` are kept.
+> `make poc` uses the fixed Docker Compose project `pfp-poc` and needs the `PFP_PG_*` variables in
+> `.env` (SETUP.md section 6). If you already started one with `make poc-up`, it is shut down (with
+> its volumes: **the lake and the Postgres tables silver and gold**) when `make poc` finishes. Your
+> archived PDFs in `~/finance-data/raw/` are kept. To keep what dbt built, use the persistent run
+> in section 5 instead.
 
 ### Reading the output
 
@@ -134,11 +135,11 @@ i=0; find ~/finance-data/raw/<user> \( -name _duplicates -o -name _needs_review 
 (File names don't matter; the account and period are read from each PDF.) Then:
 
 ```bash
-make poc-up                                             # local S3, left running
+make poc-up                                             # local S3 + PostgreSQL, left running
 set -a && source .env && set +a
 uv run dbt deps --project-dir dbt --profiles-dir dbt    # once, or after packages.yml changes
 uv run pfp ingest --user "$PFP_USER"                    # PDFs -> bronze
-uv run dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + tests + Elementary
+uv run dbt build --project-dir dbt --profiles-dir dbt   # silver + gold (in Postgres) + tests + Elementary
 ```
 
 (`uv run dagster asset materialize --select '*'` does ingest + build as one DAG; see
@@ -147,12 +148,13 @@ uv run dbt build --project-dir dbt --profiles-dir dbt   # silver + gold + tests 
 Then query the star schema:
 
 ```bash
-uv run python -c "import duckdb; duckdb.connect('dbt/pfp.duckdb', read_only=True).sql('select bank, flow_type, currency, count(*) as movements from gold.fact_transactions group by all').show()"
+PGPASSWORD="$PFP_PG_PASSWORD" psql -h 127.0.0.1 -p "$PFP_PG_PORT" -U "$PFP_PG_USER" -d "$PFP_PG_DATABASE" \
+  -c "select bank, flow_type, currency, count(*) as movements from gold.fact_transactions group by 1, 2, 3"
 ```
 
-Or open `dbt/pfp.duckdb` in DBeaver, or with the standalone `duckdb` CLI if you installed it
-([SETUP.md section 7](../SETUP.md#7-browsing-the-lake-in-dbeaver)): schemas `silver`, `gold`
-and `elementary` are there.
+Or connect any Postgres client (DBeaver: *New connection* -> PostgreSQL, `127.0.0.1`, the port and
+user from `.env`): schemas `silver` and `gold` are there. Elementary's tables are in its own DuckDB
+file, `dbt/elementary.duckdb`. (`psql` is `sudo apt install postgresql-client`.)
 
 The gold layer is `gold.fact_transactions` plus `gold.dim_date`, `gold.dim_account`,
 `gold.dim_bank` and `gold.dim_user`. `flow_type` (`ingreso` / `egreso` / `pago`) is the
@@ -160,11 +162,12 @@ direction of a movement, consistent across banks despite their opposite sign con
 filter `is_internal_transfer = false` for real income/spending. Currencies (PEN / USD) are
 never converted or mixed.
 
-Optional: a local quality report (`PFP_DUCKDB_PATH` must be absolute for `edr`) and the
+Optional: a local quality report (`PFP_ELEMENTARY_DUCKDB_PATH` must be absolute for `edr`) and the
 catalog with column-level lineage — see [SETUP.md](../SETUP.md) (Elementary subsection,
 section 10) and [ADR 0023](../brain/decisions/0023-openmetadata-catalog-and-column-lineage-from-dbt-artifacts.md).
 
-When finished: `make poc-down` (removes the lake; your PDFs in `~/finance-data/raw/` stay).
+When finished: `make poc-down` (removes the lake and the Postgres tables; your PDFs in
+`~/finance-data/raw/` stay).
 
 ## 6. After fixing a parser: reprocess
 

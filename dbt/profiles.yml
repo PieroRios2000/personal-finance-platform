@@ -7,7 +7,9 @@
 # fail loudly here, exactly as it does in `storage_options()` (ADR 0006).
 
 personal_finance_platform:
-  target: local
+  # T27 (ADR 0029): silver and gold live in PostgreSQL. `PFP_DBT_TARGET=local` selects the
+  # old DuckDB file (`dbt/pfp.duckdb`), which CI's base-vs-PR data diff still uses (T29).
+  target: "{{ env_var('PFP_DBT_TARGET', 'postgres') }}"
   outputs:
     local: &duckdb_output
       type: duckdb
@@ -37,6 +39,34 @@ personal_finance_platform:
           url_style: path
           use_ssl: "{{ 'true' if env_var('AWS_ENDPOINT_URL').startswith('https') else 'false' }}"
 
+# T26 (ADR 0029): the same engine (DuckDB reading the lake), but silver and gold are
+# stored in PostgreSQL through DuckDB's `attach`. Opt in with `--target postgres`
+# (T27 makes it the default). `database:` is the alias of the attached Postgres, so
+# every relation (silver.*, gold.*) is created there. Elementary keeps its own small
+# DuckDB file (`elem`): its view models and its results upload do not work through
+# the attach. The connection string is built from `.env` (PFP_PG_*); the password is
+# escaped the way libpq expects (a backslash or quote in it is fine). Every variable has a
+# default because dbt renders the target even when it only *parses* (Dagster's import, CI's
+# `tests` job): the database and user default to `pfp`, the password to empty, and a real
+# build with a wrong or missing one fails at connection time with Postgres's own message.
+    postgres:
+      <<: *duckdb_output
+      path: ":memory:"
+      database: "{{ env_var('PFP_PG_DATABASE', 'pfp') }}"
+      extensions:
+        - httpfs
+        - delta
+        - postgres
+      attach:
+        # A block scalar (no YAML escapes) so the Jinja filters below reach dbt as written:
+        # they escape `\` and `'` in the password the way libpq's quoted values expect.
+        - path: >-
+            dbname={{ env_var('PFP_PG_DATABASE', 'pfp') }} host={{ env_var('PFP_PG_HOST', '127.0.0.1') }} port={{ env_var('PFP_PG_PORT', '5432') }} user={{ env_var('PFP_PG_USER', 'pfp') }} password='{{ env_var('PFP_PG_PASSWORD', '') | replace('\\', '\\\\') | replace("'", "\\'") }}'
+          alias: "{{ env_var('PFP_PG_DATABASE', 'pfp') }}"
+          type: postgres
+        - path: "{{ env_var('PFP_ELEMENTARY_DUCKDB_PATH', 'dbt/elementary.duckdb') }}"
+          alias: elem
+
 # T22: the `elementary-data` CLI (`edr report`/`edr monitor`) runs its own
 # internal dbt project against a connection profile literally named
 # `elementary` -- confirmed directly (`edr report` fails with "Could not find
@@ -54,5 +84,21 @@ elementary:
   target: local
   outputs:
     local:
-      <<: *duckdb_output
+      type: duckdb
+      # T28 (ADR 0029): `edr` reads Elementary's own DuckDB file, the one dbt writes it
+      # to on the Postgres target (the attached `elem` above): no lake credentials, no
+      # Postgres. The file is attached under the alias `elem` here too, because the views
+      # dbt created inside it are stored with that catalog name in their definitions:
+      # opened on its own (catalog named after the file), they fail with `Catalog "elem"
+      # does not exist`. `schema: elementary`, not `silver`: `edr` resolves where
+      # Elementary's tables are from *this* profile's default schema, and
+      # `dbt_project.yml`'s `elementary: +schema: "elementary"` puts them there (T22:
+      # `edr report` failed until this matched). Absolute path needed for `edr`
+      # (SETUP.md): it runs from its own installed package directory.
+      path: ":memory:"
+      database: elem
       schema: elementary
+      threads: 4
+      attach:
+        - path: "{{ env_var('PFP_ELEMENTARY_DUCKDB_PATH', 'dbt/elementary.duckdb') }}"
+          alias: elem

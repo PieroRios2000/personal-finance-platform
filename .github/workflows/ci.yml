@@ -285,6 +285,17 @@ jobs:
       PFP_USER: ci
       PFP_INBOX_ROOT: /tmp/pfp-ci-inbox
       PFP_ARCHIVE_ROOT: /tmp/pfp-ci-archive
+      # T26 (ADR 0029): the PostgreSQL dbt can store silver and gold in. Local-only,
+      # non-real values, like the SeaweedFS ones above.
+      PFP_PG_HOST: 127.0.0.1
+      PFP_PG_PORT: "5432"
+      PFP_PG_DATABASE: pfp
+      PFP_PG_USER: pfp
+      PFP_PG_PASSWORD: pfp-ci-dummy-pg-password
+      PFP_PG_BI_PASSWORD: pfp-ci-dummy-bi-password
+      # T27: silver and gold are in Postgres; Elementary keeps its own DuckDB file,
+      # absolute so every step (dbt, Dagster, `edr`) resolves the same one.
+      PFP_ELEMENTARY_DUCKDB_PATH: ${{ github.workspace }}/dbt/elementary.duckdb
       DBT_SELECT: ${{ needs.changes.outputs.dbt_select }}
       DAGSTER_MODULE_NAME: orchestration.definitions
     steps:
@@ -299,7 +310,7 @@ jobs:
 
       - name: bring up the ephemeral environment
         run: |
-          docker compose -p "$COMPOSE_PROJECT" up -d --wait seaweedfs
+          docker compose -p "$COMPOSE_PROJECT" up -d --wait seaweedfs postgres
           docker compose -p "$COMPOSE_PROJECT" run --rm bucket-init
 
       # ADR 0008/0021: a change confined to dbt/ builds only what it touched and
@@ -412,16 +423,12 @@ jobs:
       # reasoning as the test step above: this is observability tooling, not
       # a correctness gate, so a bad `edr` release shouldn't block the job.
       #
-      # PFP_DUCKDB_PATH must be absolute here: `edr` runs its own internal
-      # dbt project from inside its own installed package directory, not
-      # this repo -- profiles.yml's relative default (`dbt/pfp.duckdb`)
-      # would resolve against *that* directory instead and fail to find the
-      # database `dbt build` just wrote (confirmed directly: reproducible
-      # every time with no override, gone with one).
+      # `edr` runs its own internal dbt project from inside its own installed
+      # package directory, not this repo, so its profile needs an absolute
+      # path: the job-level PFP_ELEMENTARY_DUCKDB_PATH (T28, ADR 0029), the
+      # very file dbt wrote Elementary's results to.
       - name: elementary report (warn-mode, see CONSTRAINTS.md)
         continue-on-error: true
-        env:
-          PFP_DUCKDB_PATH: ${{ github.workspace }}/dbt/pfp.duckdb
         run: |
           uv run edr report --project-dir dbt --profiles-dir dbt \
             --config-dir dbt/.edr --open-browser false \
@@ -522,6 +529,9 @@ jobs:
       AWS_REGION: us-east-1
       PFP_ACCOUNT_KEY: pfp-ci-dummy-account-key-0000000000000000
       PFP_USER: ci
+      # T27: this job's two builds still go to a DuckDB file each (ADR 0014); it has no
+      # Postgres. It moves to Postgres schemas in T29.
+      PFP_DBT_TARGET: local
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
