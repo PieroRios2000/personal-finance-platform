@@ -1,4 +1,4 @@
-slice_name: 'Investments: monthly return, with how the month was closed'
+slice_name: 'Investments: return and how each month closed'
 description: null
 certified_by: null
 certification_details: null
@@ -22,6 +22,6 @@ params:
   viz_type: table
 query_context: null
 cache_timeout: null
-uuid: 2e775692-f848-4a45-b232-4a3616537637
+uuid: 109c9235-17f4-446c-b038-e0b24ce6239b
 version: 1.0.0
-dataset_uuid: 329e145a-7011-4df6-a615-00ce8934ad12
+dataset_uuid: 8c223749-effb-4885-bf91-11fa75c23a55

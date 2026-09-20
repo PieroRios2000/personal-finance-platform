@@ -17,12 +17,13 @@ params:
   - expressionType: SQL
     sqlExpression: account_kind = 'asset'
     clause: WHERE
+  x_axis_time_format: '%Y-%m-%d'
   row_limit: 10000
   show_legend: true
   datasource: 2__table
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null
-uuid: c8f86a2b-c692-4af1-9512-2da77fa127e8
+uuid: 9eb1d4e8-269f-44f5-8936-558889ac6ccf
 version: 1.0.0
-dataset_uuid: 0f877c95-4d9b-443d-b820-72a51b348e20
+dataset_uuid: 639575b8-1e5d-4059-90cf-a7b775e655d6

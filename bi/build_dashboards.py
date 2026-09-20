@@ -28,6 +28,9 @@ from typing import Any
 ASSETS = Path(__file__).resolve().parent / "assets"
 DATABASE_NAME = "PFP gold (read-only)"
 DASHBOARD_SLUG = "pfp-finance"
+# `smart_date` (the default) prints a January 1st as just the year, which reads as a
+# yearly total; the full date is unambiguous at any grain.
+_DATE_FORMAT = "%Y-%m-%d"
 
 
 def _sql_metric(expression: str, label: str) -> dict[str, Any]:
@@ -56,6 +59,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
                 _where("NOT is_internal_transfer"),
                 _where("flow_type IN ('ingreso', 'egreso')"),
             ],
+            "x_axis_time_format": _DATE_FORMAT,
             "row_limit": 10000,
             "orientation": "vertical",
             "show_legend": True,
@@ -71,13 +75,14 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "metrics": [_sql_metric("SUM(closing_balance)", "Closing balance")],
             "groupby": ["bank", "currency"],
             "adhoc_filters": [_where("account_kind = 'asset'")],
+            "x_axis_time_format": _DATE_FORMAT,
             "row_limit": 10000,
             "show_legend": True,
         },
     ),
     (
         "fct_investment_monthly",
-        "Investments: monthly return, with how the month was closed",
+        "Investments: return and how each month closed",
         "table",
         {
             "query_mode": "raw",
@@ -100,7 +105,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
     ),
     (
         "fct_investment_monthly",
-        "Investments: monthly return per fund",
+        "Investments: return per fund over time",
         "echarts_timeseries_line",
         {
             "x_axis": "month_start",
@@ -109,6 +114,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "groupby": ["place", "currency"],
             "adhoc_filters": [_where("is_return_reliable")],
             "y_axis_format": ".2%",
+            "x_axis_time_format": _DATE_FORMAT,
             "row_limit": 10000,
             "show_legend": True,
         },
@@ -158,6 +164,52 @@ class Superset:
 
     def raw(self, path: str) -> bytes:
         return self._call("GET", path)
+
+
+def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
+    """The dashboard's filter bar: dates, time grain (month by default), bank,
+    currency and fund. Each applies to every chart that has the column."""
+
+    def base(name: str, filter_type: str, target: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": f"NATIVE_FILTER-{name.lower().replace(' ', '-')}",
+            "name": name,
+            "filterType": filter_type,
+            "targets": [target],
+            "controlValues": {},
+            "defaultDataMask": {"filterState": {}, "extraFormData": {}},
+            "cascadeParentIds": [],
+            "scope": {"rootPath": ["ROOT_ID"], "excluded": []},
+            "type": "NATIVE_FILTER",
+        }
+
+    def select(name: str, table: str, column: str) -> dict[str, Any]:
+        item = base(
+            name,
+            "filter_select",
+            {"datasetId": datasets[table], "column": {"name": column}},
+        )
+        item["controlValues"] = {
+            "multiSelect": True,
+            "enableEmptyFilter": False,
+            "defaultToFirstItem": False,
+            "searchAllOptions": False,
+            "inverseSelection": False,
+        }
+        return item
+
+    grain = base("Time grain", "filter_timegrain", {})
+    grain["defaultDataMask"] = {
+        "filterState": {"value": ["P1M"]},
+        "extraFormData": {"time_grain_sqla": "P1M"},
+    }
+    return [
+        base("Date range", "filter_time", {}),
+        grain,
+        select("Bank", "fact_transactions", "bank"),
+        select("Currency", "fact_transactions", "currency"),
+        select("Fund", "fct_investment_monthly", "place"),
+    ]
 
 
 def _position(chart_ids: Sequence[int], names: Sequence[str]) -> dict[str, Any]:
@@ -300,7 +352,10 @@ def build(client: Superset, bi_password: str) -> int:
         {
             "position_json": json.dumps(
                 _position(chart_ids, [chart[1] for chart in CHARTS])
-            )
+            ),
+            "json_metadata": json.dumps(
+                {"native_filter_configuration": native_filters(datasets)}
+            ),
         },
     )
     return int(dashboard)
