@@ -20,6 +20,7 @@ params:
   - expressionType: SQL
     sqlExpression: flow_type IN ('ingreso', 'egreso')
     clause: WHERE
+  x_axis_time_format: '%Y-%m-%d'
   row_limit: 10000
   orientation: vertical
   show_legend: true
@@ -27,6 +28,6 @@ params:
   viz_type: echarts_timeseries_bar
 query_context: null
 cache_timeout: null
-uuid: 00a743f9-76a0-4dcb-8660-369558f4e2c5
+uuid: 4ac33bb5-24f4-4b15-b072-fbd1fb728375
 version: 1.0.0
-dataset_uuid: 5cf189d9-7204-443f-85e3-88ff16c604f0
+dataset_uuid: bc0f0aec-a4dc-4f1b-a3ee-f46d96548c28

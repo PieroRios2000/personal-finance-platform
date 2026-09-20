@@ -440,12 +440,23 @@ uv run dbt build --project-dir dbt --profiles-dir dbt   # gold tables the charts
 make bi-up                           # builds the image the first time (~2 minutes)
 ```
 
-Open <http://localhost:8088>, user `admin`, password `PFP_BI_ADMIN_PASSWORD`, then *Dashboards* ->
-**PFP finance**. It has four charts: monthly cash flow (income and spending, without internal
+Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admin`, password
+`PFP_BI_ADMIN_PASSWORD`, then *Dashboards* -> **PFP finance**. It has four charts: monthly cash flow (income and spending, without internal
 transfers), the savings balance per month, and each fund's monthly return -- as a table with
 `closing_basis` next to the return (`valuation` = a real month-end value, `last_movement` = only the
 balance at the last movement) and as a line per fund. Currencies are never added: every chart splits
 by currency.
+
+The filter bar (left side of the dashboard) has **Date range**, **Time grain** (month by default; pick
+day, week or year), **Bank**, **Currency** and **Fund**. Dates on the axes are full dates
+(`2026-03-01`), so a month is never read as a year.
+
+- **`relation "gold.fct_account_balance_monthly" does not exist`** (or another gold table): the dashboard
+  needs models added after your last `dbt build`. Pull `develop`, run `uv run dbt build --project-dir dbt
+  --profiles-dir dbt`, and reload.
+- **A chart with no data:** its table is empty. Count it (counts only, no values):
+  `psql`/DBeaver `select count(*) from gold.fct_investment_monthly` -- the investments charts need the
+  manual Excel loaded (`pfp import-manual`, then `dbt build`).
 
 - Superset reads Postgres as the read-only role `pfp_bi`: it sees `gold` and nothing else, so it
   cannot read `silver` or change data.
