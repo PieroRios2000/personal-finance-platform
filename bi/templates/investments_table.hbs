@@ -1,0 +1,16 @@
+<table class="inv">
+  <thead>
+    <tr><th>Month</th><th>Fund</th><th>Currency</th><th class="num">Return</th>
+      <th>Closed at</th><th class="num">Gain</th><th class="num">Balance</th></tr>
+  </thead>
+  <tbody>
+  {{#each data}}
+    <tr>
+      <td>{{calendar_month}}</td><td>{{place}}</td><td>{{currency}}</td>
+      <td class="num ret {{#if is_return_reliable}}ok{{else}}na{{/if}}">{{return_pct}}</td>
+      <td><span class="badge {{closing_basis}}">{{closing_basis}}</span></td>
+      <td class="num">{{gain}}</td><td class="num">{{closing_balance}}</td>
+    </tr>
+  {{/each}}
+  </tbody>
+</table>

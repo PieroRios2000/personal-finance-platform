@@ -271,9 +271,13 @@ models:
   - name: rpt_balances
     description: >
       Reporting table (T34): `fct_account_balance_monthly` with the same
-      `calendar_*` columns as every other reporting view.
+      `calendar_*` columns as every other reporting table, plus `month_recency`
+      (1 = the latest month of the data, 2 = the one before).
     columns:
       - name: calendar_month
+        data_tests:
+          - not_null
+      - name: month_recency
         data_tests:
           - not_null
 

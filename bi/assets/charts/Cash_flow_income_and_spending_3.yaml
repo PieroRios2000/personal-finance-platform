@@ -1,4 +1,4 @@
-slice_name: 'Monthly cash flow: income and spending (no internal transfers)'
+slice_name: 'Cash flow: income and spending'
 description: null
 certified_by: null
 certification_details: null
@@ -12,7 +12,6 @@ params:
     label: Amount
   groupby:
   - flow_type
-  - currency
   adhoc_filters:
   - expressionType: SIMPLE
     subject: date
@@ -25,7 +24,13 @@ params:
   - expressionType: SQL
     sqlExpression: flow_type IN ('ingreso', 'egreso')
     clause: WHERE
-  x_axis_time_format: '%Y-%m-%d'
+  label_colors:
+    ingreso: '#1f9d6b'
+    egreso: '#e5484d'
+  x_axis_time_format: '%d %b %Y'
+  y_axis_format: ',.0f'
+  show_value: true
+  rich_tooltip: true
   row_limit: 10000
   orientation: vertical
   show_legend: true
@@ -33,6 +38,6 @@ params:
   viz_type: echarts_timeseries_bar
 query_context: null
 cache_timeout: null
-uuid: 6cd9aef4-f636-4846-9bfa-51e807c6f293
+uuid: 0e96267e-283b-4c9f-81ef-3dcb0d2df9e7
 version: 1.0.0
-dataset_uuid: 8c239285-716f-44a4-8562-8618c9cf59da
+dataset_uuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0

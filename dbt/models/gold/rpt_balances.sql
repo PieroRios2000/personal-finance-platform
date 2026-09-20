@@ -12,7 +12,10 @@ select
     calendar.year_quarter as calendar_quarter,
     calendar.year_month as calendar_month,
     calendar.month_name as calendar_month_name,
-    calendar.day_name as calendar_day_name
+    calendar.day_name as calendar_day_name,
+    -- 1 = the latest month of the data, 2 = the one before: lets a BI tool show "latest
+    -- balance" and "change vs previous month" without a sub-query.
+    dense_rank() over (order by facts.month_start desc) as month_recency
 from {{ ref('fct_account_balance_monthly') }} as facts
 inner join {{ ref('dim_date') }} as calendar
     on facts.month_start = calendar.date

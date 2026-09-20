@@ -500,3 +500,12 @@ def test_every_reporting_view_shares_the_same_calendar_columns(
         ).fetchall()
 
     assert months == [("2026-01",), ("2026-02",), ("2026-03",)]
+
+    with pg_store.connect() as connection:
+        recency = connection.execute(
+            "select calendar_month, month_recency from gold.rpt_balances "
+            "order by calendar_month"
+        ).fetchall()
+    # 1 = the latest month of the data, 2 = the one before: a BI tool reads "latest
+    # balance" and "change vs previous month" from it, with no sub-query.
+    assert recency == [("2026-01", 3), ("2026-02", 2), ("2026-03", 1)]
