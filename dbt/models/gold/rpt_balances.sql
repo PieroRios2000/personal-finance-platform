@@ -1,4 +1,5 @@
--- gold.rpt_balances: each account's declared closing balance per month, with its calendar attributes.
+-- gold.rpt_balances: each account's declared closing balance per month, with its
+-- calendar attributes.
 --
 -- The reporting layer (T34): the monthly balance fact joined to the shared calendar
 -- (`dim_date`), so every BI dataset carries the same `calendar_*` columns and one
@@ -10,7 +11,7 @@ select
     facts.*,
     calendar.year_number as calendar_year,
     calendar.year_quarter as calendar_quarter,
-    calendar.year_month as calendar_month,
+    calendar.month_label as calendar_month,
     calendar.month_name as calendar_month_name,
     calendar.day_name as calendar_day_name,
     -- 1 = the latest month of the data, 2 = the one before: lets a BI tool show "latest

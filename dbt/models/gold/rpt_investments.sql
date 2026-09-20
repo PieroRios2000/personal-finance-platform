@@ -10,7 +10,7 @@ select
     facts.*,
     calendar.year_number as calendar_year,
     calendar.year_quarter as calendar_quarter,
-    calendar.year_month as calendar_month,
+    calendar.month_label as calendar_month,
     calendar.month_name as calendar_month_name,
     calendar.day_name as calendar_day_name
 from {{ ref('fct_investment_monthly') }} as facts

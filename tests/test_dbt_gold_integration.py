@@ -459,7 +459,7 @@ def test_dim_date_is_a_continuous_calendar_over_the_data_range(
 
     with pg_store.connect() as connection:
         row = connection.execute(
-            "select count(*), min(date), max(date), count(distinct year_month) "
+            "select count(*), min(date), max(date), count(distinct month_label) "
             "from gold.dim_date"
         ).fetchone()
 

@@ -37,7 +37,7 @@ models:
       - name: month_start
         data_tests:
           - not_null
-      - name: year_month
+      - name: month_label
         description: Year and month like `2026-03`, for a month filter or axis.
         data_tests:
           - not_null

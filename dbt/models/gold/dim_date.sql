@@ -11,7 +11,7 @@
 -- not from a hard-coded start and end.
 --
 -- The date-part columns are the attributes a BI tool wants without re-deriving them
--- per query (`year_month` like `2026-03`, `year_quarter` like `2026-Q1`) --
+-- per query (`month_label` like `2026-03`, `year_quarter` like `2026-Q1`) --
 -- nothing speculative beyond that (no fiscal calendar, no holidays).
 
 with data_range as (
@@ -29,7 +29,7 @@ with data_range as (
 
 ),
 
-calendar as (
+calendar (date) as (
 
     select
         cast(
@@ -40,23 +40,23 @@ calendar as (
                     interval 1 day
                 )
             ) as date
-        ) as date
+        )
     from data_range
 
 )
 
 select
     date,
+    cast(date_trunc('month', date) as date) as month_start,
     extract(year from date) as year_number,
     extract(quarter from date) as quarter_number,
     extract(month from date) as month_number,
     strftime(date, '%B') as month_name,
     extract(day from date) as day_number,
     strftime(date, '%A') as day_name,
+    strftime(date, '%Y-%m') as month_label,
     -- DuckDB's dayofweek(): 0 = Sunday .. 6 = Saturday.
     dayofweek(date) in (0, 6) as is_weekend,
-    cast(date_trunc('month', date) as date) as month_start,
-    strftime(date, '%Y-%m') as year_month,
     strftime(date, '%Y') || '-Q' || cast(extract(quarter from date) as varchar)
         as year_quarter
 from calendar
