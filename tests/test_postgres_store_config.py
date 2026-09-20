@@ -98,8 +98,13 @@ def _profile() -> dict[str, Any]:
     return profile
 
 
-def test_the_default_dbt_target_is_still_the_duckdb_file() -> None:
-    assert _profile()["target"] == "local"
+def test_the_default_dbt_target_is_postgres_and_local_stays_selectable() -> None:
+    """T27: silver and gold live in Postgres by default; `PFP_DBT_TARGET=local`
+    still selects the DuckDB file (CI's data diff uses it until T29)."""
+    target = _profile()["target"]
+
+    assert "PFP_DBT_TARGET" in target and "'postgres'" in target
+    assert "local" in _profile()["outputs"]
 
 
 def test_the_postgres_target_attaches_postgres_and_elementarys_own_file() -> None:
@@ -154,3 +159,19 @@ def test_make_has_targets_to_start_and_stop_postgres_without_touching_the_lake()
 
     assert re.search(r"^pg-up:\n\t.*up -d --wait postgres", makefile, re.M)
     assert re.search(r"^pg-down:\n\t.*stop postgres", makefile, re.M)
+
+
+def test_make_poc_up_starts_postgres_with_the_local_s3() -> None:
+    makefile = (_ROOT / "Makefile").read_text()
+
+    assert re.search(r"^poc-up:\n\t.*up -d --wait seaweedfs postgres", makefile, re.M)
+
+
+def test_the_orchestration_module_gives_elementary_an_absolute_file_by_default() -> (
+    None
+):
+    """Dagster runs dbt from the project directory, so a relative default would
+    resolve against the wrong cwd (the reason PFP_DUCKDB_PATH gets one too)."""
+    source = (_ROOT / "orchestration" / "assets" / "dbt_project.py").read_text()
+
+    assert 'os.environ.setdefault("PFP_ELEMENTARY_DUCKDB_PATH"' in source
