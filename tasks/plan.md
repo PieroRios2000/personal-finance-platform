@@ -103,7 +103,7 @@ Every decision gets recorded as an ADR in `brain/decisions/` in the task where i
 ## Definition of Done (for every task)
 
 - [ ] The task's acceptance criteria are met.
-- [ ] `make check-task` green locally and CI's blocking checks green.
+- [ ] `make check-task` and `make ci-local` (CI's own jobs, in a clean clone) green locally (`make ci-local-full` too when the change touches `dbt/`, `ingestion/`, `lakehouse/`, `docker-compose.yml`, `Makefile` or CI), and CI's blocking checks green.
 - [ ] Behavior verified by running it, not just with tests.
 - [ ] New tests fail without the change and pass with it.
 - [ ] No real data or secrets in the diff.

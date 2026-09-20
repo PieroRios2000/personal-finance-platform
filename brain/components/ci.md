@@ -89,6 +89,16 @@ GitHub Actions PR run to confirm the wiring itself, since this session can't tri
   ruleset's required checks, so a real base-vs-PR difference — or even a broken base-branch
   build — can never block a merge the way `ephemeral-integration` itself does.
 
+## Reproducing CI locally
+
+`make ci-local` (`scripts/ci_local.py`) runs a job's own `run:` steps, read from `ci.yml`, in a
+clean clone of the last commit with only that job's variables (`make ci-local-full` adds
+`ephemeral-integration`). It exists because CI's `tests` job once failed on a variable that only a
+job without Postgres lacks and on files a fresh checkout does not have, both invisible locally:
+run against that failing commit it reports the same error. Uncommitted changes are refused, `if:`
+steps other than `always()` and `sudo` steps are skipped with a printed reason, and a GitHub
+expression it cannot evaluate makes the job refuse to run. It is part of the Definition of Done.
+
 ## Cost, and where it goes
 
 `ephemeral-integration` is the slow job: about 20 minutes when it runs, of which 17 are

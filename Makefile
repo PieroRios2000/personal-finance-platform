@@ -5,7 +5,7 @@
 
 BASE ?= origin/develop
 
-.PHONY: check-fast check-task check-full poc poc-up poc-down pg-check pg-up pg-down om-up om-sync om-down alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down om-up om-sync om-down alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -102,3 +102,14 @@ alert:
 
 alert-digest:
 	set -a && . ./.env && set +a && uv run python -m alerting digest
+
+# CI's own jobs, run locally the way CI runs them (scripts/ci_local.py): the steps and
+# environment come from .github/workflows/ci.yml, in a clean clone of what is committed
+# and with only that job's variables. `ci-local` is the fast jobs (lint-types, tests,
+# architecture, floor-guard); `ci-local-full` adds ephemeral-integration (Docker, and
+# the ports 8333 and 5432 free: `make poc-down` first if your stack is up).
+ci-local:
+	uv run python -m scripts.ci_local
+
+ci-local-full:
+	uv run python -m scripts.ci_local --full
