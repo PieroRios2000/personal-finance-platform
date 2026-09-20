@@ -20,12 +20,14 @@ shows one real edge (bronze -> silver) matching the actual data flow, not
 upstream stubs for tables Dagster never separately produces.
 """
 
+import json
 import os
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
 import dagster as dg
+import psycopg
 from dagster_dbt import (
     DagsterDbtTranslator,
     DagsterDbtTranslatorSettings,
@@ -33,11 +35,13 @@ from dagster_dbt import (
     DbtProject,
     dbt_assets,
 )
+from psycopg.conninfo import make_conninfo
 
 from orchestration.assets.bronze import bronze
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DBT_PROJECT_DIR = _REPO_ROOT / "dbt"
+_PACKAGE = "personal_finance_platform"
 
 # dbt/profiles.yml's `path` defaults to the *relative* `dbt/pfp.duckdb`, resolved
 # against the dbt CLI subprocess's own cwd -- correct for every existing manual/CI
@@ -116,6 +120,48 @@ def _dbt_build_args() -> list[str]:
     return args
 
 
+def _model_relations() -> dict[dg.AssetKey, tuple[str, str]]:
+    """`(schema, table)` of every dbt model, by the asset key it has in the graph."""
+    translator = BronzeSourceDbtTranslator()
+    manifest = json.loads(dbt_project.manifest_path.read_text())
+    return {
+        translator.get_asset_key(node): (node["schema"], node["alias"])
+        for node in manifest["nodes"].values()
+        if node["resource_type"] == "model" and node["package_name"] == _PACKAGE
+    }
+
+
+def _postgres_row_count(schema: str, table: str) -> int:
+    """`count(*)` of one table in the Postgres dbt stores silver and gold in."""
+    conninfo = make_conninfo(
+        dbname=os.environ.get("PFP_PG_DATABASE", "pfp"),
+        host=os.environ.get("PFP_PG_HOST", "127.0.0.1"),
+        port=os.environ.get("PFP_PG_PORT", "5432"),
+        user=os.environ["PFP_PG_USER"],
+        password=os.environ["PFP_PG_PASSWORD"],
+    )
+    with psycopg.connect(conninfo) as connection:
+        row = connection.execute(
+            f'select count(*) from "{schema}"."{table}"'
+        ).fetchone()
+    assert row is not None  # count(*) always returns one row
+    return int(row[0])
+
+
+def _storage_metadata(key: dg.AssetKey) -> dict[str, Any]:
+    """Where a model is stored and how many rows it has. Empty for a model this
+    graph does not know, and without a row count on the `local` (DuckDB file) target,
+    which has no Postgres to ask."""
+    relation = _model_relations().get(key)
+    if relation is None:
+        return {}
+    schema, table = relation
+    metadata: dict[str, Any] = {"dagster/table_name": f"{schema}.{table}"}
+    if os.environ.get("PFP_DBT_TARGET", "postgres") == "postgres":
+        metadata["dagster/row_count"] = _postgres_row_count(schema, table)
+    return metadata
+
+
 @dbt_assets(
     manifest=dbt_project.manifest_path,
     project=dbt_project,
@@ -125,4 +171,10 @@ def dbt_models(context: dg.AssetExecutionContext, dbt: DbtCliResource) -> Iterat
     """Every dbt node in `dbt/models/` as one Dagster multi-asset, built with
     `dbt build` -- the identical command CI and a developer already run by
     hand, optionally narrowed by `_dbt_build_args()`."""
-    yield from dbt.cli(_dbt_build_args(), context=context).stream()
+    # T31: each model's materialization carries the table it is stored in and its
+    # row count, so the graph shows where the data lives and how big it is.
+    for event in dbt.cli(_dbt_build_args(), context=context).stream():
+        if isinstance(event, dg.Output):
+            key = context.assets_def.keys_by_output_name[event.output_name]
+            event = event.with_metadata(_storage_metadata(key))
+        yield event

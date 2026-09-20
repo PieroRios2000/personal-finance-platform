@@ -144,7 +144,7 @@ def test_dbt_assets_carry_their_postgres_table_and_row_count(
     for event in result.get_asset_materialization_events():
         materialization = event.step_materialization_data.materialization
         by_key[materialization.asset_key.to_user_string()] = materialization.metadata
-    transactions = by_key["silver/transactions"]
+    transactions = by_key["transactions"]
     assert transactions["dagster/row_count"].value == len(DEFAULT_MOVEMENTS)
     assert str(transactions["dagster/table_name"].value).endswith("silver.transactions")
     fact = by_key["gold/fact_transactions"]

@@ -2,7 +2,7 @@
 type: component
 phase: 2
 status: built
-task: T21
+task: T31
 ---
 
 # dagster
@@ -20,6 +20,7 @@ one (ADR 0004's masked-dump debugging loop still needs no DAG in the way).
 |---|---|
 | [`orchestration/assets/bronze.py`](../../orchestration/assets/bronze.py) | The `bronze` asset: `organizer.organize()` + `bronze.write_statement()`, the same two calls `ingestion.cli._run_ingest()` makes for `pfp ingest` -- never a shelled-out `subprocess.run(["pfp", "ingest"])`. `BronzeIngestConfig` defaults `user_id`/`inbox_root`/`archive_root` from the same `PFP_USER`/`PFP_INBOX_ROOT`/`PFP_ARCHIVE_ROOT` env vars the CLI and CI already use |
 | [`orchestration/assets/dbt_project.py`](../../orchestration/assets/dbt_project.py) | The whole dbt project as one Dagster multi-asset (`dagster_dbt.dbt_assets`), one Dagster asset key per dbt node -- today `transactions`, `internal_transfer_matches`, `internal_transfers`, `unmatched_transfers`; whatever a future model adds shows up automatically, no per-model wiring. `BronzeSourceDbtTranslator` collapses dbt's two `bronze` sources (`transactions`, `statements`) onto the one Python `bronze` asset that actually writes them, so the graph shows one real edge, not two invented stubs. `_dbt_build_args()` (T21, [ADR 0021](../decisions/0021-ci-invokes-the-dagster-pipeline.md)) forwards `DBT_SELECT`/`DBT_STATE_PATH` into the underlying `dbt build`, carrying ADR 0008's impact-based CI selection through unchanged |
+| Storage metadata (T31) | `dbt_models` adds `dagster/table_name` (schema.table) and `dagster/row_count` to each model's materialization: the table comes from the manifest, the count from a `count(*)` in the Postgres dbt stores silver and gold in (`PFP_PG_*`); on the `local` DuckDB target only the table name. Not `dagster-dbt`'s `fetch_row_counts()`: its in-process adapter cannot open the `:memory:` + `attach` profile (`IO Error ... dbt/:memory:`) |
 | [`orchestration/definitions.py`](../../orchestration/definitions.py) | The top-level `Definitions` object: `bronze` + `dbt_models`, wired with `DbtCliResource(project_dir=dbt_project)`. Discovered by the `dagster` CLI via `pyproject.toml`'s `[tool.dagster] module_name` for `dagster dev` only -- see the env var note below for `dagster asset materialize`/`asset list` |
 | `orchestration` package + `[tool.dagster]` (`pyproject.toml`) | `orchestration` is a fourth hatch build package and import-linter root, forbidden from `ingestion`/`lakehouse` importing back into it (same direction `ingestion.cli` already orchestrates both from). Named `orchestration`, not `dagster`: naming it `dagster` would shadow the real library on `sys.path` for anything that adds the repo root to it (`uv run pytest`, via `pythonpath = ["."]`) -- confirmed by reproducing the shadowing directly |
 | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)'s `ephemeral-integration` job | `dagster asset materialize --select '*'` replaces the old separate `pfp ingest`/`dbt build` steps (T21, [ADR 0021](../decisions/0021-ci-invokes-the-dagster-pipeline.md)) |

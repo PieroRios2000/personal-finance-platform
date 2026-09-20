@@ -392,8 +392,8 @@ directly.
 lake, dbt and the database are seen as one thing.
 
 **Acceptance criteria:**
-- [ ] The dbt assets carry their Postgres schema, table and row count as asset metadata after a run.
-- [ ] The graph is documented (README/SETUP) with what to look at.
+- [x] The dbt assets carry their Postgres schema, table and row count as asset metadata after a run.
+- [x] The graph is documented (README/SETUP) with what to look at.
 
 **Dependencies:** T27 · **Files:** `orchestration/**`, `brain/components/dagster.md` · **Size:** S
 
