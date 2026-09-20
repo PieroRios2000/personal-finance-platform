@@ -34,7 +34,7 @@ services:
       PFP_BI_ADMIN_PASSWORD: ${PFP_BI_ADMIN_PASSWORD:?PFP_BI_ADMIN_PASSWORD is required (see .env.example)}
       PFP_PG_BI_PASSWORD: ${PFP_PG_BI_PASSWORD:?}
     ports:
-      - "127.0.0.1:8088:8088"
+      - "127.0.0.1:${PFP_BI_PORT:-8088}:8088"
     volumes:
       - ./superset_config.py:/app/superset_config.py:ro
       - ./start.sh:/app/start.sh:ro

@@ -86,3 +86,34 @@ def test_every_chart_reads_a_gold_table_the_dashboard_exports() -> None:
     exported = {p.stem for p in (_BI / "assets" / "datasets").rglob("*.yaml")}
 
     assert {c[0] for c in _builder().CHARTS} == exported
+
+
+def test_the_dashboard_has_filters_for_dates_grain_bank_currency_and_fund() -> None:
+    filters = _builder().native_filters(
+        {"fact_transactions": 2, "fct_investment_monthly": 1}
+    )
+
+    by_name = {f["name"]: f for f in filters}
+    assert by_name["Date range"]["filterType"] == "filter_time"
+    assert by_name["Time grain"]["filterType"] == "filter_timegrain"
+    assert by_name["Bank"]["targets"][0]["column"]["name"] == "bank"
+    assert by_name["Currency"]["targets"][0]["column"]["name"] == "currency"
+    assert by_name["Fund"]["targets"][0]["column"]["name"] == "place"
+
+
+def test_the_time_grain_starts_monthly_and_the_axis_shows_the_full_date() -> None:
+    builder = _builder()
+    grain = next(
+        f
+        for f in builder.native_filters(
+            {"fact_transactions": 2, "fct_investment_monthly": 1}
+        )
+        if f["name"] == "Time grain"
+    )
+
+    assert grain["defaultDataMask"]["extraFormData"] == {"time_grain_sqla": "P1M"}
+    # `smart_date` prints a January 1st as just the year: it read as a yearly total.
+    timeseries = [c for c in builder.CHARTS if c[2].startswith("echarts_timeseries")]
+    assert timeseries and all(
+        c[3]["x_axis_time_format"] == "%Y-%m-%d" for c in timeseries
+    )
