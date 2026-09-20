@@ -403,15 +403,15 @@ lake, dbt and the database are seen as one thing.
 read-only role, plus the first dashboards.
 
 **Acceptance criteria:**
-- [ ] `make bi-up` / `make bi-down` start and stop Superset (its metadata in its own database of the same
+- [x] `make bi-up` / `make bi-down` start and stop Superset (its metadata in its own database of the same
   Postgres); it is not started by `make poc-up`, like OpenMetadata.
-- [ ] A Postgres database connection with the read-only role; dashboards as code (exported and committed):
+- [x] A Postgres database connection with the read-only role; dashboards as code (exported and committed):
   monthly cash flow (income and spending, no internal transfers), savings balance per month, and each
   fund's monthly return **with `closing_basis` beside the return**.
-- [ ] The RAM it needs is measured against `.wslconfig` and written down (like T24).
-- [ ] An ADR records Superset over Metabase and Streamlit; SETUP.md gets a section.
+- [x] The RAM it needs is measured against `.wslconfig` and written down (like T24).
+- [x] An ADR records Superset over Metabase and Streamlit; SETUP.md gets a section.
 
-**Dependencies:** T26 · **Files:** `docker-compose.superset.yml`, `bi/**`, `Makefile`, `SETUP.md`,
+**Dependencies:** T26 · **Files:** `bi/**` (compose, Dockerfile, assets), `Makefile`, `SETUP.md`,
 `brain/**` · **Size:** L
 
 ### T33: Phase 2 re-close — `docs/phase-2-extension-close`
