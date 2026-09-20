@@ -162,7 +162,7 @@ direction of a movement, consistent across banks despite their opposite sign con
 filter `is_internal_transfer = false` for real income/spending. Currencies (PEN / USD) are
 never converted or mixed.
 
-Optional: a local quality report (`PFP_DUCKDB_PATH` must be absolute for `edr`) and the
+Optional: a local quality report (`PFP_ELEMENTARY_DUCKDB_PATH` must be absolute for `edr`) and the
 catalog with column-level lineage — see [SETUP.md](../SETUP.md) (Elementary subsection,
 section 10) and [ADR 0023](../brain/decisions/0023-openmetadata-catalog-and-column-lineage-from-dbt-artifacts.md).
 

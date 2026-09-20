@@ -101,7 +101,7 @@ the engine (it reads bronze from the lake) and stores silver and gold in **Postg
 |---|---|
 | T26 | PostgreSQL service and the dbt connection (done: `dbt build --target postgres`, opt-in until T27) |
 | T27 | Scripts, Dagster wiring and tests read PostgreSQL instead of the DuckDB file (done: Postgres is the default target) |
-| T28 | Elementary keeps its own small DuckDB file |
+| T28 | Elementary keeps its own small DuckDB file (done, `edr` included) |
 | T29 | CI's ephemeral environment and the PR data diff on PostgreSQL |
 | T30 | OpenMetadata reads PostgreSQL natively |
 | T31 | Dagster shows where each model is stored |

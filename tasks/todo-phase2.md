@@ -347,9 +347,12 @@ passes against a real Postgres and S3.
 Postgres attach. Give it a small DuckDB file of its own; its anomaly test still reads silver in Postgres.
 
 **Acceptance criteria:**
-- [ ] Elementary's models and results land in a DuckDB file (`elementary` schema), not in Postgres.
-- [ ] `volume_anomalies` still passes/warns as in T22, and `edr report` still renders.
-- [ ] ADR 0022 and `brain/components/elementary.md` updated (where it lives now).
+- [x] Elementary's models and results land in a DuckDB file (`elementary` schema), not in Postgres (done
+  in T26, which the Postgres target needed).
+- [x] `volume_anomalies` still passes/warns as in T22 (its tests read the file), and `edr report` still
+  renders: `edr` has its own profile on that file (integration test renders the report), and CI's `edr`
+  step uses the same absolute path as dbt.
+- [x] ADR 0022 (update section), `brain/components/elementary.md` and SETUP.md updated (where it lives now).
 
 **Dependencies:** T27 · **Files:** `dbt/**`, `tests/test_elementary_anomaly_integration.py`,
 `brain/**` · **Size:** M

@@ -241,9 +241,13 @@ def test_the_edr_profile_reads_elementarys_own_file_and_nothing_else() -> None:
     profile: dict[str, Any] = yaml.safe_load(text)["elementary"]["outputs"]["local"]
 
     assert profile["type"] == "duckdb"
-    assert "PFP_ELEMENTARY_DUCKDB_PATH" in profile["path"]
+    # attached under the alias dbt's views were created with (`elem`), whatever the
+    # file is called
+    (attached,) = profile["attach"]
+    assert "PFP_ELEMENTARY_DUCKDB_PATH" in attached["path"]
+    assert attached["alias"] == profile["database"] == "elem"
     assert profile["schema"] == "elementary"
-    assert "secrets" not in profile and "attach" not in profile
+    assert "secrets" not in profile
     assert "PFP_DUCKDB_PATH" not in str(profile)
 
 

@@ -178,8 +178,7 @@ The role exists only in a volume created by this version: with an older volume, 
 `PFP_PG_BI_PASSWORD`, run `make poc-down` (removes the volume, lake included) and `make pg-up` again.
 `make pg-down` only stops Postgres.
 
-The `edr` CLI (`elementary:` profile) reads the file in `PFP_DUCKDB_PATH`: point it at
-`dbt/elementary.duckdb` (absolute path, section "Elementary" below; T28 tidies this).
+The `edr` CLI reads Elementary's own file (`PFP_ELEMENTARY_DUCKDB_PATH`, section "Elementary" below).
 
 `make check-task` doesn't cover this: dbt reads bronze's Delta tables straight off local S3, so
 it needs SeaweedFS running and `.env` exported into the shell. `profiles.yml` lives inside the
@@ -229,20 +228,22 @@ is how you try things out without touching your real bronze.
 anomaly shows up as `WARN` in `dbt build`'s own output, but doesn't fail the build yet.
 
 `edr report` (from the `elementary-data` package above) renders a local HTML report from what
-that build already wrote — same prerequisites as `dbt build`:
+that build already wrote. Elementary's tables live in **their own DuckDB file**
+(`dbt/elementary.duckdb`, gitignored; silver and gold are in Postgres, ADR 0029), so `edr` needs
+only that file, not the lake or Postgres:
 
 ```bash
-export PFP_DUCKDB_PATH="$PWD/dbt/pfp.duckdb"   # must be absolute for edr, see below
+export PFP_ELEMENTARY_DUCKDB_PATH="$PWD/dbt/elementary.duckdb"   # must be absolute for edr, see below
 uv run edr report --project-dir dbt --profiles-dir dbt --config-dir dbt/.edr \
   --file-path dbt/elementary_report.html
 ```
 
-`PFP_DUCKDB_PATH` has to be absolute here, unlike every `dbt build`/`dbt test` command above:
-`edr` runs its own internal dbt project from inside its own installed package directory, not this
-repo, so `profiles.yml`'s relative default (`dbt/pfp.duckdb`) would resolve against *that*
-directory instead and fail to find the database `dbt build` just wrote (confirmed directly:
-`edr report` fails with `Cannot open file ".../site-packages/elementary/.../dbt/pfp.duckdb"` with
-no override, and finds the right file with one).
+The path has to be absolute here, unlike every `dbt build`/`dbt test` command above: `edr` runs its
+own internal dbt project from inside its own installed package directory, not this repo, so a
+relative path would resolve against *that* directory and `edr report` would fail to find the file
+`dbt build` just wrote. (The default for `dbt build` and Dagster is `dbt/elementary.duckdb`; Dagster
+sets an absolute one itself.) `make poc-down` deletes the file together with the database it
+described.
 
 `--config-dir dbt/.edr` opts out of Elementary's own anonymous usage tracking (`dbt/.edr/config.yml`,
 committed) — without it the generated report embeds a PostHog project key that would let it phone
@@ -250,8 +251,9 @@ home when opened in a browser (ADR 0004, ADR 0022). Drop `--open-browser false` 
 open automatically; `dbt/*.html` is gitignored.
 
 `edr` needs its own connection profile literally named `elementary` in `dbt/profiles.yml` (not the
-project's own `personal_finance_platform` profile) — already there, pointed at the same DuckDB
-file and S3 secrets so it reads what `dbt build` just wrote, not a second database.
+project's own `personal_finance_platform` profile) — already there, pointing at Elementary's DuckDB
+file (attached under the alias `elem`, the catalog name dbt's views were created with, so the file
+can have any name).
 
 ### `make poc`: the whole flow against your real PDFs (T17)
 
