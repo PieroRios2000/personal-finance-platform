@@ -75,18 +75,24 @@ poc:
 # makes Docker create it root-owned.
 OM_COMPOSE = docker compose -f openmetadata/docker-compose.yml -p pfp-om
 
+# The ingestion container joins the network of PFP's Postgres (T30): start it first
+# (`make poc-up`, project pfp-poc), or set PFP_NETWORK to another project's network.
 om-up:
+	@docker network inspect "$${PFP_NETWORK:-pfp-poc_default}" >/dev/null 2>&1 || \
+		{ echo "No Docker network $${PFP_NETWORK:-pfp-poc_default}: run 'make poc-up' first (PFP's Postgres must be up)." >&2; exit 1; }
 	mkdir -p openmetadata/artifacts
 	$(OM_COMPOSE) up -d --wait
 
 # Needs `dbt build` to have run against the lake (`dbt docs generate` reads the built
-# tables' columns), so: `make poc-up`, export .env, `dbt build`, then this. Registers the
-# tables, runs the dbt ingestion workflow inside the ingestion container, then fails
-# unless gold.fact_transactions.amount traces back to bronze.transactions.amount.
+# tables' columns), so: `make poc-up`, export .env, `dbt build`, then this. Registers
+# bronze, ingests silver and gold with OpenMetadata's native Postgres connector, runs
+# the dbt workflow (lineage), then fails unless gold.fact_transactions.amount traces
+# back to bronze.transactions.amount.
 om-sync:
 	set -a && . ./.env && set +a && \
 	uv run dbt docs generate --project-dir dbt --profiles-dir dbt
-	uv run python -m scripts.openmetadata_sync sync
+	set -a && . ./.env && set +a && uv run python -m scripts.openmetadata_sync sync
+	$(OM_COMPOSE) exec -T ingestion metadata ingest -c /opt/pfp-artifacts/postgres-workflow.yaml
 	$(OM_COMPOSE) exec -T ingestion metadata ingest -c /opt/pfp-artifacts/dbt-workflow.yaml
 	uv run python -m scripts.openmetadata_sync check
 

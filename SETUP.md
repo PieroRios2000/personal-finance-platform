@@ -151,8 +151,8 @@ All green = the environment is ready.
 > **Phase 2 extension (T26–T33):** silver and gold live in **PostgreSQL**, not in `dbt/pfp.duckdb`
 > ([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). Since T27 that is the
 > **default**: `make poc-up` starts the local S3 *and* Postgres, and every `dbt build` below writes
-> there. Sections 7 (DBeaver) and 10 (OpenMetadata) still describe the DuckDB-file version until
-> T30 and this section's own leftovers are updated.
+> there. Section 10 (OpenMetadata) is on Postgres since T30; section 7 (DBeaver) still describes the
+> DuckDB-file version.
 
 ### PostgreSQL as dbt's store (T26, default since T27)
 
@@ -380,19 +380,28 @@ Elasticsearch under its own project name (`pfp-om`), ephemeral like the SeaweedF
 CI never runs this stack (ADR 0023).
 
 ```bash
-make poc-up                          # local S3, as in section 6
+make poc-up                          # local S3 and Postgres, as in section 6
 set -a && source .env && set +a
 uv run dbt deps --project-dir dbt --profiles-dir dbt
 uv run dbt build --project-dir dbt --profiles-dir dbt   # or `dagster asset materialize`, section 9
 
 make om-up                           # ~5 minutes to become healthy the first time
-make om-sync                         # docs generate, register tables, ingest, check the lineage
+make om-sync                         # docs generate, register bronze, ingest silver/gold, check the lineage
 ```
+
+Since T30 OpenMetadata reads silver and gold with its **native Postgres connector**: the `ingestion`
+container joins the Docker network of your Postgres (`pfp-poc_default`; `make om-up` stops with a clear
+message if `make poc-up` has not run, and `PFP_NETWORK` -- exported in your shell, not set in `.env` -- selects another project's network, whose Postgres service must be named `postgres`) and connects
+as `postgres:5432` with the `PFP_PG_USER`/`PFP_PG_PASSWORD` from `.env`. Those credentials are written to
+`openmetadata/artifacts/postgres-workflow.yaml` (gitignored, removed by `make om-down`), next to the
+short-lived token the dbt workflow already needs. Run `make om-down` before `make poc-down`: while the
+`ingestion` container is attached, Docker cannot remove the `pfp-poc_default` network. Only bronze -- Delta tables the connector cannot see --
+is still registered by `scripts/openmetadata_sync.py`, from `lakehouse/bronze.py`'s schemas.
 
 `make om-sync` ends with `OK: 1 column-level path(s) from ...bronze.transactions.amount`, or
 exits 1 if `gold.fact_transactions.amount` no longer traces back to bronze. Then open
 <http://localhost:8585> (login `admin@open-metadata.org` / `admin`, the stack's upstream local
-default) and browse *Explore* -> `pfp_duckdb` -> `gold` -> `fact_transactions` -> *Lineage*,
+default) and browse *Explore* -> `pfp_postgres` -> `pfp` -> `gold` -> `fact_transactions` -> *Lineage*,
 with *Column level lineage* on. The same from the API:
 
 ```bash
@@ -400,11 +409,12 @@ TOKEN=$(curl -s -X POST localhost:8585/api/v1/users/login -H 'Content-Type: appl
   -d "{\"email\":\"admin@open-metadata.org\",\"password\":\"$(printf admin | base64)\"}" \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "localhost:8585/api/v1/lineage/getLineage?fqn=pfp_duckdb.pfp.gold.fact_transactions&type=table&upstreamDepth=10&downstreamDepth=0"
+  "localhost:8585/api/v1/lineage/getLineage?fqn=pfp_postgres.pfp.gold.fact_transactions&type=table&upstreamDepth=10&downstreamDepth=0"
 ```
 
 Re-run `make om-sync` after any `dbt build` that changes models; it is idempotent. `make om-down`
-when done. Elementary's own models are not catalogued and dbt tests are not ingested.
+when done. Elementary's own models (a separate DuckDB file, not in Postgres) are not
+catalogued and dbt tests are not ingested.
 
 ## 11. Alerts by email or Microsoft Teams (Phase 7)
 
@@ -517,6 +527,6 @@ uv run pytest -m benchmark -q --benchmark-min-rounds=10 \
 | `terminate called without an active exception` after a `pfp ingest`/`pfp backfill` run that read bronze, with exit code 134 | The command already did its work and printed its report: this is `deltalake==1.6.3` aborting while the process shuts down, after `main()` returned. Reproducible on this machine with `deltalake` alone (three lines: open a `DeltaTable`, `to_pyarrow_table()`, exit), so it isn't the CLI's doing; `pytest` isn't affected. Noted while building T14c; needs its own fix (a `deltalake` upgrade is the first thing to try) — don't script around a `pfp` exit code until then |
 | `dbt build`/`dbt test` exits non-zero with `Catalog Error: Table with name test_..._elementary_volume_anomalies...__metrics__tmp_... does not exist!`, right after printing `Done. PASS=... WARN=... ERROR=0` | Elementary's own `on-run-end` cleanup of its per-invocation temp tables (`elementary.clean_elementary_temp_tables()`) reproducibly crashes on this stack (dbt-duckdb 1.11.0, elementary 0.26.0) — always *after* every real result is already computed, so it never hides a failure, only dbt's own exit code afterward. `dbt/dbt_project.yml`'s `vars: clean_elementary_temp_tables: false` (T22) already works around it; if you see this anyway, check that var hasn't been reverted |
 | `make om-up` takes ~5 minutes the first time (measured: 4m40s with the images already pulled) | Normal: `up --wait` blocks until every container, including `ingestion` (Airflow, the slowest), reports healthy. Give it the time before assuming a failure |
-| `metadata ingest` logs `Unable to find the node or columns in the catalog file for dbt node: source.personal_finance_platform.bronze.*` (and the `operation.*` on-run-end hooks) | Expected and harmless: dbt's catalog can't see bronze (`delta_scan()` isn't a DuckDB relation) and hooks have no columns. Bronze's tables and columns are registered by `scripts/openmetadata_sync.py` instead; the run still ends `Success %: 100.0` |
+| `metadata ingest` logs `Unable to find the node or columns in the catalog file for dbt node: source.personal_finance_platform.bronze.*` (and the `operation.*` on-run-end hooks) | Expected and harmless: dbt's catalog can't see bronze (`delta_scan()` isn't a database relation) and hooks have no columns. Bronze's tables and columns are registered by `scripts/openmetadata_sync.py` instead; the run still ends `Success %: 100.0` |
 | `make om-sync`'s `check` prints `FAIL: no column-level path ...` and exits 1 | Column lineage stopped short of bronze. Reproduced on purpose by ingesting `dbt/target/manifest.json` as-is instead of the copy `sync` writes to `openmetadata/artifacts/manifest.json` (its `delta_scan(...)` paths aren't tables to OpenMetadata's SQL parser, ADR 0023): re-run `make om-sync`, which regenerates the copy |
 | Upstream's own `docker-compose-postgres.yml` leaves `docker-volume/db-data-postgres` behind and `rm -rf` fails with `Permission denied` | Not applicable to `openmetadata/docker-compose.yml`: it uses named volumes, so `make om-down` (`down -v`) removes everything (checked: no `pfp-om_*` volume left) |
