@@ -32,7 +32,8 @@ from BCP's checking-account one, confirmed from that dump:
 - The period is `DD-MM-YYYY` (dashes), found via a `DEL ... AL ...` line with no
   leading label, the same shape-based technique `bcp.py`'s `_find_period` uses.
 - Each row carries its own 2-digit year directly (`DD/MM/YY`, two date
-  columns — only the later one, the value date, is kept; the earlier one is
+  columns — only the later one, the purchase date (confirmed by the owner: the first is
+  the processing date), is kept; the earlier one is
   given a throwaway column so it can't bleed into it, the exact same problem
   and fix as `bcp.py`'s two FECHA columns).
 - The header spans **two lines**: `Fecha` (twice) and `Descripción` on one,

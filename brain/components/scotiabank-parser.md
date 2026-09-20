@@ -53,8 +53,8 @@ Confirmed directly from a real masked dump (T9's inspector, 2026-09):
 - **No "CUENTA NRO."/"PERIODO" label** next to either value; both found by shape, same
   principle as `bcp.py`.
 - **Period**: `DD-MM-YYYY` (dashes), found via a `DEL ... AL ...` line with no leading label.
-- **Row dates**: `DD/MM/YY`, two columns (processing, value) — only the later, value-date
-  column is kept, the earlier one given a throwaway column so it can't bleed into it. Unlike
+- **Row dates**: `DD/MM/YY`, two columns (processing, then purchase: the owner confirmed
+  which is which) — only the later, purchase-date column is kept, the earlier one given a throwaway column so it can't bleed into it. Unlike
   BCP, each row carries its own year directly; no cross-new-year inference needed.
 - **Two-line header**: `Fecha` (twice) and `Descripción` on one line, `Soles`/`Dólares` a few
   points below on the next — enough vertical gap to land in separate `_group_lines` groups.
