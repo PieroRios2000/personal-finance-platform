@@ -134,6 +134,14 @@ models:
                 field: account_id
       - name: account_last4
         description: The account's last four digits, to tell accounts apart on a chart (not a key).
+      - name: signed_amount
+        description: >
+          What the movement does to your position, the same on every bank (ADR 0031): money in
+          and debt paid down are positive, money out and new debt are negative. `amount` keeps
+          the bank's own sign, so it matches the statement; for a liability (a credit card)
+          `signed_amount` is its opposite.
+        data_tests:
+          - not_null
       - name: bank
         description: The bank the statement came from, e.g. BCP.
         data_tests:

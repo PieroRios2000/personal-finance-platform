@@ -450,7 +450,9 @@ Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admi
 - **Investments**: a styled table with each fund's return, and `closing_basis` as a badge right
   beside it (`valuation` = a real month-end value, `last_movement` = only the balance at the last
   movement), plus the return per fund over time and a note on how to read it.
-- **Movements** and **Statement balances**: every gold movement (real descriptions: they never
+- **Movements** and **Statement balances**: every gold movement (`amount` as the bank prints it, and
+  `signed_amount`, the effect on you: on a credit card a charge is negative and a payment positive,
+  ADR 0031) (real descriptions: they never
   leave your machine, so don't screenshot them into a chat) and each account's declared closing
   balance per month, to check against the PDFs. Filter to one bank, account, currency and month and
   compare.

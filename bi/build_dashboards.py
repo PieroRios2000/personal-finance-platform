@@ -277,24 +277,39 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
                 "currency",
                 "flow_type",
                 "amount",
+                "signed_amount",
                 "is_internal_transfer",
                 "description",
             ],
             "order_by_cols": ['["date", false]'],
+            # `amount` is as the bank prints it (matches the PDF; a credit card charge
+            # is positive there). `signed_amount` is the effect on you, the same on
+            # every bank: money in and debt paid down positive, money out and new debt
+            # negative.
             "column_config": {
-                "amount": {"d3NumberFormat": ",.2f", "horizontalAlign": "right"},
+                "amount": {
+                    "d3NumberFormat": ",.2f",
+                    "horizontalAlign": "right",
+                    "customColumnName": "amount (as in the PDF)",
+                },
+                "signed_amount": {
+                    "d3NumberFormat": ",.2f",
+                    "horizontalAlign": "right",
+                    "customColumnName": "effect on you",
+                },
             },
-            # Only numeric columns can be coloured: income green, spending red.
+            # Only numeric columns can be coloured: what improves your position is
+            # green, what worsens it red.
             "conditional_formatting": [
                 {
                     "colorScheme": "#c6f0dc",
-                    "column": "amount",
+                    "column": "signed_amount",
                     "operator": ">",
                     "targetValue": 0,
                 },
                 {
                     "colorScheme": "#fbd0d2",
-                    "column": "amount",
+                    "column": "signed_amount",
                     "operator": "<",
                     "targetValue": 0,
                 },

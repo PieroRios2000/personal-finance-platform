@@ -69,6 +69,6 @@ params:
   viz_type: handlebars
 query_context: null
 cache_timeout: null
-uuid: 9005a9cf-d6e7-4494-8b96-5aa0d425097f
+uuid: 75777fe5-7fe0-4ec0-955a-169255149e5d
 version: 1.0.0
-dataset_uuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+dataset_uuid: 50f398ba-7414-4b91-b12e-b8515edc252b

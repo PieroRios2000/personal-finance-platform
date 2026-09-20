@@ -172,9 +172,19 @@ def test_the_movements_and_balances_tables_exist_to_check_against_the_statements
 
     movements = charts["Movements (check against your statements)"]
     assert movements[0] == "rpt_movements"
-    assert {"date", "bank", "currency", "flow_type", "amount", "description"} <= set(
-        movements[3]["all_columns"]
-    )
+    assert {
+        "date",
+        "bank",
+        "currency",
+        "flow_type",
+        "amount",
+        "signed_amount",
+        "description",
+    } <= set(movements[3]["all_columns"])
+    # Colours follow the effect on you, not each bank's own sign.
+    assert {f["column"] for f in movements[3]["conditional_formatting"]} == {
+        "signed_amount"
+    }
     balances = charts["Statement balances (check against your statements)"]
     assert balances[0] == "rpt_balances"
     assert {"closing_date", "account_last4", "closing_balance"} <= set(

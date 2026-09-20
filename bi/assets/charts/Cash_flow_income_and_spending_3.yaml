@@ -38,6 +38,6 @@ params:
   viz_type: echarts_timeseries_bar
 query_context: null
 cache_timeout: null
-uuid: 0e96267e-283b-4c9f-81ef-3dcb0d2df9e7
+uuid: f5b43ee0-7f3d-4a5e-99c0-2474a7436994
 version: 1.0.0
-dataset_uuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+dataset_uuid: 50f398ba-7414-4b91-b12e-b8515edc252b
