@@ -3,6 +3,7 @@ Compose service, the read-only role's init script, the dbt profile's target and
 `.env.example`. The live behaviour is proven by `test_dbt_postgres_integration.py`."""
 
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -164,7 +165,7 @@ def test_make_has_targets_to_start_and_stop_postgres_without_touching_the_lake()
 def test_make_poc_up_starts_postgres_with_the_local_s3() -> None:
     makefile = (_ROOT / "Makefile").read_text()
 
-    assert re.search(r"^poc-up:\n\t.*up -d --wait seaweedfs postgres", makefile, re.M)
+    assert re.search(r"^poc-up:.*\n\t.*up -d --wait seaweedfs postgres", makefile, re.M)
 
 
 def test_the_orchestration_module_gives_elementary_an_absolute_file_by_default() -> (
@@ -175,3 +176,46 @@ def test_the_orchestration_module_gives_elementary_an_absolute_file_by_default()
     source = (_ROOT / "orchestration" / "assets" / "dbt_project.py").read_text()
 
     assert re.search(r'setdefault\(\s*"PFP_ELEMENTARY_DUCKDB_PATH"', source)
+
+
+def test_starting_the_local_environment_checks_the_postgres_secrets_first() -> None:
+    """Otherwise compose starts Postgres with an empty password, the container
+    exits, and `make poc` aborts before its teardown trap with a generic error."""
+    makefile = (_ROOT / "Makefile").read_text()
+
+    assert re.search(r"^poc-up: .*pg-check", makefile, re.M)
+    assert re.search(r"^pg-up: .*pg-check", makefile, re.M)
+
+
+def _make_pg_check(tmp_path: Path, env_file: str) -> "subprocess.CompletedProcess[str]":
+    (tmp_path / ".env").write_text(env_file)
+    return subprocess.run(
+        ["make", "-f", str(_ROOT / "Makefile"), "pg-check"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_pg_check_names_the_missing_secrets_and_stops(tmp_path: Path) -> None:
+    result = _make_pg_check(tmp_path, "PFP_PG_PASSWORD=\nPFP_PG_BI_PASSWORD=x\n")
+
+    assert result.returncode != 0
+    assert "PFP_PG_PASSWORD" in result.stdout + result.stderr
+
+
+def test_pg_check_passes_when_both_secrets_are_set(tmp_path: Path) -> None:
+    result = _make_pg_check(tmp_path, "PFP_PG_PASSWORD=a\nPFP_PG_BI_PASSWORD=b\n")
+
+    assert result.returncode == 0
+
+
+def test_poc_down_also_forgets_elementarys_file_so_it_matches_the_fresh_database() -> (
+    None
+):
+    makefile = (_ROOT / "Makefile").read_text()
+
+    assert re.search(
+        r"^poc-down:\n(\t.*\n)*\t.*rm -f dbt/elementary\.duckdb", makefile, re.M
+    )

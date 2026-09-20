@@ -210,6 +210,25 @@ def test_main_fails_clearly_without_the_postgres_variables(
     assert "PFP_PG_PASSWORD" in capsys.readouterr().err
 
 
+def test_unreadable_counts_never_stop_the_report_or_the_alerts(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The build passed: a Postgres hiccup while counting transfers must not turn
+    into a traceback that skips the PASS line and the alerting after it."""
+    monkeypatch.setenv("PFP_USER", "piero")
+
+    def _refuse() -> tuple[int, int]:
+        raise psycopg.OperationalError("connection refused")
+
+    monkeypatch.setattr(poc, "_transfer_counts", _refuse)
+    monkeypatch.setattr(subprocess, "run", _fake_run(0, 0))
+
+    assert main() == 0
+    out = capsys.readouterr().out
+    assert "could not read the transfer counts from Postgres" in out
+    assert "poc: PASS" in out
+
+
 def test_main_prints_the_transfer_summary_when_dbt_build_succeeds(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

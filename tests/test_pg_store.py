@@ -8,6 +8,7 @@ import pytest
 from tests.pg_store import (
     dbt_environment,
     missing_env,
+    pg_settings,
     translate_placeholders,
     worker_database,
 )
@@ -63,8 +64,31 @@ def test_dbt_runs_against_the_workers_database_and_a_private_elementary_file(
 def test_the_missing_postgres_variables_are_named(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    for name in ("PFP_PG_HOST", "PFP_PG_PORT", "PFP_PG_DATABASE", "PFP_PG_USER"):
+    for name in ("PFP_PG_DATABASE", "PFP_PG_USER"):
         monkeypatch.setenv(name, "x")
     monkeypatch.delenv("PFP_PG_PASSWORD", raising=False)
 
     assert missing_env() == ["PFP_PG_PASSWORD"]
+
+
+def test_the_connection_takes_its_settings_as_keywords_so_no_password_needs_quoting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name, value in {
+        "PFP_PG_DATABASE": "pfp",
+        "PFP_PG_USER": "pfp",
+        "PFP_PG_PASSWORD": "a'b\\c d",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("PFP_PG_HOST", raising=False)
+    monkeypatch.delenv("PFP_PG_PORT", raising=False)
+
+    settings = pg_settings("pfp_test_gw0")
+
+    assert settings == {
+        "host": "127.0.0.1",
+        "port": "5432",
+        "dbname": "pfp_test_gw0",
+        "user": "pfp",
+        "password": "a'b\\c d",
+    }
