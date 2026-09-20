@@ -20,6 +20,14 @@ implementation started:
    0013) narrows to `state:modified+` when it safely can, to save time; does `pr-data-diff`
    get the same narrowing for the same reason?
 
+> **Amended by T29 ([ADR 0029](0029-dbt-stores-silver-and-gold-in-postgres.md)).** Silver and gold
+> now live in PostgreSQL, so each run's own store is a **database** of the job's one Postgres
+> (`pfp_diff_base`, `pfp_diff_pr`, created empty by `scripts/pg_databases.py`) instead of a
+> `PFP_DUCKDB_PATH` file, and `scripts/data_diff.py` attaches both databases read-only and compares
+> `silver` and `gold`. Everything below about prefixes, separate inboxes and never narrowing the
+> build still holds; where it says "`.duckdb` file", read "database". Elementary keeps a DuckDB
+> file per run.
+
 ## Decision
 
 **One SeaweedFS instance, two URI prefixes; two full `dbt build` runs, never narrowed.**

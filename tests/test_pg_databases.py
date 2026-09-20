@@ -3,6 +3,7 @@ builds into (T29, ADR 0029). No Postgres needed here."""
 
 from typing import Any
 
+import psycopg
 import pytest
 
 from scripts import pg_databases
@@ -43,7 +44,7 @@ def test_each_database_is_dropped_if_it_exists_and_created_fresh(
         seen["kwargs"] = kwargs
         return fake
 
-    monkeypatch.setattr(pg_databases.psycopg, "connect", connect)
+    monkeypatch.setattr(psycopg, "connect", connect)
 
     assert pg_databases.main(["pfp_diff_base", "pfp_diff_pr"]) == 0
 
@@ -72,7 +73,7 @@ def test_a_name_that_is_not_a_plain_identifier_is_refused(
     def refuse(*args: object, **kwargs: object) -> None:
         raise AssertionError("must not connect")
 
-    monkeypatch.setattr(pg_databases.psycopg, "connect", refuse)
+    monkeypatch.setattr(psycopg, "connect", refuse)
 
     assert pg_databases.main([name]) == 2
 
@@ -83,6 +84,6 @@ def test_the_database_the_owner_works_in_is_never_dropped(
     def refuse(*args: object, **kwargs: object) -> None:
         raise AssertionError("must not connect")
 
-    monkeypatch.setattr(pg_databases.psycopg, "connect", refuse)
+    monkeypatch.setattr(psycopg, "connect", refuse)
 
     assert pg_databases.main(["pfp"]) == 2
