@@ -343,8 +343,8 @@ def bcp_real_layout_statement_pdf(
             charge = _money(Decimal("0.00"))
         if garble_first_row_charge and row_index == 0:
             charge = "REF.A1B2"
-        # A different processing date than the value date, so a test can
-        # prove the parser reads the *second* FECHA column, not the first.
+        # The first date column, a day before the second, so a test can tell which of
+        # the two the parser keeps (the first).
         proc_date = movement.when.replace(day=max(1, movement.when.day - 1))
         proc_abbr = _SPANISH_MONTH_ABBR[proc_date.month]
         pdf.text(40, row_y, f"{proc_date.day:02d}{proc_abbr}")
@@ -428,8 +428,8 @@ def scotiabank_statement_pdf(
     Matches the real layout confirmed from a masked dump (T9, T18): no
     "CUENTA NRO."/"PERIODO" adjacency the way BCP has, a two-line header
     (FECHA x2 + DESCRIPCION, then SOLES/DOLARES on the *next* line), a
-    DD-MM-YYYY period, DD/MM/YY row dates (two columns, only the second one
-    used, same "value date wins" rule as BCP), a bare 8-digit account code
+    DD-MM-YYYY period, DD/MM/YY row dates (two columns, only the first
+    one is kept), a bare 8-digit account code
     (no adjacent label — found by shape) sitting next to a card number the
     bank itself already masks (`0000-0000-****-0000`, present as realistic
     noise the parser must *not* mistake for the account code), "Saldo

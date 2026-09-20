@@ -32,8 +32,7 @@ from BCP's checking-account one, confirmed from that dump:
 - The period is `DD-MM-YYYY` (dashes), found via a `DEL ... AL ...` line with no
   leading label, the same shape-based technique `bcp.py`'s `_find_period` uses.
 - Each row carries its own 2-digit year directly (`DD/MM/YY`, two date
-  columns — only the later one, the purchase date (confirmed by the owner: the first is
-  the processing date), is kept; the earlier one is
+  columns — only the *first* is kept, by the owner's choice; the earlier one is
   given a throwaway column so it can't bleed into it, the exact same problem
   and fix as `bcp.py`'s two FECHA columns).
 - The header spans **two lines**: `Fecha` (twice) and `Descripción` on one,
@@ -222,9 +221,8 @@ def _find_header_columns(
     plus every column's x0. The header spans two lines in the real layout, not
     one the way BCP's does.
 
-    A real header has "Fecha" *twice* (processing date, then value date, the
-    same situation `bcp.py`'s `_find_header_columns` already solved): only
-    the later occurrence becomes the "FECHA" column; earlier ones get a
+    A real header has "Fecha" *twice* (two date columns per row): only the *first*
+    occurrence becomes the "FECHA" column (the owner's choice); later ones get a
     throwaway column so their words don't bleed into it.
     """
     for index, line in enumerate(lines):
@@ -236,9 +234,11 @@ def _find_header_columns(
         fecha_words = sorted(
             (w for w in line if w["text"] == "Fecha"), key=lambda w: w["x0"]
         )
-        for ignored_index, word in enumerate(fecha_words[:-1]):
+        # The first Fecha column is the one kept (the owner's choice); later ones get a
+        # throwaway column so their words do not bleed into it.
+        columns["FECHA"] = fecha_words[0]["x0"]
+        for ignored_index, word in enumerate(fecha_words[1:]):
             columns[f"_fecha_ignored_{ignored_index}"] = word["x0"]
-        columns["FECHA"] = fecha_words[-1]["x0"]
         columns["DESCRIPCION"] = next(
             w["x0"] for w in line if w["text"] == "Descripción"
         )

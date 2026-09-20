@@ -296,9 +296,9 @@ def test_parse_keeps_rows_from_different_pages_separate(tmp_path: Path) -> None:
     assert len(pen.transactions) == 2
     by_amount = {t.amount: t for t in pen.transactions}
     assert by_amount[Decimal("50.00")].description == "PAGE ONE FICTICIA"
-    assert by_amount[Decimal("50.00")].date == date(2026, 1, 5)
+    assert by_amount[Decimal("50.00")].date == date(2026, 1, 4)  # the first column
     assert by_amount[Decimal("80.00")].description == "PAGE TWO FICTICIA"
-    assert by_amount[Decimal("80.00")].date == date(2026, 1, 12)
+    assert by_amount[Decimal("80.00")].date == date(2026, 1, 11)
 
 
 def test_parse_omits_a_currency_with_no_activity(tmp_path: Path) -> None:
