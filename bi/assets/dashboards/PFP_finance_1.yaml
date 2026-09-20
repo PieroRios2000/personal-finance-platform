@@ -5,7 +5,7 @@ slug: pfp-finance
 certified_by: null
 certification_details: null
 published: true
-uuid: a2d433ba-0e69-48f6-97c4-26b4dd8f0f5f
+uuid: 8f4c8f41-7733-49e6-83bd-6c4f4dcb82ee
 position:
   DASHBOARD_VERSION_KEY: v2
   ROOT_ID:
@@ -21,7 +21,6 @@ position:
     - ROW-1
     - ROW-2
     - ROW-3
-    - ROW-N-PRB0T9MA
     parents:
     - ROOT_ID
   HEADER_ID:
@@ -41,6 +40,7 @@ position:
       width: 6
       height: 50
       chartId: 1
+      uuid: 11401ba2-3c74-4fbb-941d-c81a7a8e457e
       sliceName: 'Monthly cash flow: income and spending (no internal transfers)'
   CHART-1:
     type: CHART
@@ -54,6 +54,7 @@ position:
       width: 6
       height: 50
       chartId: 2
+      uuid: bc035f06-4e3b-4f74-bd8c-01d31ac6bc80
       sliceName: Savings balance per month (asset accounts)
   ROW-0:
     type: ROW
@@ -78,6 +79,7 @@ position:
       width: 6
       height: 50
       chartId: 3
+      uuid: 46e7c38e-909b-473e-b8a2-509d34946f7e
       sliceName: 'Investments: return and how each month closed'
   CHART-3:
     type: CHART
@@ -91,6 +93,7 @@ position:
       width: 6
       height: 50
       chartId: 4
+      uuid: cde5a388-53c2-43ef-a72e-7aa61eaeb7e3
       sliceName: 'Investments: return per fund over time'
   ROW-1:
     type: ROW
@@ -115,6 +118,7 @@ position:
       width: 12
       height: 60
       chartId: 5
+      uuid: 97ac3935-e17a-47b0-8789-055fb73ab58b
       sliceName: Movements (check against your statements)
   ROW-2:
     type: ROW
@@ -138,6 +142,7 @@ position:
       width: 12
       height: 60
       chartId: 6
+      uuid: 18d25919-7311-4733-b7d3-6804b779d897
       sliceName: Statement balances (check against your statements)
   ROW-3:
     type: ROW
@@ -149,106 +154,6 @@ position:
     - GRID_ID
     meta:
       background: BACKGROUND_TRANSPARENT
-  ROW-N-PRB0T9MA:
-    children:
-    - CHART-2M47RVL9
-    - CHART-MJTBKT6G
-    - CHART-RZLJ7UST
-    - CHART-6UUQFV1R
-    - CHART-IJUQY6EF
-    - CHART-FHZE6SQT
-    id: ROW-N-PRB0T9MA
-    meta:
-      '0': ROOT_ID
-      background: BACKGROUND_TRANSPARENT
-    type: ROW
-    parents:
-    - ROOT_ID
-    - GRID_ID
-  CHART-2M47RVL9:
-    children: []
-    id: CHART-2M47RVL9
-    meta:
-      chartId: 4
-      height: 50
-      sliceName: 'Investments: return per fund over time'
-      uuid: fb9f4899-dbb9-497a-8e32-2a4696d37605
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-PRB0T9MA
-  CHART-MJTBKT6G:
-    children: []
-    id: CHART-MJTBKT6G
-    meta:
-      chartId: 2
-      height: 50
-      sliceName: Savings balance per month (asset accounts)
-      uuid: 613c054d-f792-4f3e-9e5f-44822939bff8
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-PRB0T9MA
-  CHART-RZLJ7UST:
-    children: []
-    id: CHART-RZLJ7UST
-    meta:
-      chartId: 3
-      height: 50
-      sliceName: 'Investments: return and how each month closed'
-      uuid: 25b750f5-60b9-48cc-b207-1c6e6f612e15
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-PRB0T9MA
-  CHART-6UUQFV1R:
-    children: []
-    id: CHART-6UUQFV1R
-    meta:
-      chartId: 5
-      height: 50
-      sliceName: Movements (check against your statements)
-      uuid: c315bf2e-08e1-4868-acea-41e4adfc3804
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-PRB0T9MA
-  CHART-IJUQY6EF:
-    children: []
-    id: CHART-IJUQY6EF
-    meta:
-      chartId: 1
-      height: 50
-      sliceName: 'Monthly cash flow: income and spending (no internal transfers)'
-      uuid: 78982325-f081-402a-9e35-e1488167c3b1
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-PRB0T9MA
-  CHART-FHZE6SQT:
-    children: []
-    id: CHART-FHZE6SQT
-    meta:
-      chartId: 6
-      height: 50
-      sliceName: Statement balances (check against your statements)
-      uuid: 25b49a7e-2871-44e3-afaf-1793009d378e
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-PRB0T9MA
 metadata:
   native_filter_configuration:
   - id: NATIVE_FILTER-date-range
@@ -290,7 +195,7 @@ metadata:
     targets:
     - column:
         name: bank
-      datasetUuid: ef734d47-d567-4af6-8ba8-f53e0f003e76
+      datasetUuid: 57c35384-836a-453d-a844-95628540877a
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -312,7 +217,7 @@ metadata:
     targets:
     - column:
         name: account_last4
-      datasetUuid: ef734d47-d567-4af6-8ba8-f53e0f003e76
+      datasetUuid: 57c35384-836a-453d-a844-95628540877a
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -334,7 +239,7 @@ metadata:
     targets:
     - column:
         name: currency
-      datasetUuid: ef734d47-d567-4af6-8ba8-f53e0f003e76
+      datasetUuid: 57c35384-836a-453d-a844-95628540877a
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -356,7 +261,7 @@ metadata:
     targets:
     - column:
         name: flow_type
-      datasetUuid: ef734d47-d567-4af6-8ba8-f53e0f003e76
+      datasetUuid: 57c35384-836a-453d-a844-95628540877a
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -378,7 +283,7 @@ metadata:
     targets:
     - column:
         name: is_internal_transfer
-      datasetUuid: ef734d47-d567-4af6-8ba8-f53e0f003e76
+      datasetUuid: 57c35384-836a-453d-a844-95628540877a
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -400,7 +305,7 @@ metadata:
     targets:
     - column:
         name: place
-      datasetUuid: fec30a31-fd6f-40ff-ae53-6d89f74d97e3
+      datasetUuid: e41c065e-aaaa-4ce3-878a-3d8e5cc35092
     controlValues:
       multiSelect: true
       enableEmptyFilter: false

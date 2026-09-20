@@ -256,7 +256,9 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
     ]
 
 
-def _position(chart_ids: Sequence[int], names: Sequence[str]) -> dict[str, Any]:
+def _position(
+    chart_ids: Sequence[int], names: Sequence[str], uuids: Sequence[str]
+) -> dict[str, Any]:
     """A two-column grid, two charts per row, in the order given."""
     layout: dict[str, Any] = {
         "DASHBOARD_VERSION_KEY": "v2",
@@ -297,6 +299,7 @@ def _position(chart_ids: Sequence[int], names: Sequence[str]) -> dict[str, Any]:
                     "width": 12 if len(members) == 1 else 6,
                     "height": 60 if len(members) == 1 else 50,
                     "chartId": chart_ids[i],
+                    "uuid": uuids[i],
                     "sliceName": names[i],
                 },
             }
@@ -308,6 +311,14 @@ def _position(chart_ids: Sequence[int], names: Sequence[str]) -> dict[str, Any]:
             "meta": {"background": "BACKGROUND_TRANSPARENT"},
         }
     return layout
+
+
+def _chart_uuids(client: Superset, chart_ids: Sequence[int]) -> list[str]:
+    """The uuid of each chart, in the order of `chart_ids` (the layout ties its cells to
+    charts by uuid; the chart's own show endpoint does not return it, the list does)."""
+    listed = client.json("GET", "/chart/?q=(columns:!(id,uuid),page_size:100)")
+    by_id = {row["id"]: row["uuid"] for row in listed["result"]}
+    return [by_id[chart_id] for chart_id in chart_ids]
 
 
 def _sample_rows(client: Superset, dataset: int, params: dict[str, Any]) -> int:
@@ -400,7 +411,11 @@ def build(client: Superset, bi_password: str) -> int:
         f"/dashboard/{dashboard}",
         {
             "position_json": json.dumps(
-                _position(chart_ids, [chart[1] for chart in CHARTS])
+                _position(
+                    chart_ids,
+                    [chart[1] for chart in CHARTS],
+                    _chart_uuids(client, chart_ids),
+                )
             ),
             "json_metadata": json.dumps(
                 {"native_filter_configuration": native_filters(datasets)}

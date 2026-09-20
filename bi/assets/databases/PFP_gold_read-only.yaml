@@ -13,5 +13,5 @@ extra:
   metadata_cache_timeout: {}
   schemas_allowed_for_file_upload: []
 impersonate_user: false
-uuid: fa37c409-29c0-4cd2-82ae-8aaf76781f3b
+uuid: e17a1574-73b5-4c91-885f-2fbd15bcd5ad
 version: 1.0.0
