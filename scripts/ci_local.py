@@ -249,6 +249,10 @@ def main(argv: list[str] | None = None) -> int:
             for name, reason in job_plan.skipped:
                 print(f"    [{job}] skipped: {name} ({reason})")
             results[job] = execute(job_plan, _runner(job_plan, clone, job))
+            summary = (clone.parent / "github_step_summary").read_text().strip()
+            if summary:
+                print(f"\n-- [{job}] step summary --\n{summary}")
+            (clone.parent / "github_step_summary").write_text("")
     finally:
         if args.keep:
             print(f"\nclean clone kept at {clone}")

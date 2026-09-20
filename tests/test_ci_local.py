@@ -222,3 +222,14 @@ def test_make_has_the_fast_and_the_full_targets() -> None:
 
     assert re.search(r"^ci-local:\n\t.*scripts\.ci_local\s*$", makefile, re.M)
     assert re.search(r"^ci-local-full:\n\t.*scripts\.ci_local --full", makefile, re.M)
+
+
+def test_the_files_github_gives_every_step_exist_locally_too(tmp_path: Path) -> None:
+    """Scripts write to `$GITHUB_STEP_SUMMARY` (and `$GITHUB_ENV`, `$GITHUB_OUTPUT`):
+    unset, `>> "$GITHUB_STEP_SUMMARY"` fails with 'No such file or directory'."""
+    variables = ci_local.github_files(tmp_path)
+
+    assert set(variables) == {"GITHUB_STEP_SUMMARY", "GITHUB_ENV", "GITHUB_OUTPUT"}
+    for path in variables.values():
+        with Path(path).open("a") as handle:
+            handle.write("x\n")
