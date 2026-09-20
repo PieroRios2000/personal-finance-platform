@@ -1,4 +1,4 @@
-slice_name: 'Investments: monthly return per fund'
+slice_name: 'Investments: return per fund over time'
 description: null
 certified_by: null
 certification_details: null
@@ -18,12 +18,13 @@ params:
     sqlExpression: is_return_reliable
     clause: WHERE
   y_axis_format: .2%
+  x_axis_time_format: '%Y-%m-%d'
   row_limit: 10000
   show_legend: true
   datasource: 3__table
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null
-uuid: e7ac666a-be3b-43e9-a114-b16bdb818561
+uuid: 45e99467-f4c0-487a-a6c9-0ba703591580
 version: 1.0.0
-dataset_uuid: 329e145a-7011-4df6-a615-00ce8934ad12
+dataset_uuid: 8c223749-effb-4885-bf91-11fa75c23a55

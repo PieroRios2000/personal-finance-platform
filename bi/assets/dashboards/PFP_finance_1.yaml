@@ -5,7 +5,7 @@ slug: pfp-finance
 certified_by: null
 certification_details: null
 published: true
-uuid: b4eb034f-9529-420c-8c60-35ba5e30dc32
+uuid: ea72165e-b70e-499c-b979-949147a7cbdb
 position:
   DASHBOARD_VERSION_KEY: v2
   ROOT_ID:
@@ -19,7 +19,7 @@ position:
     children:
     - ROW-0
     - ROW-1
-    - ROW-N-458SJZMB
+    - ROW-N-TWHANHZT
     parents:
     - ROOT_ID
   HEADER_ID:
@@ -76,7 +76,7 @@ position:
       width: 6
       height: 50
       chartId: 3
-      sliceName: 'Investments: monthly return, with how the month was closed'
+      sliceName: 'Investments: return and how each month closed'
   CHART-3:
     type: CHART
     id: CHART-3
@@ -89,7 +89,7 @@ position:
       width: 6
       height: 50
       chartId: 4
-      sliceName: 'Investments: monthly return per fund'
+      sliceName: 'Investments: return per fund over time'
   ROW-1:
     type: ROW
     id: ROW-1
@@ -101,13 +101,13 @@ position:
     - GRID_ID
     meta:
       background: BACKGROUND_TRANSPARENT
-  ROW-N-458SJZMB:
+  ROW-N-TWHANHZT:
     children:
-    - CHART-1SP4BFJ6
-    - CHART-QRTOWZAN
-    - CHART-0LGDS8G1
-    - CHART-XAIUQQ03
-    id: ROW-N-458SJZMB
+    - CHART-24T4W2Z6
+    - CHART-AZT79JJT
+    - CHART-EXCU0CXG
+    - CHART-BPUHV6D4
+    id: ROW-N-TWHANHZT
     meta:
       '0': ROOT_ID
       background: BACKGROUND_TRANSPARENT
@@ -115,60 +115,170 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-  CHART-1SP4BFJ6:
+  CHART-24T4W2Z6:
     children: []
-    id: CHART-1SP4BFJ6
-    meta:
-      chartId: 3
-      height: 50
-      sliceName: 'Investments: monthly return, with how the month was closed'
-      uuid: 2e775692-f848-4a45-b232-4a3616537637
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-458SJZMB
-  CHART-QRTOWZAN:
-    children: []
-    id: CHART-QRTOWZAN
-    meta:
-      chartId: 1
-      height: 50
-      sliceName: 'Monthly cash flow: income and spending (no internal transfers)'
-      uuid: 00a743f9-76a0-4dcb-8660-369558f4e2c5
-      width: 4
-    type: CHART
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-N-458SJZMB
-  CHART-0LGDS8G1:
-    children: []
-    id: CHART-0LGDS8G1
+    id: CHART-24T4W2Z6
     meta:
       chartId: 2
       height: 50
       sliceName: Savings balance per month (asset accounts)
-      uuid: c8f86a2b-c692-4af1-9512-2da77fa127e8
+      uuid: 9eb1d4e8-269f-44f5-8936-558889ac6ccf
       width: 4
     type: CHART
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-458SJZMB
-  CHART-XAIUQQ03:
+    - ROW-N-TWHANHZT
+  CHART-AZT79JJT:
     children: []
-    id: CHART-XAIUQQ03
+    id: CHART-AZT79JJT
+    meta:
+      chartId: 1
+      height: 50
+      sliceName: 'Monthly cash flow: income and spending (no internal transfers)'
+      uuid: 4ac33bb5-24f4-4b15-b072-fbd1fb728375
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-TWHANHZT
+  CHART-EXCU0CXG:
+    children: []
+    id: CHART-EXCU0CXG
+    meta:
+      chartId: 3
+      height: 50
+      sliceName: 'Investments: return and how each month closed'
+      uuid: 109c9235-17f4-446c-b038-e0b24ce6239b
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-TWHANHZT
+  CHART-BPUHV6D4:
+    children: []
+    id: CHART-BPUHV6D4
     meta:
       chartId: 4
       height: 50
-      sliceName: 'Investments: monthly return per fund'
-      uuid: e7ac666a-be3b-43e9-a114-b16bdb818561
+      sliceName: 'Investments: return per fund over time'
+      uuid: 45e99467-f4c0-487a-a6c9-0ba703591580
       width: 4
     type: CHART
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-N-458SJZMB
+    - ROW-N-TWHANHZT
+metadata:
+  native_filter_configuration:
+  - id: NATIVE_FILTER-date-range
+    name: Date range
+    filterType: filter_time
+    targets:
+    - {}
+    controlValues: {}
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-time-grain
+    name: Time grain
+    filterType: filter_timegrain
+    targets:
+    - {}
+    controlValues: {}
+    defaultDataMask:
+      filterState:
+        value:
+        - P1M
+      extraFormData:
+        time_grain_sqla: P1M
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-bank
+    name: Bank
+    filterType: filter_select
+    targets:
+    - column:
+        name: bank
+      datasetUuid: bc0f0aec-a4dc-4f1b-a3ee-f46d96548c28
+    controlValues:
+      multiSelect: true
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-currency
+    name: Currency
+    filterType: filter_select
+    targets:
+    - column:
+        name: currency
+      datasetUuid: bc0f0aec-a4dc-4f1b-a3ee-f46d96548c28
+    controlValues:
+      multiSelect: true
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-fund
+    name: Fund
+    filterType: filter_select
+    targets:
+    - column:
+        name: place
+      datasetUuid: 8c223749-effb-4885-bf91-11fa75c23a55
+    controlValues:
+      multiSelect: true
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  timed_refresh_immune_slices: []
+  expanded_slices: {}
+  refresh_frequency: 0
+  color_scheme: ''
+  label_colors: {}
+  shared_label_colors: []
+  map_label_colors: {}
+  color_scheme_domain: []
+  cross_filters_enabled: true
 version: 1.0.0
