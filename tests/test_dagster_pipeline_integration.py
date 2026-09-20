@@ -146,10 +146,12 @@ def test_dbt_assets_carry_their_postgres_table_and_row_count(
         by_key[materialization.asset_key.to_user_string()] = materialization.metadata
     transactions = by_key["transactions"]
     assert transactions["dagster/row_count"].value == len(DEFAULT_MOVEMENTS)
-    assert str(transactions["dagster/table_name"].value).endswith("silver.transactions")
+    assert transactions["dagster/table_name"].value == "silver.transactions"
+    # dagster-dbt's own metadata is kept, not replaced by the two keys above.
+    assert len(transactions) > 2
     fact = by_key["gold/fact_transactions"]
     assert fact["dagster/row_count"].value == len(DEFAULT_MOVEMENTS)
-    assert str(fact["dagster/table_name"].value).endswith("gold.fact_transactions")
+    assert fact["dagster/table_name"].value == "gold.fact_transactions"
 
 
 def test_second_materialization_of_the_whole_pipeline_adds_nothing_new(
