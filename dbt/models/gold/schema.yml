@@ -265,6 +265,13 @@ models:
       - name: closing_balance
         data_tests:
           - not_null
+      - name: signed_closing_balance
+        description: >
+          Your position at the month's close (ADR 0031): a credit card's debt is negative, so
+          the balances of all accounts add up to what you have. `closing_balance` keeps the
+          statement's own value (the debt owed is positive).
+        data_tests:
+          - not_null
 
   - name: rpt_movements
     description: >
