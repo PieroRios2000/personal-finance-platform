@@ -425,3 +425,21 @@ def test_account_balance_monthly_has_the_closing_balance_of_each_account_and_mon
         ("2026-03-01", "900.00"),
     ]
     assert {(r[2], r[3], r[4]) for r in rows} == {("BCP", "asset", "PEN")}
+
+
+def test_fact_transactions_carries_the_account_last4_for_filtering(
+    lake: str, tmp_path: Path
+) -> None:
+    """The dashboard filters movements by account: the last four digits are readable,
+    the account_id hash is not."""
+    _write(*_JANUARY)
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    with pg_store.connect() as connection:
+        rows = connection.execute(
+            "select distinct account_last4 from gold.fact_transactions"
+        ).fetchall()
+
+    assert rows == [(_LAST4,)]
