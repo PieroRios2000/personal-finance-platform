@@ -164,7 +164,7 @@ def _storage_metadata(key: dg.AssetKey, log: Callable[[str], None]) -> dict[str,
     if os.environ.get("PFP_DBT_TARGET", "postgres") == "postgres":
         try:
             metadata["dagster/row_count"] = _postgres_row_count(schema, table)
-        except Exception as error:  # noqa: BLE001 -- see docstring
+        except Exception as error:
             log(f"no row count for {schema}.{table}: {error}")
     return metadata
 
