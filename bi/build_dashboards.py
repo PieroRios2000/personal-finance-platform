@@ -119,6 +119,47 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "show_legend": True,
         },
     ),
+    (
+        "fact_transactions",
+        "Movements (check against your statements)",
+        "table",
+        {
+            "query_mode": "raw",
+            "all_columns": [
+                "date",
+                "bank",
+                "account_last4",
+                "currency",
+                "flow_type",
+                "amount",
+                "is_internal_transfer",
+                "description",
+            ],
+            "order_by_cols": ['["date", false]'],
+            "row_limit": 1000,
+            "include_search": True,
+        },
+    ),
+    (
+        "fct_account_balance_monthly",
+        "Statement balances (check against your statements)",
+        "table",
+        {
+            "query_mode": "raw",
+            "all_columns": [
+                "month_start",
+                "closing_date",
+                "bank",
+                "account_last4",
+                "account_kind",
+                "currency",
+                "closing_balance",
+            ],
+            "order_by_cols": ['["closing_date", false]'],
+            "row_limit": 1000,
+            "include_search": True,
+        },
+    ),
 ]
 
 
@@ -207,7 +248,10 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
         base("Date range", "filter_time", {}),
         grain,
         select("Bank", "fact_transactions", "bank"),
+        select("Account", "fact_transactions", "account_last4"),
         select("Currency", "fact_transactions", "currency"),
+        select("Flow type", "fact_transactions", "flow_type"),
+        select("Internal transfer", "fact_transactions", "is_internal_transfer"),
         select("Fund", "fct_investment_monthly", "place"),
     ]
 
@@ -229,24 +273,29 @@ def _position(chart_ids: Sequence[int], names: Sequence[str]) -> dict[str, Any]:
             "meta": {"text": "PFP finance"},
         },
     }
-    for row_index in range(0, len(chart_ids), 2):
-        row_id = f"ROW-{row_index // 2}"
+    # Charts two to a row; the tables for checking against statements get a whole row.
+    rows: list[list[int]] = []
+    for i, name in enumerate(names):
+        if (
+            "check against" in name
+            or not rows
+            or len(rows[-1]) == 2
+            or ("check against" in names[rows[-1][0]])
+        ):
+            rows.append([])
+        rows[-1].append(i)
+    for row_number, members in enumerate(rows):
+        row_id = f"ROW-{row_number}"
         layout["GRID_ID"]["children"].append(row_id)
-        row_children = []
-        for offset in range(2):
-            i = row_index + offset
-            if i >= len(chart_ids):
-                break
-            chart_id = f"CHART-{i}"
-            row_children.append(chart_id)
-            layout[chart_id] = {
+        for i in members:
+            layout[f"CHART-{i}"] = {
                 "type": "CHART",
-                "id": chart_id,
+                "id": f"CHART-{i}",
                 "children": [],
                 "parents": ["ROOT_ID", "GRID_ID", row_id],
                 "meta": {
-                    "width": 6,
-                    "height": 50,
+                    "width": 12 if len(members) == 1 else 6,
+                    "height": 60 if len(members) == 1 else 50,
                     "chartId": chart_ids[i],
                     "sliceName": names[i],
                 },
@@ -254,7 +303,7 @@ def _position(chart_ids: Sequence[int], names: Sequence[str]) -> dict[str, Any]:
         layout[row_id] = {
             "type": "ROW",
             "id": row_id,
-            "children": row_children,
+            "children": [f"CHART-{i}" for i in members],
             "parents": ["ROOT_ID", "GRID_ID"],
             "meta": {"background": "BACKGROUND_TRANSPARENT"},
         }

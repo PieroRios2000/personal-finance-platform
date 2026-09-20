@@ -1,4 +1,4 @@
-slice_name: 'Investments: return and how each month closed'
+slice_name: Statement balances (check against your statements)
 description: null
 certified_by: null
 certification_details: null
@@ -7,21 +7,20 @@ params:
   query_mode: raw
   all_columns:
   - month_start
-  - place
+  - closing_date
+  - bank
+  - account_last4
+  - account_kind
   - currency
-  - return_pct
-  - closing_basis
-  - is_return_reliable
-  - gain
   - closing_balance
   order_by_cols:
-  - '["month_start", false]'
+  - '["closing_date", false]'
   row_limit: 1000
   include_search: true
-  datasource: 3__table
+  datasource: 2__table
   viz_type: table
 query_context: null
 cache_timeout: null
-uuid: 25b750f5-60b9-48cc-b207-1c6e6f612e15
+uuid: 25b49a7e-2871-44e3-afaf-1793009d378e
 version: 1.0.0
-dataset_uuid: fec30a31-fd6f-40ff-ae53-6d89f74d97e3
+dataset_uuid: 2dc5bbc1-1e02-4d1b-8926-ba8cb03c51b2

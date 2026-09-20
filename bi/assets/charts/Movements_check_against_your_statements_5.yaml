@@ -1,0 +1,27 @@
+slice_name: Movements (check against your statements)
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  all_columns:
+  - date
+  - bank
+  - account_last4
+  - currency
+  - flow_type
+  - amount
+  - is_internal_transfer
+  - description
+  order_by_cols:
+  - '["date", false]'
+  row_limit: 1000
+  include_search: true
+  datasource: 1__table
+  viz_type: table
+query_context: null
+cache_timeout: null
+uuid: c315bf2e-08e1-4868-acea-41e4adfc3804
+version: 1.0.0
+dataset_uuid: ef734d47-d567-4af6-8ba8-f53e0f003e76

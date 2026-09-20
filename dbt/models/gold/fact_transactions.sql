@@ -46,6 +46,7 @@
 select
     silver_transactions.user_id,
     silver_transactions.account_id,
+    silver_transactions.account_last4,
     silver_transactions.bank,
     silver_transactions.date,
     silver_transactions.amount,

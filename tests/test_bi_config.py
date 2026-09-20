@@ -73,7 +73,9 @@ def test_the_dashboard_connects_as_the_read_only_role_to_gold_only() -> None:
 
 
 def test_the_return_table_shows_closing_basis_right_beside_the_return() -> None:
-    (chart,) = [c for c in _builder().CHARTS if c[2] == "table"]
+    (chart,) = [
+        c for c in _builder().CHARTS if c[1].startswith("Investments: return and")
+    ]
     columns = chart[3]["all_columns"]
 
     assert columns.index("closing_basis") == columns.index("return_pct") + 1
@@ -145,3 +147,17 @@ def test_the_movements_and_balances_tables_exist_to_check_against_the_statements
     assert {"closing_date", "account_last4", "closing_balance"} <= set(
         balances[3]["all_columns"]
     )
+
+
+def test_every_chart_in_the_layout_is_tied_to_its_chart_by_uuid() -> None:
+    """Without the uuid, the import cannot map a layout cell to its imported chart and
+    Superset appends every chart again in an extra row at the bottom."""
+    builder = _builder()
+    names = [c[1] for c in builder.CHARTS]
+    uuids = [f"uuid-{i}" for i in range(len(names))]
+
+    layout = builder._position(list(range(len(names))), names, uuids)
+
+    cells = [v for k, v in layout.items() if k.startswith("CHART-")]
+    assert len(cells) == len(names)
+    assert {c["meta"]["uuid"] for c in cells} == set(uuids)
