@@ -5,7 +5,7 @@
 
 BASE ?= origin/develop
 
-.PHONY: check-fast check-task check-full poc poc-up poc-down pg-check pg-up pg-down om-up om-sync om-down alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down om-up om-sync om-down bi-up bi-down bi-reset bi-export alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -75,24 +75,58 @@ poc:
 # makes Docker create it root-owned.
 OM_COMPOSE = docker compose -f openmetadata/docker-compose.yml -p pfp-om
 
+# The ingestion container joins the network of PFP's Postgres (T30): start it first
+# (`make poc-up`, project pfp-poc), or set PFP_NETWORK to another project's network.
 om-up:
+	@docker network inspect "$${PFP_NETWORK:-pfp-poc_default}" >/dev/null 2>&1 || \
+		{ echo "No Docker network $${PFP_NETWORK:-pfp-poc_default}: run 'make poc-up' first (PFP's Postgres must be up)." >&2; exit 1; }
 	mkdir -p openmetadata/artifacts
 	$(OM_COMPOSE) up -d --wait
 
 # Needs `dbt build` to have run against the lake (`dbt docs generate` reads the built
-# tables' columns), so: `make poc-up`, export .env, `dbt build`, then this. Registers the
-# tables, runs the dbt ingestion workflow inside the ingestion container, then fails
-# unless gold.fact_transactions.amount traces back to bronze.transactions.amount.
+# tables' columns), so: `make poc-up`, export .env, `dbt build`, then this. Registers
+# bronze, ingests silver and gold with OpenMetadata's native Postgres connector, runs
+# the dbt workflow (lineage), then fails unless gold.fact_transactions.amount traces
+# back to bronze.transactions.amount.
 om-sync:
 	set -a && . ./.env && set +a && \
 	uv run dbt docs generate --project-dir dbt --profiles-dir dbt
-	uv run python -m scripts.openmetadata_sync sync
+	set -a && . ./.env && set +a && uv run python -m scripts.openmetadata_sync sync
+	$(OM_COMPOSE) exec -T ingestion metadata ingest -c /opt/pfp-artifacts/postgres-workflow.yaml
 	$(OM_COMPOSE) exec -T ingestion metadata ingest -c /opt/pfp-artifacts/dbt-workflow.yaml
 	uv run python -m scripts.openmetadata_sync check
 
 om-down:
 	$(OM_COMPOSE) down -v
 	rm -rf openmetadata/artifacts
+
+# Apache Superset (T32, ADR 0030): optional, local only, never run by CI. Its own project
+# (`pfp-bi`), started by hand, not by `make poc-up`. It joins the network of PFP's Postgres
+# (start that first) and reads gold as the read-only role; its metadata is in a `superset`
+# database of the same Postgres. `bi-down` removes only Superset's container and image
+# layers; its dashboards are in bi/assets (committed) and come back on the next `bi-up`.
+BI_COMPOSE = docker compose -f bi/docker-compose.yml -p pfp-bi
+
+bi-up:
+	set -a && . ./.env && set +a && \
+	{ docker network inspect "$${PFP_NETWORK:-pfp-poc_default}" >/dev/null 2>&1 || \
+		{ echo "No Docker network $${PFP_NETWORK:-pfp-poc_default}: run 'make poc-up' first (PFP's Postgres must be up)." >&2; exit 1; }; } && \
+	$(BI_COMPOSE) up -d --build --wait
+	@echo "Superset: http://localhost:8088 (user admin, password PFP_BI_ADMIN_PASSWORD from .env)"
+
+bi-down:
+	set -a && . ./.env && set +a && $(BI_COMPOSE) down
+
+# DROPS the `superset` database in PFP's Postgres: Superset's users and dashboards (only
+# re-importable state; `pfp` is untouched). The next `bi-up` re-imports bi/assets. Needed
+# before `make bi-export` re-authors them.
+bi-reset: bi-down
+	set -a && . ./.env && set +a && docker compose -f docker-compose.yml -p pfp-poc exec -T postgres \
+		psql -U "$$PFP_PG_USER" -d "$$PFP_PG_DATABASE" -c 'drop database if exists superset with (force)'
+
+# Rewrites bi/assets from a fresh Superset: `rm bi/assets/*`, `make bi-reset bi-up`, this.
+bi-export:
+	set -a && . ./.env && set +a && uv run python bi/build_dashboards.py
 
 # Phase 7 (alerting, SETUP.md section 11): send the errors of the last `dbt build`
 # now and queue its warnings; `alert-digest` sends the queued warnings as one
@@ -102,3 +136,14 @@ alert:
 
 alert-digest:
 	set -a && . ./.env && set +a && uv run python -m alerting digest
+
+# CI's own jobs, run locally the way CI runs them (scripts/ci_local.py): the steps and
+# environment come from .github/workflows/ci.yml, in a clean clone of what is committed
+# and with only that job's variables. `ci-local` is the fast jobs (lint-types, tests,
+# architecture, floor-guard); `ci-local-full` adds ephemeral-integration (Docker, and
+# the ports 8333 and 5432 free: `make poc-down` first if your stack is up).
+ci-local:
+	uv run python -m scripts.ci_local
+
+ci-local-full:
+	uv run python -m scripts.ci_local --full

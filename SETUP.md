@@ -19,6 +19,7 @@ if something breaks, fall back to these.
 | make | 4.4 | Check shortcuts (`make check-task`) | T4 |
 | Docker Desktop | 4.43.2 (Engine 28.3.2, Compose 2.38) | Local S3 with SeaweedFS | T13 |
 | OpenMetadata stack (optional, `openmetadata/docker-compose.yml`) | OpenMetadata 2.0.2 (server, ingestion, PostgreSQL) + Elasticsearch 9.3.0 | Catalog and column-level lineage over the dbt project (T24). **Needs ~4.6 GiB of RAM at idle (measured: ~4.8 GiB peak while ingesting) and up to ~4.5 of 6 vCPUs while ingesting**, on top of SeaweedFS; the official minimum is 6 GiB and 4 vCPUs given to Docker. ~12 GiB of images. Measured on WSL2 with `memory=11GB processors=6 swap=4GB` in `C:\Users\<you>\.wslconfig` (Docker then sees 14.88 GiB); not measured at 7.4 GiB. Never run by CI | T24 |
+| Superset stack (optional, `bi/docker-compose.yml`) | Apache Superset 5.0.0 + `psycopg2-binary` 2.9.10 | Dashboards over the gold schema (T32). **Measured: 335 MiB of RAM idle and after loading every chart**; the image is 3.7 GB on disk. Never run by CI | T32 |
 | Tesseract OCR + Spanish language pack | 5.5 | OCR for scanned PDFs | T11b |
 | GitHub CLI (`gh`) | 2.46 | PRs from the terminal | Optional |
 
@@ -151,8 +152,8 @@ All green = the environment is ready.
 > **Phase 2 extension (T26–T33):** silver and gold live in **PostgreSQL**, not in `dbt/pfp.duckdb`
 > ([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). Since T27 that is the
 > **default**: `make poc-up` starts the local S3 *and* Postgres, and every `dbt build` below writes
-> there. Sections 7 (DBeaver) and 10 (OpenMetadata) still describe the DuckDB-file version until
-> T30 and this section's own leftovers are updated.
+> there. Section 10 (OpenMetadata) is on Postgres since T30; section 7 (DBeaver) still describes the
+> DuckDB-file version.
 
 ### PostgreSQL as dbt's store (T26, default since T27)
 
@@ -371,6 +372,13 @@ this env var — confirmed by reading `dagster`'s own CLI source
 `dagster dev` (the local web UI, not required for CI or `make poc`) does use the
 `pyproject.toml` block, so it needs no extra flag or env var: `uv run dagster dev`.
 
+**What to look at (T31).** Open the *Assets* graph: `bronze` (the lake, Delta on S3) feeds the dbt
+models (silver, then gold). After a materialization, click a dbt model and its latest
+materialization shows `dagster/table_name` (`silver.transactions`, `gold.fact_transactions`: the
+schema and table in Postgres) and `dagster/row_count` (measured in Postgres right after the build).
+That is the lake, dbt and the database in one view. With `PFP_DBT_TARGET=local` (the DuckDB file)
+only the table name is shown, since there is no Postgres to count in.
+
 ## 10. Browsing the catalog and lineage in OpenMetadata (T24)
 
 Optional. `openmetadata/docker-compose.yml` runs OpenMetadata 2.0.2 with PostgreSQL and
@@ -380,19 +388,28 @@ Elasticsearch under its own project name (`pfp-om`), ephemeral like the SeaweedF
 CI never runs this stack (ADR 0023).
 
 ```bash
-make poc-up                          # local S3, as in section 6
+make poc-up                          # local S3 and Postgres, as in section 6
 set -a && source .env && set +a
 uv run dbt deps --project-dir dbt --profiles-dir dbt
 uv run dbt build --project-dir dbt --profiles-dir dbt   # or `dagster asset materialize`, section 9
 
 make om-up                           # ~5 minutes to become healthy the first time
-make om-sync                         # docs generate, register tables, ingest, check the lineage
+make om-sync                         # docs generate, register bronze, ingest silver/gold, check the lineage
 ```
+
+Since T30 OpenMetadata reads silver and gold with its **native Postgres connector**: the `ingestion`
+container joins the Docker network of your Postgres (`pfp-poc_default`; `make om-up` stops with a clear
+message if `make poc-up` has not run, and `PFP_NETWORK` -- exported in your shell, not set in `.env` -- selects another project's network, whose Postgres service must be named `postgres`) and connects
+as `postgres:5432` with the `PFP_PG_USER`/`PFP_PG_PASSWORD` from `.env`. Those credentials are written to
+`openmetadata/artifacts/postgres-workflow.yaml` (gitignored, removed by `make om-down`), next to the
+short-lived token the dbt workflow already needs. Run `make om-down` before `make poc-down`: while the
+`ingestion` container is attached, Docker cannot remove the `pfp-poc_default` network. Only bronze -- Delta tables the connector cannot see --
+is still registered by `scripts/openmetadata_sync.py`, from `lakehouse/bronze.py`'s schemas.
 
 `make om-sync` ends with `OK: 1 column-level path(s) from ...bronze.transactions.amount`, or
 exits 1 if `gold.fact_transactions.amount` no longer traces back to bronze. Then open
 <http://localhost:8585> (login `admin@open-metadata.org` / `admin`, the stack's upstream local
-default) and browse *Explore* -> `pfp_duckdb` -> `gold` -> `fact_transactions` -> *Lineage*,
+default) and browse *Explore* -> `pfp_postgres` -> `pfp` -> `gold` -> `fact_transactions` -> *Lineage*,
 with *Column level lineage* on. The same from the API:
 
 ```bash
@@ -400,11 +417,48 @@ TOKEN=$(curl -s -X POST localhost:8585/api/v1/users/login -H 'Content-Type: appl
   -d "{\"email\":\"admin@open-metadata.org\",\"password\":\"$(printf admin | base64)\"}" \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "localhost:8585/api/v1/lineage/getLineage?fqn=pfp_duckdb.pfp.gold.fact_transactions&type=table&upstreamDepth=10&downstreamDepth=0"
+  "localhost:8585/api/v1/lineage/getLineage?fqn=pfp_postgres.pfp.gold.fact_transactions&type=table&upstreamDepth=10&downstreamDepth=0"
 ```
 
 Re-run `make om-sync` after any `dbt build` that changes models; it is idempotent. `make om-down`
-when done. Elementary's own models are not catalogued and dbt tests are not ingested.
+when done. Elementary's own models (a separate DuckDB file, not in Postgres) are not
+catalogued and dbt tests are not ingested.
+
+## 12. Dashboards in Apache Superset (T32)
+
+Optional, like OpenMetadata: `bi/docker-compose.yml` runs Superset 5.0.0 under its own project
+(`pfp-bi`). CI never runs it and `make poc-up` does not start it. **Measured: 335 MiB idle and after
+loading every chart** (one container; the image is 3.7 GB on disk), far below OpenMetadata's ~4.6 GiB,
+so no `.wslconfig` change is needed on top of section 10's.
+
+```bash
+make poc-up                          # local S3 and Postgres, as in section 6
+# fill in .env (see .env.example): PFP_BI_DB_PASSWORD, PFP_BI_ADMIN_PASSWORD, PFP_BI_SECRET_KEY
+set -a && source .env && set +a
+uv run pfp ingest --user "$PFP_USER"                    # your data, as in section 6
+uv run dbt build --project-dir dbt --profiles-dir dbt   # gold tables the charts read
+make bi-up                           # builds the image the first time (~2 minutes)
+```
+
+Open <http://localhost:8088>, user `admin`, password `PFP_BI_ADMIN_PASSWORD`, then *Dashboards* ->
+**PFP finance**. It has four charts: monthly cash flow (income and spending, without internal
+transfers), the savings balance per month, and each fund's monthly return -- as a table with
+`closing_basis` next to the return (`valuation` = a real month-end value, `last_movement` = only the
+balance at the last movement) and as a line per fund. Currencies are never added: every chart splits
+by currency.
+
+- Superset reads Postgres as the read-only role `pfp_bi`: it sees `gold` and nothing else, so it
+  cannot read `silver` or change data.
+- Its own users and dashboards live in a `superset` database of the same Postgres (created by
+  `bi/init-metadata.sh`). `make bi-down` stops it; `make bi-reset` also forgets that state, and the next
+  `make bi-up` re-imports the committed dashboards from `bi/assets/`.
+- Run `make bi-down` (and `make om-down`) before `make poc-down`: while they are attached, Docker cannot
+  remove the Postgres network.
+- **Changing a dashboard:** edit `bi/build_dashboards.py`, then `rm -r bi/assets/*`, `make bi-reset bi-up`,
+  `make bi-export`, and commit the new `bi/assets/`.
+- If `pfp_bi` cannot log in: its password is only read when the Postgres volume is first created
+  (`postgres/init-roles.sh`); if you changed `PFP_PG_BI_PASSWORD` since, either recreate the volume or
+  `alter role pfp_bi password '...'`.
 
 ## 11. Alerts by email or Microsoft Teams (Phase 7)
 
@@ -449,6 +503,28 @@ many rows, how many files need review), never an amount, an account or a file na
    and 1 when a channel failed, whether or not the build was healthy. An *error* alert whose
    delivery fails is not retried: the failure is printed and the exit code is 1, so look at
    `dbt/target/run_results.json` or re-run `make alert`.
+
+## Reproducing CI locally (`make ci-local`)
+
+A PR can fail in CI for a reason that never shows on your machine: a variable CI does not set, a
+file that only exists in your working copy (`dbt/target`, `dbt/dbt_packages`, `.env`). `make ci-local`
+removes that surprise by running CI's own jobs the way CI runs them:
+
+```bash
+git commit ...                 # CI only sees what is committed; uncommitted changes are refused
+make ci-local                  # lint-types, tests, architecture, floor-guard (~3 min)
+make ci-local-full             # + ephemeral-integration (~20 min; Docker; ports 8333 and 5432 free)
+uv run python -m scripts.ci_local tests   # one job by name; --keep leaves the clean clone to inspect
+```
+
+The steps and the environment are read from `.github/workflows/ci.yml` itself (one definition, not a
+copy), and they run in a **clean clone of your last commit** with `env -i`-style isolation: only `HOME`,
+`PATH` and that job's own variables. So `tests`, which has no Postgres variables, runs without them,
+exactly as in CI. Skipped with a printed reason: steps with an `if:` condition other than `always()`
+and steps that need `sudo` (install Tesseract yourself if `tests` needs it). `ephemeral-integration`
+binds ports 8333 and 5432, so it refuses to start while your `make poc-up` stack is running
+(`make poc-down` first: that also removes the lake and Postgres volumes). Not covered: the
+`security` job (gitleaks and pip-audit run as their own actions), `benchmarks` and `pr-data-diff`.
 
 ## Reviewing CI
 
@@ -495,6 +571,6 @@ uv run pytest -m benchmark -q --benchmark-min-rounds=10 \
 | `terminate called without an active exception` after a `pfp ingest`/`pfp backfill` run that read bronze, with exit code 134 | The command already did its work and printed its report: this is `deltalake==1.6.3` aborting while the process shuts down, after `main()` returned. Reproducible on this machine with `deltalake` alone (three lines: open a `DeltaTable`, `to_pyarrow_table()`, exit), so it isn't the CLI's doing; `pytest` isn't affected. Noted while building T14c; needs its own fix (a `deltalake` upgrade is the first thing to try) — don't script around a `pfp` exit code until then |
 | `dbt build`/`dbt test` exits non-zero with `Catalog Error: Table with name test_..._elementary_volume_anomalies...__metrics__tmp_... does not exist!`, right after printing `Done. PASS=... WARN=... ERROR=0` | Elementary's own `on-run-end` cleanup of its per-invocation temp tables (`elementary.clean_elementary_temp_tables()`) reproducibly crashes on this stack (dbt-duckdb 1.11.0, elementary 0.26.0) — always *after* every real result is already computed, so it never hides a failure, only dbt's own exit code afterward. `dbt/dbt_project.yml`'s `vars: clean_elementary_temp_tables: false` (T22) already works around it; if you see this anyway, check that var hasn't been reverted |
 | `make om-up` takes ~5 minutes the first time (measured: 4m40s with the images already pulled) | Normal: `up --wait` blocks until every container, including `ingestion` (Airflow, the slowest), reports healthy. Give it the time before assuming a failure |
-| `metadata ingest` logs `Unable to find the node or columns in the catalog file for dbt node: source.personal_finance_platform.bronze.*` (and the `operation.*` on-run-end hooks) | Expected and harmless: dbt's catalog can't see bronze (`delta_scan()` isn't a DuckDB relation) and hooks have no columns. Bronze's tables and columns are registered by `scripts/openmetadata_sync.py` instead; the run still ends `Success %: 100.0` |
+| `metadata ingest` logs `Unable to find the node or columns in the catalog file for dbt node: source.personal_finance_platform.bronze.*` (and the `operation.*` on-run-end hooks) | Expected and harmless: dbt's catalog can't see bronze (`delta_scan()` isn't a database relation) and hooks have no columns. Bronze's tables and columns are registered by `scripts/openmetadata_sync.py` instead; the run still ends `Success %: 100.0` |
 | `make om-sync`'s `check` prints `FAIL: no column-level path ...` and exits 1 | Column lineage stopped short of bronze. Reproduced on purpose by ingesting `dbt/target/manifest.json` as-is instead of the copy `sync` writes to `openmetadata/artifacts/manifest.json` (its `delta_scan(...)` paths aren't tables to OpenMetadata's SQL parser, ADR 0023): re-run `make om-sync`, which regenerates the copy |
 | Upstream's own `docker-compose-postgres.yml` leaves `docker-volume/db-data-postgres` behind and `rm -rf` fails with `Permission denied` | Not applicable to `openmetadata/docker-compose.yml`: it uses named volumes, so `make om-down` (`down -v`) removes everything (checked: no `pfp-om_*` volume left) |

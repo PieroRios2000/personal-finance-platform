@@ -24,7 +24,7 @@ GitHub Actions PR run to confirm the wiring itself, since this session can't tri
 | `ephemeral-integration` job (T17, [ADR 0007](../decisions/0007-ephemeral-per-pr-environments.md); [ADR 0021](../decisions/0021-ci-invokes-the-dagster-pipeline.md); [ADR 0022](../decisions/0022-elementary-anomaly-detection-and-warn-mode.md)) | Built | Local S3 up under a per-run project name, `dagster asset materialize --select '*'` (T21: bronze + dbt build together, impact-narrowed per ADR 0008/0021 — Elementary's own models and its `silver.transactions` anomaly test run inside this same build too, T22) twice (idempotency, checked via `scripts/count_bronze_statements.py`'s real row count — a multi-asset materialize doesn't stream a step's own log text to stdout), `sqlfluff lint`, the `integration`-marked tests, a dedicated `continue-on-error: true` re-run of just the Elementary anomaly test (T22, warn-mode) and `edr report` (also `continue-on-error: true`, uploaded as an artifact), then always torn down; logs, dbt's artifacts and the Elementary report saved first |
 | `ephemeral-integration-gate` job ([ADR 0019](../decisions/0019-ephemeral-integration-required-via-gate-job.md)) | Built | The job the ruleset actually requires — always runs (`if: always()`), turns `ephemeral-integration`'s own `success`/`skipped` conclusion into a pass and `failure`/`cancelled` into a fail, since a ruleset-required check left "skipped" isn't reliably accepted as satisfied |
 | `make poc` (T17) | Built | The same flow, once, locally, against Piero's real PDFs; prints only pass/fail and reconciliation *counts* (ADR 0004) |
-| `pr-data-diff` job (T17b, [ADR 0014](../decisions/0014-pr-data-diff-shared-instance-full-build.md)) | Built | Ingest + `dbt build` run twice against the base branch's commit and the PR's, isolated by a `LAKEHOUSE_URI` prefix and a `PFP_DUCKDB_PATH` on one shared SeaweedFS instance; [`scripts/data_diff.py`](../../scripts/data_diff.py) diffs the two `.duckdb` files and posts Markdown to the job summary. Warn-only, gated on the same `integration` output as `ephemeral-integration` but runs in parallel with it |
+| `pr-data-diff` job (T17b, [ADR 0014](../decisions/0014-pr-data-diff-shared-instance-full-build.md)) | Built | Ingest + `dbt build` run twice against the base branch's commit and the PR's, isolated by a `LAKEHOUSE_URI` prefix and a Postgres database (`pfp_diff_base` / `pfp_diff_pr`, created by [`scripts/pg_databases.py`](../../scripts/pg_databases.py)) on one shared SeaweedFS and Postgres; [`scripts/data_diff.py`](../../scripts/data_diff.py) attaches both databases read-only, diffs `silver` and `gold`, and posts Markdown to the job summary. Warn-only, gated on the same `integration` output as `ephemeral-integration` but runs in parallel with it |
 
 ## Details that must not break
 
@@ -89,6 +89,16 @@ GitHub Actions PR run to confirm the wiring itself, since this session can't tri
   ruleset's required checks, so a real base-vs-PR difference — or even a broken base-branch
   build — can never block a merge the way `ephemeral-integration` itself does.
 
+## Reproducing CI locally
+
+`make ci-local` (`scripts/ci_local.py`) runs a job's own `run:` steps, read from `ci.yml`, in a
+clean clone of the last commit with only that job's variables (`make ci-local-full` adds
+`ephemeral-integration`). It exists because CI's `tests` job once failed on a variable that only a
+job without Postgres lacks and on files a fresh checkout does not have, both invisible locally:
+run against that failing commit it reports the same error. Uncommitted changes are refused, `if:`
+steps other than `always()` and `sudo` steps are skipped with a printed reason, and a GitHub
+expression it cannot evaluate makes the job refuse to run. It is part of the Definition of Done.
+
 ## Cost, and where it goes
 
 `ephemeral-integration` is the slow job: about 20 minutes when it runs, of which 17 are
@@ -109,9 +119,9 @@ run's **Artifacts** panel (`ephemeral-integration-logs`, kept 3 days). Locally, 
 against real data is `make poc` (`make poc-up` first if you want to poke at the environment
 afterwards instead of it tearing itself down). For `pr-data-diff`: its comparison is on the
 run's own **Summary** tab, not a separate artifact; `scripts/data_diff.py` itself can be run
-directly against any two `.duckdb` files (`uv run python -m scripts.data_diff --base
-BASE.duckdb --pr PR.duckdb`), which is also how `tests/test_data_diff.py` exercises it,
-against two small hand-built files, without a live SeaweedFS or dbt build.
+directly against two Postgres databases (`--base-database A --pr-database B`) or any two
+`.duckdb` files (`--base BASE.duckdb --pr PR.duckdb`); `tests/test_data_diff.py` exercises the
+file form against two small hand-built files, without a live SeaweedFS, Postgres or dbt build.
 
 ## Related
 

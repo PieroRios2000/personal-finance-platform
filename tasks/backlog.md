@@ -13,6 +13,11 @@ branch and PR when it is picked up; see [`CLAUDE.md`](../CLAUDE.md) for how.
       failing source test skipped 93 of 127 nodes, silver and gold included).
 - [ ] Numeric CI rules leave warn-mode on 2026-09-26 (two-line change).
 
+## CI parity (done 2026-09-19)
+
+- [x] `make ci-local` / `make ci-local-full`: CI's own jobs, from `ci.yml`, in a clean clone with only
+      each job's environment (SETUP.md, `brain/components/ci.md`); part of the Definition of Done.
+
 ## CI speed (evaluation point, raised 2026-09-19)
 
 The ephemeral environment (`ephemeral-integration`) now takes about 20 minutes per PR that touches

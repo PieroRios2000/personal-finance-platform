@@ -1,0 +1,174 @@
+dashboard_title: PFP finance
+description: null
+css: null
+slug: pfp-finance
+certified_by: null
+certification_details: null
+published: true
+uuid: b4eb034f-9529-420c-8c60-35ba5e30dc32
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+    - GRID_ID
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    children:
+    - ROW-0
+    - ROW-1
+    - ROW-N-458SJZMB
+    parents:
+    - ROOT_ID
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: PFP finance
+  CHART-0:
+    type: CHART
+    id: CHART-0
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-0
+    meta:
+      width: 6
+      height: 50
+      chartId: 1
+      sliceName: 'Monthly cash flow: income and spending (no internal transfers)'
+  CHART-1:
+    type: CHART
+    id: CHART-1
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-0
+    meta:
+      width: 6
+      height: 50
+      chartId: 2
+      sliceName: Savings balance per month (asset accounts)
+  ROW-0:
+    type: ROW
+    id: ROW-0
+    children:
+    - CHART-0
+    - CHART-1
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-2:
+    type: CHART
+    id: CHART-2
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-1
+    meta:
+      width: 6
+      height: 50
+      chartId: 3
+      sliceName: 'Investments: monthly return, with how the month was closed'
+  CHART-3:
+    type: CHART
+    id: CHART-3
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-1
+    meta:
+      width: 6
+      height: 50
+      chartId: 4
+      sliceName: 'Investments: monthly return per fund'
+  ROW-1:
+    type: ROW
+    id: ROW-1
+    children:
+    - CHART-2
+    - CHART-3
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  ROW-N-458SJZMB:
+    children:
+    - CHART-1SP4BFJ6
+    - CHART-QRTOWZAN
+    - CHART-0LGDS8G1
+    - CHART-XAIUQQ03
+    id: ROW-N-458SJZMB
+    meta:
+      '0': ROOT_ID
+      background: BACKGROUND_TRANSPARENT
+    type: ROW
+    parents:
+    - ROOT_ID
+    - GRID_ID
+  CHART-1SP4BFJ6:
+    children: []
+    id: CHART-1SP4BFJ6
+    meta:
+      chartId: 3
+      height: 50
+      sliceName: 'Investments: monthly return, with how the month was closed'
+      uuid: 2e775692-f848-4a45-b232-4a3616537637
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-458SJZMB
+  CHART-QRTOWZAN:
+    children: []
+    id: CHART-QRTOWZAN
+    meta:
+      chartId: 1
+      height: 50
+      sliceName: 'Monthly cash flow: income and spending (no internal transfers)'
+      uuid: 00a743f9-76a0-4dcb-8660-369558f4e2c5
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-458SJZMB
+  CHART-0LGDS8G1:
+    children: []
+    id: CHART-0LGDS8G1
+    meta:
+      chartId: 2
+      height: 50
+      sliceName: Savings balance per month (asset accounts)
+      uuid: c8f86a2b-c692-4af1-9512-2da77fa127e8
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-458SJZMB
+  CHART-XAIUQQ03:
+    children: []
+    id: CHART-XAIUQQ03
+    meta:
+      chartId: 4
+      height: 50
+      sliceName: 'Investments: monthly return per fund'
+      uuid: e7ac666a-be3b-43e9-a114-b16bdb818561
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-458SJZMB
+version: 1.0.0

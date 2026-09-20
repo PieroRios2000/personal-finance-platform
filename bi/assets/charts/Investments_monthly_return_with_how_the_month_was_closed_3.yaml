@@ -1,0 +1,27 @@
+slice_name: 'Investments: monthly return, with how the month was closed'
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  all_columns:
+  - month_start
+  - place
+  - currency
+  - return_pct
+  - closing_basis
+  - is_return_reliable
+  - gain
+  - closing_balance
+  order_by_cols:
+  - '["month_start", false]'
+  row_limit: 1000
+  include_search: true
+  datasource: 3__table
+  viz_type: table
+query_context: null
+cache_timeout: null
+uuid: 2e775692-f848-4a45-b232-4a3616537637
+version: 1.0.0
+dataset_uuid: 329e145a-7011-4df6-a615-00ce8934ad12

@@ -2,7 +2,7 @@
 type: component
 phase: 2
 status: built
-task: T24
+task: T30
 ---
 
 # OpenMetadata
@@ -18,10 +18,11 @@ Design decisions and their alternatives in
 | Piece | What it does |
 |---|---|
 | [`openmetadata/docker-compose.yml`](../../openmetadata/docker-compose.yml) | OpenMetadata 2.0.2 (PostgreSQL variant): `postgresql`, `elasticsearch` 9.3.0, a one-shot `execute-migrate-all`, `openmetadata-server` (UI/API on `localhost:8585`) and `ingestion` (Airflow plus the `metadata` CLI). Condensed from the official release file; named volumes only, so `down -v` leaves nothing; only 8585 published |
-| [`scripts/openmetadata_sync.py`](../../scripts/openmetadata_sync.py) `sync` | Registers the `pfp_duckdb` service, `pfp` database, `bronze`/`silver`/`gold` schemas and their tables (silver/gold from dbt's `catalog.json`, bronze from `lakehouse/bronze.py`'s pyarrow schemas), then writes `openmetadata/artifacts/`: a manifest copy with sources resolved to logical names, `catalog.json`, and the ingestion workflow config |
-| `openmetadata/artifacts/` (gitignored) | What the ingestion container reads, mounted read-only at `/opt/pfp-artifacts`. Holds a short-lived admin token, so it is never committed |
+| [`scripts/openmetadata_sync.py`](../../scripts/openmetadata_sync.py) `sync` | Registers the `pfp_postgres` service (native Postgres connection), the `pfp` database and the **bronze** schema and tables (from `lakehouse/bronze.py`'s pyarrow schemas: Delta tables the connector cannot see), then writes `openmetadata/artifacts/`: the Postgres connector's workflow config, a manifest copy with sources resolved to logical names, `catalog.json`, and the dbt workflow config |
+| Native Postgres connector | `metadata ingest -c postgres-workflow.yaml` reads the `silver` and `gold` schemas (tables, typed columns) straight from PFP's Postgres; the `ingestion` container joins the Postgres network (`pfp-poc_default`, `PFP_NETWORK`) |
+| `openmetadata/artifacts/` (gitignored) | What the ingestion container reads, mounted read-only at `/opt/pfp-artifacts`. Holds a short-lived admin token and the Postgres password, so it is never committed |
 | [`scripts/openmetadata_sync.py`](../../scripts/openmetadata_sync.py) `check` | Asks the running server for `gold.fact_transactions.amount`'s upstream lineage and exits 1 unless it reaches `bronze.transactions.amount` column by column |
-| `make om-up` / `make om-sync` / `make om-down` | Start the stack under project `pfp-om`; run `dbt docs generate`, `sync`, the dbt ingestion workflow and `check`; tear down with `-v` and remove `artifacts/` |
+| `make om-up` / `make om-sync` / `make om-down` | Start the stack under project `pfp-om` (needs `make poc-up` first); run `dbt docs generate`, `sync`, the Postgres and dbt ingestion workflows and `check`; tear down with `-v` and remove `artifacts/` |
 | [`tests/test_openmetadata_sync.py`](../../tests/test_openmetadata_sync.py) | Unit tests for the transformations (type mapping, catalog and bronze tables, source resolution, workflow config, registration order, column-path walking); no server needed |
 
 ## How it fits together
@@ -29,24 +30,25 @@ Design decisions and their alternatives in
 ```
 dbt build -> dbt docs generate -> manifest.json + catalog.json
                                         |
-                       openmetadata_sync sync ---- REST ---> OpenMetadata (tables, columns)
+                 openmetadata_sync sync ---- REST ---> OpenMetadata (service, bronze tables)
                                         |
-                        artifacts/ (manifest copy, catalog, workflow config)
+                  artifacts/ (workflow configs, manifest copy, catalog)
                                         |  read-only mount
-                    metadata ingest (ingestion container) --> lineage
+   metadata ingest postgres (ingestion container) --> silver, gold tables (native connector)
+   metadata ingest dbt      (ingestion container) --> lineage
                                         |
                        openmetadata_sync check <--- REST --- column-level lineage
 ```
 
-- **Why a script and not a DuckDB connector:** OpenMetadata 2.0.2 has none, and its dbt workflow
-  only enriches tables that already exist. `sync` creates them, from dbt's `catalog.json` (which
-  is DuckDB's own information schema).
+- **Why a script for bronze:** silver and gold are in Postgres, so the native connector catalogues
+  them (T30, before that a DuckDB script did). Bronze is Delta on S3, which no connector reads,
+  and the dbt workflow only enriches tables that already exist, so `sync` creates bronze's tables.
 - **Why the manifest is copied:** OpenMetadata parses each model's compiled SQL for column
   lineage, and `delta_scan('s3://...')` (ADR 0011) is not a table to it. In the copy, each
   source's `delta_scan(...)` is replaced by `"pfp"."bronze"."<name>"`, in `compiled_code` only.
   Without it the column chain stops at silver (verified against the real server).
-- **Elementary's own models are not catalogued** (30-odd monitoring tables); dbt tests aren't
-  ingested either.
+- **Elementary's own models are not catalogued** (they live in a separate DuckDB file, not in
+  Postgres); dbt tests aren't ingested either.
 
 ## What lineage shows, and what it doesn't
 

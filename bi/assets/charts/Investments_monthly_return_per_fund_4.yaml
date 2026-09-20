@@ -1,0 +1,29 @@
+slice_name: 'Investments: monthly return per fund'
+description: null
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_line
+params:
+  x_axis: month_start
+  time_grain_sqla: P1M
+  metrics:
+  - expressionType: SQL
+    sqlExpression: MAX(return_pct)
+    label: Return
+  groupby:
+  - place
+  - currency
+  adhoc_filters:
+  - expressionType: SQL
+    sqlExpression: is_return_reliable
+    clause: WHERE
+  y_axis_format: .2%
+  row_limit: 10000
+  show_legend: true
+  datasource: 3__table
+  viz_type: echarts_timeseries_line
+query_context: null
+cache_timeout: null
+uuid: e7ac666a-be3b-43e9-a114-b16bdb818561
+version: 1.0.0
+dataset_uuid: 329e145a-7011-4df6-a615-00ce8934ad12

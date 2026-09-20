@@ -1,0 +1,53 @@
+# Apache Superset: dashboards over PFP's gold schema (T32, ADR 0030).
+#
+# OPTIONAL local infrastructure, like openmetadata/: CI never runs it, `make poc-up` does
+# not start it, and `make bi-up` / `make bi-down` (project `pfp-bi`) do. It joins the Docker
+# network of PFP's own Postgres (project `pfp-poc` by default, `PFP_NETWORK` to change it)
+# and reads it as the read-only role `pfp_bi`, which can see `gold` and nothing else. Its own
+# metadata is in a separate `superset` database of the same Postgres (init-metadata.sh).
+# Only 8088 is published, on 127.0.0.1.
+
+services:
+  bi-init:
+    image: postgres:16.10-alpine
+    entrypoint: ["/bin/sh", "/init-metadata.sh"]
+    environment:
+      PGPASSWORD: ${PFP_PG_PASSWORD:?PFP_PG_PASSWORD is required (see .env.example)}
+      PFP_PG_USER: ${PFP_PG_USER:?}
+      PFP_PG_DATABASE: ${PFP_PG_DATABASE:?}
+      PFP_BI_DB_PASSWORD: ${PFP_BI_DB_PASSWORD:?PFP_BI_DB_PASSWORD is required (see .env.example)}
+    volumes:
+      - ./init-metadata.sh:/init-metadata.sh:ro
+    networks: [pfp]
+
+  superset:
+    build: .
+    image: pfp-superset:5.0.0
+    depends_on:
+      bi-init:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "/app/start.sh"]
+    environment:
+      SUPERSET_CONFIG_PATH: /app/superset_config.py
+      SUPERSET_SECRET_KEY: ${PFP_BI_SECRET_KEY:?PFP_BI_SECRET_KEY is required (see .env.example)}
+      PFP_BI_DB_PASSWORD: ${PFP_BI_DB_PASSWORD:?}
+      PFP_BI_ADMIN_PASSWORD: ${PFP_BI_ADMIN_PASSWORD:?PFP_BI_ADMIN_PASSWORD is required (see .env.example)}
+      PFP_PG_BI_PASSWORD: ${PFP_PG_BI_PASSWORD:?}
+    ports:
+      - "127.0.0.1:8088:8088"
+    volumes:
+      - ./superset_config.py:/app/superset_config.py:ro
+      - ./start.sh:/app/start.sh:ro
+      - ./assets:/app/pfp-assets:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8088/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks: [pfp]
+
+networks:
+  pfp:
+    name: ${PFP_NETWORK:-pfp-poc_default}
+    external: true

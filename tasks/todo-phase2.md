@@ -334,8 +334,8 @@ passes against a real Postgres and S3.
   (`tests/pg_store.py`); each parallel pytest-xdist worker gets its own database, dropped and recreated
   with the test lake, so the parallel runner keeps working.
 - [x] The default dbt target is Postgres (`PFP_DBT_TARGET`); `local` (the DuckDB file) stays selectable
-  because CI's base-versus-PR data diff still needs it until T29. `PFP_DUCKDB_PATH` is now only that
-  target's and `edr`'s (T28).
+  because CI's base-versus-PR data diff still needed it until T29 (now on Postgres too). `PFP_DUCKDB_PATH`
+  is now only that target's and `edr`'s (T28).
 
 **Verification:** the whole integration suite passes with `-n 4` against a real Postgres and S3.
 
@@ -362,11 +362,12 @@ Postgres attach. Give it a small DuckDB file of its own; its anomaly test still 
 **Description:** The ephemeral environment (ADR 0007) and the base-versus-PR data diff work on Postgres.
 
 **Acceptance criteria:**
-- [ ] `ephemeral-integration` brings up Postgres with SeaweedFS, runs the Dagster job and the integration
-  tests, and tears both down (`down -v`).
-- [ ] `scripts/data_diff.py` and `pr-data-diff` compare Postgres schemas (base and PR) instead of two
-  DuckDB files; ADR 0014 updated.
-- [ ] The job stays within its time budget (backlog, "CI speed").
+- [x] `ephemeral-integration` brings up Postgres with SeaweedFS, runs the Dagster job and the integration
+  tests, and tears both down (`down -v`) (done in T27).
+- [x] `scripts/data_diff.py` and `pr-data-diff` compare Postgres databases (base and PR, `silver` and
+  `gold`) instead of two DuckDB files; ADR 0014 updated. `scripts/pg_databases.py` creates the two
+  throwaway databases.
+- [ ] The job stays within its time budget (backlog, "CI speed") -- checked on this PR's own run.
 
 **Dependencies:** T27, T28 · **Files:** `.github/workflows/ci.yml`, `scripts/data_diff.py`,
 `brain/**` · **Size:** M
@@ -377,9 +378,9 @@ Postgres attach. Give it a small DuckDB file of its own; its anomaly test still 
 directly.
 
 **Acceptance criteria:**
-- [ ] OpenMetadata ingests the Postgres `silver` and `gold` schemas with its native connector and the
+- [x] OpenMetadata ingests the Postgres `silver` and `gold` schemas with its native connector and the
   dbt artifacts, and `fact_transactions.amount` still traces back to `bronze.transactions.amount`.
-- [ ] `scripts/openmetadata_sync.py` is removed or reduced to what the connector does not cover; ADR 0023
+- [x] `scripts/openmetadata_sync.py` is removed or reduced to what the connector does not cover; ADR 0023
   and `brain/components/openmetadata.md` updated; SETUP.md section 10 updated.
 
 **Dependencies:** T26 · **Files:** `scripts/openmetadata_sync.py`, `docker-compose.openmetadata.yml`,
@@ -391,8 +392,8 @@ directly.
 lake, dbt and the database are seen as one thing.
 
 **Acceptance criteria:**
-- [ ] The dbt assets carry their Postgres schema, table and row count as asset metadata after a run.
-- [ ] The graph is documented (README/SETUP) with what to look at.
+- [x] The dbt assets carry their Postgres schema, table and row count as asset metadata after a run.
+- [x] The graph is documented (README/SETUP) with what to look at.
 
 **Dependencies:** T27 · **Files:** `orchestration/**`, `brain/components/dagster.md` · **Size:** S
 
@@ -402,15 +403,15 @@ lake, dbt and the database are seen as one thing.
 read-only role, plus the first dashboards.
 
 **Acceptance criteria:**
-- [ ] `make bi-up` / `make bi-down` start and stop Superset (its metadata in its own database of the same
+- [x] `make bi-up` / `make bi-down` start and stop Superset (its metadata in its own database of the same
   Postgres); it is not started by `make poc-up`, like OpenMetadata.
-- [ ] A Postgres database connection with the read-only role; dashboards as code (exported and committed):
+- [x] A Postgres database connection with the read-only role; dashboards as code (exported and committed):
   monthly cash flow (income and spending, no internal transfers), savings balance per month, and each
   fund's monthly return **with `closing_basis` beside the return**.
-- [ ] The RAM it needs is measured against `.wslconfig` and written down (like T24).
-- [ ] An ADR records Superset over Metabase and Streamlit; SETUP.md gets a section.
+- [x] The RAM it needs is measured against `.wslconfig` and written down (like T24).
+- [x] An ADR records Superset over Metabase and Streamlit; SETUP.md gets a section.
 
-**Dependencies:** T26 · **Files:** `docker-compose.superset.yml`, `bi/**`, `Makefile`, `SETUP.md`,
+**Dependencies:** T26 · **Files:** `bi/**` (compose, Dockerfile, assets), `Makefile`, `SETUP.md`,
 `brain/**` · **Size:** L
 
 ### T33: Phase 2 re-close — `docs/phase-2-extension-close`

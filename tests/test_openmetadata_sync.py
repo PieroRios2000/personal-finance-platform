@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from scripts import openmetadata_sync as om
 
@@ -96,16 +97,6 @@ def test_om_column_unknown_type_fails_loudly_instead_of_guessing() -> None:
         om.om_column("shape", "GEOMETRY", 1)
 
 
-def test_catalog_tables_keeps_project_models_and_drops_elementarys_own() -> None:
-    tables = om.catalog_tables(_manifest(), _catalog())
-    assert [(t.schema, t.name) for t in tables] == [
-        ("silver", "transactions"),
-        ("gold", "fact_transactions"),
-    ]
-    assert [c["name"] for c in tables[1].columns] == ["amount", "flow_type"]
-    assert [c["ordinalPosition"] for c in tables[1].columns] == [1, 2]
-
-
 def test_bronze_tables_come_from_the_lakehouse_schema_not_from_dbt() -> None:
     # dbt's catalog can't see bronze (delta_scan() isn't a DuckDB relation), so the
     # columns come from the pyarrow schema bronze is written with.
@@ -149,9 +140,9 @@ def test_resolve_sources_touches_only_compiled_code_and_leaves_the_input_alone()
 def test_workflow_config_points_at_the_mounted_artifacts_and_scopes_the_schemas() -> (
     None
 ):
-    config = om.workflow_config(service="pfp_duckdb", database="pfp", token="tok")
+    config = om.workflow_config(service="pfp_postgres", database="pfp", token="tok")
     source_config = config["source"]["sourceConfig"]["config"]
-    assert config["source"]["serviceName"] == "pfp_duckdb"
+    assert config["source"]["serviceName"] == "pfp_postgres"
     assert source_config["dbtConfigSource"] == {
         "dbtConfigType": "local",
         "dbtManifestFilePath": "/opt/pfp-artifacts/manifest.json",
@@ -174,20 +165,53 @@ class _FakeClient:
         return {}
 
 
-def test_register_creates_service_database_schemas_then_tables_in_that_order() -> None:
+_POSTGRES = {"host_port": "postgres:5432", "user": "pfp", "password": "s3cret"}
+
+
+def test_postgres_service_is_a_native_connection_not_a_custom_one() -> None:
+    body = om.postgres_service("pfp_postgres", database="pfp", **_POSTGRES)
+    assert body["serviceType"] == "Postgres"
+    assert body["connection"]["config"] == {
+        "type": "Postgres",
+        "hostPort": "postgres:5432",
+        "username": "pfp",
+        "authType": {"password": "s3cret"},
+        "database": "pfp",
+    }
+
+
+def test_postgres_workflow_ingests_only_silver_and_gold_with_the_native_connector() -> (
+    None
+):
+    config = om.postgres_workflow(
+        "pfp_postgres", database="pfp", token="tok", **_POSTGRES
+    )
+    source = config["source"]
+    assert source["type"] == "postgres"
+    assert source["serviceName"] == "pfp_postgres"
+    assert source["serviceConnection"]["config"]["hostPort"] == "postgres:5432"
+    # Bronze is not in Postgres: leaving it out of the filter keeps the connector from
+    # touching (or marking deleted) the tables `sync` registered for it.
+    assert source["sourceConfig"]["config"]["schemaFilterPattern"] == {
+        "includes": ["^silver$", "^gold$"]
+    }
+    assert config["workflowConfig"]["openMetadataServerConfig"]["securityConfig"] == {
+        "jwtToken": "tok"
+    }
+
+
+def test_register_bronze_puts_service_database_schema_then_tables() -> None:
     client = _FakeClient()
-    tables = om.catalog_tables(_manifest(), _catalog())
-    om.register(client, service="pfp_duckdb", database="pfp", tables=tables)
+    tables = om.bronze_tables(_manifest())
+    service = om.postgres_service("pfp_postgres", database="pfp", **_POSTGRES)
+    om.register_bronze(client, service=service, database="pfp", tables=tables)
     assert [(path, body["name"]) for _, path, body in client.calls] == [
-        ("/services/databaseServices", "pfp_duckdb"),
+        ("/services/databaseServices", "pfp_postgres"),
         ("/databases", "pfp"),
-        ("/databaseSchemas", "silver"),
+        ("/databaseSchemas", "bronze"),
         ("/tables", "transactions"),
-        ("/databaseSchemas", "gold"),
-        ("/tables", "fact_transactions"),
     ]
-    table_call = client.calls[-1][2]
-    assert table_call["databaseSchema"] == "pfp_duckdb.pfp.gold"
+    assert client.calls[-1][2]["databaseSchema"] == "pfp_postgres.pfp.bronze"
 
 
 def _lineage() -> dict[str, Any]:
@@ -249,7 +273,13 @@ def _write_artifacts(target: Path) -> None:
     (target / "catalog.json").write_text(json.dumps(_catalog()))
 
 
-def test_sync_writes_the_three_ingestion_inputs(
+@pytest.fixture(autouse=True)
+def _postgres_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PFP_PG_USER", "pfp")
+    monkeypatch.setenv("PFP_PG_PASSWORD", "s3cret")
+
+
+def test_sync_writes_the_ingestion_inputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(om, "OpenMetadata", _FakeServer)
@@ -266,6 +296,20 @@ def test_sync_writes_the_three_ingestion_inputs(
     assert config["workflowConfig"]["openMetadataServerConfig"]["securityConfig"] == {
         "jwtToken": "tok"
     }
+    postgres = json.loads((out / "postgres-workflow.yaml").read_text())
+    assert postgres["source"]["type"] == "postgres"
+    assert postgres["source"]["serviceConnection"]["config"]["authType"] == {
+        "password": "s3cret"
+    }
+
+
+def test_sync_without_the_postgres_credentials_exits_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("PFP_PG_PASSWORD")
+    monkeypatch.setattr(om, "OpenMetadata", _FakeServer)
+    _write_artifacts(tmp_path / "target")
+    assert om.main(["sync", "--target-path", str(tmp_path / "target")]) == 2
 
 
 def test_sync_without_dbt_artifacts_exits_2(tmp_path: Path) -> None:
@@ -273,7 +317,7 @@ def test_sync_without_dbt_artifacts_exits_2(tmp_path: Path) -> None:
 
 
 def _bronze_to_gold_lineage() -> dict[str, Any]:
-    prefix = "pfp_duckdb.pfp."
+    prefix = "pfp_postgres.pfp."
     return {
         "upstreamEdges": {
             "edge": {
@@ -301,7 +345,7 @@ def test_check_fails_when_the_column_chain_stops_short_of_bronze(
 ) -> None:
     lineage = _bronze_to_gold_lineage()
     lineage["upstreamEdges"]["edge"]["columns"][0]["fromColumns"] = [
-        "pfp_duckdb.pfp.silver.transactions.amount"
+        "pfp_postgres.pfp.silver.transactions.amount"
     ]
     monkeypatch.setattr(_FakeServer, "lineage", lineage)
     monkeypatch.setattr(om, "OpenMetadata", _FakeServer)
@@ -351,3 +395,22 @@ def test_check_exits_2_when_the_server_reply_is_not_usable(
 
     monkeypatch.setattr(om, "OpenMetadata", _Broken)
     assert om.main(["check"]) == 2
+
+
+def test_bronze_tables_covers_every_source_dbt_declares() -> None:
+    declared = yaml.safe_load(
+        (Path(__file__).resolve().parent.parent / "dbt/models/sources.yml").read_text()
+    )["sources"][0]
+    manifest = {
+        "sources": {
+            f"source.x.{t['name']}": {
+                "database": "pfp",
+                "schema": "bronze",
+                "identifier": t["name"],
+            }
+            for t in declared["tables"]
+        }
+    }
+    assert {t.name for t in om.bronze_tables(manifest)} == {
+        t["name"] for t in declared["tables"]
+    }
