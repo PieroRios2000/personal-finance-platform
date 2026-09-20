@@ -200,3 +200,25 @@ def test_a_continue_on_error_step_does_not_fail_the_job() -> None:
 
     assert ci_local.execute(plan, runner)
     assert ran == ["warn", "after"]
+
+
+def test_a_busy_port_is_reported_so_full_runs_do_not_collide_with_a_stack() -> None:
+    import socket
+
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        busy_port = listener.getsockname()[1]
+
+        assert ci_local.ports_in_use((busy_port,)) == [busy_port]
+
+    assert ci_local.ports_in_use((busy_port,)) == []
+
+
+def test_make_has_the_fast_and_the_full_targets() -> None:
+    import re
+
+    makefile = (_ROOT / "Makefile").read_text()
+
+    assert re.search(r"^ci-local:\n\t.*scripts\.ci_local\s*$", makefile, re.M)
+    assert re.search(r"^ci-local-full:\n\t.*scripts\.ci_local --full", makefile, re.M)
