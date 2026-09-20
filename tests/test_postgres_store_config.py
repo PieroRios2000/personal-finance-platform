@@ -219,3 +219,15 @@ def test_poc_down_also_forgets_elementarys_file_so_it_matches_the_fresh_database
     assert re.search(
         r"^poc-down:\n(\t.*\n)*\t.*rm -f dbt/elementary\.duckdb", makefile, re.M
     )
+
+
+def test_every_postgres_variable_in_the_profile_has_a_default() -> None:
+    """dbt renders the target while it only *parses* (the Dagster import and the
+    `tests` job run `dbt parse` with no PFP_PG_* set, and no database is contacted):
+    a variable without a default would fail every such parse."""
+    profile = (_ROOT / "dbt" / "profiles.yml").read_text()
+
+    calls = re.findall(r"env_var\('PFP_PG_\w+'[^)]*\)", profile)
+
+    assert calls, "the postgres target reads PFP_PG_* variables"
+    assert all("," in call for call in calls), [c for c in calls if "," not in c]
