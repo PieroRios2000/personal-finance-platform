@@ -93,6 +93,7 @@ movements as (
 
 select
     last_statement.user_id,
+    last_statement.account_id,
     last_statement.bank,
     last_statement.account_last4,
     last_statement.account_kind,
