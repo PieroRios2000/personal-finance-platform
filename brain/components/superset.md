@@ -15,7 +15,7 @@ return with `closing_basis`, all under one calendar filter bar. Optional local i
 
 | Piece | What it does |
 |---|---|
-| [`bi/docker-compose.yml`](../../bi/docker-compose.yml) | Project `pfp-bi`: `bi-init` (creates Superset's role and database) and `superset` (port 8088 on 127.0.0.1). Joins the network of PFP's Postgres (`pfp-poc_default`, `PFP_NETWORK`) |
+| [`bi/docker-compose.yml`](../../bi/docker-compose.yml) | Behind the `bi` profile of the one Compose project (`pfp-poc`, ADR 0032): `bi-init` (creates Superset's role and database, after Postgres is healthy) and `superset` (port 8088 on 127.0.0.1) |
 | [`bi/Dockerfile`](../../bi/Dockerfile) | `apache/superset:5.0.0` plus the Postgres driver the official image lacks |
 | [`bi/superset_config.py`](../../bi/superset_config.py) | Secret key and metadata database URI, from the environment |
 | [`bi/init-metadata.sh`](../../bi/init-metadata.sh) | Idempotent: the `superset` role and database in PFP's Postgres |

@@ -1,0 +1,51 @@
+slice_name: 'Reconciliation: opening + movements = balance (difference must be 0)'
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  adhoc_filters: []
+  all_columns:
+  - bank
+  - account_last4
+  - currency
+  - account_kind
+  - first_month
+  - last_month
+  - opening_balance
+  - net_movements
+  - closing_balance
+  - difference
+  order_by_cols:
+  - '["bank", true]'
+  column_config:
+    opening_balance:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    net_movements:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    closing_balance:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    difference:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+  conditional_formatting:
+  - colorScheme: '#fbd0d2'
+    column: difference
+    operator: '>'
+    targetValue: 0
+  - colorScheme: '#fbd0d2'
+    column: difference
+    operator: <
+    targetValue: 0
+  row_limit: 200
+  datasource: 15__table
+  viz_type: table
+query_context: null
+cache_timeout: null
+uuid: 639b6207-0b0a-5895-8ebf-7b45be98dd81
+version: 1.0.0
+dataset_uuid: c9f803ba-bfd7-50b2-90c1-a9662bee1a85

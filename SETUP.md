@@ -271,56 +271,37 @@ make poc   # brings its own environment up and down; no need for poc-up first
 
 ## 7. Browsing the lake in DBeaver
 
-`dbt/pfp.duckdb` (section 6) is a real on-disk DuckDB database, so any DuckDB-aware SQL client
-can open it directly — DBeaver has a built-in driver for it. The commands below also use the
-standalone `duckdb` CLI (not the same as the `duckdb` Python package `uv sync` already
-installs): `curl https://install.duckdb.org | sh` if `which duckdb` comes back empty.
+Silver and gold live in PostgreSQL (section 6, ADR 0029), so DBeaver connects to it natively (no extra
+driver setup beyond the PostgreSQL driver DBeaver offers to download). `make up` (section 13) starts it.
 
-**Silver only, zero extra setup**, after at least one `dbt build`:
+1. DBeaver → *Database* → *New Database Connection* → **PostgreSQL** → Next.
+2. *Host* `localhost`, *Port* `PFP_PG_PORT` (5432), *Database* `PFP_PG_DATABASE` (`pfp`).
+3. Two logins, from `.env`: **`PFP_PG_USER` / `PFP_PG_PASSWORD`** sees everything (`silver`, `gold`, and the
+   `superset` database's own tables are separate), and the read-only role **`pfp_bi` / `PFP_PG_BI_PASSWORD`**
+   sees `gold` only (the one Superset uses). Prefer the read-only one for browsing.
+4. *Test Connection* → Finish. `gold.rpt_movements`, `gold.rpt_reconciliation`, `gold.fact_transactions`
+   and the rest show up in the Database Navigator.
 
-1. DBeaver → *Database* → *New Database Connection* → search **DuckDB** → Next.
-2. *Path*: browse to this repo's `dbt/pfp.duckdb`.
-3. *Test Connection* → DBeaver offers to download the DuckDB JDBC driver from Maven → Download.
-4. Finish. `silver.transactions` shows up in the Database Navigator.
-
-**Bronze too** (the raw Delta tables on SeaweedFS S3) needs a one-time setup, since dbt only
-*reads* bronze through `delta_scan()` at build time — it never materializes it into
-`pfp.duckdb`. Run this once, from the repository root, with SeaweedFS up and `.env` exported
-(same prerequisites as section 6):
+**Bronze** (the raw Delta tables on SeaweedFS S3) is not in Postgres: dbt reads it through `delta_scan()` at
+build time. To query it, use DuckDB with an S3 secret pointing at the local SeaweedFS (only for
+inspection; the platform never needs it):
 
 ```bash
-make poc-up
+make up
 set -a && source .env && set +a
 ENDPOINT_HOST=$(echo "$AWS_ENDPOINT_URL" | sed -E 's#^[a-z]+://##; s#/$##')
-
-duckdb dbt/pfp.duckdb <<SQL
-INSTALL httpfs; LOAD httpfs;
-
-CREATE PERSISTENT SECRET lakehouse (
-    TYPE s3,
-    PROVIDER config,
-    KEY_ID '$AWS_ACCESS_KEY_ID',
-    SECRET '$AWS_SECRET_ACCESS_KEY',
-    REGION '${AWS_REGION:-us-east-1}',
-    ENDPOINT '$ENDPOINT_HOST',
-    URL_STYLE 'path',
-    USE_SSL false
-);
-
-CREATE SCHEMA IF NOT EXISTS bronze;
-CREATE OR REPLACE VIEW bronze.transactions   AS SELECT * FROM delta_scan('s3://lakehouse/bronze/transactions');
-CREATE OR REPLACE VIEW bronze.statements     AS SELECT * FROM delta_scan('s3://lakehouse/bronze/statements');
-CREATE OR REPLACE VIEW bronze.ingested_files AS SELECT * FROM delta_scan('s3://lakehouse/bronze/ingested_files');
+duckdb <<SQL
+INSTALL httpfs; LOAD httpfs; INSTALL delta; LOAD delta;
+CREATE SECRET lakehouse (TYPE s3, PROVIDER config, KEY_ID '$AWS_ACCESS_KEY_ID',
+    SECRET '$AWS_SECRET_ACCESS_KEY', REGION '${AWS_REGION:-us-east-1}',
+    ENDPOINT '$ENDPOINT_HOST', URL_STYLE 'path', USE_SSL false);
+SELECT count(*) FROM delta_scan('s3://lakehouse/bronze/transactions');
 SQL
 ```
 
-`CREATE PERSISTENT SECRET` writes to `~/.duckdb/stored_secrets` (unencrypted — this is local
-SeaweedFS, not real AWS credentials) and loads automatically into **every** DuckDB
-connection on this machine from then on, DBeaver included; the views live inside
-`pfp.duckdb` itself, so they show up in the Database Navigator next to `silver.*` with no
-further per-connection setup. Re-run only the `duckdb dbt/pfp.duckdb -c "CREATE OR REPLACE
-VIEW ..."` block if the bucket or table names ever change — the secret only needs creating
-once. Querying `bronze.*` still needs `make poc-up` running, same as `dbt build` does.
+(`duckdb` is the standalone CLI: `curl https://install.duckdb.org | sh`.) The older DuckDB-file option
+(`PFP_DBT_TARGET=local`, `dbt/pfp.duckdb`, which DBeaver opens with its built-in DuckDB driver) still works
+for local experiments, but nothing else in the platform reads it.
 
 ## 8. Browsing the brain in Obsidian
 
@@ -382,28 +363,26 @@ only the table name is shown, since there is no Postgres to count in.
 ## 10. Browsing the catalog and lineage in OpenMetadata (T24)
 
 Optional. `openmetadata/docker-compose.yml` runs OpenMetadata 2.0.2 with PostgreSQL and
-Elasticsearch under its own project name (`pfp-om`), ephemeral like the SeaweedFS one
-(ADR 0007): `make om-down` removes every volume. Make sure WSL2 has the memory first
+Elasticsearch as part of the platform's one Compose project (behind the `catalog` profile, ADR 0032),
+ephemeral like the SeaweedFS one (ADR 0007): `make om-down` removes its volumes. Make sure WSL2 has the memory first
 (requirements table above); after editing `.wslconfig`, run `wsl --shutdown` from PowerShell.
 CI never runs this stack (ADR 0023).
 
 ```bash
-make poc-up                          # local S3 and Postgres, as in section 6
+make up                              # storage, Postgres and Superset (section 13); `make poc-up` is enough too
 set -a && source .env && set +a
 uv run dbt deps --project-dir dbt --profiles-dir dbt
 uv run dbt build --project-dir dbt --profiles-dir dbt   # or `dagster asset materialize`, section 9
 
-make om-up                           # ~5 minutes to become healthy the first time
+make up-catalog                      # adds OpenMetadata; ~5 minutes to become healthy the first time
 make om-sync                         # docs generate, register bronze, ingest silver/gold, check the lineage
 ```
 
 Since T30 OpenMetadata reads silver and gold with its **native Postgres connector**: the `ingestion`
-container joins the Docker network of your Postgres (`pfp-poc_default`; `make om-up` stops with a clear
-message if `make poc-up` has not run, and `PFP_NETWORK` -- exported in your shell, not set in `.env` -- selects another project's network, whose Postgres service must be named `postgres`) and connects
-as `postgres:5432` with the `PFP_PG_USER`/`PFP_PG_PASSWORD` from `.env`. Those credentials are written to
+container is in the same project (and network) as your Postgres and connects as `postgres:5432` with the
+`PFP_PG_USER`/`PFP_PG_PASSWORD` from `.env`. Those credentials are written to
 `openmetadata/artifacts/postgres-workflow.yaml` (gitignored, removed by `make om-down`), next to the
-short-lived token the dbt workflow already needs. Run `make om-down` before `make poc-down`: while the
-`ingestion` container is attached, Docker cannot remove the `pfp-poc_default` network. Only bronze -- Delta tables the connector cannot see --
+short-lived token the dbt workflow already needs. Only bronze -- Delta tables the connector cannot see --
 is still registered by `scripts/openmetadata_sync.py`, from `lakehouse/bronze.py`'s schemas.
 
 `make om-sync` ends with `OK: 1 column-level path(s) from ...bronze.transactions.amount`, or
@@ -426,25 +405,29 @@ catalogued and dbt tests are not ingested.
 
 ## 12. Dashboards in Apache Superset (T32)
 
-Optional, like OpenMetadata: `bi/docker-compose.yml` runs Superset 5.0.0 under its own project
-(`pfp-bi`). CI never runs it and `make poc-up` does not start it. **Measured: 335 MiB idle and after
+Optional, like OpenMetadata: `bi/docker-compose.yml` runs Superset 5.0.0 as part of the platform's one
+Compose project (behind the `bi` profile, ADR 0032). CI never runs it and `make poc-up` does not start
+it (`make up` does). **Measured: 335 MiB idle and after
 loading every chart** (one container; the image is 3.7 GB on disk), far below OpenMetadata's ~4.6 GiB,
 so no `.wslconfig` change is needed on top of section 10's.
 
 ```bash
-make poc-up                          # local S3 and Postgres, as in section 6
 # fill in .env (see .env.example): PFP_BI_DB_PASSWORD, PFP_BI_ADMIN_PASSWORD, PFP_BI_SECRET_KEY
+make up                              # storage + Postgres + Superset; builds the image the first time (~2 minutes)
 set -a && source .env && set +a
 uv run pfp ingest --user "$PFP_USER"                    # your data, as in section 6
 uv run dbt build --project-dir dbt --profiles-dir dbt   # gold tables the charts read
-make bi-up                           # builds the image the first time (~2 minutes)
 ```
 
 Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admin`, password
 `PFP_BI_ADMIN_PASSWORD`, then *Dashboards* -> **PFP finance**. From the top:
 
-- **Summary cards** (HTML made with Superset's Handlebars chart): money in, money out, net and the
-  number of movements for the filtered period; your **total capital** (savings accounts plus
+- **Summary cards** (HTML made with Superset's Handlebars chart): money in, money out, **net saved**,
+  **% saved** (net ÷ income, where income is the money that came into your accounts from outside, without
+  the movements between your own accounts; a dash if the period has no income) and the number of
+  movements for the filtered period; the **period analysed** (first and last movement left
+  after the filters, and how many closed months it spans) and the **debt at the end of the period**
+  (the card balance owed in the last month of your selection); your **total capital** (savings accounts plus
   investments, with the breakdown) and your **net position** (capital minus debt, with its change
   against the previous month), both at the latest month. A month an account or fund has no row keeps
   its last known balance, so the totals do not dip.
@@ -461,6 +444,23 @@ Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admi
   leave your machine, so don't screenshot them into a chat) and each account's declared closing
   balance per month, to check against the PDFs. Filter to one bank, account, currency and month and
   compare.
+
+- **Reconciliation** (the last table): per account, the opening balance of its first statement plus
+  its movements against its closing balance. **`difference` must be 0**; a red cell means a movement
+  is missing or was read twice. This is what tells a balance that simply started above zero (an
+  account you already had when you loaded it: that is its opening balance) apart from a real error.
+  It covers every closed month loaded, so the calendar filters do not apply to it.
+
+*Why the cards do not match each other:* **Net** is a flow (what came in minus what went out over the
+filtered period), while **Capital** and **Net position** are balances at the last closed month. A
+balance equals the movements only if the account started at zero; the rest is its opening balance,
+plus what funds gained on their own. The reconciliation table shows exactly that split.
+
+**Only closed months are shown.** The current month is partial (a card cycle cut mid-month, an
+Excel half filled), so summing it with complete months made balances that did not add up. The
+`gold.rpt_*` tables the dashboard reads leave the current month out, and "latest month" on the cards is
+the last closed one (in September, August). A month closes at the first `dbt build` after it ends;
+the facts (`fact_transactions`, ...) keep every movement.
 
 The filter bar (left side; open it with the arrow on its edge) applies to **every** chart:
 **Currency** (one at a time, PEN first: currencies are never added), **Date range**, **Time grain**
@@ -496,8 +496,6 @@ tables and a continuous `dim_date`), then `make bi-down && make bi-up`.
 - Its own users and dashboards live in a `superset` database of the same Postgres (created by
   `bi/init-metadata.sh`). `make bi-down` stops it; `make bi-reset` also forgets that state, and the next
   `make bi-up` re-imports the committed dashboards from `bi/assets/`.
-- Run `make bi-down` (and `make om-down`) before `make poc-down`: while they are attached, Docker cannot
-  remove the Postgres network.
 - **Changing a dashboard:** edit `bi/build_dashboards.py`, then `rm -r bi/assets/*`, `make bi-reset bi-up`,
   `make bi-export`, and commit the new `bi/assets/`.
 - If `pfp_bi` cannot log in: its password is only read when the Postgres volume is first created
@@ -547,6 +545,29 @@ many rows, how many files need review), never an amount, an account or a file na
    and 1 when a channel failed, whether or not the build was healthy. An *error* alert whose
    delivery fails is not retried: the failure is printed and the exit code is 1, so look at
    `dbt/target/run_results.json` or re-run `make alert`.
+
+## 13. The whole platform with one command (T37)
+
+Storage (SeaweedFS), PostgreSQL, Superset and (optionally) OpenMetadata are **one Docker Compose
+project**, `pfp-poc`: one group in Docker Desktop, one network, one command (ADR 0032).
+
+```bash
+make env           # a fresh clone: writes .env with generated secrets (never overwrites yours)
+make up            # storage + Postgres + Superset (the dashboards)
+make demo          # artificial data (eight closed months of a fictional person) -> bronze, then dbt build
+make up-catalog    # ... plus OpenMetadata (~4.6 GiB of RAM; see section 10)
+make status        # what is running, and the URLs
+make down          # stop everything, KEEP the data (the lake, the tables, the dashboards)
+make poc-down      # stop everything and DELETE the data (volumes), as before
+```
+
+`make up` needs the `PFP_PG_*` and `PFP_BI_*` variables of `.env` (it says which one is missing; `make env`
+generates them all). `make demo` writes only fictional data marked `DEMO` and is idempotent; to look at your
+own data instead of the demo, ingest with another `PFP_USER`, or `make poc-down` to start clean. Dagster
+is not a container: `uv run dagster dev` (http://localhost:3000). **Upgrading from separate stacks:**
+`make up` first stops the old `pfp-bi` and `pfp-om` projects (their ports would clash) and keeps your
+lake and Postgres data, since the project name did not change. `make poc-up` still starts only storage and
+Postgres, and CI is unchanged.
 
 ## Reproducing CI locally (`make ci-local`)
 

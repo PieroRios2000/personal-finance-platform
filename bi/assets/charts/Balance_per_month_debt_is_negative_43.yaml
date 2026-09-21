@@ -29,7 +29,7 @@ params:
   rich_tooltip: true
   row_limit: 10000
   show_legend: true
-  datasource: 10__table
+  datasource: 13__table
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null

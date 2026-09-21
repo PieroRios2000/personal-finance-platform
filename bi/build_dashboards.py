@@ -74,6 +74,8 @@ _KPI_STYLE = (_TEMPLATES / "kpi.css").read_text()
 _CASH_FLOW_KPI = (_TEMPLATES / "cash_flow_kpi.hbs").read_text()
 _BALANCE_KPI = (_TEMPLATES / "balance_kpi.hbs").read_text()
 _CAPITAL_KPI = (_TEMPLATES / "capital_kpi.hbs").read_text()
+_RANGE_KPI = (_TEMPLATES / "range_kpi.hbs").read_text()
+_DEBT_KPI = (_TEMPLATES / "debt_kpi.hbs").read_text()
 
 
 # Money in and out are read from `signed_amount` (ADR 0031): the effect on you, the same
@@ -83,6 +85,13 @@ _MONEY_IN = "COALESCE(SUM(signed_amount) FILTER (WHERE signed_amount > 0), 0)"
 _MONEY_OUT = "COALESCE(-SUM(signed_amount) FILTER (WHERE signed_amount < 0), 0)"
 _MONEY = "'FM999,999,999,990.00'"
 _NET = "COALESCE(SUM(signed_amount), 0)"
+# The income the savings rate is measured against: money that came into an asset
+# account from outside (salary, deposits), without the movements between your own
+# accounts, which would inflate it (money in on one side of every transfer).
+_REAL_INCOME = (
+    "COALESCE(SUM(signed_amount) FILTER (WHERE flow_type = 'ingreso' "
+    "AND NOT is_internal_transfer), 0)"
+)
 
 
 def _balance_at(recency: int) -> str:
@@ -122,11 +131,61 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
                 _sql_metric(f"to_char({_MONEY_OUT}, {_MONEY})", "money_out"),
                 _sql_metric(f"to_char({_NET}, {_MONEY})", "net"),
                 _sql_metric(f"CASE WHEN {_NET} >= 0 THEN 1 ELSE 0 END", "net_positive"),
+                _sql_metric(
+                    f"CASE WHEN {_REAL_INCOME} = 0 THEN '-' ELSE to_char("
+                    f"100 * {_NET} / {_REAL_INCOME}, 'FM990.0') || '%' END",
+                    "savings_rate",
+                ),
+                _sql_metric(
+                    f"CASE WHEN {_NET} >= 0 THEN 1 ELSE 0 END", "rate_positive"
+                ),
                 _sql_metric("to_char(COUNT(*), 'FM999,999,990')", "movements"),
             ],
             "adhoc_filters": [_time_range("date")],
             "row_limit": 1,
             "handlebarsTemplate": _CASH_FLOW_KPI,
+            "styleTemplate": _KPI_STYLE,
+        },
+    ),
+    (
+        "rpt_movements",
+        "Period analysed",
+        "handlebars",
+        {
+            "query_mode": "aggregate",
+            "groupby": [],
+            # From the first to the last movement left after the filters, and how many
+            # closed months that spans.
+            "metrics": [
+                _sql_metric("to_char(MIN(date), 'DD Mon YYYY')", "from"),
+                _sql_metric("to_char(MAX(date), 'DD Mon YYYY')", "to"),
+                _sql_metric("COUNT(DISTINCT calendar_month)", "months"),
+            ],
+            "adhoc_filters": [_time_range("date")],
+            "row_limit": 1,
+            "handlebarsTemplate": _RANGE_KPI,
+            "styleTemplate": _KPI_STYLE,
+        },
+    ),
+    (
+        "rpt_capital",
+        "Debt at the end of the period",
+        "handlebars",
+        {
+            "query_mode": "aggregate",
+            # One row per month, the latest month left after the filters on top: the
+            # debt you carry where the selected range ends.
+            "groupby": ["calendar_month"],
+            "metrics": [
+                _sql_metric("MAX(currency)", "currency"),
+                _sql_metric(f"to_char(SUM(debt_balance), {_MONEY})", "debt"),
+                _sql_metric("MAX(month_start)", "sort_key"),
+            ],
+            "timeseries_limit_metric": _sql_metric("MAX(month_start)", "sort_key"),
+            "order_desc": True,
+            "adhoc_filters": [_time_range("month_start")],
+            "row_limit": 1,
+            "handlebarsTemplate": _DEBT_KPI,
             "styleTemplate": _KPI_STYLE,
         },
     ),
@@ -376,6 +435,51 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "include_search": True,
         },
     ),
+    (
+        "rpt_reconciliation",
+        "Reconciliation: opening + movements = balance (difference must be 0)",
+        "table",
+        {
+            "query_mode": "raw",
+            # Per account, over every closed month loaded (no calendar filter applies):
+            # the first statement's opening balance plus the movements equals the
+            # balance. A non-zero difference is a movement missing or read twice. Debt
+            # is negative, like everywhere else.
+            "adhoc_filters": [],
+            "all_columns": [
+                "bank",
+                "account_last4",
+                "currency",
+                "account_kind",
+                "first_month",
+                "last_month",
+                "opening_balance",
+                "net_movements",
+                "closing_balance",
+                "difference",
+            ],
+            "order_by_cols": ['["bank", true]'],
+            "column_config": {
+                name: {"d3NumberFormat": ",.2f", "horizontalAlign": "right"}
+                for name in (
+                    "opening_balance",
+                    "net_movements",
+                    "closing_balance",
+                    "difference",
+                )
+            },
+            "conditional_formatting": [
+                {
+                    "colorScheme": "#fbd0d2",
+                    "column": "difference",
+                    "operator": op,
+                    "targetValue": 0,
+                }
+                for op in (">", "<")
+            ],
+            "row_limit": 200,
+        },
+    ),
 ]
 
 
@@ -503,12 +607,14 @@ NOTE_TEXT = (
 # The grid: (chart name prefix, width out of 12, height) per cell, row by row.
 LAYOUT: list[list[tuple[str, int, int]]] = [
     [("Cash flow summary", 12, 22)],
+    [("Period analysed", 6, 22), ("Debt at the end", 6, 22)],
     [("Capital summary", 6, 22), ("Net position summary", 6, 22)],
     [("Cash flow: money", 6, 50), ("Balance per month", 6, 50)],
     [("Investments: return and", 12, 32)],
     [("Investments: return per", 8, 50), (NOTE, 4, 50)],
     [("Movements", 12, 60)],
     [("Statement balances", 12, 60)],
+    [("Reconciliation", 12, 40)],
 ]
 
 

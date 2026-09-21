@@ -4,6 +4,15 @@
 # tear down with `-v` so no volume outlives the environment.
 #
 # Credentials come only from `.env` (see `.env.example`); nothing is hardcoded here.
+#
+# One project for the whole platform (T37, ADR 0032): the BI and catalog files below are
+# included here and their services sit behind the `bi` and `catalog` profiles, so a plain
+# `docker compose up seaweedfs postgres` (CI, `make poc-up`) is unchanged, `make up`
+# brings storage, Postgres and Superset up together, and `make up-catalog` adds
+# OpenMetadata: one group in Docker Desktop, one command, one network.
+include:
+  - path: bi/docker-compose.yml
+  - path: openmetadata/docker-compose.yml
 
 services:
   seaweedfs:

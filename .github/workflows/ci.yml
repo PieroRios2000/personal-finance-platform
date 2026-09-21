@@ -91,6 +91,8 @@ jobs:
         run: |
           echo "::add-matcher::.github/matchers/mypy.json"
           uv run mypy .
+      - name: docs links
+        run: uv run python -m scripts.check_docs_links
 
   tests:
     name: tests

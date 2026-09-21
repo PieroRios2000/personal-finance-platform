@@ -424,18 +424,30 @@ currency at a time, HTML cards and styled tables, formatted numbers.
 - [x] Summary cards and the investments table are Handlebars (HTML/CSS); numbers formatted.
 - [x] Verified by clicking with a headless browser (Currency, Month and Time grain change every chart).
 
+### T35: Capital, stable ids, reconciliation and the cards after real use — `feat/bi-*`
+
+- [x] Total capital (savings + investments, balances carried forward), net position from the same table,
+  stable exported uuids and `bi/cleanup_stale.py` (30 charts on a dashboard of 8 fixed) (#111).
+- [x] `signed_amount`, debt negative, movements between own accounts counted on both sides (#109), only
+  closed months (#113), `gold.rpt_reconciliation`, period and debt cards (#115), `% saved` (#118).
+
+### T37: One Compose project, one command — `feat/make-up-single-stack`
+
+- [x] The root compose `include`s the BI and catalog files behind the `bi` / `catalog` profiles; `make up`,
+  `make up-catalog`, `make status`, `make down`; every Makefile compose call goes through `$(PFP)` (#116, ADR 0032).
+
 ### T33: Phase 2 re-close — `docs/phase-2-extension-close`
 
 **Description:** Leave the extended phase presentable, as T25 did.
 
 **Acceptance criteria:**
-- [ ] README, PROJECT.md, `brain/phases/phase-2.md` and the architecture diagram reflect Postgres, Superset
+- [x] README, PROJECT.md, `brain/phases/phase-2.md` and the architecture diagram reflect Postgres, Superset
   and the extension; nothing still says "embedded, no Postgres" as a current fact.
-- [ ] A clean clone follows the README to a running dashboard.
-- [ ] Links and anchors checked with a script.
+- [x] A clean clone follows the README to a running dashboard (`make env`, `make up`, `make demo`).
+- [x] Links and anchors checked with a script (`scripts/check_docs_links.py`, in CI's `lint-types` job).
 
-**Dependencies:** T26-T32 · **Size:** S
+**Dependencies:** T26-T37 · **Size:** S
 
-### ✅ Final checkpoint (Phase 2, including the extension T26-T33)
-- [ ] All criteria met · [ ] `develop → main` release PR "Phase 2 — Orchestration + Governance"
+### ✅ Final checkpoint (Phase 2, including the extension T26-T37)
+- [x] All criteria met · [ ] `develop → main` release PR "Phase 2 — Orchestration + Governance"
   · [ ] merged by Piero

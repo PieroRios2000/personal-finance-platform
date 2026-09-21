@@ -26,7 +26,7 @@ running (`make poc-up`, T13) with `.env` exported into the shell. Run with
 import hashlib
 import os
 from collections.abc import Iterator
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -645,4 +645,108 @@ def test_capital_adds_savings_and_investments_and_carries_the_last_balance_forwa
         ("2026-01", "900.00", "500.00", "1400.00", "300.00", "1100.00", "3"),
         ("2026-02", "950.00", "600.00", "1550.00", "300.00", "1250.00", "2"),
         ("2026-03", "900.00", "600.00", "1500.00", "300.00", "1200.00", "1"),
+    ]
+
+
+def _month_bounds(months_ago: int) -> tuple[date, date]:
+    """First and last day of the calendar month `months_ago` before the current one."""
+    first = date.today().replace(day=1)
+    for _ in range(months_ago):
+        first = (first - timedelta(days=1)).replace(day=1)
+    last = (first + timedelta(days=31)).replace(day=1) - timedelta(days=1)
+    return first, last
+
+
+def test_reports_show_only_closed_months(lake: str, tmp_path: Path) -> None:
+    """A month is closed once it is over: the current month is partial (a card cycle
+    cut mid-month, an Excel half filled), so summing it with complete months makes a
+    balance that does not add up. The reporting tables leave it out and their "latest
+    month" is the last closed one; the facts keep everything."""
+    closed_start, closed_end = _month_bounds(1)
+    open_start, open_end = _month_bounds(0)
+    _write(closed_start, closed_end, "1000.00", "-100.00")  # closes at 900.00
+    _write(open_start, open_end, "900.00", "-50.00")  # the current month, partial
+    for month, balance in ((closed_start, "500"), (open_start, "560")):
+        bronze.replace_investment_month(
+            InvestmentMonth(
+                user_id=_USER_ID,
+                place="Fondo A",
+                currency="PEN",
+                year=month.year,
+                month=month.month,
+                month_key=hashlib.sha256(f"closed-{month}".encode()).hexdigest(),
+                entries=[
+                    InvestmentEntry(
+                        date=month.replace(day=28),
+                        kind="valorizacion",
+                        amount=Decimal("0"),
+                        balance=Decimal(balance),
+                        detail=None,
+                        position=2,
+                    )
+                ],
+            )
+        )
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    closed_label = f"{closed_start:%Y-%m}"
+    with pg_store.connect() as connection:
+        facts = _row_count(connection, "gold.fact_transactions")
+        months = {
+            table: [
+                row[0]
+                for row in connection.execute(
+                    f"select distinct calendar_month from gold.{table} order by 1"
+                ).fetchall()
+            ]
+            for table in (
+                "rpt_movements",
+                "rpt_balances",
+                "rpt_investments",
+                "rpt_capital",
+            )
+        }
+        recency = connection.execute(
+            "select calendar_month, month_recency from gold.rpt_capital"
+        ).fetchall()
+
+    assert facts == 2  # the facts keep every movement
+    assert months == {table: [closed_label] for table in months}
+    assert recency == [(closed_label, 1)]  # the latest month is the last closed one
+
+
+def test_reconciliation_explains_each_balance_by_its_opening_plus_movements(
+    lake: str, tmp_path: Path
+) -> None:
+    """Per account: the opening balance of its first statement plus the movements up to
+    its last closed statement is its balance, so `difference` is 0. A debt is negative
+    on both sides. The current month's statement is not part of it."""
+    two_ago, one_ago, now = _month_bounds(2), _month_bounds(1), _month_bounds(0)
+    _write(*two_ago, "1000.00", "-100.00")  # BCP opens at 1000.00, closes 900.00
+    _write(*one_ago, "900.00", "50.00")  # closes 950.00
+    _write(*now, "950.00", "-25.00")  # the current month: left out
+    _write(
+        *one_ago,
+        "250.00",  # a card that already owed 250.00 when its first statement starts
+        "60.00",  # and charges 60.00: 310.00 owed
+        bank="Scotiabank",
+        account_id=_LIABILITY_EGRESO_ACCOUNT_ID,
+        account_kind="liability",
+    )
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    with pg_store.connect() as connection:
+        rows = connection.execute(
+            "select bank, account_kind, opening_balance, net_movements, "
+            "closing_balance, difference from gold.rpt_reconciliation "
+            "order by bank"
+        ).fetchall()
+
+    assert [tuple(str(v) for v in row) for row in rows] == [
+        ("BCP", "asset", "1000.00", "-50.00", "950.00", "0.00"),
+        ("Scotiabank", "liability", "-250.00", "-60.00", "-310.00", "0.00"),
     ]

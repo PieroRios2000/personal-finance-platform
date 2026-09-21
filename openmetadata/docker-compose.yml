@@ -3,10 +3,13 @@
 # OPTIONAL local-exploration infrastructure. CI never runs it (~4.6 GiB of containers at
 # idle, see SETUP.md): nothing in .github/ references this file, on purpose.
 #
-# Same ephemeral pattern as the root docker-compose.yml (ADR 0007): run it under its own
-# project name and tear it down with `-v`, so no volume outlives the environment
-# (`make om-up` / `make om-down`). The project name (`pfp-om`) is distinct from
-# `pfp-poc`, so this stack and the local SeaweedFS never collide.
+# Part of the platform's one Compose project (T37, ADR 0032): the root docker-compose.yml
+# includes this file and every service sits behind the `catalog` profile, so
+# `make up-catalog` starts it next to storage, Postgres and Superset and CI never does. It
+# shares the project's network, so the native Postgres connector reaches PFP's Postgres as
+# `postgres:5432`. Its volumes are removed by `make om-down` / `make poc-down`, so no data
+# outlives the environment (ADR 0007). No required-variable interpolation here: this file is read even when the
+# profile is off.
 #
 # Condensed from the official release file (2.0.2, docker-compose-postgres.yml, 559
 # lines): the same four images, the same wiring, but only the settings that matter here.
@@ -47,13 +50,14 @@ x-server-env: &server-env
 
 services:
   postgresql:
+    profiles: ["catalog"]
     image: docker.getcollate.io/openmetadata/postgresql:2.0.2
     command: "--work_mem=10MB"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - om-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: psql -U postgres -tAc 'select 1' -d openmetadata_db
       interval: 15s
@@ -61,6 +65,7 @@ services:
       retries: 10
 
   elasticsearch:
+    profiles: ["catalog"]
     image: docker.elastic.co/elasticsearch/elasticsearch:9.3.0
     environment:
       - discovery.type=single-node
@@ -78,6 +83,7 @@ services:
   # own: openmetadata-server depends on it with service_completed_successfully, which is
   # the case `up --wait` handles (docker/compose#10596 only bites an orphan one-shot).
   execute-migrate-all:
+    profiles: ["catalog"]
     image: docker.getcollate.io/openmetadata/server:2.0.2
     command: "./bootstrap/openmetadata-ops.sh migrate"
     environment: *server-env
@@ -88,6 +94,7 @@ services:
         condition: service_healthy
 
   openmetadata-server:
+    profiles: ["catalog"]
     image: docker.getcollate.io/openmetadata/server:2.0.2
     environment: *server-env
     ports:
@@ -111,6 +118,7 @@ services:
   # read-only: the host writes them (`scripts/openmetadata_sync.py`), the container only
   # reads, so nothing here is ever owned by the container's user (ADR 0023).
   ingestion:
+    profiles: ["catalog"]
     image: docker.getcollate.io/openmetadata/ingestion:2.0.2
     depends_on:
       elasticsearch:
@@ -137,20 +145,9 @@ services:
       - ingestion-volume-dags:/opt/airflow/dags
       - ingestion-volume-tmp:/tmp
       - ./artifacts:/opt/pfp-artifacts:ro
-    # T30: joins the network PFP's own Postgres runs in (project pfp-poc by default), so
-    # the native Postgres connector reaches it as `postgres:5432`. `make om-up` checks
-    # it exists first. Override the name with PFP_NETWORK for another project.
-    networks:
-      - default
-      - pfp
-
-networks:
-  pfp:
-    name: ${PFP_NETWORK:-pfp-poc_default}
-    external: true
 
 volumes:
-  postgres-data:
+  om-postgres-data:
   es-data:
   ingestion-volume-dag-airflow:
   ingestion-volume-dags:

@@ -30,7 +30,7 @@ params:
   row_limit: 10000
   orientation: vertical
   show_legend: true
-  datasource: 8__table
+  datasource: 11__table
   viz_type: echarts_timeseries_bar
 query_context: null
 cache_timeout: null

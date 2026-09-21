@@ -104,7 +104,7 @@ Every parser validates that the sum of the extracted transactions matches the ba
 
 ### Phase 1 — Foundation
 **Goal:** show discipline and good practices from the very first commit.
-- Repo structure, `docker-compose` (SeaweedFS as local S3; embedded DuckDB, no Postgres at the time: PostgreSQL arrived in the Phase 2 extension), `.gitignore` + `gitleaks`.
+- Repo structure, `docker-compose` (SeaweedFS as local S3; at the time silver lived in an embedded DuckDB file, no Postgres: PostgreSQL arrived in the Phase 2 extension), `.gitignore` + `gitleaks`.
 - `Transaction` schema (pydantic) and BCP/Scotiabank parsers with `pdfplumber` + `pikepdf`; OCR with `pytesseract` for scanned pages.
 - File hash (file-level dedup) + basic reconciliation.
 - Bronze layer in Delta (delta-rs) on SeaweedFS.
@@ -113,7 +113,7 @@ Every parser validates that the sum of the extracted transactions matches the ba
 
 **Closes:** modeling, basic quality, CI/CD, data security.
 
-### Phase 2 — Orchestration + Governance *(closed 2026-09-18; extended 2026-09-19: PostgreSQL store and dashboard, T26–T33)*
+### Phase 2 — Orchestration + Governance *(closed 2026-09-18; extended 2026-09-19 and re-closed 2026-09-21: PostgreSQL store and Superset dashboards, T26–T37)*
 **Goal:** the most important gap for data-leadership roles.
 - Dagster orchestrating: ingestion → dbt → tests → refresh.
 - Incremental MERGE by business key (transaction-level dedup) in silver.
