@@ -69,3 +69,15 @@ def test_main_exits_1_when_something_is_broken_and_0_when_not(tmp_path: Path) ->
 
     _write(tmp_path, "b.md", "# B\n")
     assert links.main(["--root", str(tmp_path)]) == 0
+
+
+def test_underscores_stay_in_an_anchor_like_on_github(tmp_path: Path) -> None:
+    """`## account_kind (T18a)` is `#account_kind-t18a` on GitHub (`_` stays)."""
+    _write(
+        tmp_path,
+        "a.md",
+        "[k](#account_kind-t18a) [t](#goldrpt_reconciliation)\n"
+        "## account_kind (T18a)\n## `gold.rpt_reconciliation`\n",
+    )
+
+    assert links.check(tmp_path) == []

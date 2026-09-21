@@ -90,3 +90,13 @@ def test_a_different_demo_user_can_be_chosen(
 
     assert _values(target.read_text())["PFP_USER"] == "ana"
     assert "PFP_BI_ADMIN_PASSWORD" in capsys.readouterr().out  # says where to find it
+
+
+def test_a_user_name_that_would_break_sourcing_the_file_is_refused(
+    tmp_path: Path,
+) -> None:
+    """`.env` is sourced by the shell and the name is a folder: no spaces or `$`."""
+    target = tmp_path / ".env"
+
+    assert init_env.main(["--out", str(target), "--user", "a b$c"]) == 2
+    assert not target.exists()
