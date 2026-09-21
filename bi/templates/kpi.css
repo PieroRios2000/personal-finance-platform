@@ -11,3 +11,6 @@
 .kpi.bal { border-left-color: #0ea5e9; }
 .kpi .up { color: #1f9d6b; } .kpi .down { color: #e5484d; }
 .kpi.cap { border-left-color: #a855f7; }
+.kpi.range { border-left-color: #0ea5a4; }
+.kpi.debt { border-left-color: #e5484d; }
+.kpi .value.small { font-size: 18px; }

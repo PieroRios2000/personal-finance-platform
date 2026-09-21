@@ -715,3 +715,38 @@ def test_reports_show_only_closed_months(lake: str, tmp_path: Path) -> None:
     assert facts == 2  # the facts keep every movement
     assert months == {table: [closed_label] for table in months}
     assert recency == [(closed_label, 1)]  # the latest month is the last closed one
+
+
+def test_reconciliation_explains_each_balance_by_its_opening_plus_movements(
+    lake: str, tmp_path: Path
+) -> None:
+    """Per account: the opening balance of its first statement plus the movements up to
+    its last closed statement is its balance, so `difference` is 0. A debt is negative
+    on both sides. The current month's statement is not part of it."""
+    two_ago, one_ago, now = _month_bounds(2), _month_bounds(1), _month_bounds(0)
+    _write(*two_ago, "1000.00", "-100.00")  # BCP opens at 1000.00, closes 900.00
+    _write(*one_ago, "900.00", "50.00")  # closes 950.00
+    _write(*now, "950.00", "-25.00")  # the current month: left out
+    _write(
+        *one_ago,
+        "250.00",  # a card that already owed 250.00 when its first statement starts
+        "60.00",  # and charges 60.00: 310.00 owed
+        bank="Scotiabank",
+        account_id=_LIABILITY_EGRESO_ACCOUNT_ID,
+        account_kind="liability",
+    )
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    with pg_store.connect() as connection:
+        rows = connection.execute(
+            "select bank, account_kind, opening_balance, net_movements, "
+            "closing_balance, difference from gold.rpt_reconciliation "
+            "order by bank"
+        ).fetchall()
+
+    assert [tuple(str(v) for v in row) for row in rows] == [
+        ("BCP", "asset", "1000.00", "-50.00", "950.00", "0.00"),
+        ("Scotiabank", "liability", "-250.00", "-60.00", "-310.00", "0.00"),
+    ]

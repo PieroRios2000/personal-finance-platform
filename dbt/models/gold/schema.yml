@@ -265,6 +265,10 @@ models:
       - name: closing_balance
         data_tests:
           - not_null
+      - name: opening_balance
+        description: The balance the month's statement opens with, as it declares it.
+      - name: signed_opening_balance
+        description: The opening balance as your position (a debt is negative), ADR 0031.
       - name: signed_closing_balance
         description: >
           Your position at the month's close (ADR 0031): a credit card's debt is negative, so
@@ -324,5 +328,21 @@ models:
         data_tests:
           - not_null
       - name: calendar_month
+        data_tests:
+          - not_null
+
+  - name: rpt_reconciliation
+    description: >
+      Reporting table (T36): per account and currency, the opening balance of its first
+      statement plus the movements up to its last closed statement against its closing
+      balance. `difference` is 0 when every movement was read, none twice. Amounts are your
+      position (a debt is negative). Only closed months. Not monthly: the calendar filters
+      do not apply to it.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, account_id, currency]
+    columns:
+      - name: difference
         data_tests:
           - not_null

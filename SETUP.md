@@ -444,7 +444,9 @@ Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admi
 `PFP_BI_ADMIN_PASSWORD`, then *Dashboards* -> **PFP finance**. From the top:
 
 - **Summary cards** (HTML made with Superset's Handlebars chart): money in, money out, net and the
-  number of movements for the filtered period; your **total capital** (savings accounts plus
+  number of movements for the filtered period; the **period analysed** (first and last movement left
+  after the filters, and how many closed months it spans) and the **debt at the end of the period**
+  (the card balance owed in the last month of your selection); your **total capital** (savings accounts plus
   investments, with the breakdown) and your **net position** (capital minus debt, with its change
   against the previous month), both at the latest month. A month an account or fund has no row keeps
   its last known balance, so the totals do not dip.
@@ -461,6 +463,17 @@ Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admi
   leave your machine, so don't screenshot them into a chat) and each account's declared closing
   balance per month, to check against the PDFs. Filter to one bank, account, currency and month and
   compare.
+
+- **Reconciliation** (the last table): per account, the opening balance of its first statement plus
+  its movements against its closing balance. **`difference` must be 0**; a red cell means a movement
+  is missing or was read twice. This is what tells a balance that simply started above zero (an
+  account you already had when you loaded it: that is its opening balance) apart from a real error.
+  It covers every closed month loaded, so the calendar filters do not apply to it.
+
+*Why the cards do not match each other:* **Net** is a flow (what came in minus what went out over the
+filtered period), while **Capital** and **Net position** are balances at the last closed month. A
+balance equals the movements only if the account started at zero; the rest is its opening balance,
+plus what funds gained on their own. The reconciliation table shows exactly that split.
 
 **Only closed months are shown.** The current month is partial (a card cycle cut mid-month, an
 Excel half filled), so summing it with complete months made balances that did not add up. The

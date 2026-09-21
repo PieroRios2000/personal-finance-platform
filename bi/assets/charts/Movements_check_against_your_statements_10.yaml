@@ -43,7 +43,7 @@ params:
     targetValue: 0
   row_limit: 1000
   include_search: true
-  datasource: 8__table
+  datasource: 1__table
   viz_type: table
 query_context: null
 cache_timeout: null
