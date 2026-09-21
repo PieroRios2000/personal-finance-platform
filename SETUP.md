@@ -464,6 +464,17 @@ Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admi
   balance per month, to check against the PDFs. Filter to one bank, account, currency and month and
   compare.
 
+- **Reconciliation** (the last table): per account, the opening balance of its first statement plus
+  its movements against its closing balance. **`difference` must be 0**; a red cell means a movement
+  is missing or was read twice. This is what tells a balance that simply started above zero (an
+  account you already had when you loaded it: that is its opening balance) apart from a real error.
+  It covers every closed month loaded, so the calendar filters do not apply to it.
+
+*Why the cards do not match each other:* **Net** is a flow (what came in minus what went out over the
+filtered period), while **Capital** and **Net position** are balances at the last closed month. A
+balance equals the movements only if the account started at zero; the rest is its opening balance,
+plus what funds gained on their own. The reconciliation table shows exactly that split.
+
 **Only closed months are shown.** The current month is partial (a card cycle cut mid-month, an
 Excel half filled), so summing it with complete months made balances that did not add up. The
 `gold.rpt_*` tables the dashboard reads leave the current month out, and "latest month" on the cards is
