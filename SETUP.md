@@ -462,6 +462,12 @@ Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admi
   balance per month, to check against the PDFs. Filter to one bank, account, currency and month and
   compare.
 
+**Only closed months are shown.** The current month is partial (a card cycle cut mid-month, an
+Excel half filled), so summing it with complete months made balances that did not add up. The
+`gold.rpt_*` tables the dashboard reads leave the current month out, and "latest month" on the cards is
+the last closed one (in September, August). A month closes at the first `dbt build` after it ends;
+the facts (`fact_transactions`, ...) keep every movement.
+
 The filter bar (left side; open it with the arrow on its edge) applies to **every** chart:
 **Currency** (one at a time, PEN first: currencies are never added), **Date range**, **Time grain**
 (month by default; day, week, year on demand), **Year**, **Quarter**, **Month**, **Bank**,

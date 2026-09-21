@@ -104,3 +104,12 @@ After the owner used the dashboard on real data:
   (`bi/build_dashboards.py`), and `bi/cleanup_stale.py` (run by `start.sh`) removes what an earlier
   import left behind. Verified: an instance holding stale charts ends with exactly the 9 in the
   export, and a second start removes none.
+
+## Update 2026-09-21: only closed months
+
+The owner's balance did not add up because the current month was summed with complete ones (an
+account with a statement for the month, another without, a half-filled Excel month). The reporting
+tables (`gold.rpt_*`) now keep only months **before the first day of the current month**
+(`first_day_of_current_month()`, evaluated when dbt runs), and `month_recency` ("latest month" on the
+cards) is computed over those, so the latest month is the last closed one. The facts keep every
+movement. Trade-off: a month closes at the first `dbt build` after it ends, not at midnight.
