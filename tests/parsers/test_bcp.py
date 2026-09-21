@@ -3,6 +3,7 @@
 import hashlib
 import io
 import os
+from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -91,13 +92,40 @@ def test_parse_marks_every_statement_as_an_asset_account(bcp_pdf: Path) -> None:
     assert statement.account_kind == "asset"
 
 
-def test_parse_marks_every_statement_as_pen_currency(bcp_pdf: Path) -> None:
-    """BCP is a Soles-only checking account (T18c): hardcoded per parser, the
-    same reasoning account_kind already follows -- a bank's own product
-    doesn't vary per statement."""
+def test_parse_reads_a_soles_account_as_pen(bcp_pdf: Path) -> None:
     [statement] = bcp.parse(bcp_pdf, user_id="piero", file_sha256=FILE_SHA256)
 
     assert statement.currency == "PEN"
+    assert {t.currency for t in statement.transactions} == {"PEN"}
+
+
+@pytest.mark.parametrize(
+    "render", [bcp_statement_pdf, bcp_real_layout_statement_pdf], ids=["t10", "real"]
+)
+def test_parse_reads_a_dollars_account_as_usd_not_soles(
+    tmp_path: Path, render: Callable[..., bytes]
+) -> None:
+    """A BCP account can be in dollars: the PDF says so under MONEDA. Reading every
+    BCP account as soles mixed a USD account's movements into the PEN totals."""
+    path = tmp_path / "usd.pdf"
+    path.write_bytes(render(currency="USD"))
+
+    [statement] = bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
+
+    assert statement.currency == "USD"
+    assert {t.currency for t in statement.transactions} == {"USD"}
+
+
+def test_parse_refuses_a_statement_whose_currency_it_cannot_read(
+    tmp_path: Path,
+) -> None:
+    """A wrong currency silently lands in the wrong totals; an unreadable one goes to
+    the review folder instead of being guessed."""
+    path = tmp_path / "no-currency.pdf"
+    path.write_bytes(bcp_real_layout_statement_pdf(currency=None))
+
+    with pytest.raises(ValueError, match="currency"):
+        bcp.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
 
 def test_parse_extracts_charges_and_credits_with_the_right_sign(bcp_pdf: Path) -> None:

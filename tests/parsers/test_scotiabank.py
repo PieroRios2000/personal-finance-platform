@@ -149,17 +149,16 @@ def test_parse_reads_the_debt_sign_convention(tmp_path: Path) -> None:
     assert by_amount[Decimal("-100.00")].description == "PAGO TARJETA FICTICIO"
 
 
-def test_parse_uses_the_value_date_not_the_processing_date(tmp_path: Path) -> None:
-    """The header has FECHA twice (processing date, then value date); the
-    fixture gives them different values, proving the second column wins —
-    same situation and fix as bcp.py's own two FECHA columns."""
+def test_parse_uses_the_first_date_column(tmp_path: Path) -> None:
+    """The credit card header has Fecha twice; the owner wants the first column
+    (the fixture prints it a day before the second, so the two are told apart)."""
     path = tmp_path / "statement.pdf"
     path.write_bytes(scotiabank_statement_pdf())
 
     statements = scotiabank.parse(path, user_id="piero", file_sha256=FILE_SHA256)
 
     dates = sorted(t.date for s in statements for t in s.transactions)
-    assert dates == [date(2026, 1, 5), date(2026, 1, 12), date(2026, 1, 20)]
+    assert dates == [date(2026, 1, 4), date(2026, 1, 11), date(2026, 1, 19)]
 
 
 def test_parse_reads_the_account_code_and_masked_card_last4(tmp_path: Path) -> None:
@@ -297,9 +296,9 @@ def test_parse_keeps_rows_from_different_pages_separate(tmp_path: Path) -> None:
     assert len(pen.transactions) == 2
     by_amount = {t.amount: t for t in pen.transactions}
     assert by_amount[Decimal("50.00")].description == "PAGE ONE FICTICIA"
-    assert by_amount[Decimal("50.00")].date == date(2026, 1, 5)
+    assert by_amount[Decimal("50.00")].date == date(2026, 1, 4)  # the first column
     assert by_amount[Decimal("80.00")].description == "PAGE TWO FICTICIA"
-    assert by_amount[Decimal("80.00")].date == date(2026, 1, 12)
+    assert by_amount[Decimal("80.00")].date == date(2026, 1, 11)
 
 
 def test_parse_omits_a_currency_with_no_activity(tmp_path: Path) -> None:

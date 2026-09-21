@@ -39,8 +39,9 @@ give it one — only `Transaction` did.
 **`currency: Currency` on `Statement`, mirroring `account_kind`'s own precedent (ADR 0015)
 exactly:**
 
-- **Required, no default; hardcoded per parser, not read from the PDF.** `ingestion/parsers/
-  bcp.py` sets `currency="PEN"` on the one `Statement` it ever builds — confirmed from the
+- **Required, no default.** *(Corrected 2026-09-20: BCP now reads it from the PDF, see the note
+  below; the original reasoning is kept as it was.)* `ingestion/parsers/
+  bcp.py` set `currency="PEN"` on the one `Statement` it ever builds — confirmed from the
   parser's own module docstring ("a BCP account statement covers one account in one currency")
   and reconfirmed here rather than assumed: nothing in `bcp.py` reads a currency off the page at
   all, every `Transaction` it builds is already hardcoded to `"PEN"`. If BCP is ever found to
@@ -191,3 +192,14 @@ about this field, not a rule against ever joining `bronze.statements` into silve
 - [Reconciliation](../concepts/reconciliation.md) — the "fail loudly, not silently" principle
   behind the new cross-field currency check.
 - [Phase 1](../phases/phase-1.md)
+
+## Correction 2026-09-20: a BCP account can be in dollars
+
+The reasoning above ("BCP is Soles-only", nothing in `bcp.py` reads a currency) was wrong for the
+owner's real data: one BCP account is in dollars, and it was read as soles, so its movements
+landed in the PEN totals (found on the dashboard, not by any test: the synthetic fixtures were all
+soles). `bcp.py` now reads the currency from the PDF, where the real layout prints `SOLES` or
+`DOLARES` after the account number under the `MONEDA` header, and refuses a statement it cannot
+read rather than defaulting to soles. Already-ingested statements are corrected by
+`pfp backfill` (it replaces a file's rows), then `dbt build`. The lesson: a constant "confirmed" from
+the parser's own docstring is not evidence about the bank's products.
