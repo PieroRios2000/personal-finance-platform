@@ -29,10 +29,10 @@ params:
   rich_tooltip: true
   row_limit: 10000
   show_legend: true
-  datasource: 2__table
+  datasource: 10__table
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null
-uuid: 2684e319-9700-4266-8aee-3e889b544270
+uuid: 36343172-f26c-5149-9619-3a7abdb2a66d
 version: 1.0.0
-dataset_uuid: 558afd57-a095-4fe1-8a8f-b12e21f44261
+dataset_uuid: c86e2242-660c-530a-a3af-77b867584bc3

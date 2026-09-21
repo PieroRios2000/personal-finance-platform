@@ -8,7 +8,8 @@ empty `bi/assets/` (a fresh `make bi-reset bi-up`). It then rewrites `bi/assets/
     uv run python bi/build_dashboards.py [--host http://localhost:8088]
 
 Reads `PFP_BI_ADMIN_PASSWORD` (the Superset login) and `PFP_PG_BI_PASSWORD` (the
-read-only role the connection uses) from the environment. Stdlib only.
+read-only role the connection uses) from the environment. Needs PyYAML, already a
+dependency.
 """
 
 import argparse
@@ -20,11 +21,14 @@ import shutil
 import sys
 import urllib.error
 import urllib.request
+import uuid
 import zipfile
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
+
+import yaml
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 DATABASE_NAME = "PFP gold (read-only)"
@@ -69,6 +73,7 @@ DASHBOARD_CSS = (_TEMPLATES / "dashboard.css").read_text()
 _KPI_STYLE = (_TEMPLATES / "kpi.css").read_text()
 _CASH_FLOW_KPI = (_TEMPLATES / "cash_flow_kpi.hbs").read_text()
 _BALANCE_KPI = (_TEMPLATES / "balance_kpi.hbs").read_text()
+_CAPITAL_KPI = (_TEMPLATES / "capital_kpi.hbs").read_text()
 
 
 # Money in and out are read from `signed_amount` (ADR 0031): the effect on you, the same
@@ -81,10 +86,7 @@ _NET = "COALESCE(SUM(signed_amount), 0)"
 
 
 def _balance_at(recency: int) -> str:
-    return (
-        "COALESCE(SUM(signed_closing_balance) FILTER "
-        f"(WHERE month_recency = {recency}), 0)"
-    )
+    return f"COALESCE(SUM(net_position) FILTER (WHERE month_recency = {recency}), 0)"
 
 
 def _or_dash(expression: str) -> str:
@@ -94,6 +96,12 @@ def _or_dash(expression: str) -> str:
         "CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-' "
         f"ELSE {expression} END"
     )
+
+
+def _capital(column: str) -> str:
+    """One of rpt_capital's balances at the latest month, formatted (or a dash)."""
+    latest = f"COALESCE(SUM({column}) FILTER (WHERE month_recency = 1), 0)"
+    return _or_dash(f"to_char({latest}, {_MONEY})")
 
 
 _CHANGE = f"({_balance_at(1)} - {_balance_at(2)})"
@@ -123,8 +131,34 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         },
     ),
     (
-        "rpt_balances",
-        "Balance summary",
+        "rpt_capital",
+        "Capital summary",
+        "handlebars",
+        {
+            "query_mode": "aggregate",
+            "groupby": [],
+            # Total capital = savings (asset accounts) plus investments (funds), at
+            # the latest month: rpt_capital carries each balance forward.
+            "metrics": [
+                _sql_metric("MAX(currency)", "currency"),
+                _sql_metric(_capital("total_capital"), "total"),
+                _sql_metric(_capital("savings_balance"), "savings"),
+                _sql_metric(_capital("investments_balance"), "investments"),
+                _sql_metric(
+                    "to_char(MAX(month_start) FILTER "
+                    "(WHERE month_recency = 1), 'Mon YYYY')",
+                    "month",
+                ),
+            ],
+            "adhoc_filters": [_time_range("month_start")],
+            "row_limit": 1,
+            "handlebarsTemplate": _CAPITAL_KPI,
+            "styleTemplate": _KPI_STYLE,
+        },
+    ),
+    (
+        "rpt_capital",
+        "Net position summary",
         "handlebars",
         {
             "query_mode": "aggregate",
@@ -468,7 +502,8 @@ NOTE_TEXT = (
 
 # The grid: (chart name prefix, width out of 12, height) per cell, row by row.
 LAYOUT: list[list[tuple[str, int, int]]] = [
-    [("Cash flow summary", 8, 22), ("Balance summary", 4, 22)],
+    [("Cash flow summary", 12, 22)],
+    [("Capital summary", 6, 22), ("Net position summary", 6, 22)],
     [("Cash flow: money", 6, 50), ("Balance per month", 6, 50)],
     [("Investments: return and", 12, 32)],
     [("Investments: return per", 8, 50), (NOTE, 4, 50)],
@@ -688,18 +723,53 @@ def build(client: Superset, bi_password: str) -> int:
     return int(dashboard)
 
 
+# Fixed namespace for the uuids below (any constant will do; it must never change).
+_UUID_NAMESPACE = uuid.UUID("6f1d0c0e-5b1e-4d55-9b0c-2f6d1f0a7e11")
+_NAME_KEYS = {
+    "charts": "slice_name",
+    "dashboards": "slug",
+    "databases": "database_name",
+    "datasets": "table_name",
+}
+
+
+def stable_uuid_map(files: dict[str, str]) -> dict[str, str]:
+    """{uuid Superset made: uuid from the object's kind and name}, for every object in
+    an export. Superset gives every object a new random uuid on each run of this
+    script; importing that export then created new charts beside the old ones instead
+    of updating them (30 charts on the dashboard, 8 wanted). A uuid derived from the
+    name is the same every time, so an import overwrites the same objects."""
+    mapping: dict[str, str] = {}
+    for path, text in files.items():
+        kind = Path(path).parts[0]
+        if kind not in _NAME_KEYS:
+            continue
+        document = yaml.safe_load(text)
+        name = document[_NAME_KEYS[kind]]
+        mapping[str(document["uuid"])] = str(
+            uuid.uuid5(_UUID_NAMESPACE, f"{kind}:{name}")
+        )
+    return mapping
+
+
 def export(client: Superset, dashboard: int) -> None:
     bundle = zipfile.ZipFile(
         io.BytesIO(client.raw(f"/dashboard/export/?q=!({dashboard})"))
     )
+    files = {
+        str(Path(*Path(name).parts[1:])): bundle.read(name).decode()
+        for name in bundle.namelist()
+        if not name.endswith("/") and len(Path(name).parts) > 1
+    }
+    mapping = stable_uuid_map(files)
     shutil.rmtree(ASSETS, ignore_errors=True)
-    for name in bundle.namelist():
-        relative = Path(*Path(name).parts[1:])  # drop the archive's root folder
-        if name.endswith("/") or not relative.parts:
-            continue
+    for relative, text in files.items():
+        # In the object's own file and in every reference to it.
+        for old, new in mapping.items():
+            text = text.replace(old, new)
         target = ASSETS / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(bundle.read(name))
+        target.write_text(text)
     print(f"exported to {ASSETS}")
 
 

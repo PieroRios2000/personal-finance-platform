@@ -43,10 +43,10 @@ params:
     targetValue: 0
   row_limit: 1000
   include_search: true
-  datasource: 1__table
+  datasource: 8__table
   viz_type: table
 query_context: null
 cache_timeout: null
-uuid: ea3b1b01-1b67-4bf6-b3a3-ed3067371322
+uuid: 8e81aaab-2fd3-59b0-b902-2d95666db6b9
 version: 1.0.0
-dataset_uuid: 4ee68312-89f8-4a60-9930-8b54153e52aa
+dataset_uuid: 421b5769-3581-5c67-928a-84023a5f132f

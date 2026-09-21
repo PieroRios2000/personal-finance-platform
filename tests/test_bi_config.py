@@ -162,11 +162,12 @@ def test_cash_flow_uses_signed_amount_and_counts_transfers_between_accounts() ->
 def test_balances_use_the_signed_closing_balance_so_debt_is_negative() -> None:
     charts = _charts()
     line = charts["Balance per month (debt is negative)"][3]
-    summary = json.dumps(charts["Balance summary"][3])
+    summary = charts["Net position summary"]
 
     assert line["metrics"][0]["sqlExpression"] == "SUM(signed_closing_balance)"
     assert "account_kind" not in json.dumps(line)  # debts are in, not filtered out
-    assert "signed_closing_balance" in summary and "account_kind" not in summary
+    # The card is capital minus debt, carried forward like every holding.
+    assert summary[0] == "rpt_capital" and "net_position" in json.dumps(summary[3])
     table = charts["Statement balances (check against your statements)"][3]
     assert {"closing_balance", "signed_closing_balance"} <= set(table["all_columns"])
 
@@ -236,3 +237,41 @@ def test_every_chart_in_the_layout_is_tied_to_its_chart_by_uuid() -> None:
     cells = [v for k, v in layout.items() if k.startswith("CHART-")]
     assert len(cells) == len(names)
     assert {c["meta"]["uuid"] for c in cells} == set(uuids)
+
+
+def test_exported_uuids_depend_on_the_names_not_on_the_run() -> None:
+    """Every regeneration used to give every object a new uuid, so importing it created
+    new charts beside the old ones (30 charts, 8 wanted). The uuid now comes from the
+    object's kind and name, so an import updates the same objects."""
+    builder = _builder()
+    first = {
+        "charts/a.yaml": "slice_name: Cash flow\nuuid: 1111\n",
+        "dashboards/d.yaml": "dashboard_title: PFP\nslug: pfp\nuuid: 2222\n"
+        "position:\n  meta: {uuid: 1111}\n",
+    }
+    second = {
+        "charts/other_name.yaml": "slice_name: Cash flow\nuuid: 9999\n",
+        "dashboards/x.yaml": "dashboard_title: PFP\nslug: pfp\nuuid: 8888\n"
+        "position:\n  meta: {uuid: 9999}\n",
+    }
+
+    a, b = builder.stable_uuid_map(first), builder.stable_uuid_map(second)
+
+    assert sorted(a.values()) == sorted(b.values())
+    assert len(set(a.values())) == 2
+    assert set(a) == {"1111", "2222"}
+
+
+def test_the_capital_card_adds_savings_and_investments_from_one_dataset() -> None:
+    """Total capital combines savings accounts and investments, which are two different
+    facts: one reporting table (rpt_capital) has both, so a chart can show the sum."""
+    chart = _charts()["Capital summary"]
+    text = json.dumps(chart[3])
+
+    assert chart[0] == "rpt_capital"
+    for column in ("total_capital", "savings_balance", "investments_balance"):
+        assert column in text
+    assert "month_recency = 1" in text
+    assert '"{{total}}"' not in text  # the template, not the metric, shows the value
+    assert "{{savings}}" in chart[3]["handlebarsTemplate"]
+    assert "{{investments}}" in chart[3]["handlebarsTemplate"]

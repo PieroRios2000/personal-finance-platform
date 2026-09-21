@@ -1,4 +1,4 @@
-table_name: rpt_investments
+table_name: rpt_capital
 main_dttm_col: month_start
 description: null
 default_endpoint: null
@@ -14,7 +14,7 @@ fetch_values_predicate: null
 extra: null
 normalize_columns: false
 always_filter_main_dttm: false
-uuid: 673c06bf-c577-5fb4-b52b-54ddbe349e43
+uuid: 80f10cdd-0b29-517f-ab7a-3d0cb2673307
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
@@ -26,11 +26,11 @@ metrics:
   extra: null
   warning_text: null
 columns:
-- column_name: cumulative_net_contributed
+- column_name: savings_balance
   verbose_name: null
   is_dttm: false
   is_active: true
-  type: NUMERIC(18, 2)
+  type: NUMERIC(38, 2)
   advanced_data_type: null
   groupby: true
   filterable: true
@@ -38,11 +38,11 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: closing_balance
+- column_name: total_capital
   verbose_name: null
   is_dttm: false
   is_active: true
-  type: NUMERIC(18, 2)
+  type: NUMERIC(38, 2)
   advanced_data_type: null
   groupby: true
   filterable: true
@@ -50,11 +50,11 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: opening_balance
+- column_name: debt_balance
   verbose_name: null
   is_dttm: false
   is_active: true
-  type: NUMERIC(18, 2)
+  type: NUMERIC(38, 2)
   advanced_data_type: null
   groupby: true
   filterable: true
@@ -62,11 +62,11 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: cumulative_gain
+- column_name: investments_balance
   verbose_name: null
   is_dttm: false
   is_active: true
-  type: NUMERIC(18, 2)
+  type: NUMERIC(38, 2)
   advanced_data_type: null
   groupby: true
   filterable: true
@@ -74,47 +74,11 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: withdrawals
+- column_name: net_position
   verbose_name: null
   is_dttm: false
   is_active: true
-  type: NUMERIC(18, 2)
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: gain
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: NUMERIC(18, 2)
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: contributions
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: NUMERIC(18, 2)
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: return_pct
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: DOUBLE PRECISION
+  type: NUMERIC(38, 2)
   advanced_data_type: null
   groupby: true
   filterable: true
@@ -170,31 +134,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: closing_basis
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
 - column_name: user_id
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: place
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -218,30 +158,6 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: is_return_reliable
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: BOOLEAN
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: has_valuation
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: BOOLEAN
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
 - column_name: month_start
   verbose_name: null
   is_dttm: true
@@ -254,7 +170,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: months_since_previous
+- column_name: calendar_year
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -266,7 +182,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: calendar_year
+- column_name: month_recency
   verbose_name: null
   is_dttm: false
   is_active: true

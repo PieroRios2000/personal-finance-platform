@@ -28,6 +28,8 @@ for path in glob.glob("/tmp/assets/databases/*.yaml"):
     open(path, "w").write(text.replace("XXXXXXXXXX", password))
 PY
     superset import-directory /tmp/assets --overwrite
+    # Earlier imports left charts and datasets behind; drop what is not in this export.
+    python /app/bi-cleanup.py /tmp/assets || echo "cleanup failed; the dashboard still works"
 fi
 
 exec gunicorn --bind 0.0.0.0:8088 --workers 2 --timeout 120 \
