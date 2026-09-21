@@ -92,7 +92,9 @@ def test_no_target_hardcodes_the_real_project_so_a_test_run_cannot_touch_it() ->
     makefile = (_ROOT / "Makefile").read_text()
 
     assert "-p pfp-poc" not in makefile
-    assert "PFP_PROJECT = pfp-poc" in makefile
+    # The project name is derived from the environment (default poc: today's stack).
+    assert "PFP_ENV ?= poc" in makefile
+    assert "PFP_PROJECT ?= pfp-$(PFP_ENV)" in makefile
     literal = [
         line
         for line in makefile.splitlines()

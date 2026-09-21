@@ -144,7 +144,7 @@ services:
       - ingestion-volume-dag-airflow:/opt/airflow/dag_generated_configs
       - ingestion-volume-dags:/opt/airflow/dags
       - ingestion-volume-tmp:/tmp
-      - ./artifacts:/opt/pfp-artifacts:ro
+      - ${PFP_OM_ARTIFACTS:-./artifacts}:/opt/pfp-artifacts:ro
 
 volumes:
   om-postgres-data:

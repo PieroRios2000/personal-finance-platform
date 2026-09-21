@@ -569,6 +569,41 @@ is not a container: `uv run dagster dev` (http://localhost:3000). **Upgrading fr
 lake and Postgres data, since the project name did not change. `make poc-up` still starts only storage and
 Postgres, and CI is unchanged.
 
+## 14. Dev and prod environments (T38)
+
+One machine, several **environments**: each is its own Compose project with its own volumes,
+Postgres, Superset and catalog, an env file and ports (ADR 0033). `PFP_ENV` picks it (default `poc`:
+today's stack, unchanged).
+
+| `PFP_ENV` | Project · env file · ports | Data | Code |
+|---|---|---|---|
+| `dev` | `pfp-dev` · `.env.dev` · +100 | your **real** statements | develop and feature branches |
+| `prod` | `pfp-prod` · `.env.prod` · +200 | **artificial** (`make demo`) | `main` only |
+
+```bash
+# dev: try a change with your real data (from your develop or feature checkout)
+make env PFP_ENV=dev USER_NAME=piero      # writes .env.dev: generated secrets, ports +100
+make up PFP_ENV=dev                       # its own storage, Postgres, Superset
+make ingest PFP_ENV=dev                   # your inbox (PFP_USER) -> bronze; refuses the demo user
+make build PFP_ENV=dev                    # dbt build; then open the Superset URL `make status PFP_ENV=dev` prints
+make up-catalog PFP_ENV=dev               # optional: the catalog for this environment
+
+# prod: what others see, on the code of main, with artificial data
+git worktree add ../pfp-prod main && cd ../pfp-prod
+make env PFP_ENV=prod                     # PFP_USER=demo
+make up PFP_ENV=prod && make demo PFP_ENV=prod
+```
+
+The flow: change on a branch -> `make up PFP_ENV=dev` from that checkout and look at it with the real data ->
+merge to `develop`, then to `main` -> update prod's checkout (`git pull` in `../pfp-prod`) and
+`make up PFP_ENV=prod`. **Guards:** prod refuses to start unless the checkout is on `main`, dev refuses `main`
+(`FORCE=1` overrides), `make demo` needs `PFP_USER=demo` in the env file and `make ingest` refuses it, so a real
+dashboard never gets demo rows. `make down`, `make status`, `make up-catalog`, `make om-sync` and the rest take the
+same `PFP_ENV`. Run the catalog in one environment at a time (4.6 GiB each). A new environment's `make build`
+fails until it has ingested at least one statement (an empty lake has no `bronze.transactions` yet). Moving your
+current `poc` data to dev means re-ingesting your archive into it: the [runbook](docs/runbook-rebuild-from-archive.md)
+with `PFP_ENV=dev`.
+
 ## Reproducing CI locally (`make ci-local`)
 
 A PR can fail in CI for a reason that never shows on your machine: a variable CI does not set, a
