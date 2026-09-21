@@ -4,8 +4,8 @@ A step-by-step walkthrough for running the platform against **real** statements 
 Scotiabank) on your own machine. Everything stays local: real PDFs, the `.env` and the
 account key never leave it ([ADR 0004](../brain/decisions/0004-real-pdfs-never-leave-your-machine.md)).
 
-If you only want to see the pipeline work, use the synthetic quickstart in the
-[README](../README.md#quickstart-synthetic-data) instead — no PDFs needed.
+If you only want to see the pipeline work, use the quickstart with artificial data in the
+[README](../README.md#quickstart-artificial-data-to-a-running-dashboard) instead — no PDFs needed.
 
 > **One rule while asking for help** (from a colleague or an AI assistant): share only the
 > **counts and generic messages** `make poc` prints. Never paste a balance, an account

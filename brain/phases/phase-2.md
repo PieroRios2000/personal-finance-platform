@@ -1,10 +1,10 @@
 ---
 type: phase
 phase: 2
-status: extended
+status: closed
 ---
 
-# Phase 2 — Orchestration + Governance (closed 2026-09-18, extended 2026-09-19)
+# Phase 2 — Orchestration + Governance (closed 2026-09-18, extended 2026-09-19, re-closed 2026-09-21)
 
 The same PDFs now flow through one orchestrated DAG (Dagster), silver is an incremental `MERGE`
 keyed on each transaction's business key, gold is a star schema, Elementary watches silver for
@@ -23,27 +23,42 @@ anomalies, and OpenMetadata (optional, local) shows column-level lineage back to
 | T24 | OpenMetadata catalog and column-level lineage (optional, not in CI) | done (#73) — [ADR 0023](../decisions/0023-openmetadata-catalog-and-column-lineage-from-dbt-artifacts.md) |
 | T25 | Phase close: README, this note, PROJECT.md, the walkthrough for real PDFs, `make poc` installs dbt packages | done |
 
-### Extension: PostgreSQL as dbt's store, then the dashboard (T26–T33, planned)
+### Extension: PostgreSQL as dbt's store, then the dashboard (T26–T37, done 2026-09-21)
 
 Added after the phase closed, on the owner's decision: BI, the catalog and Dagster must read what dbt
 builds *while it builds*, and a DuckDB file has a single writer. dbt keeps DuckDB as the **engine** (it
-reads bronze from the lake) and stores silver and gold in **PostgreSQL**; Apache Superset then reads it.
+reads bronze from the lake) and stores silver and gold in **PostgreSQL**; Apache Superset reads it.
 Decision, feasibility check and consequences: [ADR 0029](../decisions/0029-dbt-stores-silver-and-gold-in-postgres.md);
-acceptance criteria in [`tasks/todo-phase2.md`](../../tasks/todo-phase2.md). Phase 3 (ML) starts after T33.
+acceptance criteria in [`tasks/todo-phase2.md`](../../tasks/todo-phase2.md). Phase 3 (ML) starts here.
 
 | Task | What | Status |
 |---|---|---|
-| T26 | PostgreSQL service and the dbt connection (opt-in `--target postgres`; read-only BI role; Elementary on its own file for this target) | done — [ADR 0029](../decisions/0029-dbt-stores-silver-and-gold-in-postgres.md) |
-| T27 | Scripts, Dagster wiring and tests read PostgreSQL instead of the DuckDB file; Postgres is the default dbt target | done |
+| T26 | PostgreSQL service and the dbt connection (read-only BI role; Elementary on its own file) | done — [ADR 0029](../decisions/0029-dbt-stores-silver-and-gold-in-postgres.md) |
+| T27 | Scripts, Dagster wiring and tests read PostgreSQL; it is the default dbt target | done |
 | T28 | Elementary keeps its own small DuckDB file; `edr` reads it through its own profile | done |
-| T29 | CI's ephemeral environment and the PR data diff on PostgreSQL | planned |
-| T30 | OpenMetadata reads PostgreSQL natively (retires the DuckDB workaround of ADR 0023) | planned |
-| T31 | Dagster shows where each model is stored | planned |
-| T32 | Superset over a read-only role on gold: cash flow, savings, each fund's monthly return | planned |
-| T33 | Phase 2 re-close | planned |
+| T29 | CI's ephemeral environment and the PR data diff on PostgreSQL | done (#98) |
+| T30 | OpenMetadata reads PostgreSQL natively (retires the DuckDB workaround of ADR 0023) | done (#99) |
+| T31 | Dagster shows where each model is stored and its row count | done (#100) |
+| T32 | Superset over a read-only role on gold, dashboards as code | done (#101) — [ADR 0030](../decisions/0030-superset-for-dashboards-over-the-read-only-role.md) |
+| T34 | Shared calendar, `gold.rpt_*` reporting tables, one currency at a time, HTML cards | done (#108) |
+| T35 | Total capital card, stable exported ids and cleanup (no duplicate charts) | done (#111) |
+| T36 | Reconciliation table, period and debt cards, `signed_amount` ([ADR 0031](../decisions/0031-signed-amount-is-the-effect-on-you.md)), closed months only, `% saved` | done (#109, #113, #115, #118) |
+| T37 | The whole platform as one Compose project, `make up` / `make down` ([ADR 0032](../decisions/0032-one-compose-project-one-command.md)) | done (#116) |
+| T33 | This re-close: README, PROJECT.md, diagram, `make env` + `make demo`, `scripts/check_docs_links.py` in CI | done |
 
-Until each task lands, the notes below describe the DuckDB-file version; each task updates the notes it
-touches.
+**Closing the extension (T33, 2026-09-21).** A clean clone follows the README to a running dashboard:
+`make env`, `make up`, `make demo` (eight closed months of a fictional person written straight to bronze, then
+`dbt build`) and the Superset URL from `make status`, verified in a fresh clone on a throwaway Compose project.
+Open items, stated plainly:
+
+- **Real-data validation of the dashboard is the owner's** ([ADR 0004](../decisions/0004-real-pdfs-never-leave-your-machine.md)):
+  what was checked with the real archive prints only counts. Per account, `gold.rpt_reconciliation` reports
+  opening balance + movements = closing balance for all 8 account/currency pairs.
+- **One incident:** `make poc-down` wiped the real stack while testing on a throwaway one; rebuilt from the
+  archive with identical counts ([post-mortem](../../docs/incidents/2026-09-21-poc-down-wiped-the-real-stack.md),
+  [runbook](../../docs/runbook-rebuild-from-archive.md)). Every Makefile target now goes through one project variable.
+- **Not done, by design:** no `dim_category` and no ML (Phase 3), no per-user login or environment split yet
+  (a DEV stack, Dex single sign-on and per-user alerts are next), no FX (Phase 6).
 
 Also integrated during the phase: `ephemeral-integration` made genuinely required through an
 always-run gate job (#69, [ADR 0019](../decisions/0019-ephemeral-integration-required-via-gate-job.md)),
@@ -74,10 +89,10 @@ merged, and a clean clone follows the README's quickstart through to a materiali
   4.76–4.81 GiB and 457–554% CPU during ingestion, in two independent runs); it was never measured at the earlier 7.4 GiB limit.
   Its column-level lineage has two documented gaps (`silver.transactions.occurrence_number`
   has only a table-level edge; the manifest handed to it is a rewritten copy) — ADR 0023.
-- **Silver and gold live in `dbt/pfp.duckdb`, a local DuckDB file; only bronze is Delta on S3.**
-  The layers exist; the storage isn't uniform. Moving them onto the lake is not planned here.
-- **No `dim_category`, no dashboard, no ML.** Categories and ML are Phase 3, the dashboard
-  Phase 5 ([PROJECT.md](../../PROJECT.md)).
+- **Silver and gold live in PostgreSQL; only bronze is Delta on S3.** (Until the extension they were a
+  local DuckDB file, `dbt/pfp.duckdb`.) The storage isn't uniform; moving them onto the lake is not planned.
+- **No `dim_category`, no ML.** Categories and ML are Phase 3 ([PROJECT.md](../../PROJECT.md)); the
+  dashboard was built in the extension (Superset), not in Phase 5.
 
 ## Components
 
@@ -86,6 +101,7 @@ merged, and a clean clone follows the README's quickstart through to a materiali
 - [dagster](../components/dagster.md) — built (T21): the `bronze` asset, the dbt project as assets, `DAGSTER_MODULE_NAME`, and the gotchas found running it for real.
 - [Elementary](../components/elementary.md) — built (T22): the dbt package, the `elementary` profile `edr` needs, warn-mode.
 - [OpenMetadata](../components/openmetadata.md) — built (T24): the optional local stack and `scripts/openmetadata_sync.py`.
+- [Superset](../components/superset.md) — built (T32–T36): the one-project Compose stack, dashboards as code, the templates.
 - [CI](../components/ci.md) — extended: `ephemeral-integration` runs the Dagster path, `dbt deps` in the places that need it, Elementary steps in warn-mode.
 
 ## Decisions
