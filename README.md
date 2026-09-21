@@ -202,6 +202,9 @@ Open the Superset URL from `make status` (user `admin`, password `PFP_BI_ADMIN_P
 then *Dashboards → PFP finance*. When done: `make down` stops everything and keeps the data;
 `make poc-down` stops it and **deletes** it.
 
+Several environments on one machine (dev with your real data, prod with the artificial data, each with its own
+stack): [SETUP.md §14](SETUP.md#14-dev-and-prod-environments-t38).
+
 The same pipeline through Dagster (`uv run dagster asset materialize --select '*'`) and on a synthetic
 PDF are in [SETUP.md](SETUP.md) sections 6 and 9; running on your own PDFs is
 [docs/ingesting-your-own-pdfs.md](docs/ingesting-your-own-pdfs.md).
