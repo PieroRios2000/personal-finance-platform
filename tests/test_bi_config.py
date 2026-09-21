@@ -324,4 +324,4 @@ def test_the_savings_rate_is_net_over_real_income_without_transfers() -> None:
     assert "= 0 THEN '-'" in rate
     template = card[3]["handlebarsTemplate"]
     assert "{{savings_rate}}" in template
-    assert "savings" in template.lower() and "income" in template.lower()
+    assert "% saved" in template and "income" in template.lower()

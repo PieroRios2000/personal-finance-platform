@@ -14,3 +14,5 @@
 .kpi.range { border-left-color: #0ea5a4; }
 .kpi.debt { border-left-color: #e5484d; }
 .kpi .value.small { font-size: 18px; }
+.kpi.rate.pos .value { color: #1f9d6b; } .kpi.rate.neg .value { color: #e5484d; }
+.kpi.count { border-left-color: #6366f1; }

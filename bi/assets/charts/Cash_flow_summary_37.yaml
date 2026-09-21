@@ -25,6 +25,15 @@ params:
     sqlExpression: CASE WHEN COALESCE(SUM(signed_amount), 0) >= 0 THEN 1 ELSE 0 END
     label: net_positive
   - expressionType: SQL
+    sqlExpression: CASE WHEN COALESCE(SUM(signed_amount) FILTER (WHERE flow_type =
+      'ingreso' AND NOT is_internal_transfer), 0) = 0 THEN '-' ELSE to_char(100 *
+      COALESCE(SUM(signed_amount), 0) / COALESCE(SUM(signed_amount) FILTER (WHERE
+      flow_type = 'ingreso' AND NOT is_internal_transfer), 0), 'FM990.0') || '%' END
+    label: savings_rate
+  - expressionType: SQL
+    sqlExpression: CASE WHEN COALESCE(SUM(signed_amount), 0) >= 0 THEN 1 ELSE 0 END
+    label: rate_positive
+  - expressionType: SQL
     sqlExpression: to_char(COUNT(*), 'FM999,999,990')
     label: movements
   adhoc_filters:
@@ -40,10 +49,12 @@ params:
     kpi spend\"><div class=\"label\">Money out</div>\n    <div class=\"value\">{{currency}}\
     \ {{money_out}}</div><div class=\"note\">incl. transfers between your accounts</div></div>\n\
     \  <div class=\"kpi net {{#if net_positive}}pos{{else}}neg{{/if}}\"><div class=\"\
-    label\">Net</div>\n    <div class=\"value\">{{currency}} {{net}}</div><div class=\"\
-    note\">in minus out</div></div>\n  <div class=\"kpi rate\"><div class=\"label\"\
-    >Movements</div>\n    <div class=\"value\">{{movements}}</div><div class=\"note\"\
-    >in the filtered period</div></div>\n</div>\n{{/each}}\n"
+    label\">Net saved</div>\n    <div class=\"value\">{{currency}} {{net}}</div><div\
+    \ class=\"note\">in minus out</div></div>\n  <div class=\"kpi rate {{#if rate_positive}}pos{{else}}neg{{/if}}\"\
+    ><div class=\"label\">% saved</div>\n    <div class=\"value\">{{savings_rate}}</div><div\
+    \ class=\"note\">net &divide; income, no transfers</div></div>\n  <div class=\"\
+    kpi count\"><div class=\"label\">Movements</div>\n    <div class=\"value\">{{movements}}</div><div\
+    \ class=\"note\">in the filtered period</div></div>\n</div>\n{{/each}}\n"
   styleTemplate: ".kpis { display: flex; gap: 10px; height: 100%; align-items: stretch;\
     \ font-family: inherit; }\n.kpi { flex: 1; border-radius: 12px; padding: 12px\
     \ 14px; display: flex;\n       flex-direction: column; justify-content: center;\
@@ -58,8 +69,9 @@ params:
     \ #0ea5e9; }\n.kpi .up { color: #1f9d6b; } .kpi .down { color: #e5484d; }\n.kpi.cap\
     \ { border-left-color: #a855f7; }\n.kpi.range { border-left-color: #0ea5a4; }\n\
     .kpi.debt { border-left-color: #e5484d; }\n.kpi .value.small { font-size: 18px;\
-    \ }\n"
-  datasource: 1__table
+    \ }\n.kpi.rate.pos .value { color: #1f9d6b; } .kpi.rate.neg .value { color: #e5484d;\
+    \ }\n.kpi.count { border-left-color: #6366f1; }\n"
+  datasource: 11__table
   viz_type: handlebars
 query_context: null
 cache_timeout: null

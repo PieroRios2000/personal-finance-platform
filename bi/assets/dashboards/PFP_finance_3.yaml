@@ -48,7 +48,7 @@ position:
     meta:
       width: 12
       height: 22
-      chartId: 1
+      chartId: 37
       uuid: 0714ed2a-7dbb-519a-98c9-888bf4127391
       sliceName: Cash flow summary
   ROW-0:
@@ -72,7 +72,7 @@ position:
     meta:
       width: 6
       height: 22
-      chartId: 2
+      chartId: 38
       uuid: 5856ebce-5741-580b-95ba-a50f5285380d
       sliceName: Period analysed
   CHART-2:
@@ -86,7 +86,7 @@ position:
     meta:
       width: 6
       height: 22
-      chartId: 3
+      chartId: 39
       uuid: 774586d8-a528-5ef1-afc5-c5555f5ad472
       sliceName: Debt at the end of the period
   ROW-1:
@@ -111,7 +111,7 @@ position:
     meta:
       width: 6
       height: 22
-      chartId: 4
+      chartId: 40
       uuid: 995bb779-2eb3-5d2b-b038-9820d2bd06ec
       sliceName: Capital summary
   CHART-4:
@@ -125,7 +125,7 @@ position:
     meta:
       width: 6
       height: 22
-      chartId: 5
+      chartId: 41
       uuid: ab570cbe-f8aa-51d2-a8db-1329c1b1eb55
       sliceName: Net position summary
   ROW-2:
@@ -150,7 +150,7 @@ position:
     meta:
       width: 6
       height: 50
-      chartId: 6
+      chartId: 42
       uuid: 49f14305-2e47-5c9a-a798-94b91a277406
       sliceName: 'Cash flow: money in and out'
   CHART-6:
@@ -164,7 +164,7 @@ position:
     meta:
       width: 6
       height: 50
-      chartId: 7
+      chartId: 43
       uuid: 36343172-f26c-5149-9619-3a7abdb2a66d
       sliceName: Balance per month (debt is negative)
   ROW-3:
@@ -189,7 +189,7 @@ position:
     meta:
       width: 12
       height: 32
-      chartId: 8
+      chartId: 44
       uuid: f90318a4-53b4-5473-a1c3-c47cb7c1f3f8
       sliceName: 'Investments: return and how each month closed'
   ROW-4:
@@ -213,7 +213,7 @@ position:
     meta:
       width: 8
       height: 50
-      chartId: 9
+      chartId: 45
       uuid: 77bb74fe-4bbd-527b-af20-060bbc44471a
       sliceName: 'Investments: return per fund over time'
   MARKDOWN-note:
@@ -263,7 +263,7 @@ position:
     meta:
       width: 12
       height: 60
-      chartId: 10
+      chartId: 46
       uuid: 8e81aaab-2fd3-59b0-b902-2d95666db6b9
       sliceName: Movements (check against your statements)
   ROW-6:
@@ -287,7 +287,7 @@ position:
     meta:
       width: 12
       height: 60
-      chartId: 11
+      chartId: 47
       uuid: e0814a73-2359-50f6-aeb8-4d63a6174f02
       sliceName: Statement balances (check against your statements)
   ROW-7:
@@ -311,7 +311,7 @@ position:
     meta:
       width: 12
       height: 40
-      chartId: 12
+      chartId: 48
       uuid: 639b6207-0b0a-5895-8ebf-7b45be98dd81
       sliceName: 'Reconciliation: opening + movements = balance (difference must be
         0)'
