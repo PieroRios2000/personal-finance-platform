@@ -30,10 +30,10 @@ params:
   row_limit: 10000
   orientation: vertical
   show_legend: true
-  datasource: 1__table
+  datasource: 8__table
   viz_type: echarts_timeseries_bar
 query_context: null
 cache_timeout: null
-uuid: 3dd72a9d-8159-4c7a-b167-f0ced56b477a
+uuid: 49f14305-2e47-5c9a-a798-94b91a277406
 version: 1.0.0
-dataset_uuid: 4ee68312-89f8-4a60-9930-8b54153e52aa
+dataset_uuid: 421b5769-3581-5c67-928a-84023a5f132f

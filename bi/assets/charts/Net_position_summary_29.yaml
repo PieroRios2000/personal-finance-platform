@@ -1,4 +1,4 @@
-slice_name: Balance summary
+slice_name: Net position summary
 description: null
 certified_by: null
 certification_details: null
@@ -12,8 +12,8 @@ params:
     label: currency
   - expressionType: SQL
     sqlExpression: CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-'
-      ELSE to_char(COALESCE(SUM(signed_closing_balance) FILTER (WHERE month_recency
-      = 1), 0), 'FM999,999,999,990.00') END
+      ELSE to_char(COALESCE(SUM(net_position) FILTER (WHERE month_recency = 1), 0),
+      'FM999,999,999,990.00') END
     label: balance
   - expressionType: SQL
     sqlExpression: to_char(MAX(month_start) FILTER (WHERE month_recency = 1), 'Mon
@@ -21,14 +21,14 @@ params:
     label: month
   - expressionType: SQL
     sqlExpression: CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-'
-      ELSE to_char(ABS((COALESCE(SUM(signed_closing_balance) FILTER (WHERE month_recency
-      = 1), 0) - COALESCE(SUM(signed_closing_balance) FILTER (WHERE month_recency
-      = 2), 0))), 'FM999,999,999,990.00') END
+      ELSE to_char(ABS((COALESCE(SUM(net_position) FILTER (WHERE month_recency = 1),
+      0) - COALESCE(SUM(net_position) FILTER (WHERE month_recency = 2), 0))), 'FM999,999,999,990.00')
+      END
     label: change
   - expressionType: SQL
-    sqlExpression: CASE WHEN (COALESCE(SUM(signed_closing_balance) FILTER (WHERE month_recency
-      = 1), 0) - COALESCE(SUM(signed_closing_balance) FILTER (WHERE month_recency
-      = 2), 0)) >= 0 THEN 1 ELSE 0 END
+    sqlExpression: CASE WHEN (COALESCE(SUM(net_position) FILTER (WHERE month_recency
+      = 1), 0) - COALESCE(SUM(net_position) FILTER (WHERE month_recency = 2), 0))
+      >= 0 THEN 1 ELSE 0 END
     label: change_positive
   adhoc_filters:
   - expressionType: SIMPLE
@@ -54,11 +54,12 @@ params:
     \ #e5484d; }\n.kpi.net.pos { border-left-color: #1f9d6b; } .kpi.net.neg { border-left-color:\
     \ #e5484d; }\n.kpi.net.pos .value { color: #1f9d6b; } .kpi.net.neg .value { color:\
     \ #e5484d; }\n.kpi.rate { border-left-color: #6366f1; }\n.kpi.bal { border-left-color:\
-    \ #0ea5e9; }\n.kpi .up { color: #1f9d6b; } .kpi .down { color: #e5484d; }\n"
-  datasource: 2__table
+    \ #0ea5e9; }\n.kpi .up { color: #1f9d6b; } .kpi .down { color: #e5484d; }\n.kpi.cap\
+    \ { border-left-color: #a855f7; }\n"
+  datasource: 9__table
   viz_type: handlebars
 query_context: null
 cache_timeout: null
-uuid: 638d726d-06f1-4afb-83ae-2e958cb91098
+uuid: ab570cbe-f8aa-51d2-a8db-1329c1b1eb55
 version: 1.0.0
-dataset_uuid: 558afd57-a095-4fe1-8a8f-b12e21f44261
+dataset_uuid: 80f10cdd-0b29-517f-ab7a-3d0cb2673307

@@ -31,10 +31,10 @@ params:
       horizontalAlign: right
   row_limit: 1000
   include_search: true
-  datasource: 2__table
+  datasource: 10__table
   viz_type: table
 query_context: null
 cache_timeout: null
-uuid: 1f79a91a-8b77-41bf-9c5f-702d4e5ab684
+uuid: e0814a73-2359-50f6-aeb8-4d63a6174f02
 version: 1.0.0
-dataset_uuid: 558afd57-a095-4fe1-8a8f-b12e21f44261
+dataset_uuid: c86e2242-660c-530a-a3af-77b867584bc3

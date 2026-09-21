@@ -310,13 +310,17 @@ models:
       Reporting table (T35): your total capital per user, currency and month, savings
       (every asset account's closing balance) plus investments (every fund's month-end
       balance). A month a holding has no row keeps its last known balance. A debt is not
-      capital. Same `calendar_*` columns and `month_recency` as the other reporting tables.
+      capital: it is `debt_balance`, and `net_position` is capital minus debt. Same
+      `calendar_*` columns and `month_recency` as the other reporting tables.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [user_id, currency, month_start]
     columns:
       - name: total_capital
+        data_tests:
+          - not_null
+      - name: net_position
         data_tests:
           - not_null
       - name: calendar_month

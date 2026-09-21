@@ -7,7 +7,8 @@
 -- (fct_investment_monthly). A month a holding has no row keeps its last known balance
 -- (an account or fund does not stop existing because its statement or its Excel row is
 -- missing), so the total does not dip. A debt (a liability account) is not capital: it is
--- in `signed_closing_balance` for the net position. Currencies are never added together.
+-- `debt_balance`, and `net_position` is capital minus debt. Currencies are never added
+-- together.
 -- Carries the same `calendar_*` columns as the other reporting tables, so the dashboard's
 -- calendar filters apply to it too.
 
@@ -30,6 +31,18 @@ holdings as (
         closing_balance
     from {{ ref('fct_account_balance_monthly') }}
     where account_kind = 'asset'
+
+    union all
+
+    select
+        user_id,
+        currency,
+        account_id as holding_id,
+        'debt' as kind,
+        month_start,
+        closing_balance
+    from {{ ref('fct_account_balance_monthly') }}
+    where account_kind = 'liability'
 
     union all
 
@@ -95,7 +108,10 @@ totals as (
             as savings_balance,
         coalesce(sum(balance) filter (where kind = 'investments'), 0)
             as investments_balance,
-        coalesce(sum(balance), 0) as total_capital
+        coalesce(sum(balance) filter (where kind != 'debt'), 0) as total_capital,
+        coalesce(sum(balance) filter (where kind = 'debt'), 0) as debt_balance,
+        coalesce(sum(balance) filter (where kind != 'debt'), 0)
+        - coalesce(sum(balance) filter (where kind = 'debt'), 0) as net_position
     from filled
     group by user_id, currency, month_start
 

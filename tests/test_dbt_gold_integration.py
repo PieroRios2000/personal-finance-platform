@@ -635,12 +635,14 @@ def test_capital_adds_savings_and_investments_and_carries_the_last_balance_forwa
     with pg_store.connect() as connection:
         rows = connection.execute(
             "select calendar_month, savings_balance, investments_balance, "
-            "total_capital, month_recency from gold.rpt_capital "
-            "where currency = 'PEN' order by calendar_month"
+            "total_capital, debt_balance, net_position, month_recency "
+            "from gold.rpt_capital where currency = 'PEN' order by calendar_month"
         ).fetchall()
 
-    assert [(m, str(s), str(i), str(t), r) for m, s, i, t, r in rows] == [
-        ("2026-01", "900.00", "500.00", "1400.00", 3),
-        ("2026-02", "950.00", "600.00", "1550.00", 2),
-        ("2026-03", "900.00", "600.00", "1500.00", 1),
+    # The card's 300.00 debt is not capital, but it is subtracted for the net position,
+    # and (like every holding) carried forward.
+    assert [tuple(str(v) for v in row) for row in rows] == [
+        ("2026-01", "900.00", "500.00", "1400.00", "300.00", "1100.00", "3"),
+        ("2026-02", "950.00", "600.00", "1550.00", "300.00", "1250.00", "2"),
+        ("2026-03", "900.00", "600.00", "1500.00", "300.00", "1200.00", "1"),
     ]

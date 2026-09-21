@@ -22,6 +22,7 @@ return with `closing_basis`, all under one calendar filter bar. Optional local i
 | [`bi/start.sh`](../../bi/start.sh) | Migrate, create admin, import `bi/assets` (password filled in from the environment), serve |
 | [`bi/assets/`](../../bi/assets) | The dashboards as code: Superset's export YAML (database, three `rpt_*` datasets, eight charts, one dashboard with its filters and CSS) |
 | [`bi/templates/`](../../bi/templates) | The HTML (Handlebars) and CSS of the summary cards and the investments table, and the dashboard-wide CSS |
+| [`bi/cleanup_stale.py`](../../bi/cleanup_stale.py) | Run by `start.sh` after the import: removes the dashboard's charts that are not in the export, and our datasets no chart uses |
 | [`bi/build_dashboards.py`](../../bi/build_dashboards.py) | How the export is authored: REST API, then export. `make bi-export` |
 | [`dbt/models/gold/fct_account_balance_monthly.sql`](../../dbt/models/gold/fct_account_balance_monthly.sql) | Closing balance per account, currency and month, for the savings chart |
 | `make bi-up` / `bi-down` / `bi-reset` / `bi-export` | Start, stop, forget Superset's own state, re-export the dashboards |

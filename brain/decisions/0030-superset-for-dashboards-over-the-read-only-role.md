@@ -90,3 +90,17 @@ After the owner used the dashboard on real data:
   (`rpt_balances.month_recency`), not a `(select max(...))`.
 - Superset's table chart can colour only numeric columns; string badges (`closing_basis`) are why
   the investments table is a Handlebars chart.
+
+## Update 2026-09-21: total capital, stable ids, no duplicate charts
+
+- **Total capital card.** Savings accounts and investments are two facts, and a Superset chart reads
+  one dataset, so `gold.rpt_capital` (savings + investments per user, currency and month, with
+  `debt_balance` and `net_position = capital - debt`) carries the sum. Every holding's balance is
+  carried forward over a month with no row, so the total does not dip when an account misses a
+  statement or the Excel a month. The net-position card reads the same table, so both cards agree.
+- **Duplicate charts.** The export used to be regenerated from a fresh Superset, giving every object
+  a new random uuid; importing it then created new charts beside the old ones (30 charts on a
+  dashboard that has 8). The exported uuids are now derived from the object's kind and name
+  (`bi/build_dashboards.py`), and `bi/cleanup_stale.py` (run by `start.sh`) removes what an earlier
+  import left behind. Verified: an instance holding stale charts ends with exactly the 9 in the
+  export, and a second start removes none.

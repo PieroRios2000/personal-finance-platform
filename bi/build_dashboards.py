@@ -73,6 +73,7 @@ DASHBOARD_CSS = (_TEMPLATES / "dashboard.css").read_text()
 _KPI_STYLE = (_TEMPLATES / "kpi.css").read_text()
 _CASH_FLOW_KPI = (_TEMPLATES / "cash_flow_kpi.hbs").read_text()
 _BALANCE_KPI = (_TEMPLATES / "balance_kpi.hbs").read_text()
+_CAPITAL_KPI = (_TEMPLATES / "capital_kpi.hbs").read_text()
 
 
 # Money in and out are read from `signed_amount` (ADR 0031): the effect on you, the same
@@ -85,10 +86,7 @@ _NET = "COALESCE(SUM(signed_amount), 0)"
 
 
 def _balance_at(recency: int) -> str:
-    return (
-        "COALESCE(SUM(signed_closing_balance) FILTER "
-        f"(WHERE month_recency = {recency}), 0)"
-    )
+    return f"COALESCE(SUM(net_position) FILTER (WHERE month_recency = {recency}), 0)"
 
 
 def _or_dash(expression: str) -> str:
@@ -98,6 +96,12 @@ def _or_dash(expression: str) -> str:
         "CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-' "
         f"ELSE {expression} END"
     )
+
+
+def _capital(column: str) -> str:
+    """One of rpt_capital's balances at the latest month, formatted (or a dash)."""
+    latest = f"COALESCE(SUM({column}) FILTER (WHERE month_recency = 1), 0)"
+    return _or_dash(f"to_char({latest}, {_MONEY})")
 
 
 _CHANGE = f"({_balance_at(1)} - {_balance_at(2)})"
@@ -127,8 +131,34 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         },
     ),
     (
-        "rpt_balances",
-        "Balance summary",
+        "rpt_capital",
+        "Capital summary",
+        "handlebars",
+        {
+            "query_mode": "aggregate",
+            "groupby": [],
+            # Total capital = savings (asset accounts) plus investments (funds), at
+            # the latest month: rpt_capital carries each balance forward.
+            "metrics": [
+                _sql_metric("MAX(currency)", "currency"),
+                _sql_metric(_capital("total_capital"), "total"),
+                _sql_metric(_capital("savings_balance"), "savings"),
+                _sql_metric(_capital("investments_balance"), "investments"),
+                _sql_metric(
+                    "to_char(MAX(month_start) FILTER "
+                    "(WHERE month_recency = 1), 'Mon YYYY')",
+                    "month",
+                ),
+            ],
+            "adhoc_filters": [_time_range("month_start")],
+            "row_limit": 1,
+            "handlebarsTemplate": _CAPITAL_KPI,
+            "styleTemplate": _KPI_STYLE,
+        },
+    ),
+    (
+        "rpt_capital",
+        "Net position summary",
         "handlebars",
         {
             "query_mode": "aggregate",
@@ -472,7 +502,8 @@ NOTE_TEXT = (
 
 # The grid: (chart name prefix, width out of 12, height) per cell, row by row.
 LAYOUT: list[list[tuple[str, int, int]]] = [
-    [("Cash flow summary", 8, 22), ("Balance summary", 4, 22)],
+    [("Cash flow summary", 12, 22)],
+    [("Capital summary", 6, 22), ("Net position summary", 6, 22)],
     [("Cash flow: money", 6, 50), ("Balance per month", 6, 50)],
     [("Investments: return and", 12, 32)],
     [("Investments: return per", 8, 50), (NOTE, 4, 50)],
