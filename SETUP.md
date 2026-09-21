@@ -552,14 +552,18 @@ Storage (SeaweedFS), PostgreSQL, Superset and (optionally) OpenMetadata are **on
 project**, `pfp-poc`: one group in Docker Desktop, one network, one command (ADR 0032).
 
 ```bash
+make env           # a fresh clone: writes .env with generated secrets (never overwrites yours)
 make up            # storage + Postgres + Superset (the dashboards)
+make demo          # artificial data (eight closed months of a fictional person) -> bronze, then dbt build
 make up-catalog    # ... plus OpenMetadata (~4.6 GiB of RAM; see section 10)
 make status        # what is running, and the URLs
 make down          # stop everything, KEEP the data (the lake, the tables, the dashboards)
 make poc-down      # stop everything and DELETE the data (volumes), as before
 ```
 
-`make up` needs the `PFP_PG_*` and `PFP_BI_*` variables of `.env` (it says which one is missing). Dagster
+`make up` needs the `PFP_PG_*` and `PFP_BI_*` variables of `.env` (it says which one is missing; `make env`
+generates them all). `make demo` writes only fictional data marked `DEMO` and is idempotent; to look at your
+own data instead of the demo, ingest with another `PFP_USER`, or `make poc-down` to start clean. Dagster
 is not a container: `uv run dagster dev` (http://localhost:3000). **Upgrading from separate stacks:**
 `make up` first stops the old `pfp-bi` and `pfp-om` projects (their ports would clash) and keeps your
 lake and Postgres data, since the project name did not change. `make poc-up` still starts only storage and
