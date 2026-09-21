@@ -254,9 +254,8 @@ def test_exported_uuids_depend_on_the_names_not_on_the_run() -> None:
         "position:\n  meta: {uuid: 9999}\n",
     }
 
-    assert (
-        builder.stable_uuid_map(first).values()
-        == builder.stable_uuid_map(second).values()
-    )
-    assert len(set(builder.stable_uuid_map(first).values())) == 2
-    assert set(builder.stable_uuid_map(first)) == {"1111", "2222"}
+    a, b = builder.stable_uuid_map(first), builder.stable_uuid_map(second)
+
+    assert sorted(a.values()) == sorted(b.values())
+    assert len(set(a.values())) == 2
+    assert set(a) == {"1111", "2222"}
