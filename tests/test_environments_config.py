@@ -33,6 +33,7 @@ def _make(cwd: Path, *args: str, dry: bool = False) -> subprocess.CompletedProce
 
 def _repo(tmp_path: Path, branch: str) -> Path:
     """A throwaway git repo on `branch` holding a copy of the Makefile."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
     shutil.copy(_ROOT / "Makefile", tmp_path / "Makefile")
     git = ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
     subprocess.run(["git", "init", "-q", "-b", branch, str(tmp_path)], check=True)
