@@ -22,4 +22,5 @@
 - [ ] Brain updated: the component or concept note, `brain/phases/phase-1.md`, and an ADR if a decision was made.
 - [ ] `SETUP.md` kept current if the task adds libraries, programs, versions or env vars.
 - [ ] `ponytail-review` and `review` with no pending findings.
+- [ ] Any incident or surprising error is recorded in `docs/incidents/`; anything run on the owner's environment is in `docs/operations-log.md`.
 - [ ] PR reviewed and merged by Piero.

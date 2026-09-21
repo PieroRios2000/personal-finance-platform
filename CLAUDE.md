@@ -65,6 +65,17 @@ Start with your task in `tasks/todo.md` and read only what you need:
 - Skills by kind of work: see "Ways of working" in `tasks/plan.md`.
 - The simplest thing that meets the criteria; nothing speculative.
 
+## Operations and incidents (traceability)
+
+- **Log what you run on the owner's real environment** (pull, build, backfill, restart, rebuild): one line
+  in [`docs/operations-log.md`](docs/operations-log.md), counts only.
+- **Any surprising error, data loss or near miss gets a blameless post-mortem** in
+  [`docs/incidents/`](docs/incidents/README.md), in the PR that fixes its cause.
+- **Never run a target that deletes volumes** (`poc-down`, `down -v`, `om-down`, `bi-reset`) on the real
+  project. Read the recipe first (`make -n <target> <overrides>`), use only a throwaway `PFP_PROJECT` and
+  ports, and check `docker ps` / `docker volume ls` before and after. The real stack is `pfp-poc`.
+  A rebuild is routine: [`docs/runbook-rebuild-from-archive.md`](docs/runbook-rebuild-from-archive.md).
+
 ## Definition of Done
 
 The full list is in `tasks/plan.md` and the PR template. In short:
@@ -77,6 +88,8 @@ The full list is in `tasks/plan.md` and the PR template. In short:
   `brain/phases/phase-1.md`, and an ADR in `brain/decisions/` if a decision was made.
 - **`SETUP.md` kept current** if the task adds libraries, programs, versions or env vars.
 - `ponytail-review` and `review` with no pending findings before opening the PR.
+- An incident or a surprising error met while doing the task is recorded in `docs/incidents/`, and
+  what was run on the owner's environment in `docs/operations-log.md`.
 
 ## Known issues
 
