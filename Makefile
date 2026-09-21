@@ -101,6 +101,7 @@ env:
 # silver and gold. Needs `make up` first. Idempotent; real data can be loaded next to it (use
 # a different PFP_USER for it) or the demo removed with `make poc-down`.
 demo:
+	@test -f .env || { echo 'no .env: run `make env` first' >&2; exit 2; }
 	set -a && . ./.env && set +a && uv run python -m scripts.seed_demo && \
 	uv run dbt deps --project-dir dbt --profiles-dir dbt && \
 	uv run dbt build --project-dir dbt --profiles-dir dbt

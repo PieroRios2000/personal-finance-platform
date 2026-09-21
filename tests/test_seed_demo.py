@@ -6,6 +6,7 @@ exercised by the live demo."""
 from datetime import date
 
 from ingestion.reconciliation import reconcile
+from ingestion.schema import Statement
 from scripts import seed_demo
 
 _TODAY = date(2026, 9, 21)
@@ -77,7 +78,7 @@ def test_a_later_month_continues_the_same_history() -> None:
         s for s in september if s.period_start >= date(2026, 2, 1)
     ]
     for statements in (september, october):
-        by_account: dict[str, list] = {}
+        by_account: dict[str, list[Statement]] = {}
         for s in statements:
             by_account.setdefault(s.account_id, []).append(s)
         for chain in by_account.values():

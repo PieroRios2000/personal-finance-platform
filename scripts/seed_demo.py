@@ -17,7 +17,7 @@ import calendar
 import hashlib
 import os
 from collections.abc import Sequence
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from ingestion.schema import (
@@ -31,16 +31,21 @@ from lakehouse import bronze
 
 _MONTHS = 8
 _FUND_MONTHS = 6
+# The history starts at a fixed month, so the balance every account opens with in any
+# month is the same whenever the demo is run: running it again next month extends the
+# history (the overlapping months are identical) instead of restarting it.
+_ANCHOR = date(2024, 1, 1)
 
 
-def _closed_months(today: date, count: int) -> list[date]:
-    """The first day of each of the last `count` closed months, oldest first."""
-    first = today.replace(day=1)
+def _closed_months(today: date, first: date = _ANCHOR) -> list[date]:
+    """The first day of every closed month from `first` to the one before today's."""
     months = []
-    for _ in range(count):
-        first = (first.replace(day=1) - date.resolution).replace(day=1)
-        months.append(first)
-    return months[::-1]
+    month = first
+    current = today.replace(day=1)
+    while month < current:
+        months.append(month)
+        month = (month + timedelta(days=32)).replace(day=1)
+    return months
 
 
 def _sha(text: str) -> str:
@@ -57,7 +62,7 @@ def _statement(
     currency: Currency,
     month: date,
     opening: Decimal,
-    items: list[tuple[int, str, str]],
+    items: list[tuple[int, str, Decimal]],
 ) -> Statement:
     account_id = _sha(f"demo-{name}")
     file_sha = _sha(f"demo-{name}-{month}")
@@ -69,7 +74,7 @@ def _statement(
             account_last4=last4,
             date=month.replace(day=day),
             description=f"DEMO {description}",
-            amount=Decimal(amount),
+            amount=amount,
             currency=currency,
             source_file_sha256=file_sha,
         )
@@ -91,13 +96,20 @@ def _statement(
 
 
 def demo_statements(today: date, user_id: str = "demo") -> list[Statement]:
-    """Every demo statement, oldest first. Deterministic for a given `today`."""
+    """The last eight closed months of every demo account, oldest first.
+
+    Every amount depends only on the month, and every balance chain starts at the fixed
+    anchor, so the result is deterministic and consistent across runs and months."""
     statements = []
     checking, card, dollars = Decimal("1500.00"), Decimal("800.00"), Decimal("300.00")
-    for index, month in enumerate(_closed_months(today, _MONTHS)):
-        groceries = 380 + 15 * (index % 4)
-        charges = (640 + 20 * (index % 3), 410 + 10 * (index % 5))
-        statement = _statement(
+    for month in _closed_months(today):
+        groceries = Decimal(380 + 15 * (month.month % 4))
+        charges = (
+            Decimal(640 + 20 * (month.month % 3)),
+            Decimal(410 + 10 * (month.month % 5)),
+        )
+        payment = charges[0] + charges[1]  # the card is paid in full each month
+        checking_statement = _statement(
             user_id=user_id,
             bank="BCP",
             name="bcp-soles",
@@ -107,17 +119,15 @@ def demo_statements(today: date, user_id: str = "demo") -> list[Statement]:
             month=month,
             opening=checking,
             items=[
-                (2, "SALARY ACME", "3200.00"),
-                (3, "RENT", "-900.00"),
-                (10, f"GROCERIES {index}", f"-{groceries}.00"),
-                (14, "UTILITIES", "-180.50"),
-                (18, "TRANSFER TO FUND", "-300.00"),
-                (20, "CARD PAYMENT", "-1100.00"),
+                (2, "SALARY ACME", Decimal("3200.00")),
+                (3, "RENT", Decimal("-900.00")),
+                (10, f"GROCERIES {month:%b}", -groceries),
+                (14, "UTILITIES", Decimal("-180.50")),
+                (18, "TRANSFER TO FUND", Decimal("-300.00")),
+                (20, "CARD PAYMENT", -payment),
             ],
         )
-        statements.append(statement)
-        checking = statement.closing_balance
-        statement = _statement(
+        card_statement = _statement(
             user_id=user_id,
             bank="Scotiabank",
             name="card-soles",
@@ -127,14 +137,12 @@ def demo_statements(today: date, user_id: str = "demo") -> list[Statement]:
             month=month,
             opening=card,
             items=[
-                (5, "SHOP ONE", f"{charges[0]}.00"),
-                (12, "SHOP TWO", f"{charges[1]}.00"),
-                (21, "PAYMENT RECEIVED", "-1100.00"),
+                (5, "SHOP ONE", charges[0]),
+                (12, "SHOP TWO", charges[1]),
+                (21, "PAYMENT RECEIVED", -payment),
             ],
         )
-        statements.append(statement)
-        card = statement.closing_balance
-        statement = _statement(
+        dollars_statement = _statement(
             user_id=user_id,
             bank="BCP",
             name="bcp-dollars",
@@ -143,18 +151,28 @@ def demo_statements(today: date, user_id: str = "demo") -> list[Statement]:
             currency="USD",
             month=month,
             opening=dollars,
-            items=[(4, "DEPOSIT", "150.00"), (16, "ONLINE STORE", "-45.00")],
+            items=[
+                (4, "DEPOSIT", Decimal("150.00")),
+                (16, "ONLINE STORE", Decimal("-45.00")),
+            ],
         )
-        statements.append(statement)
-        dollars = statement.closing_balance
-    return statements
+        checking = checking_statement.closing_balance
+        card = card_statement.closing_balance
+        dollars = dollars_statement.closing_balance
+        statements += [checking_statement, card_statement, dollars_statement]
+    return [s for s in statements if s.period_start >= _window_start(today, _MONTHS)]
+
+
+def _window_start(today: date, count: int) -> date:
+    return _closed_months(today)[-count]
 
 
 def demo_investment_months(today: date, user_id: str = "demo") -> list[InvestmentMonth]:
-    """One fund, a contribution and a month-end valuation each month (about +1%)."""
+    """One fund, a contribution and a month-end valuation each month (about +1%),
+    the balance chain starting at the same fixed anchor as the statements."""
     balance = Decimal("2000.00")
     months = []
-    for month in _closed_months(today, _FUND_MONTHS):
+    for month in _closed_months(today):
         contribution = Decimal("300.00")
         after_contribution = balance + contribution
         balance = (after_contribution * Decimal("1.01")).quantize(Decimal("0.01"))
@@ -185,7 +203,7 @@ def demo_investment_months(today: date, user_id: str = "demo") -> list[Investmen
                 ],
             )
         )
-    return months
+    return months[-_FUND_MONTHS:]
 
 
 def main(argv: Sequence[str] | None = None) -> int:

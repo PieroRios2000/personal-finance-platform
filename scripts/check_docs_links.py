@@ -34,7 +34,7 @@ class Problem:
 def slug(heading: str) -> str:
     """GitHub's anchor for a heading's text."""
     text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", heading)  # links keep their text
-    text = re.sub(r"[`*_~]", "", text)
+    text = re.sub(r"[`*~]", "", text)  # `_` stays: it is a word character
     text = unicodedata.normalize("NFKC", text).lower()
     text = re.sub(r"[^\w\- ]", "", text)
     return text.replace(" ", "-")

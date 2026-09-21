@@ -13,6 +13,7 @@ back unchanged.
 
 import argparse
 import os
+import re
 import secrets
 import sys
 from collections.abc import Sequence
@@ -21,6 +22,7 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parent.parent
 _ACCOUNT_KEY_BYTES = 32
 _SECRET_BYTES = 16
+_SAFE_USER = re.compile(r"[A-Za-z0-9_-]+")
 _GENERATED = (
     "PFP_ACCOUNT_KEY",
     "AWS_ACCESS_KEY_ID",
@@ -54,19 +56,31 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--user", default="demo", help="the name your data belongs to")
     args = parser.parse_args(argv)
 
-    if args.out.exists():
+    if not _SAFE_USER.fullmatch(args.user):
+        print(
+            "--user must be letters, digits, `_` or `-`: it is a folder name and is "
+            "written into a file the shell sources.",
+            file=sys.stderr,
+        )
+        return 2
+    text = render((_ROOT / ".env.example").read_text(), args.user)
+    # Created readable by you only from the first byte, not chmod-ed afterwards, and
+    # never over an existing file (O_EXCL): that file holds your real secrets.
+    try:
+        descriptor = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
         print(
             f"{args.out} already exists: not touching it (it holds your secrets).",
             file=sys.stderr,
         )
         return 1
-    text = render((_ROOT / ".env.example").read_text(), args.user)
-    # Created readable by you only from the first byte, not chmod-ed afterwards.
-    descriptor = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "w") as handle:
         handle.write(text)
     print(f"wrote {args.out} (mode 600) with generated secrets.")
     print("Superset login: user admin, password = PFP_BI_ADMIN_PASSWORD in that file.")
+    print(
+        f"PFP_USER={args.user}: use another name for real statements (demo mixes in)."
+    )
     print("For real data, back up PFP_ACCOUNT_KEY: losing it changes every account id.")
     return 0
 
