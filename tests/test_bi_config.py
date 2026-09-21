@@ -158,8 +158,13 @@ def test_cash_flow_uses_signed_amount_and_counts_transfers_between_accounts() ->
     assert "is_internal_transfer" not in text
     assert "flow_type" not in text
     assert chart["label_colors"] == {"in": "#1f9d6b", "out": "#e5484d"}
-    summary = json.dumps(_charts()["Cash flow summary"][3])
-    assert "signed_amount" in summary and "is_internal_transfer" not in summary
+    metrics = {
+        m["label"]: m["sqlExpression"]
+        for m in _charts()["Cash flow summary"][3]["metrics"]
+    }
+    for label in ("money_in", "money_out", "net"):
+        assert "signed_amount" in metrics[label], label
+        assert "is_internal_transfer" not in metrics[label], label
 
 
 def test_balances_use_the_signed_closing_balance_so_debt_is_negative() -> None:
@@ -304,3 +309,19 @@ def test_the_reconciliation_table_shows_the_difference_and_flags_a_non_zero_one(
         table[3]["all_columns"]
     )
     assert {f["column"] for f in table[3]["conditional_formatting"]} == {"difference"}
+
+
+def test_the_savings_rate_is_net_over_real_income_without_transfers() -> None:
+    """% saved = net / income. The income in the denominator leaves out movements
+    between your own accounts (they would inflate it: money in on one side of every
+    transfer), and a period with no income shows a dash, not a division by zero."""
+    card = _charts()["Cash flow summary"]
+    metrics = {m["label"]: m["sqlExpression"] for m in card[3]["metrics"]}
+    rate = metrics["savings_rate"]
+
+    assert "SUM(signed_amount)" in rate  # the net, the same amount the Net card shows
+    assert "flow_type = 'ingreso'" in rate and "NOT is_internal_transfer" in rate
+    assert "= 0 THEN '-'" in rate
+    template = card[3]["handlebarsTemplate"]
+    assert "{{savings_rate}}" in template
+    assert "% saved" in template and "income" in template.lower()

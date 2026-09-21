@@ -42,7 +42,7 @@ params:
     operator: <
     targetValue: 0
   row_limit: 200
-  datasource: 5__table
+  datasource: 15__table
   viz_type: table
 query_context: null
 cache_timeout: null

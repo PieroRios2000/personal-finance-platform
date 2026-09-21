@@ -85,6 +85,13 @@ _MONEY_IN = "COALESCE(SUM(signed_amount) FILTER (WHERE signed_amount > 0), 0)"
 _MONEY_OUT = "COALESCE(-SUM(signed_amount) FILTER (WHERE signed_amount < 0), 0)"
 _MONEY = "'FM999,999,999,990.00'"
 _NET = "COALESCE(SUM(signed_amount), 0)"
+# The income the savings rate is measured against: money that came into an asset
+# account from outside (salary, deposits), without the movements between your own
+# accounts, which would inflate it (money in on one side of every transfer).
+_REAL_INCOME = (
+    "COALESCE(SUM(signed_amount) FILTER (WHERE flow_type = 'ingreso' "
+    "AND NOT is_internal_transfer), 0)"
+)
 
 
 def _balance_at(recency: int) -> str:
@@ -124,6 +131,14 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
                 _sql_metric(f"to_char({_MONEY_OUT}, {_MONEY})", "money_out"),
                 _sql_metric(f"to_char({_NET}, {_MONEY})", "net"),
                 _sql_metric(f"CASE WHEN {_NET} >= 0 THEN 1 ELSE 0 END", "net_positive"),
+                _sql_metric(
+                    f"CASE WHEN {_REAL_INCOME} = 0 THEN '-' ELSE to_char("
+                    f"100 * {_NET} / {_REAL_INCOME}, 'FM990.0') || '%' END",
+                    "savings_rate",
+                ),
+                _sql_metric(
+                    f"CASE WHEN {_NET} >= 0 THEN 1 ELSE 0 END", "rate_positive"
+                ),
                 _sql_metric("to_char(COUNT(*), 'FM999,999,990')", "movements"),
             ],
             "adhoc_filters": [_time_range("date")],
