@@ -6,6 +6,9 @@
 -- calendar filter applies to all of them. A table (dbt-duckdb cannot create a view
 -- in the attached Postgres), rebuilt with every run: the star schema (the facts and
 -- dimensions) stays untouched for dbt and the models.
+--
+-- Only closed months: rows of the current month are left out
+-- (`first_day_of_current_month`), so a partial month never mixes with complete ones.
 
 select
     facts.*,
@@ -20,3 +23,4 @@ select
 from {{ ref('fct_account_balance_monthly') }} as facts
 inner join {{ ref('dim_date') }} as calendar
     on facts.month_start = calendar.date
+where facts.month_start < {{ first_day_of_current_month() }}

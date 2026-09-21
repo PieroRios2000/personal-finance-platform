@@ -11,6 +11,9 @@
 -- together.
 -- Carries the same `calendar_*` columns as the other reporting tables, so the dashboard's
 -- calendar filters apply to it too.
+--
+-- Only closed months: rows of the current month are left out
+-- (`first_day_of_current_month`), so a partial month never mixes with complete ones.
 
 with months as (
 
@@ -129,3 +132,4 @@ select
 from totals
 inner join {{ ref('dim_date') }} as calendar
     on totals.month_start = calendar.date
+where totals.month_start < {{ first_day_of_current_month() }}
