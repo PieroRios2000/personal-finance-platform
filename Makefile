@@ -5,7 +5,14 @@
 
 BASE ?= origin/develop
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down om-up om-sync om-down bi-up bi-down bi-reset bi-export alert alert-digest
+# The one Compose project of the platform (ADR 0032). Every `docker compose` call below goes
+# through $(PFP): the project name is written here once, so a throwaway one can be tried with
+# `make <target> PFP_PROJECT=pfp-test` without ever touching the real stack (`poc-down` and
+# `down -v` delete volumes: never run them without checking the project).
+PFP_PROJECT = pfp-poc
+PFP = docker compose -p $(PFP_PROJECT)
+
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -32,11 +39,11 @@ check-full: check-task
 # `pg-check` first: with an empty PFP_PG_PASSWORD compose would start Postgres, it would
 # exit, and `make poc` would abort before its teardown trap with a generic error.
 poc-up: pg-check
-	docker compose -p pfp-poc up -d --wait seaweedfs postgres
-	docker compose -p pfp-poc run --rm bucket-init
+	$(PFP) up -d --wait seaweedfs postgres
+	$(PFP) run --rm bucket-init
 
 poc-down:
-	docker compose -p pfp-poc down -v
+	$(PFP) --profile bi --profile catalog down -v --remove-orphans
 	# Elementary's file holds baselines for a database that no longer exists.
 	rm -f dbt/elementary.duckdb
 
@@ -51,10 +58,10 @@ pg-check:
 	{ [ -z "$$missing" ] || { echo "set$$missing in .env (see .env.example, SETUP.md section 6)" >&2; exit 2; }; }
 
 pg-up: pg-check
-	set -a && . ./.env && set +a && docker compose -p pfp-poc up -d --wait postgres
+	set -a && . ./.env && set +a && $(PFP) up -d --wait postgres
 
 pg-down:
-	docker compose -p pfp-poc stop postgres
+	$(PFP) stop postgres
 
 # The same flow as CI's ephemeral-integration job (T17, ADR 0007), but against
 # Piero's own real PDFs instead of the synthetic fixture, and only once, locally.
@@ -68,23 +75,66 @@ poc:
 	set -a && . .env && set +a && \
 	uv run python -m scripts.poc
 
-# OpenMetadata catalog and column-level lineage (T24, ADR 0023): optional, local only, never
-# run by CI (~4.6 GiB of containers at idle). Its own fixed project name, distinct from
-# pfp-poc, and `down -v` leaves nothing behind, like poc-down. openmetadata/artifacts is
-# created here, not by Docker, so the ingestion container's read-only mount of it never
-# makes Docker create it root-owned.
-OM_COMPOSE = docker compose -f openmetadata/docker-compose.yml -p pfp-om
+# The whole platform as one Compose project, `pfp-poc` (T37, ADR 0032): storage (SeaweedFS),
+# Postgres and, behind the `bi` and `catalog` profiles, Superset and OpenMetadata. One group
+# in Docker Desktop, one network, one command:
+#     make up           storage + Postgres + Superset (T32, ADR 0030)
+#     make up-catalog   ... plus OpenMetadata (T24, ADR 0023; ~4.6 GiB of RAM)
+#     make status       what is running and where
+#     make down         stop everything, keep the data (the lake, the tables, the dashboards)
+#     make poc-down     stop everything and DELETE the data (volumes), as before
+# Compose's `include` reads every file even for a stopped profile, so `${VAR:?}` cannot live
+# in them: `bi-check` verifies the Superset variables before `up`. The project name did not
+# change, so the volumes of an existing install (lake, Postgres) are kept.
+BI_SERVICES = bi-init superset
+CATALOG_SERVICES = postgresql elasticsearch execute-migrate-all openmetadata-server ingestion
+OM_VOLUMES = om-postgres-data es-data ingestion-volume-dag-airflow ingestion-volume-dags ingestion-volume-tmp
 
-# The ingestion container joins the network of PFP's Postgres (T30): start it first
-# (`make poc-up`, project pfp-poc), or set PFP_NETWORK to another project's network.
-om-up:
-	@docker network inspect "$${PFP_NETWORK:-pfp-poc_default}" >/dev/null 2>&1 || \
-		{ echo "No Docker network $${PFP_NETWORK:-pfp-poc_default}: run 'make poc-up' first (PFP's Postgres must be up)." >&2; exit 1; }
+bi-check: pg-check
+	@set -a && . ./.env && set +a && \
+	missing="" && \
+	{ [ -n "$$PFP_BI_DB_PASSWORD" ] || missing="$$missing PFP_BI_DB_PASSWORD"; } && \
+	{ [ -n "$$PFP_BI_ADMIN_PASSWORD" ] || missing="$$missing PFP_BI_ADMIN_PASSWORD"; } && \
+	{ [ -n "$$PFP_BI_SECRET_KEY" ] || missing="$$missing PFP_BI_SECRET_KEY"; } && \
+	{ [ -z "$$missing" ] || { echo "set$$missing in .env (see .env.example, SETUP.md section 12)" >&2; exit 2; }; }
+
+# Before T37 Superset and OpenMetadata ran as their own projects (`pfp-bi`, `pfp-om`), on
+# their own ports: stop any left over so the ports are free for the one project.
+legacy-down:
+	@for p in pfp-bi pfp-om; do \
+		ids=$$(docker ps -aq --filter "label=com.docker.compose.project=$$p"); \
+		if [ -n "$$ids" ]; then echo "stopping the old $$p project"; docker rm -f $$ids >/dev/null; \
+			docker network rm "$${p}_default" >/dev/null 2>&1 || true; fi; \
+	done
+
+up: bi-check legacy-down
+	set -a && . ./.env && set +a && $(PFP) --profile bi up -d --build --wait seaweedfs postgres $(BI_SERVICES)
+	set -a && . ./.env && set +a && $(PFP) run --rm bucket-init
+	@$(MAKE) --no-print-directory status
+
+up-catalog: up
 	mkdir -p openmetadata/artifacts
-	$(OM_COMPOSE) up -d --wait
+	set -a && . ./.env && set +a && $(PFP) --profile bi --profile catalog up -d --wait $(CATALOG_SERVICES)
+	@$(MAKE) --no-print-directory status
+
+status:
+	@set -a && . ./.env && set +a && $(PFP) --profile bi --profile catalog ps --format 'table {{.Name}}\t{{.Status}}'
+	@set -a && . ./.env && set +a && \
+	echo "" && echo "Storage (S3):  http://localhost:$${SEAWEEDFS_S3_PORT:-8333}" && \
+	echo "Superset:      http://localhost:$${PFP_BI_PORT:-8088}   (admin / PFP_BI_ADMIN_PASSWORD)" && \
+	echo "OpenMetadata:  http://localhost:$${OPENMETADATA_PORT:-8585}   (only after make up-catalog)" && \
+	echo "Dagster:       uv run dagster dev  ->  http://localhost:3000"
+
+down:
+	set -a && . ./.env && set +a && $(PFP) --profile bi --profile catalog down --remove-orphans
+
+# OpenMetadata catalog and column-level lineage (T24, ADR 0023): optional, local only, never
+# run by CI (~4.6 GiB of containers at idle). `om-up` is `up-catalog`; `om-down` stops the
+# catalog and DELETES its volumes and artifacts (Postgres and Superset keep running).
+om-up: up-catalog
 
 # Needs `dbt build` to have run against the lake (`dbt docs generate` reads the built
-# tables' columns), so: `make poc-up`, export .env, `dbt build`, then this. Registers
+# tables' columns), so: `make up`, export .env, `dbt build`, then this. Registers
 # bronze, ingests silver and gold with OpenMetadata's native Postgres connector, runs
 # the dbt workflow (lineage), then fails unless gold.fact_transactions.amount traces
 # back to bronze.transactions.amount.
@@ -92,36 +142,30 @@ om-sync:
 	set -a && . ./.env && set +a && \
 	uv run dbt docs generate --project-dir dbt --profiles-dir dbt
 	set -a && . ./.env && set +a && uv run python -m scripts.openmetadata_sync sync
-	$(OM_COMPOSE) exec -T ingestion metadata ingest -c /opt/pfp-artifacts/postgres-workflow.yaml
-	$(OM_COMPOSE) exec -T ingestion metadata ingest -c /opt/pfp-artifacts/dbt-workflow.yaml
+	$(PFP) --profile catalog exec -T ingestion metadata ingest -c /opt/pfp-artifacts/postgres-workflow.yaml
+	$(PFP) --profile catalog exec -T ingestion metadata ingest -c /opt/pfp-artifacts/dbt-workflow.yaml
 	uv run python -m scripts.openmetadata_sync check
 
 om-down:
-	$(OM_COMPOSE) down -v
+	set -a && . ./.env && set +a && $(PFP) --profile catalog rm -sf $(CATALOG_SERVICES)
+	docker volume rm -f $(foreach v,$(OM_VOLUMES),$(PFP_PROJECT)_$(v)) >/dev/null
 	rm -rf openmetadata/artifacts
 
-# Apache Superset (T32, ADR 0030): optional, local only, never run by CI. Its own project
-# (`pfp-bi`), started by hand, not by `make poc-up`. It joins the network of PFP's Postgres
-# (start that first) and reads gold as the read-only role; its metadata is in a `superset`
-# database of the same Postgres. `bi-down` removes only Superset's container and image
-# layers; its dashboards are in bi/assets (committed) and come back on the next `bi-up`.
-BI_COMPOSE = docker compose -f bi/docker-compose.yml -p pfp-bi
-
-bi-up:
-	set -a && . ./.env && set +a && \
-	{ docker network inspect "$${PFP_NETWORK:-pfp-poc_default}" >/dev/null 2>&1 || \
-		{ echo "No Docker network $${PFP_NETWORK:-pfp-poc_default}: run 'make poc-up' first (PFP's Postgres must be up)." >&2; exit 1; }; } && \
-	$(BI_COMPOSE) up -d --build --wait
+# Apache Superset (T32, ADR 0030): optional, local only, never run by CI. `bi-up` starts
+# just Superset next to a running Postgres (`make up` starts everything); `bi-down` removes
+# its containers. Its dashboards are in bi/assets (committed) and come back on the next start.
+bi-up: bi-check legacy-down
+	set -a && . ./.env && set +a && $(PFP) --profile bi up -d --build --wait $(BI_SERVICES)
 	@echo "Superset: http://localhost:8088 (user admin, password PFP_BI_ADMIN_PASSWORD from .env)"
 
 bi-down:
-	set -a && . ./.env && set +a && $(BI_COMPOSE) down
+	set -a && . ./.env && set +a && $(PFP) --profile bi rm -sf $(BI_SERVICES)
 
 # DROPS the `superset` database in PFP's Postgres: Superset's users and dashboards (only
 # re-importable state; `pfp` is untouched). The next `bi-up` re-imports bi/assets. Needed
 # before `make bi-export` re-authors them.
 bi-reset: bi-down
-	set -a && . ./.env && set +a && docker compose -f docker-compose.yml -p pfp-poc exec -T postgres \
+	set -a && . ./.env && set +a && $(PFP) exec -T postgres \
 		psql -U "$$PFP_PG_USER" -d "$$PFP_PG_DATABASE" -c 'drop database if exists superset with (force)'
 
 # Rewrites bi/assets from a fresh Superset: `rm bi/assets/*`, `make bi-reset bi-up`, this.

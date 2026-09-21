@@ -75,3 +75,27 @@ def test_the_makefile_has_one_command_up_and_down() -> None:
         assert re.search(rf"^{target}:", makefile, re.M), target
     up = makefile[makefile.index("\nup:") :].split("\n\n")[0]
     assert "--profile bi" in up
+
+
+def test_superset_setup_waits_for_the_postgres_it_configures() -> None:
+    """One project: nothing else orders bi-init after Postgres, so it must say so."""
+    depends = _load("bi")["services"]["bi-init"]["depends_on"]
+
+    assert depends["postgres"]["condition"] == "service_healthy"
+
+
+def test_no_target_hardcodes_the_real_project_so_a_test_run_cannot_touch_it() -> None:
+    """`make poc-down` deletes volumes. It once ran against the owner's real stack while
+    only being tried on a throwaway one, because it named `-p pfp-poc` instead of using
+    the PFP_PROJECT variable. Every compose call goes through `$(PFP)`; the project name
+    is written once."""
+    makefile = (_ROOT / "Makefile").read_text()
+
+    assert "-p pfp-poc" not in makefile
+    assert "PFP_PROJECT = pfp-poc" in makefile
+    literal = [
+        line
+        for line in makefile.splitlines()
+        if "docker compose" in line and not line.lstrip().startswith("#")
+    ]
+    assert literal == ["PFP = docker compose -p $(PFP_PROJECT)"], literal

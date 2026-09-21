@@ -382,28 +382,26 @@ only the table name is shown, since there is no Postgres to count in.
 ## 10. Browsing the catalog and lineage in OpenMetadata (T24)
 
 Optional. `openmetadata/docker-compose.yml` runs OpenMetadata 2.0.2 with PostgreSQL and
-Elasticsearch under its own project name (`pfp-om`), ephemeral like the SeaweedFS one
-(ADR 0007): `make om-down` removes every volume. Make sure WSL2 has the memory first
+Elasticsearch as part of the platform's one Compose project (behind the `catalog` profile, ADR 0032),
+ephemeral like the SeaweedFS one (ADR 0007): `make om-down` removes its volumes. Make sure WSL2 has the memory first
 (requirements table above); after editing `.wslconfig`, run `wsl --shutdown` from PowerShell.
 CI never runs this stack (ADR 0023).
 
 ```bash
-make poc-up                          # local S3 and Postgres, as in section 6
+make up                              # storage, Postgres and Superset (section 13); `make poc-up` is enough too
 set -a && source .env && set +a
 uv run dbt deps --project-dir dbt --profiles-dir dbt
 uv run dbt build --project-dir dbt --profiles-dir dbt   # or `dagster asset materialize`, section 9
 
-make om-up                           # ~5 minutes to become healthy the first time
+make up-catalog                      # adds OpenMetadata; ~5 minutes to become healthy the first time
 make om-sync                         # docs generate, register bronze, ingest silver/gold, check the lineage
 ```
 
 Since T30 OpenMetadata reads silver and gold with its **native Postgres connector**: the `ingestion`
-container joins the Docker network of your Postgres (`pfp-poc_default`; `make om-up` stops with a clear
-message if `make poc-up` has not run, and `PFP_NETWORK` -- exported in your shell, not set in `.env` -- selects another project's network, whose Postgres service must be named `postgres`) and connects
-as `postgres:5432` with the `PFP_PG_USER`/`PFP_PG_PASSWORD` from `.env`. Those credentials are written to
+container is in the same project (and network) as your Postgres and connects as `postgres:5432` with the
+`PFP_PG_USER`/`PFP_PG_PASSWORD` from `.env`. Those credentials are written to
 `openmetadata/artifacts/postgres-workflow.yaml` (gitignored, removed by `make om-down`), next to the
-short-lived token the dbt workflow already needs. Run `make om-down` before `make poc-down`: while the
-`ingestion` container is attached, Docker cannot remove the `pfp-poc_default` network. Only bronze -- Delta tables the connector cannot see --
+short-lived token the dbt workflow already needs. Only bronze -- Delta tables the connector cannot see --
 is still registered by `scripts/openmetadata_sync.py`, from `lakehouse/bronze.py`'s schemas.
 
 `make om-sync` ends with `OK: 1 column-level path(s) from ...bronze.transactions.amount`, or
@@ -426,18 +424,18 @@ catalogued and dbt tests are not ingested.
 
 ## 12. Dashboards in Apache Superset (T32)
 
-Optional, like OpenMetadata: `bi/docker-compose.yml` runs Superset 5.0.0 under its own project
-(`pfp-bi`). CI never runs it and `make poc-up` does not start it. **Measured: 335 MiB idle and after
+Optional, like OpenMetadata: `bi/docker-compose.yml` runs Superset 5.0.0 as part of the platform's one
+Compose project (behind the `bi` profile, ADR 0032). CI never runs it and `make poc-up` does not start
+it (`make up` does). **Measured: 335 MiB idle and after
 loading every chart** (one container; the image is 3.7 GB on disk), far below OpenMetadata's ~4.6 GiB,
 so no `.wslconfig` change is needed on top of section 10's.
 
 ```bash
-make poc-up                          # local S3 and Postgres, as in section 6
 # fill in .env (see .env.example): PFP_BI_DB_PASSWORD, PFP_BI_ADMIN_PASSWORD, PFP_BI_SECRET_KEY
+make up                              # storage + Postgres + Superset; builds the image the first time (~2 minutes)
 set -a && source .env && set +a
 uv run pfp ingest --user "$PFP_USER"                    # your data, as in section 6
 uv run dbt build --project-dir dbt --profiles-dir dbt   # gold tables the charts read
-make bi-up                           # builds the image the first time (~2 minutes)
 ```
 
 Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admin`, password
@@ -515,8 +513,6 @@ tables and a continuous `dim_date`), then `make bi-down && make bi-up`.
 - Its own users and dashboards live in a `superset` database of the same Postgres (created by
   `bi/init-metadata.sh`). `make bi-down` stops it; `make bi-reset` also forgets that state, and the next
   `make bi-up` re-imports the committed dashboards from `bi/assets/`.
-- Run `make bi-down` (and `make om-down`) before `make poc-down`: while they are attached, Docker cannot
-  remove the Postgres network.
 - **Changing a dashboard:** edit `bi/build_dashboards.py`, then `rm -r bi/assets/*`, `make bi-reset bi-up`,
   `make bi-export`, and commit the new `bi/assets/`.
 - If `pfp_bi` cannot log in: its password is only read when the Postgres volume is first created
@@ -566,6 +562,25 @@ many rows, how many files need review), never an amount, an account or a file na
    and 1 when a channel failed, whether or not the build was healthy. An *error* alert whose
    delivery fails is not retried: the failure is printed and the exit code is 1, so look at
    `dbt/target/run_results.json` or re-run `make alert`.
+
+## 13. The whole platform with one command (T37)
+
+Storage (SeaweedFS), PostgreSQL, Superset and (optionally) OpenMetadata are **one Docker Compose
+project**, `pfp-poc`: one group in Docker Desktop, one network, one command (ADR 0032).
+
+```bash
+make up            # storage + Postgres + Superset (the dashboards)
+make up-catalog    # ... plus OpenMetadata (~4.6 GiB of RAM; see section 10)
+make status        # what is running, and the URLs
+make down          # stop everything, KEEP the data (the lake, the tables, the dashboards)
+make poc-down      # stop everything and DELETE the data (volumes), as before
+```
+
+`make up` needs the `PFP_PG_*` and `PFP_BI_*` variables of `.env` (it says which one is missing). Dagster
+is not a container: `uv run dagster dev` (http://localhost:3000). **Upgrading from separate stacks:**
+`make up` first stops the old `pfp-bi` and `pfp-om` projects (their ports would clash) and keeps your
+lake and Postgres data, since the project name did not change. `make poc-up` still starts only storage and
+Postgres, and CI is unchanged.
 
 ## Reproducing CI locally (`make ci-local`)
 

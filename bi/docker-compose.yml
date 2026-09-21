@@ -1,26 +1,36 @@
 # Apache Superset: dashboards over PFP's gold schema (T32, ADR 0030).
 #
-# OPTIONAL local infrastructure, like openmetadata/: CI never runs it, `make poc-up` does
-# not start it, and `make bi-up` / `make bi-down` (project `pfp-bi`) do. It joins the Docker
-# network of PFP's own Postgres (project `pfp-poc` by default, `PFP_NETWORK` to change it)
-# and reads it as the read-only role `pfp_bi`, which can see `gold` and nothing else. Its own
-# metadata is in a separate `superset` database of the same Postgres (init-metadata.sh).
-# Only 8088 is published, on 127.0.0.1.
+# Part of the platform's one Compose project (T37, ADR 0032): the root docker-compose.yml
+# includes this file and both services sit behind the `bi` profile, so `make up` starts
+# them with storage and Postgres, and CI never does. They share the project's network: the
+# read-only role `pfp_bi` reaches Postgres as `postgres:5432` and sees `gold` and nothing
+# else. Superset's own metadata is in a separate `superset` database of that Postgres
+# (init-metadata.sh). Only 8088 is published, on 127.0.0.1.
+#
+# No `${VAR:-}` here: an included file is read even when its profile is off, so a required
+# variable would break every project that does not use Superset. `make up` checks the
+# three PFP_BI_* variables first (`make bi-check`).
 
 services:
   bi-init:
+    profiles: ["bi"]
+    # It runs psql against PFP's Postgres, defined in the root file of this same project:
+    # wait until that one is accepting connections.
+    depends_on:
+      postgres:
+        condition: service_healthy
     image: postgres:16.10-alpine
     entrypoint: ["/bin/sh", "/init-metadata.sh"]
     environment:
-      PGPASSWORD: ${PFP_PG_PASSWORD:?PFP_PG_PASSWORD is required (see .env.example)}
-      PFP_PG_USER: ${PFP_PG_USER:?}
-      PFP_PG_DATABASE: ${PFP_PG_DATABASE:?}
-      PFP_BI_DB_PASSWORD: ${PFP_BI_DB_PASSWORD:?PFP_BI_DB_PASSWORD is required (see .env.example)}
+      PGPASSWORD: ${PFP_PG_PASSWORD:-}
+      PFP_PG_USER: ${PFP_PG_USER:-}
+      PFP_PG_DATABASE: ${PFP_PG_DATABASE:-}
+      PFP_BI_DB_PASSWORD: ${PFP_BI_DB_PASSWORD:-}
     volumes:
       - ./init-metadata.sh:/init-metadata.sh:ro
-    networks: [pfp]
 
   superset:
+    profiles: ["bi"]
     build: .
     image: pfp-superset:5.0.0
     depends_on:
@@ -29,10 +39,10 @@ services:
     entrypoint: ["/bin/sh", "/app/start.sh"]
     environment:
       SUPERSET_CONFIG_PATH: /app/superset_config.py
-      SUPERSET_SECRET_KEY: ${PFP_BI_SECRET_KEY:?PFP_BI_SECRET_KEY is required (see .env.example)}
-      PFP_BI_DB_PASSWORD: ${PFP_BI_DB_PASSWORD:?}
-      PFP_BI_ADMIN_PASSWORD: ${PFP_BI_ADMIN_PASSWORD:?PFP_BI_ADMIN_PASSWORD is required (see .env.example)}
-      PFP_PG_BI_PASSWORD: ${PFP_PG_BI_PASSWORD:?}
+      SUPERSET_SECRET_KEY: ${PFP_BI_SECRET_KEY:-}
+      PFP_BI_DB_PASSWORD: ${PFP_BI_DB_PASSWORD:-}
+      PFP_BI_ADMIN_PASSWORD: ${PFP_BI_ADMIN_PASSWORD:-}
+      PFP_PG_BI_PASSWORD: ${PFP_PG_BI_PASSWORD:-}
     ports:
       - "127.0.0.1:${PFP_BI_PORT:-8088}:8088"
     volumes:
@@ -46,9 +56,3 @@ services:
       timeout: 5s
       retries: 30
       start_period: 60s
-    networks: [pfp]
-
-networks:
-  pfp:
-    name: ${PFP_NETWORK:-pfp-poc_default}
-    external: true
