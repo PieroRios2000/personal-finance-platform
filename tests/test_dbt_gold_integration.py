@@ -33,7 +33,14 @@ from typing import Any
 
 import pytest
 
-from ingestion.schema import AccountKind, Currency, Statement, Transaction
+from ingestion.schema import (
+    AccountKind,
+    Currency,
+    InvestmentEntry,
+    InvestmentMonth,
+    Statement,
+    Transaction,
+)
 from lakehouse import bronze
 from tests import pg_store
 from tests.test_dbt_silver_integration import (
@@ -581,3 +588,59 @@ def test_a_debt_balance_is_negative_in_signed_closing_balance(
         }
 
     assert rows == {"asset": ("900.00", "900.00"), "liability": ("300.00", "-300.00")}
+
+
+def test_capital_adds_savings_and_investments_and_carries_the_last_balance_forward(
+    lake: str, tmp_path: Path
+) -> None:
+    """Total capital = the money in your asset accounts plus what your funds are worth,
+    per currency and month. A month a fund has no row keeps its last known value; a debt
+    (a credit card) is not capital."""
+    for period in (_JANUARY, _FEBRUARY, _MARCH):
+        _write(*period)  # BCP asset, closing 900.00, 950.00, 900.00
+    _write(
+        date(2026, 1, 1),
+        date(2026, 1, 31),
+        "0.00",
+        "300.00",  # a card with 300.00 owed: not capital
+        bank="Scotiabank",
+        account_id=_LIABILITY_EGRESO_ACCOUNT_ID,
+        account_kind="liability",
+    )
+    for month, balance in ((1, "500"), (2, "600")):  # no row for March
+        bronze.replace_investment_month(
+            InvestmentMonth(
+                user_id=_USER_ID,
+                place="Fondo A",
+                currency="PEN",
+                year=2026,
+                month=month,
+                month_key=f"fondo-a-{month}",
+                entries=[
+                    InvestmentEntry(
+                        date=date(2026, month, 28),
+                        kind="valorizacion",
+                        amount=Decimal("0"),
+                        balance=Decimal(balance),
+                        detail=None,
+                        position=2,
+                    )
+                ],
+            )
+        )
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    with pg_store.connect() as connection:
+        rows = connection.execute(
+            "select calendar_month, savings_balance, investments_balance, "
+            "total_capital, month_recency from gold.rpt_capital "
+            "where currency = 'PEN' order by calendar_month"
+        ).fetchall()
+
+    assert [(m, str(s), str(i), str(t), r) for m, s, i, t, r in rows] == [
+        ("2026-01", "900.00", "500.00", "1400.00", 3),
+        ("2026-02", "950.00", "600.00", "1550.00", 2),
+        ("2026-03", "900.00", "600.00", "1500.00", 1),
+    ]
