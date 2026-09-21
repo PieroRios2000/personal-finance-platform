@@ -33,7 +33,14 @@ from typing import Any
 
 import pytest
 
-from ingestion.schema import AccountKind, Currency, Statement, Transaction
+from ingestion.schema import (
+    AccountKind,
+    Currency,
+    InvestmentEntry,
+    InvestmentMonth,
+    Statement,
+    Transaction,
+)
 from lakehouse import bronze
 from tests import pg_store
 from tests.test_dbt_silver_integration import (
@@ -509,3 +516,133 @@ def test_every_reporting_view_shares_the_same_calendar_columns(
     # 1 = the latest month of the data, 2 = the one before: a BI tool reads "latest
     # balance" and "change vs previous month" from it, with no sub-query.
     assert recency == [("2026-01", 3), ("2026-02", 2), ("2026-03", 1)]
+
+
+def test_signed_amount_is_the_effect_on_you_the_same_on_every_bank(
+    lake: str, tmp_path: Path
+) -> None:
+    """`amount` keeps each bank's own sign (a credit card charge is positive: debt
+    grows). `signed_amount` is what the movement does to your position, so the same
+    everywhere: money in and debt paid down are positive, money out and new debt are
+    negative."""
+    cases: list[tuple[str, str, AccountKind, str, str]] = [
+        (_ASSET_INGRESO_ACCOUNT_ID, "BCP", "asset", "500.00", "500.00"),
+        (_ASSET_EGRESO_ACCOUNT_ID, "BCP", "asset", "-75.00", "-75.00"),
+        (_LIABILITY_EGRESO_ACCOUNT_ID, "Scotiabank", "liability", "60.00", "-60.00"),
+        (_LIABILITY_PAGO_ACCOUNT_ID, "Scotiabank", "liability", "-40.00", "40.00"),
+    ]
+    for account_id, bank, kind, raw, _ in cases:
+        _write(
+            date(2026, 2, 1),
+            date(2026, 2, 1),
+            "0.00",
+            raw,
+            bank=bank,
+            account_id=account_id,
+            account_kind=kind,
+        )
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    with pg_store.connect() as connection:
+        rows = {
+            account_id: (str(amount), str(signed))
+            for account_id, amount, signed in connection.execute(
+                "select account_id, amount, signed_amount from gold.fact_transactions"
+            ).fetchall()
+        }
+
+    assert rows == {
+        account_id: (raw, signed) for account_id, _, _, raw, signed in cases
+    }
+
+
+def test_a_debt_balance_is_negative_in_signed_closing_balance(
+    lake: str, tmp_path: Path
+) -> None:
+    """A credit card's closing balance is the debt owed (positive as printed). Its
+    `signed_closing_balance` is your position: negative for a debt, so assets minus
+    debts adds up to what you have. An asset account is unchanged."""
+    _write(*_JANUARY)  # BCP asset: closing 900.00
+    _write(
+        date(2026, 1, 1),
+        date(2026, 1, 31),
+        "0.00",
+        "300.00",  # 300 of charges: 300.00 owed
+        bank="Scotiabank",
+        account_id=_LIABILITY_EGRESO_ACCOUNT_ID,
+        account_kind="liability",
+    )
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    with pg_store.connect() as connection:
+        rows = {
+            kind: (str(closing), str(signed))
+            for kind, closing, signed in connection.execute(
+                "select account_kind, closing_balance, signed_closing_balance "
+                "from gold.fct_account_balance_monthly"
+            ).fetchall()
+        }
+
+    assert rows == {"asset": ("900.00", "900.00"), "liability": ("300.00", "-300.00")}
+
+
+def test_capital_adds_savings_and_investments_and_carries_the_last_balance_forward(
+    lake: str, tmp_path: Path
+) -> None:
+    """Total capital = the money in your asset accounts plus what your funds are worth,
+    per currency and month. A month a fund has no row keeps its last known value; a debt
+    (a credit card) is not capital."""
+    for period in (_JANUARY, _FEBRUARY, _MARCH):
+        _write(*period)  # BCP asset, closing 900.00, 950.00, 900.00
+    _write(
+        date(2026, 1, 1),
+        date(2026, 1, 31),
+        "0.00",
+        "300.00",  # a card with 300.00 owed: not capital
+        bank="Scotiabank",
+        account_id=_LIABILITY_EGRESO_ACCOUNT_ID,
+        account_kind="liability",
+    )
+    for month, balance in ((1, "500"), (2, "600")):  # no row for March
+        bronze.replace_investment_month(
+            InvestmentMonth(
+                user_id=_USER_ID,
+                place="Fondo A",
+                currency="PEN",
+                year=2026,
+                month=month,
+                month_key=hashlib.sha256(f"fondo-a-{month}".encode()).hexdigest(),
+                entries=[
+                    InvestmentEntry(
+                        date=date(2026, month, 28),
+                        kind="valorizacion",
+                        amount=Decimal("0"),
+                        balance=Decimal(balance),
+                        detail=None,
+                        position=2,
+                    )
+                ],
+            )
+        )
+
+    result = _dbt_build(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+    with pg_store.connect() as connection:
+        rows = connection.execute(
+            "select calendar_month, savings_balance, investments_balance, "
+            "total_capital, debt_balance, net_position, month_recency "
+            "from gold.rpt_capital where currency = 'PEN' order by calendar_month"
+        ).fetchall()
+
+    # The card's 300.00 debt is not capital, but it is subtracted for the net position,
+    # and (like every holding) carried forward.
+    assert [tuple(str(v) for v in row) for row in rows] == [
+        ("2026-01", "900.00", "500.00", "1400.00", "300.00", "1100.00", "3"),
+        ("2026-02", "950.00", "600.00", "1550.00", "300.00", "1250.00", "2"),
+        ("2026-03", "900.00", "600.00", "1500.00", "300.00", "1200.00", "1"),
+    ]

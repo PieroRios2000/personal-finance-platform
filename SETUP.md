@@ -443,14 +443,21 @@ make bi-up                           # builds the image the first time (~2 minut
 Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admin`, password
 `PFP_BI_ADMIN_PASSWORD`, then *Dashboards* -> **PFP finance**. From the top:
 
-- **Summary cards** (HTML made with Superset's Handlebars chart): income, spending, net and savings
-  rate for the filtered period, and the latest balance with its change against the previous month.
-- **Cash flow** (income green, spending red; internal transfers excluded) and **balance per month**
-  per account.
+- **Summary cards** (HTML made with Superset's Handlebars chart): money in, money out, net and the
+  number of movements for the filtered period; your **total capital** (savings accounts plus
+  investments, with the breakdown) and your **net position** (capital minus debt, with its change
+  against the previous month), both at the latest month. A month an account or fund has no row keeps
+  its last known balance, so the totals do not dip.
+- **Cash flow** (money in green, out red) and **balance per month** per account. Both use the
+  *effect on you* (`signed_amount`, ADR 0031): a credit card charge is out, a payment is in, debt is
+  a negative balance, and transfers between your own accounts count on both sides (a fee between
+  banks shows in the net; filter *Internal transfer* to leave them out).
 - **Investments**: a styled table with each fund's return, and `closing_basis` as a badge right
   beside it (`valuation` = a real month-end value, `last_movement` = only the balance at the last
   movement), plus the return per fund over time and a note on how to read it.
-- **Movements** and **Statement balances**: every gold movement (real descriptions: they never
+- **Movements** and **Statement balances**: every gold movement (`amount` as the bank prints it, and
+  `signed_amount`, the effect on you: on a credit card a charge is negative and a payment positive,
+  ADR 0031) (real descriptions: they never
   leave your machine, so don't screenshot them into a chat) and each account's declared closing
   balance per month, to check against the PDFs. Filter to one bank, account, currency and month and
   compare.
@@ -467,6 +474,12 @@ month of the data.
 The KPI cards need Superset to allow a `<style>` block, CSS classes and script evaluation for the
 Handlebars template (`bi/superset_config.py`: `HTML_SANITIZATION_SCHEMA_EXTENSIONS` and
 `TALISMAN_CONFIG`). Only people who can edit charts can write such HTML; keep that to admins.
+
+**Old charts piling up below the tables:** every earlier `make bi-up` used to add new copies of the
+charts (the exported ids changed on each regeneration). The ids now come from the chart names, and
+`make bi-up` removes the charts of the dashboard that are not in the export (and the datasets no chart
+uses); it prints `cleanup: removed N stale chart(s)`. Charts you build by hand on other dashboards
+are not touched.
 
 **After pulling this change:** `uv run dbt build --project-dir dbt --profiles-dir dbt` (new `rpt_*`
 tables and a continuous `dim_date`), then `make bi-down && make bi-up`.

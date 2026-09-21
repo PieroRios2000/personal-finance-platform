@@ -14,6 +14,8 @@ from decimal import Decimal
 from fpdf import FPDF
 from PIL import Image, ImageDraw, ImageFont
 
+from ingestion.schema import Currency
+
 
 @dataclass(frozen=True)
 class Movement:
@@ -69,6 +71,7 @@ def bcp_statement_pdf(
     closing_balance: Decimal | None = None,
     reconciles: bool = True,
     account_number: str = _ACCOUNT_NUMBER,
+    currency: Currency | None = "PEN",
 ) -> bytes:
     """Render a fictional BCP-style statement as PDF bytes.
 
@@ -113,6 +116,7 @@ def bcp_statement_pdf(
 
     pdf.text(40, 50, "ESTADO DE CUENTA")
     pdf.text(40, 65, f"CUENTA NRO. {account_number}")
+    pdf.text(300, 65, f"MONEDA {_CURRENCY_WORD[currency]}")
     pdf.text(40, 80, f"PERIODO DEL {period_start:%d/%m/%Y} AL {period_end:%d/%m/%Y}")
     pdf.text(40, 100, f"SALDO ANTERIOR {_money(opening_balance)}")
 
@@ -223,6 +227,14 @@ _SPANISH_MONTH_ABBR = {
 
 _REAL_ACCOUNT_NUMBER = "000-00000000-0-00"
 
+# The word BCP prints for an account's currency (under "MONEDA").
+# `None` prints no currency at all (a layout the parser cannot read).
+_CURRENCY_WORD: dict[Currency | None, str] = {
+    "PEN": "SOLES",
+    "USD": "DOLARES",
+    None: "",
+}
+
 
 def bcp_real_layout_statement_pdf(
     *,
@@ -231,6 +243,7 @@ def bcp_real_layout_statement_pdf(
     closing_balance: Decimal | None = None,
     reconciles: bool = True,
     account_number: str = _REAL_ACCOUNT_NUMBER,
+    currency: Currency | None = "PEN",
     row_description_x: float = 240,
     zero_and_real_row: Decimal | None = None,
     garble_first_row_charge: bool = False,
@@ -304,7 +317,7 @@ def bcp_real_layout_statement_pdf(
 
     pdf.text(40, 50, "ESTADO DE CUENTA")
     pdf.text(40, 65, "TIPO DE CUENTA MONEDA")
-    pdf.text(40, 80, f"{account_number} SOLES")
+    pdf.text(40, 80, f"{account_number} {_CURRENCY_WORD[currency]}")
     pdf.text(
         40,
         95,
@@ -330,8 +343,8 @@ def bcp_real_layout_statement_pdf(
             charge = _money(Decimal("0.00"))
         if garble_first_row_charge and row_index == 0:
             charge = "REF.A1B2"
-        # A different processing date than the value date, so a test can
-        # prove the parser reads the *second* FECHA column, not the first.
+        # The first date column, a day before the second, so a test can tell which of
+        # the two the parser keeps (the first).
         proc_date = movement.when.replace(day=max(1, movement.when.day - 1))
         proc_abbr = _SPANISH_MONTH_ABBR[proc_date.month]
         pdf.text(40, row_y, f"{proc_date.day:02d}{proc_abbr}")
@@ -415,8 +428,8 @@ def scotiabank_statement_pdf(
     Matches the real layout confirmed from a masked dump (T9, T18): no
     "CUENTA NRO."/"PERIODO" adjacency the way BCP has, a two-line header
     (FECHA x2 + DESCRIPCION, then SOLES/DOLARES on the *next* line), a
-    DD-MM-YYYY period, DD/MM/YY row dates (two columns, only the second one
-    used, same "value date wins" rule as BCP), a bare 8-digit account code
+    DD-MM-YYYY period, DD/MM/YY row dates (two columns, only the first
+    one is kept), a bare 8-digit account code
     (no adjacent label — found by shape) sitting next to a card number the
     bank itself already masks (`0000-0000-****-0000`, present as realistic
     noise the parser must *not* mistake for the account code), "Saldo
@@ -637,6 +650,7 @@ def bcp_scanned_statement_pdf(
     pdf.set_font("Helvetica", size=9)
     pdf.text(40, 50, "ESTADO DE CUENTA")
     pdf.text(40, 65, f"CUENTA NRO. {_ACCOUNT_NUMBER}")
+    pdf.text(300, 65, f"MONEDA {_CURRENCY_WORD['PEN']}")
     pdf.text(40, 80, f"PERIODO DEL {period_start:%d/%m/%Y} AL {period_end:%d/%m/%Y}")
     pdf.text(40, 100, f"SALDO ANTERIOR {_money(opening_balance)}")
     pdf.text(40, 115, f"SALDO ACTUAL {_money(printed_closing)}")

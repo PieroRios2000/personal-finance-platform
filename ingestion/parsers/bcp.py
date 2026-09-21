@@ -23,6 +23,7 @@ never silently.
 
 import io
 import re
+import unicodedata
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -34,6 +35,7 @@ import pikepdf
 from ingestion import ocr
 from ingestion.reconciliation import reconcile
 from ingestion.schema import (
+    Currency,
     Statement,
     Transaction,
     hash_account,
@@ -206,6 +208,34 @@ def _find_account_number(words: list[Word]) -> str | None:
     return None
 
 
+def _classify_currency(text: str) -> Currency | None:
+    """PEN or USD from the words BCP prints for an account's currency (`SOLES`,
+    `DOLARES`, or the ISO code), ignoring case and accents; None if neither."""
+    plain = unicodedata.normalize("NFKD", text)
+    words = "".join(c for c in plain if not unicodedata.combining(c)).upper().split()
+    if any(w.startswith(("DOLAR", "USD", "US$")) for w in words):
+        return "USD"
+    if any(w.startswith(("SOL", "PEN", "S/")) for w in words):
+        return "PEN"
+    return None
+
+
+def _find_currency(lines: list[list[Word]], account_number: str) -> Currency | None:
+    """The account's currency, printed as a word (SOLES / DOLARES) either after the
+    account number on its own line (the real layout, under the MONEDA header) or after
+    a MONEDA label. Reading it from the PDF matters: a BCP account can be in dollars,
+    and treating every account as soles mixes its movements into the soles totals."""
+    for line in lines:
+        texts = [word["text"] for word in line]
+        for anchor in (account_number, "MONEDA", "MONEDA:"):
+            if anchor in texts:
+                after = texts[texts.index(anchor) + 1 :]
+                currency = _classify_currency(" ".join(after))
+                if currency:
+                    return currency
+    return None
+
+
 def _find_period(lines: list[list[Word]]) -> tuple[date, date] | None:
     """A line containing both "DEL" and "AL", each followed by a date — the
     real layout has no leading "PERIODO" label."""
@@ -353,6 +383,13 @@ def parse(
             "BCP statement"
         )
 
+    currency = _find_currency(lines, account_number)
+    if currency is None:
+        raise ValueError(
+            "could not read the account's currency (SOLES or DOLARES, under MONEDA) "
+            "in this BCP statement"
+        )
+
     account_id = hash_account("BCP", account_number)
     account_last4 = last4_of(account_number)
     period_start, period_end = period
@@ -415,7 +452,7 @@ def parse(
                 date=_row_date(row_date, period_start, period_end),
                 description=normalize_description(" ".join(description_words)),
                 amount=amount,
-                currency="PEN",
+                currency=currency,
                 source_file_sha256=file_sha256,
             )
         )
@@ -433,11 +470,10 @@ def parse(
         # owed. A constant, not read from the PDF — a bank's own product
         # type doesn't vary per statement (T18a, ADR 0015).
         account_kind="asset",
-        # BCP is Soles-only: every transaction built above is already hardcoded
-        # to currency="PEN" (this parser's module docstring: "a BCP account
-        # statement covers one account in one currency"), so the statement
-        # itself is too (T18c, ADR 0016).
-        currency="PEN",
+        # Read from the PDF (SOLES or DOLARES under MONEDA): a BCP account is in one
+        # currency, and it is not always soles. Every transaction above carries it too
+        # (T18c, ADR 0016).
+        currency=currency,
         transactions=transactions,
     )
     reconcile(statement)

@@ -9,7 +9,7 @@ slug: pfp-finance
 certified_by: null
 certification_details: null
 published: true
-uuid: 931829d1-aa09-43dc-889a-110413efd1f5
+uuid: 5d07abfc-0183-5581-b2a4-c53e31304b23
 position:
   DASHBOARD_VERSION_KEY: v2
   ROOT_ID:
@@ -27,6 +27,7 @@ position:
     - ROW-3
     - ROW-4
     - ROW-5
+    - ROW-6
     parents:
     - ROOT_ID
   HEADER_ID:
@@ -43,11 +44,21 @@ position:
     - GRID_ID
     - ROW-0
     meta:
-      width: 8
+      width: 12
       height: 22
-      chartId: 1
-      uuid: 9005a9cf-d6e7-4494-8b96-5aa0d425097f
+      chartId: 27
+      uuid: 0714ed2a-7dbb-519a-98c9-888bf4127391
       sliceName: Cash flow summary
+  ROW-0:
+    type: ROW
+    id: ROW-0
+    children:
+    - CHART-0
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
   CHART-1:
     type: CHART
     id: CHART-1
@@ -55,24 +66,13 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-0
+    - ROW-1
     meta:
-      width: 4
+      width: 6
       height: 22
-      chartId: 2
-      uuid: afd81f2b-2a55-4fd9-b991-44e5f596b656
-      sliceName: Balance summary
-  ROW-0:
-    type: ROW
-    id: ROW-0
-    children:
-    - CHART-0
-    - CHART-1
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    meta:
-      background: BACKGROUND_TRANSPARENT
+      chartId: 28
+      uuid: 995bb779-2eb3-5d2b-b038-9820d2bd06ec
+      sliceName: Capital summary
   CHART-2:
     type: CHART
     id: CHART-2
@@ -83,10 +83,21 @@ position:
     - ROW-1
     meta:
       width: 6
-      height: 50
-      chartId: 3
-      uuid: 0e96267e-283b-4c9f-81ef-3dcb0d2df9e7
-      sliceName: 'Cash flow: income and spending'
+      height: 22
+      chartId: 29
+      uuid: ab570cbe-f8aa-51d2-a8db-1329c1b1eb55
+      sliceName: Net position summary
+  ROW-1:
+    type: ROW
+    id: ROW-1
+    children:
+    - CHART-1
+    - CHART-2
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
   CHART-3:
     type: CHART
     id: CHART-3
@@ -94,24 +105,13 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-1
+    - ROW-2
     meta:
       width: 6
       height: 50
-      chartId: 4
-      uuid: 3a908e70-237d-4415-aadf-c0926740ae76
-      sliceName: Balance per month (asset accounts)
-  ROW-1:
-    type: ROW
-    id: ROW-1
-    children:
-    - CHART-2
-    - CHART-3
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    meta:
-      background: BACKGROUND_TRANSPARENT
+      chartId: 30
+      uuid: 49f14305-2e47-5c9a-a798-94b91a277406
+      sliceName: 'Cash flow: money in and out'
   CHART-4:
     type: CHART
     id: CHART-4
@@ -121,15 +121,16 @@ position:
     - GRID_ID
     - ROW-2
     meta:
-      width: 12
-      height: 32
-      chartId: 5
-      uuid: 44590ce6-6f7e-45f3-b956-a0eeacc66941
-      sliceName: 'Investments: return and how each month closed'
+      width: 6
+      height: 50
+      chartId: 31
+      uuid: 36343172-f26c-5149-9619-3a7abdb2a66d
+      sliceName: Balance per month (debt is negative)
   ROW-2:
     type: ROW
     id: ROW-2
     children:
+    - CHART-3
     - CHART-4
     parents:
     - ROOT_ID
@@ -145,10 +146,34 @@ position:
     - GRID_ID
     - ROW-3
     meta:
+      width: 12
+      height: 32
+      chartId: 32
+      uuid: f90318a4-53b4-5473-a1c3-c47cb7c1f3f8
+      sliceName: 'Investments: return and how each month closed'
+  ROW-3:
+    type: ROW
+    id: ROW-3
+    children:
+    - CHART-5
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-6:
+    type: CHART
+    id: CHART-6
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-4
+    meta:
       width: 8
       height: 50
-      chartId: 6
-      uuid: 22ef997b-2569-46b8-bfc8-f9486c55c3db
+      chartId: 33
+      uuid: 77bb74fe-4bbd-527b-af20-060bbc44471a
       sliceName: 'Investments: return per fund over time'
   MARKDOWN-note:
     type: MARKDOWN
@@ -157,7 +182,7 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-3
+    - ROW-4
     meta:
       width: 4
       height: 50
@@ -175,36 +200,12 @@ position:
 
 
         One currency at a time: use the **Currency** filter.'
-  ROW-3:
-    type: ROW
-    id: ROW-3
-    children:
-    - CHART-5
-    - MARKDOWN-note
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    meta:
-      background: BACKGROUND_TRANSPARENT
-  CHART-6:
-    type: CHART
-    id: CHART-6
-    children: []
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-4
-    meta:
-      width: 12
-      height: 60
-      chartId: 7
-      uuid: 0e46c611-655e-483b-8736-f5feee80f14d
-      sliceName: Movements (check against your statements)
   ROW-4:
     type: ROW
     id: ROW-4
     children:
     - CHART-6
+    - MARKDOWN-note
     parents:
     - ROOT_ID
     - GRID_ID
@@ -221,14 +222,38 @@ position:
     meta:
       width: 12
       height: 60
-      chartId: 8
-      uuid: aac5310a-924b-4fd4-be81-0848517456af
-      sliceName: Statement balances (check against your statements)
+      chartId: 34
+      uuid: 8e81aaab-2fd3-59b0-b902-2d95666db6b9
+      sliceName: Movements (check against your statements)
   ROW-5:
     type: ROW
     id: ROW-5
     children:
     - CHART-7
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-8:
+    type: CHART
+    id: CHART-8
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-6
+    meta:
+      width: 12
+      height: 60
+      chartId: 35
+      uuid: e0814a73-2359-50f6-aeb8-4d63a6174f02
+      sliceName: Statement balances (check against your statements)
+  ROW-6:
+    type: ROW
+    id: ROW-6
+    children:
+    - CHART-8
     parents:
     - ROOT_ID
     - GRID_ID
@@ -242,7 +267,7 @@ metadata:
     targets:
     - column:
         name: currency
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 421b5769-3581-5c67-928a-84023a5f132f
     controlValues:
       multiSelect: false
       enableEmptyFilter: true
@@ -284,7 +309,7 @@ metadata:
     name: Time grain
     filterType: filter_timegrain
     targets:
-    - datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+    - datasetUuid: 421b5769-3581-5c67-928a-84023a5f132f
     controlValues: {}
     defaultDataMask:
       filterState:
@@ -304,7 +329,7 @@ metadata:
     targets:
     - column:
         name: calendar_year
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 421b5769-3581-5c67-928a-84023a5f132f
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -326,7 +351,7 @@ metadata:
     targets:
     - column:
         name: calendar_quarter
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 421b5769-3581-5c67-928a-84023a5f132f
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -348,7 +373,7 @@ metadata:
     targets:
     - column:
         name: calendar_month
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 421b5769-3581-5c67-928a-84023a5f132f
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -370,7 +395,7 @@ metadata:
     targets:
     - column:
         name: bank
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 421b5769-3581-5c67-928a-84023a5f132f
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -392,7 +417,7 @@ metadata:
     targets:
     - column:
         name: account_last4
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 421b5769-3581-5c67-928a-84023a5f132f
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -414,7 +439,7 @@ metadata:
     targets:
     - column:
         name: flow_type
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 421b5769-3581-5c67-928a-84023a5f132f
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -436,7 +461,7 @@ metadata:
     targets:
     - column:
         name: is_internal_transfer
-      datasetUuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+      datasetUuid: 421b5769-3581-5c67-928a-84023a5f132f
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -458,7 +483,7 @@ metadata:
     targets:
     - column:
         name: place
-      datasetUuid: d7159e4d-b826-4531-8e9a-5533bdf50612
+      datasetUuid: 673c06bf-c577-5fb4-b52b-54ddbe349e43
     controlValues:
       multiSelect: true
       enableEmptyFilter: false
@@ -475,8 +500,8 @@ metadata:
       excluded: []
     type: NATIVE_FILTER
   label_colors:
-    ingreso: '#1f9d6b'
-    egreso: '#e5484d'
+    in: '#1f9d6b'
+    out: '#e5484d'
   timed_refresh_immune_slices: []
   expanded_slices: {}
   refresh_frequency: 0

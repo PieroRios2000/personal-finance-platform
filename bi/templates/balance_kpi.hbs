@@ -1,7 +1,7 @@
 {{#each data}}
 <div class="kpis">
-  <div class="kpi bal"><div class="label">Balance, latest month</div>
+  <div class="kpi bal"><div class="label">Net position, latest month</div>
     <div class="value">{{currency}} {{balance}}</div>
-    <div class="note">{{month}} &middot; {{#if change_positive}}<span class="up">&#9650;{{else}}<span class="down">&#9660;{{/if}} {{change}}</span> vs previous month</div></div>
+    <div class="note">{{month}} &middot; {{#if change_positive}}<span class="up">&#9650;{{else}}<span class="down">&#9660;{{/if}} {{change}}</span> vs previous month (assets minus debt)</div></div>
 </div>
 {{/each}}

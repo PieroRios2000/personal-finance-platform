@@ -19,18 +19,22 @@ params:
   - account_kind
   - currency
   - closing_balance
+  - signed_closing_balance
   order_by_cols:
   - '["closing_date", false]'
   column_config:
     closing_balance:
       d3NumberFormat: ',.2f'
       horizontalAlign: right
+    signed_closing_balance:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
   row_limit: 1000
   include_search: true
-  datasource: 2__table
+  datasource: 10__table
   viz_type: table
 query_context: null
 cache_timeout: null
-uuid: aac5310a-924b-4fd4-be81-0848517456af
+uuid: e0814a73-2359-50f6-aeb8-4d63a6174f02
 version: 1.0.0
-dataset_uuid: 4bea080f-76b3-484a-9110-231133233bd7
+dataset_uuid: c86e2242-660c-530a-a3af-77b867584bc3

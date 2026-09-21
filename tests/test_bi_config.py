@@ -145,15 +145,31 @@ def test_the_timeseries_axes_show_the_full_date() -> None:
     assert all(c[3]["x_axis_time_format"] == "%d %b %Y" for c in series)
 
 
-def test_the_cash_flow_chart_excludes_internal_transfers() -> None:
-    chart = _charts()["Cash flow: income and spending"][3]
-    filters = [
-        f["sqlExpression"] for f in chart["adhoc_filters"] if "sqlExpression" in f
-    ]
+def test_cash_flow_uses_signed_amount_and_counts_transfers_between_accounts() -> None:
+    """Money in and out is `signed_amount` (ADR 0031), the same on every bank; movements
+    between your own accounts count on both sides, so a fee between banks shows."""
+    chart = _charts()["Cash flow: money in and out"][3]
+    text = json.dumps(chart)
 
-    assert "NOT is_internal_transfer" in filters
-    # Income and spending get fixed colours by label (set on the dashboard).
-    assert chart["label_colors"] == {"ingreso": "#1f9d6b", "egreso": "#e5484d"}
+    assert chart["metrics"][0]["sqlExpression"] == "SUM(signed_amount)"
+    assert "is_internal_transfer" not in text
+    assert "flow_type" not in text
+    assert chart["label_colors"] == {"in": "#1f9d6b", "out": "#e5484d"}
+    summary = json.dumps(_charts()["Cash flow summary"][3])
+    assert "signed_amount" in summary and "is_internal_transfer" not in summary
+
+
+def test_balances_use_the_signed_closing_balance_so_debt_is_negative() -> None:
+    charts = _charts()
+    line = charts["Balance per month (debt is negative)"][3]
+    summary = charts["Net position summary"]
+
+    assert line["metrics"][0]["sqlExpression"] == "SUM(signed_closing_balance)"
+    assert "account_kind" not in json.dumps(line)  # debts are in, not filtered out
+    # The card is capital minus debt, carried forward like every holding.
+    assert summary[0] == "rpt_capital" and "net_position" in json.dumps(summary[3])
+    table = charts["Statement balances (check against your statements)"][3]
+    assert {"closing_balance", "signed_closing_balance"} <= set(table["all_columns"])
 
 
 def test_the_investments_table_shows_closing_basis_right_beside_the_return() -> None:
@@ -172,9 +188,19 @@ def test_the_movements_and_balances_tables_exist_to_check_against_the_statements
 
     movements = charts["Movements (check against your statements)"]
     assert movements[0] == "rpt_movements"
-    assert {"date", "bank", "currency", "flow_type", "amount", "description"} <= set(
-        movements[3]["all_columns"]
-    )
+    assert {
+        "date",
+        "bank",
+        "currency",
+        "flow_type",
+        "amount",
+        "signed_amount",
+        "description",
+    } <= set(movements[3]["all_columns"])
+    # Colours follow the effect on you, not each bank's own sign.
+    assert {f["column"] for f in movements[3]["conditional_formatting"]} == {
+        "signed_amount"
+    }
     balances = charts["Statement balances (check against your statements)"]
     assert balances[0] == "rpt_balances"
     assert {"closing_date", "account_last4", "closing_balance"} <= set(
@@ -211,3 +237,41 @@ def test_every_chart_in_the_layout_is_tied_to_its_chart_by_uuid() -> None:
     cells = [v for k, v in layout.items() if k.startswith("CHART-")]
     assert len(cells) == len(names)
     assert {c["meta"]["uuid"] for c in cells} == set(uuids)
+
+
+def test_exported_uuids_depend_on_the_names_not_on_the_run() -> None:
+    """Every regeneration used to give every object a new uuid, so importing it created
+    new charts beside the old ones (30 charts, 8 wanted). The uuid now comes from the
+    object's kind and name, so an import updates the same objects."""
+    builder = _builder()
+    first = {
+        "charts/a.yaml": "slice_name: Cash flow\nuuid: 1111\n",
+        "dashboards/d.yaml": "dashboard_title: PFP\nslug: pfp\nuuid: 2222\n"
+        "position:\n  meta: {uuid: 1111}\n",
+    }
+    second = {
+        "charts/other_name.yaml": "slice_name: Cash flow\nuuid: 9999\n",
+        "dashboards/x.yaml": "dashboard_title: PFP\nslug: pfp\nuuid: 8888\n"
+        "position:\n  meta: {uuid: 9999}\n",
+    }
+
+    a, b = builder.stable_uuid_map(first), builder.stable_uuid_map(second)
+
+    assert sorted(a.values()) == sorted(b.values())
+    assert len(set(a.values())) == 2
+    assert set(a) == {"1111", "2222"}
+
+
+def test_the_capital_card_adds_savings_and_investments_from_one_dataset() -> None:
+    """Total capital combines savings accounts and investments, which are two different
+    facts: one reporting table (rpt_capital) has both, so a chart can show the sum."""
+    chart = _charts()["Capital summary"]
+    text = json.dumps(chart[3])
+
+    assert chart[0] == "rpt_capital"
+    for column in ("total_capital", "savings_balance", "investments_balance"):
+        assert column in text
+    assert "month_recency = 1" in text
+    assert '"{{total}}"' not in text  # the template, not the metric, shows the value
+    assert "{{savings}}" in chart[3]["handlebarsTemplate"]
+    assert "{{investments}}" in chart[3]["handlebarsTemplate"]

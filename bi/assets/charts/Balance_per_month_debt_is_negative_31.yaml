@@ -1,4 +1,4 @@
-slice_name: 'Investments: return per fund over time'
+slice_name: Balance per month (debt is negative)
 description: null
 certified_by: null
 certification_details: null
@@ -8,30 +8,31 @@ params:
   time_grain_sqla: P1M
   metrics:
   - expressionType: SQL
-    sqlExpression: MAX(return_pct)
-    label: Return
+    sqlExpression: SUM(signed_closing_balance)
+    label: Closing balance
   groupby:
-  - place
+  - bank
+  - account_last4
   adhoc_filters:
   - expressionType: SIMPLE
     subject: month_start
     operator: TEMPORAL_RANGE
     comparator: No filter
     clause: WHERE
-  - expressionType: SQL
-    sqlExpression: is_return_reliable
-    clause: WHERE
+  area: true
+  opacity: 0.25
   markerEnabled: true
+  markerSize: 6
   seriesType: smooth
-  y_axis_format: .2%
   x_axis_time_format: '%d %b %Y'
+  y_axis_format: ',.0f'
   rich_tooltip: true
   row_limit: 10000
   show_legend: true
-  datasource: 3__table
+  datasource: 10__table
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null
-uuid: 22ef997b-2569-46b8-bfc8-f9486c55c3db
+uuid: 36343172-f26c-5149-9619-3a7abdb2a66d
 version: 1.0.0
-dataset_uuid: d7159e4d-b826-4531-8e9a-5533bdf50612
+dataset_uuid: c86e2242-660c-530a-a3af-77b867584bc3

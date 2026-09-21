@@ -14,7 +14,7 @@ fetch_values_predicate: null
 extra: null
 normalize_columns: false
 always_filter_main_dttm: false
-uuid: 0d992e2c-0226-4ed2-9e71-620ddc48d9e0
+uuid: 421b5769-3581-5c67-928a-84023a5f132f
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
@@ -26,6 +26,18 @@ metrics:
   extra: null
   warning_text: null
 columns:
+- column_name: signed_amount
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: NUMERIC(18, 2)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: amount
   verbose_name: null
   is_dttm: false
@@ -219,4 +231,4 @@ columns:
   python_date_format: null
   extra: null
 version: 1.0.0
-database_uuid: aaf2b511-07b9-4f65-bd28-54e82048e8e4
+database_uuid: 1efd4d8d-27dc-50a1-a0ab-ba8b4f599b5f

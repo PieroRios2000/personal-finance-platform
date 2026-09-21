@@ -24,9 +24,10 @@ In short:
 - `Statement.currency` says which of the two currencies a whole statement period is
   in. A Scotiabank credit-card statement is two independent ledgers (ADR 0012), so
   `ingestion/parsers/scotiabank.py` builds one `Statement` per currency that has
-  activity; BCP is Soles-only, so it always sets `"PEN"`. Every transaction in a
-  statement must share its `currency` — enforced by the same consistency check that
-  already requires them to share `user_id`/`bank`/`account_id`. See ADR 0016.
+  activity; BCP reads it from the PDF (SOLES or DOLARES under MONEDA). Every
+  transaction in a statement must share its `currency` — enforced by the same
+  consistency check that already requires them to share `user_id`/`bank`/`account_id`.
+  See ADR 0016.
 """
 
 import hashlib

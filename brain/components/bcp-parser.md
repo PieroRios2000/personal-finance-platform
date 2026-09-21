@@ -112,9 +112,11 @@ reaches `silver.transactions` for T18b's transfer matching.
 
 ## Currency (T18c)
 
-Every `Statement` this parser builds also gets `currency="PEN"`: BCP is Soles-only, confirmed
-from this module's own docstring ("a BCP account statement covers one account in one currency")
-— every `Transaction` built here was already hardcoded to `"PEN"`. See
+Every `Statement` this parser builds also gets a `currency`, **read from the PDF** (fixed after
+the owner found a dollars account read as soles): under the `MONEDA` header the real layout prints
+the account number followed by `SOLES` or `DOLARES` (the ISO code also works), which
+`_find_currency()` classifies (ignoring case and accents). A statement whose currency it cannot
+read raises instead of guessing, so it goes to `_needs_review/`. See
 [ADR 0016](../decisions/0016-currency-aware-statement-continuity.md) for why the field exists
 on `Statement` at all (the continuity test needed it to stop a false positive on Scotiabank's
 dual-currency statements) and why BCP's own case is this simple.
@@ -140,7 +142,7 @@ from a harmful one. It never asserts or prints an extracted value (ADR 0004).
 ## Related
 
 - [ADR 0015: Account kind (asset/liability)](../decisions/0015-account-kind-asset-or-liability.md) — why this parser hardcodes `account_kind="asset"`.
-- [ADR 0016: Currency-aware statement continuity](../decisions/0016-currency-aware-statement-continuity.md) — why this parser hardcodes `currency="PEN"`.
+- [ADR 0016: Currency-aware statement continuity](../decisions/0016-currency-aware-statement-continuity.md) — why the field exists (the parser reads it from the PDF).
 - [ADR 0004: Real PDFs](../decisions/0004-real-pdfs-never-leave-your-machine.md) — why the real-PDF test only checks pass/fail.
 - [Quality bar](quality-bar.md) — the exceptions process this component uses.
 - [Reconciliation](../concepts/reconciliation.md) — `parse()` calls `reconcile()` before returning.

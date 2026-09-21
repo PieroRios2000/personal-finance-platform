@@ -1,0 +1,66 @@
+slice_name: Cash flow summary
+description: null
+certified_by: null
+certification_details: null
+viz_type: handlebars
+params:
+  query_mode: aggregate
+  groupby: []
+  metrics:
+  - expressionType: SQL
+    sqlExpression: MAX(currency)
+    label: currency
+  - expressionType: SQL
+    sqlExpression: to_char(COALESCE(SUM(signed_amount) FILTER (WHERE signed_amount
+      > 0), 0), 'FM999,999,999,990.00')
+    label: money_in
+  - expressionType: SQL
+    sqlExpression: to_char(COALESCE(-SUM(signed_amount) FILTER (WHERE signed_amount
+      < 0), 0), 'FM999,999,999,990.00')
+    label: money_out
+  - expressionType: SQL
+    sqlExpression: to_char(COALESCE(SUM(signed_amount), 0), 'FM999,999,999,990.00')
+    label: net
+  - expressionType: SQL
+    sqlExpression: CASE WHEN COALESCE(SUM(signed_amount), 0) >= 0 THEN 1 ELSE 0 END
+    label: net_positive
+  - expressionType: SQL
+    sqlExpression: to_char(COUNT(*), 'FM999,999,990')
+    label: movements
+  adhoc_filters:
+  - expressionType: SIMPLE
+    subject: date
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    clause: WHERE
+  row_limit: 1
+  handlebarsTemplate: "{{#each data}}\n<div class=\"kpis\">\n  <div class=\"kpi income\"\
+    ><div class=\"label\">Money in</div>\n    <div class=\"value\">{{currency}} {{money_in}}</div><div\
+    \ class=\"note\">incl. transfers between your accounts</div></div>\n  <div class=\"\
+    kpi spend\"><div class=\"label\">Money out</div>\n    <div class=\"value\">{{currency}}\
+    \ {{money_out}}</div><div class=\"note\">incl. transfers between your accounts</div></div>\n\
+    \  <div class=\"kpi net {{#if net_positive}}pos{{else}}neg{{/if}}\"><div class=\"\
+    label\">Net</div>\n    <div class=\"value\">{{currency}} {{net}}</div><div class=\"\
+    note\">in minus out</div></div>\n  <div class=\"kpi rate\"><div class=\"label\"\
+    >Movements</div>\n    <div class=\"value\">{{movements}}</div><div class=\"note\"\
+    >in the filtered period</div></div>\n</div>\n{{/each}}\n"
+  styleTemplate: ".kpis { display: flex; gap: 10px; height: 100%; align-items: stretch;\
+    \ font-family: inherit; }\n.kpi { flex: 1; border-radius: 12px; padding: 12px\
+    \ 14px; display: flex;\n       flex-direction: column; justify-content: center;\
+    \ background: #f7f9fc; border-left: 5px solid #98a2b3; }\n.kpi .label { font-size:\
+    \ 12px; text-transform: uppercase; letter-spacing: .06em; color: #667085; }\n\
+    .kpi .value { font-size: 21px; font-weight: 700; color: #1b2437; margin-top: 4px;\
+    \ white-space: nowrap; }\n.kpi .note { font-size: 12px; color: #667085; margin-top:\
+    \ 2px; }\n.kpi.income { border-left-color: #1f9d6b; } .kpi.spend { border-left-color:\
+    \ #e5484d; }\n.kpi.net.pos { border-left-color: #1f9d6b; } .kpi.net.neg { border-left-color:\
+    \ #e5484d; }\n.kpi.net.pos .value { color: #1f9d6b; } .kpi.net.neg .value { color:\
+    \ #e5484d; }\n.kpi.rate { border-left-color: #6366f1; }\n.kpi.bal { border-left-color:\
+    \ #0ea5e9; }\n.kpi .up { color: #1f9d6b; } .kpi .down { color: #e5484d; }\n.kpi.cap\
+    \ { border-left-color: #a855f7; }\n"
+  datasource: 8__table
+  viz_type: handlebars
+query_context: null
+cache_timeout: null
+uuid: 0714ed2a-7dbb-519a-98c9-888bf4127391
+version: 1.0.0
+dataset_uuid: 421b5769-3581-5c67-928a-84023a5f132f

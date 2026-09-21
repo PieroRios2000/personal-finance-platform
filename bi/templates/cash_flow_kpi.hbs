@@ -1,12 +1,12 @@
 {{#each data}}
 <div class="kpis">
-  <div class="kpi income"><div class="label">Income</div>
-    <div class="value">{{currency}} {{income}}</div><div class="note">without internal transfers</div></div>
-  <div class="kpi spend"><div class="label">Spending</div>
-    <div class="value">{{currency}} {{spending}}</div><div class="note">without internal transfers</div></div>
+  <div class="kpi income"><div class="label">Money in</div>
+    <div class="value">{{currency}} {{money_in}}</div><div class="note">incl. transfers between your accounts</div></div>
+  <div class="kpi spend"><div class="label">Money out</div>
+    <div class="value">{{currency}} {{money_out}}</div><div class="note">incl. transfers between your accounts</div></div>
   <div class="kpi net {{#if net_positive}}pos{{else}}neg{{/if}}"><div class="label">Net</div>
-    <div class="value">{{currency}} {{net}}</div><div class="note">income minus spending</div></div>
-  <div class="kpi rate"><div class="label">Savings rate</div>
-    <div class="value">{{rate}}%</div><div class="note">net / income</div></div>
+    <div class="value">{{currency}} {{net}}</div><div class="note">in minus out</div></div>
+  <div class="kpi rate"><div class="label">Movements</div>
+    <div class="value">{{movements}}</div><div class="note">in the filtered period</div></div>
 </div>
 {{/each}}

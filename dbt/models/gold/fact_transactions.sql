@@ -71,5 +71,14 @@ select
             silver_transactions.account_kind = 'liability'
             and silver_transactions.amount < 0
             then 'pago'
-    end as flow_type
+    end as flow_type,
+    -- What the movement does to your position, the same on every bank: money in and
+    -- debt paid down are positive, money out and new debt are negative. `amount` keeps
+    -- each bank's own sign (a credit card charge is positive there: the debt grows), so
+    -- it still matches the statement; a liability's `signed_amount` is its opposite.
+    case
+        when silver_transactions.account_kind = 'liability'
+            then -silver_transactions.amount
+        else silver_transactions.amount
+    end as signed_amount
 from {{ ref('transactions') }} as silver_transactions
