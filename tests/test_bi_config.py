@@ -236,3 +236,27 @@ def test_every_chart_in_the_layout_is_tied_to_its_chart_by_uuid() -> None:
     cells = [v for k, v in layout.items() if k.startswith("CHART-")]
     assert len(cells) == len(names)
     assert {c["meta"]["uuid"] for c in cells} == set(uuids)
+
+
+def test_exported_uuids_depend_on_the_names_not_on_the_run() -> None:
+    """Every regeneration used to give every object a new uuid, so importing it created
+    new charts beside the old ones (30 charts, 8 wanted). The uuid now comes from the
+    object's kind and name, so an import updates the same objects."""
+    builder = _builder()
+    first = {
+        "charts/a.yaml": "slice_name: Cash flow\nuuid: 1111\n",
+        "dashboards/d.yaml": "dashboard_title: PFP\nslug: pfp\nuuid: 2222\n"
+        "position:\n  meta: {uuid: 1111}\n",
+    }
+    second = {
+        "charts/other_name.yaml": "slice_name: Cash flow\nuuid: 9999\n",
+        "dashboards/x.yaml": "dashboard_title: PFP\nslug: pfp\nuuid: 8888\n"
+        "position:\n  meta: {uuid: 9999}\n",
+    }
+
+    assert (
+        builder.stable_uuid_map(first).values()
+        == builder.stable_uuid_map(second).values()
+    )
+    assert len(set(builder.stable_uuid_map(first).values())) == 2
+    assert set(builder.stable_uuid_map(first)) == {"1111", "2222"}
