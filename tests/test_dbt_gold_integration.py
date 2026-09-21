@@ -615,7 +615,7 @@ def test_capital_adds_savings_and_investments_and_carries_the_last_balance_forwa
                 currency="PEN",
                 year=2026,
                 month=month,
-                month_key=f"fondo-a-{month}",
+                month_key=hashlib.sha256(f"fondo-a-{month}".encode()).hexdigest(),
                 entries=[
                     InvestmentEntry(
                         date=date(2026, month, 28),
