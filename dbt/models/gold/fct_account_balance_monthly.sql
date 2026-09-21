@@ -32,12 +32,19 @@ select
     currency,
     cast(date_trunc('month', period_end) as date) as month_start,
     period_end as closing_date,
+    opening_balance,
     closing_balance,
     -- Your position: a debt is negative, so assets plus debts add up to what you have
     -- (ADR 0031). `closing_balance` stays as the statement declares it.
     case
         when account_kind = 'liability' then -closing_balance
         else closing_balance
-    end as signed_closing_balance
+    end as signed_closing_balance,
+    -- The same for the balance the statement opens with (the first statement's is what
+    -- an account already had before it was loaded): rpt_reconciliation uses it.
+    case
+        when account_kind = 'liability' then -opening_balance
+        else opening_balance
+    end as signed_opening_balance
 from ranked
 where from_the_end = 1
