@@ -12,7 +12,7 @@ BASE ?= origin/develop
 PFP_PROJECT = pfp-poc
 PFP = docker compose -p $(PFP_PROJECT)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -89,6 +89,21 @@ poc:
 BI_SERVICES = bi-init superset
 CATALOG_SERVICES = postgresql elasticsearch execute-migrate-all openmetadata-server ingestion
 OM_VOLUMES = om-postgres-data es-data ingestion-volume-dag-airflow ingestion-volume-dags ingestion-volume-tmp
+
+# A clean clone: `make env` writes a .env with generated secrets (never overwrites yours),
+# `make up` starts the platform, `make demo` loads artificial data and builds the tables, and
+# the dashboard opens at the Superset URL `make status` prints (T33).
+env:
+	uv run python -m scripts.init_env
+
+# Eight closed months of a fictional person, straight to bronze (scripts/seed_demo.py), then
+# silver and gold. Needs `make up` first. Idempotent; real data can be loaded next to it (use
+# a different PFP_USER for it) or the demo removed with `make poc-down`.
+demo:
+	set -a && . ./.env && set +a && uv run python -m scripts.seed_demo && \
+	uv run dbt deps --project-dir dbt --profiles-dir dbt && \
+	uv run dbt build --project-dir dbt --profiles-dir dbt
+	@echo "Open the dashboard: make status shows the Superset URL (user admin)."
 
 bi-check: pg-check
 	@set -a && . ./.env && set +a && \
