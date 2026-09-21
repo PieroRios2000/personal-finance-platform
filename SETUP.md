@@ -271,56 +271,37 @@ make poc   # brings its own environment up and down; no need for poc-up first
 
 ## 7. Browsing the lake in DBeaver
 
-`dbt/pfp.duckdb` (section 6) is a real on-disk DuckDB database, so any DuckDB-aware SQL client
-can open it directly — DBeaver has a built-in driver for it. The commands below also use the
-standalone `duckdb` CLI (not the same as the `duckdb` Python package `uv sync` already
-installs): `curl https://install.duckdb.org | sh` if `which duckdb` comes back empty.
+Silver and gold live in PostgreSQL (section 6, ADR 0029), so DBeaver connects to it natively (no extra
+driver setup beyond the PostgreSQL driver DBeaver offers to download). `make up` (section 13) starts it.
 
-**Silver only, zero extra setup**, after at least one `dbt build`:
+1. DBeaver → *Database* → *New Database Connection* → **PostgreSQL** → Next.
+2. *Host* `localhost`, *Port* `PFP_PG_PORT` (5432), *Database* `PFP_PG_DATABASE` (`pfp`).
+3. Two logins, from `.env`: **`PFP_PG_USER` / `PFP_PG_PASSWORD`** sees everything (`silver`, `gold`, and the
+   `superset` database's own tables are separate), and the read-only role **`pfp_bi` / `PFP_PG_BI_PASSWORD`**
+   sees `gold` only (the one Superset uses). Prefer the read-only one for browsing.
+4. *Test Connection* → Finish. `gold.rpt_movements`, `gold.rpt_reconciliation`, `gold.fact_transactions`
+   and the rest show up in the Database Navigator.
 
-1. DBeaver → *Database* → *New Database Connection* → search **DuckDB** → Next.
-2. *Path*: browse to this repo's `dbt/pfp.duckdb`.
-3. *Test Connection* → DBeaver offers to download the DuckDB JDBC driver from Maven → Download.
-4. Finish. `silver.transactions` shows up in the Database Navigator.
-
-**Bronze too** (the raw Delta tables on SeaweedFS S3) needs a one-time setup, since dbt only
-*reads* bronze through `delta_scan()` at build time — it never materializes it into
-`pfp.duckdb`. Run this once, from the repository root, with SeaweedFS up and `.env` exported
-(same prerequisites as section 6):
+**Bronze** (the raw Delta tables on SeaweedFS S3) is not in Postgres: dbt reads it through `delta_scan()` at
+build time. To query it, use DuckDB with an S3 secret pointing at the local SeaweedFS (only for
+inspection; the platform never needs it):
 
 ```bash
-make poc-up
+make up
 set -a && source .env && set +a
 ENDPOINT_HOST=$(echo "$AWS_ENDPOINT_URL" | sed -E 's#^[a-z]+://##; s#/$##')
-
-duckdb dbt/pfp.duckdb <<SQL
-INSTALL httpfs; LOAD httpfs;
-
-CREATE PERSISTENT SECRET lakehouse (
-    TYPE s3,
-    PROVIDER config,
-    KEY_ID '$AWS_ACCESS_KEY_ID',
-    SECRET '$AWS_SECRET_ACCESS_KEY',
-    REGION '${AWS_REGION:-us-east-1}',
-    ENDPOINT '$ENDPOINT_HOST',
-    URL_STYLE 'path',
-    USE_SSL false
-);
-
-CREATE SCHEMA IF NOT EXISTS bronze;
-CREATE OR REPLACE VIEW bronze.transactions   AS SELECT * FROM delta_scan('s3://lakehouse/bronze/transactions');
-CREATE OR REPLACE VIEW bronze.statements     AS SELECT * FROM delta_scan('s3://lakehouse/bronze/statements');
-CREATE OR REPLACE VIEW bronze.ingested_files AS SELECT * FROM delta_scan('s3://lakehouse/bronze/ingested_files');
+duckdb <<SQL
+INSTALL httpfs; LOAD httpfs; INSTALL delta; LOAD delta;
+CREATE SECRET lakehouse (TYPE s3, PROVIDER config, KEY_ID '$AWS_ACCESS_KEY_ID',
+    SECRET '$AWS_SECRET_ACCESS_KEY', REGION '${AWS_REGION:-us-east-1}',
+    ENDPOINT '$ENDPOINT_HOST', URL_STYLE 'path', USE_SSL false);
+SELECT count(*) FROM delta_scan('s3://lakehouse/bronze/transactions');
 SQL
 ```
 
-`CREATE PERSISTENT SECRET` writes to `~/.duckdb/stored_secrets` (unencrypted — this is local
-SeaweedFS, not real AWS credentials) and loads automatically into **every** DuckDB
-connection on this machine from then on, DBeaver included; the views live inside
-`pfp.duckdb` itself, so they show up in the Database Navigator next to `silver.*` with no
-further per-connection setup. Re-run only the `duckdb dbt/pfp.duckdb -c "CREATE OR REPLACE
-VIEW ..."` block if the bucket or table names ever change — the secret only needs creating
-once. Querying `bronze.*` still needs `make poc-up` running, same as `dbt build` does.
+(`duckdb` is the standalone CLI: `curl https://install.duckdb.org | sh`.) The older DuckDB-file option
+(`PFP_DBT_TARGET=local`, `dbt/pfp.duckdb`, which DBeaver opens with its built-in DuckDB driver) still works
+for local experiments, but nothing else in the platform reads it.
 
 ## 8. Browsing the brain in Obsidian
 

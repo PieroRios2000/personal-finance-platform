@@ -33,20 +33,26 @@ to one person's real financial data, with the same engineering discipline:
 ```mermaid
 flowchart LR
     PDF[("Bank statement PDF\n(BCP · Scotiabank)")] --> CLI["pfp CLI\ndetect → parse → reconcile"]
+    XLS[("Manual Excel\nsavings + investments")] --> IMP["pfp import-manual"]
     CLI --> ARC[("Per-user archive\ncontent-addressed, never overwritten")]
-    ARC --> BRZ[("Bronze\nDelta Lake on S3, append-only")]
-    BRZ --> SLV[("Silver\ndbt incremental MERGE by business key,\ncross-statement reconciled")]
-    SLV --> GLD[("Gold\nstar schema: fact_transactions + 4 dimensions")]
+    CLI --> BRZ[("Bronze\nDelta Lake on S3, append-only")]
+    IMP --> BRZ
+    BRZ --> SLV[("Silver · PostgreSQL\ndbt incremental MERGE by business key,\ncross-statement reconciled")]
+    SLV --> GLD[("Gold · PostgreSQL\nstar schema + rpt_* reporting tables,\nshared calendar, signed amounts")]
+    GLD --> BI["Apache Superset\ndashboards as code, read-only role"]
     BRZ -.backfill.-> BRZ
     DAG["Dagster\none DAG: bronze → dbt"] -. orchestrates .-> BRZ
     DAG -. orchestrates .-> SLV
     ELEM["Elementary\nanomaly tests"] -. observes .-> SLV
     OM["OpenMetadata\ncatalog + column lineage (optional)"] -. catalogs .-> GLD
+    ALERT["Alerting\nemail / Teams"] -. reports .-> DAG
 
     style PDF fill:#f5deb3,stroke:#8b6f47
+    style XLS fill:#f5deb3,stroke:#8b6f47
     style BRZ fill:#cd7f32,stroke:#7a4a1e,color:#fff
     style SLV fill:#c0c0c0,stroke:#6b6b6b
     style GLD fill:#ffd700,stroke:#a68900
+    style BI fill:#8ecae6,stroke:#219ebc
 ```
 
 Every PDF is detected by content, never by file name (a file can arrive under any name from
@@ -89,27 +95,27 @@ date or an amount wrong while the balances still add up.
 | Alerting (Phase 7) | ✅ Errors sent the moment they appear, warnings in a weekly digest, by email and/or Microsoft Teams; names and counts only, never real data ([ADR 0026](brain/decisions/0026-alerts-errors-now-warnings-weekly-names-and-counts-only.md)) |
 | ML, categories | Later phases — see [PROJECT.md](PROJECT.md) |
 
-#### Phase 2 extension (in progress, added 2026-09-19): PostgreSQL store and dashboard
+#### Phase 2 extension (closed 2026-09-21): PostgreSQL store and dashboard
 
-Phase 2 was reopened on purpose: the owner wants an open-source BI tool, the catalog and Dagster to
+Phase 2 was reopened on purpose: the owner wanted an open-source BI tool, the catalog and Dagster to
 read what dbt builds *while it builds*, and a DuckDB file has a single writer. So dbt keeps DuckDB as
 the engine (it reads bronze from the lake) and stores silver and gold in **PostgreSQL**
-([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)); then **Apache Superset**
-(open source, zero cost) reads them. Eight tasks, T26–T33, in dependency order:
+([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)); **Apache Superset** (open
+source, zero cost) reads them. Built in dependency order, T26–T37:
 
 | Task | What |
 |---|---|
-| T26 | PostgreSQL service and the dbt connection (done: `dbt build --target postgres`, opt-in until T27) |
-| T27 | Scripts, Dagster wiring and tests read PostgreSQL instead of the DuckDB file (done: Postgres is the default target) |
-| T28 | Elementary keeps its own small DuckDB file (done, `edr` included) |
+| T26–T28 | PostgreSQL service and the dbt connection; scripts, Dagster and tests read it; Elementary keeps its own small DuckDB file |
 | T29 | CI's ephemeral environment and the PR data diff on PostgreSQL |
-| T30 | OpenMetadata reads PostgreSQL natively |
-| T31 | Dagster shows where each model is stored |
-| T32 | Superset over a read-only role: cash flow, savings, each fund's monthly return |
-| T33 | Phase 2 re-close |
+| T30 | OpenMetadata reads PostgreSQL with its native connector |
+| T31 | Dagster shows where each model is stored and its row count |
+| T32 | Superset over a read-only role, dashboards as code |
+| T34–T36 | Shared calendar, `signed_amount`, closed months only, capital and net-position cards, per-account reconciliation, period and debt cards |
+| T37 | The whole platform as one Compose project: `make up` / `make down` |
+| T33 | This re-close: docs, diagram, `make env` + `make demo` (a clean clone reaches a dashboard), a link checker in CI |
 
-Until these land, everything below about `dbt/pfp.duckdb` (exploring the data, DBeaver) is how it works
-today; each task updates its own instructions. Details: [`tasks/todo-phase2.md`](tasks/todo-phase2.md).
+Details: [`tasks/todo-phase2.md`](tasks/todo-phase2.md); how the numbers are derived and checked:
+[SETUP.md §12](SETUP.md#12-dashboards-in-apache-superset-t32).
 
 ### Planned
 
@@ -166,43 +172,39 @@ end to end. The full story, fix by fix, is in [`brain/components/bcp-parser.md`]
 
 ## Exploring the data
 
-**The data** (*this changes with the Phase 2 extension: silver and gold move to PostgreSQL, see above*): `dbt build`'s own output, `dbt/pfp.duckdb`, is a real on-disk DuckDB database —
-it opens directly in [DBeaver](https://dbeaver.io/) (or any DuckDB-aware SQL client), silver
-with zero setup and bronze's raw Delta tables with a one-time DuckDB persistent-secret step.
-Exact commands: **[SETUP.md §7](SETUP.md#7-browsing-the-lake-in-dbeaver)**.
+**The data:** open Superset for the dashboards (`make up`, then the URL `make status` prints), or
+connect any SQL client — [DBeaver](https://dbeaver.io/) works — to the local PostgreSQL that dbt builds
+into: schemas `silver` and `gold`, with a read-only role (`pfp_bi`) that sees `gold` only. Exact
+commands: **[SETUP.md §7](SETUP.md#7-browsing-the-lake-in-dbeaver)**.
 
 **The architecture itself:** [`brain/`](brain/README.md) is plain Markdown with relative
 links between notes, so it opens directly as an [Obsidian](https://obsidian.md/) vault —
 every ADR, component and concept connected in a real graph, not just the Mermaid map on
 GitHub. Steps: **[SETUP.md §8](SETUP.md#8-browsing-the-brain-in-obsidian)**.
 
-## Quickstart (synthetic data)
+## Quickstart (artificial data, to a running dashboard)
 
 Needs the requirements in [SETUP.md](SETUP.md) sections 1–3 (uv, Docker; on Windows, WSL2).
-No PDFs needed: a fictional statement is generated for you.
+No PDFs needed: a fictional person's eight closed months are generated for you.
 
 ```bash
 git clone https://github.com/PieroRios2000/personal-finance-platform.git
 cd personal-finance-platform
 uv sync --locked
 
-cp .env.example .env && chmod 600 .env
-# edit .env: PFP_USER (any name), PFP_ACCOUNT_KEY (openssl rand -hex 32),
-# AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (any pair). Leave the rest as it is.
-
-make poc-up                                    # local S3 (SeaweedFS)
-set -a && source .env && set +a
-export PFP_INBOX_ROOT=/tmp/pfp-demo/inbox PFP_ARCHIVE_ROOT=/tmp/pfp-demo/raw
-uv run python -m scripts.seed_synthetic_inbox --inbox-root "$PFP_INBOX_ROOT" --user "$PFP_USER"
-
-uv run dagster asset materialize --select '*'  # bronze -> silver -> gold, one DAG (first run ~2 min)
-
-uv run python -c "import duckdb; duckdb.connect('dbt/pfp.duckdb', read_only=True).sql('select bank, flow_type, currency, count(*) as movements from gold.fact_transactions group by all').show()"
-make poc-down                                  # tear the local S3 down (also after a failed step)
+make env        # writes .env with generated secrets (never overwrites yours)
+make up         # local S3, PostgreSQL and Superset, one Compose project (first run builds an image, ~2 min)
+make demo       # artificial data -> bronze, then dbt build: silver, gold, the dashboard's tables
+make status     # prints the URLs
 ```
 
-`PFP_INBOX_ROOT` / `PFP_ARCHIVE_ROOT` only apply to that shell (they point Dagster at a scratch
-folder); open a new one before running on real PDFs.
+Open the Superset URL from `make status` (user `admin`, password `PFP_BI_ADMIN_PASSWORD` in `.env`),
+then *Dashboards → PFP finance*. When done: `make down` stops everything and keeps the data;
+`make poc-down` stops it and **deletes** it.
+
+The same pipeline through Dagster (`uv run dagster asset materialize --select '*'`) and on a synthetic
+PDF are in [SETUP.md](SETUP.md) sections 6 and 9; running on your own PDFs is
+[docs/ingesting-your-own-pdfs.md](docs/ingesting-your-own-pdfs.md).
 
 ## Getting started
 

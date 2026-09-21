@@ -19,6 +19,7 @@ check-fast:
 	uv run ruff check .
 	uv run ruff format --check .
 	uv run mypy .
+	uv run python -m scripts.check_docs_links
 
 # When finishing a task (< 90 s): the above + tests with coverage, floor-guard and architecture.
 check-task: check-fast
