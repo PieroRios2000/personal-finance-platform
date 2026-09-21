@@ -444,7 +444,9 @@ Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admi
 `PFP_BI_ADMIN_PASSWORD`, then *Dashboards* -> **PFP finance**. From the top:
 
 - **Summary cards** (HTML made with Superset's Handlebars chart): money in, money out, net and the
-  number of movements for the filtered period; your **total capital** (savings accounts plus
+  number of movements for the filtered period; the **period analysed** (first and last movement left
+  after the filters, and how many closed months it spans) and the **debt at the end of the period**
+  (the card balance owed in the last month of your selection); your **total capital** (savings accounts plus
   investments, with the breakdown) and your **net position** (capital minus debt, with its change
   against the previous month), both at the latest month. A month an account or fund has no row keeps
   its last known balance, so the totals do not dip.

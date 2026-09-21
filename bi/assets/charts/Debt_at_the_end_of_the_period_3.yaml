@@ -1,34 +1,27 @@
-slice_name: Capital summary
+slice_name: Debt at the end of the period
 description: null
 certified_by: null
 certification_details: null
 viz_type: handlebars
 params:
   query_mode: aggregate
-  groupby: []
+  groupby:
+  - calendar_month
   metrics:
   - expressionType: SQL
     sqlExpression: MAX(currency)
     label: currency
   - expressionType: SQL
-    sqlExpression: CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-'
-      ELSE to_char(COALESCE(SUM(total_capital) FILTER (WHERE month_recency = 1), 0),
-      'FM999,999,999,990.00') END
-    label: total
+    sqlExpression: to_char(SUM(debt_balance), 'FM999,999,999,990.00')
+    label: debt
   - expressionType: SQL
-    sqlExpression: CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-'
-      ELSE to_char(COALESCE(SUM(savings_balance) FILTER (WHERE month_recency = 1),
-      0), 'FM999,999,999,990.00') END
-    label: savings
-  - expressionType: SQL
-    sqlExpression: CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-'
-      ELSE to_char(COALESCE(SUM(investments_balance) FILTER (WHERE month_recency =
-      1), 0), 'FM999,999,999,990.00') END
-    label: investments
-  - expressionType: SQL
-    sqlExpression: to_char(MAX(month_start) FILTER (WHERE month_recency = 1), 'Mon
-      YYYY')
-    label: month
+    sqlExpression: MAX(month_start)
+    label: sort_key
+  timeseries_limit_metric:
+    expressionType: SQL
+    sqlExpression: MAX(month_start)
+    label: sort_key
+  order_desc: true
   adhoc_filters:
   - expressionType: SIMPLE
     subject: month_start
@@ -36,10 +29,11 @@ params:
     comparator: No filter
     clause: WHERE
   row_limit: 1
-  handlebarsTemplate: "{{#each data}}\n<div class=\"kpis\">\n  <div class=\"kpi cap\"\
-    ><div class=\"label\">Total capital, latest month</div>\n    <div class=\"value\"\
-    >{{currency}} {{total}}</div>\n    <div class=\"note\">{{month}} &middot; savings\
-    \ {{savings}} + investments {{investments}}</div></div>\n</div>\n{{/each}}\n"
+  handlebarsTemplate: "{{#each data}}\n<div class=\"kpis\">\n  <div class=\"kpi debt\"\
+    ><div class=\"label\">Debt at the end of the period</div>\n    <div class=\"value\"\
+    >{{currency}} {{debt}}</div>\n    <div class=\"note\">{{calendar_month}} &middot;\
+    \ credit card balance owed, in the last month of your selection</div></div>\n\
+    </div>\n{{/each}}\n"
   styleTemplate: ".kpis { display: flex; gap: 10px; height: 100%; align-items: stretch;\
     \ font-family: inherit; }\n.kpi { flex: 1; border-radius: 12px; padding: 12px\
     \ 14px; display: flex;\n       flex-direction: column; justify-content: center;\
@@ -52,11 +46,13 @@ params:
     \ #e5484d; }\n.kpi.net.pos .value { color: #1f9d6b; } .kpi.net.neg .value { color:\
     \ #e5484d; }\n.kpi.rate { border-left-color: #6366f1; }\n.kpi.bal { border-left-color:\
     \ #0ea5e9; }\n.kpi .up { color: #1f9d6b; } .kpi .down { color: #e5484d; }\n.kpi.cap\
-    \ { border-left-color: #a855f7; }\n"
-  datasource: 9__table
+    \ { border-left-color: #a855f7; }\n.kpi.range { border-left-color: #0ea5a4; }\n\
+    .kpi.debt { border-left-color: #e5484d; }\n.kpi .value.small { font-size: 18px;\
+    \ }\n"
+  datasource: 2__table
   viz_type: handlebars
 query_context: null
 cache_timeout: null
-uuid: 995bb779-2eb3-5d2b-b038-9820d2bd06ec
+uuid: 774586d8-a528-5ef1-afc5-c5555f5ad472
 version: 1.0.0
 dataset_uuid: 80f10cdd-0b29-517f-ab7a-3d0cb2673307

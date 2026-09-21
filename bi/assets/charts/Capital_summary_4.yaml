@@ -1,0 +1,64 @@
+slice_name: Capital summary
+description: null
+certified_by: null
+certification_details: null
+viz_type: handlebars
+params:
+  query_mode: aggregate
+  groupby: []
+  metrics:
+  - expressionType: SQL
+    sqlExpression: MAX(currency)
+    label: currency
+  - expressionType: SQL
+    sqlExpression: CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-'
+      ELSE to_char(COALESCE(SUM(total_capital) FILTER (WHERE month_recency = 1), 0),
+      'FM999,999,999,990.00') END
+    label: total
+  - expressionType: SQL
+    sqlExpression: CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-'
+      ELSE to_char(COALESCE(SUM(savings_balance) FILTER (WHERE month_recency = 1),
+      0), 'FM999,999,999,990.00') END
+    label: savings
+  - expressionType: SQL
+    sqlExpression: CASE WHEN COUNT(*) FILTER (WHERE month_recency = 1) = 0 THEN '-'
+      ELSE to_char(COALESCE(SUM(investments_balance) FILTER (WHERE month_recency =
+      1), 0), 'FM999,999,999,990.00') END
+    label: investments
+  - expressionType: SQL
+    sqlExpression: to_char(MAX(month_start) FILTER (WHERE month_recency = 1), 'Mon
+      YYYY')
+    label: month
+  adhoc_filters:
+  - expressionType: SIMPLE
+    subject: month_start
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    clause: WHERE
+  row_limit: 1
+  handlebarsTemplate: "{{#each data}}\n<div class=\"kpis\">\n  <div class=\"kpi cap\"\
+    ><div class=\"label\">Total capital, latest month</div>\n    <div class=\"value\"\
+    >{{currency}} {{total}}</div>\n    <div class=\"note\">{{month}} &middot; savings\
+    \ {{savings}} + investments {{investments}}</div></div>\n</div>\n{{/each}}\n"
+  styleTemplate: ".kpis { display: flex; gap: 10px; height: 100%; align-items: stretch;\
+    \ font-family: inherit; }\n.kpi { flex: 1; border-radius: 12px; padding: 12px\
+    \ 14px; display: flex;\n       flex-direction: column; justify-content: center;\
+    \ background: #f7f9fc; border-left: 5px solid #98a2b3; }\n.kpi .label { font-size:\
+    \ 12px; text-transform: uppercase; letter-spacing: .06em; color: #667085; }\n\
+    .kpi .value { font-size: 21px; font-weight: 700; color: #1b2437; margin-top: 4px;\
+    \ white-space: nowrap; }\n.kpi .note { font-size: 12px; color: #667085; margin-top:\
+    \ 2px; }\n.kpi.income { border-left-color: #1f9d6b; } .kpi.spend { border-left-color:\
+    \ #e5484d; }\n.kpi.net.pos { border-left-color: #1f9d6b; } .kpi.net.neg { border-left-color:\
+    \ #e5484d; }\n.kpi.net.pos .value { color: #1f9d6b; } .kpi.net.neg .value { color:\
+    \ #e5484d; }\n.kpi.rate { border-left-color: #6366f1; }\n.kpi.bal { border-left-color:\
+    \ #0ea5e9; }\n.kpi .up { color: #1f9d6b; } .kpi .down { color: #e5484d; }\n.kpi.cap\
+    \ { border-left-color: #a855f7; }\n.kpi.range { border-left-color: #0ea5a4; }\n\
+    .kpi.debt { border-left-color: #e5484d; }\n.kpi .value.small { font-size: 18px;\
+    \ }\n"
+  datasource: 2__table
+  viz_type: handlebars
+query_context: null
+cache_timeout: null
+uuid: 995bb779-2eb3-5d2b-b038-9820d2bd06ec
+version: 1.0.0
+dataset_uuid: 80f10cdd-0b29-517f-ab7a-3d0cb2673307

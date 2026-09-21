@@ -129,6 +129,9 @@ def test_every_dated_chart_has_a_time_range_filter_for_the_date_range() -> None:
     """Superset's Date range filter only narrows a chart that already has a time-range
     (TEMPORAL_RANGE) filter on its date column; without one it does nothing."""
     for name, chart in _charts().items():
+        if name.startswith("Reconciliation"):  # per account, not per month
+            assert chart[3]["adhoc_filters"] == []
+            continue
         ranges = [
             f
             for f in chart[3]["adhoc_filters"]
@@ -275,3 +278,29 @@ def test_the_capital_card_adds_savings_and_investments_from_one_dataset() -> Non
     assert '"{{total}}"' not in text  # the template, not the metric, shows the value
     assert "{{savings}}" in chart[3]["handlebarsTemplate"]
     assert "{{investments}}" in chart[3]["handlebarsTemplate"]
+
+
+def test_the_range_and_debt_cards_follow_the_selected_period() -> None:
+    charts = _charts()
+    period = json.dumps(charts["Period analysed"][3])
+    debt = charts["Debt at the end of the period"]
+
+    assert "MIN(date)" in period and "MAX(date)" in period
+    assert debt[0] == "rpt_capital" and "SUM(debt_balance)" in json.dumps(debt[3])
+    # The debt is the latest month left after the filters, not the global latest.
+    assert debt[3]["order_desc"] is True and debt[3]["row_limit"] == 1
+    assert "month_recency" not in json.dumps(debt[3])
+
+
+def test_the_reconciliation_table_shows_the_difference_and_flags_a_non_zero_one() -> (
+    None
+):
+    table = _charts()[
+        "Reconciliation: opening + movements = balance (difference must be 0)"
+    ]
+
+    assert table[0] == "rpt_reconciliation"
+    assert {"opening_balance", "net_movements", "closing_balance", "difference"} <= set(
+        table[3]["all_columns"]
+    )
+    assert {f["column"] for f in table[3]["conditional_formatting"]} == {"difference"}

@@ -56,8 +56,10 @@ params:
     \ #e5484d; }\n.kpi.net.pos .value { color: #1f9d6b; } .kpi.net.neg .value { color:\
     \ #e5484d; }\n.kpi.rate { border-left-color: #6366f1; }\n.kpi.bal { border-left-color:\
     \ #0ea5e9; }\n.kpi .up { color: #1f9d6b; } .kpi .down { color: #e5484d; }\n.kpi.cap\
-    \ { border-left-color: #a855f7; }\n"
-  datasource: 8__table
+    \ { border-left-color: #a855f7; }\n.kpi.range { border-left-color: #0ea5a4; }\n\
+    .kpi.debt { border-left-color: #e5484d; }\n.kpi .value.small { font-size: 18px;\
+    \ }\n"
+  datasource: 1__table
   viz_type: handlebars
 query_context: null
 cache_timeout: null
