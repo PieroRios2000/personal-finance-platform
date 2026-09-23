@@ -9,8 +9,17 @@
 # committed with real values. `idEnv`/`secretEnv` are Dex's own env-var indirection for a
 # client's two scalar secret fields; the user list has no such indirection, so it is templated
 # by hand from one env var, one user per comma.
+#
+# The issuer is the Compose network address, never the published one: it drives every URL
+# Dex's discovery document hands back (token, userinfo, jwks), and those are all backend-to-
+# backend calls Superset's container makes -- confirmed by first pointing this at the
+# published host port, which left the token exchange doing `connect to localhost:5906
+# refused` from inside the Superset container, itself, not Dex. The one call a browser
+# actually needs (the redirect to /auth) never goes through this issuer or the discovery
+# document at all: bi/superset_config.py sets `authorize_url` explicitly, straight to the
+# published port.
 
-issuer: {{ getenv "DEX_ISSUER" }}
+issuer: http://dex:5556/dex
 
 storage:
   type: sqlite3

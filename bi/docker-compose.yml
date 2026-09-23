@@ -21,7 +21,6 @@ services:
     image: ghcr.io/dexidp/dex:v2.43.1
     command: ["dex", "serve", "/etc/dex/config.yaml"]
     environment:
-      DEX_ISSUER: ${DEX_ISSUER:-}
       PFP_BI_BASE_URL: http://localhost:${PFP_BI_PORT:-8088}
       PFP_BI_OAUTH_CLIENT_ID: ${PFP_BI_OAUTH_CLIENT_ID:-}
       PFP_BI_OAUTH_CLIENT_SECRET: ${PFP_BI_OAUTH_CLIENT_SECRET:-}
@@ -73,10 +72,11 @@ services:
       PFP_PG_BI_PASSWORD: ${PFP_PG_BI_PASSWORD:-}
       PFP_BI_OAUTH_CLIENT_ID: ${PFP_BI_OAUTH_CLIENT_ID:-}
       PFP_BI_OAUTH_CLIENT_SECRET: ${PFP_BI_OAUTH_CLIENT_SECRET:-}
-      # Two hosts for one issuer: Superset's backend talks to `dex` over the compose network
-      # (metadata, token exchange, userinfo); the browser can only reach the published port.
-      DEX_ISSUER: http://dex:5556/dex
-      DEX_PUBLIC_ISSUER: http://localhost:${PFP_DEX_PORT:-5556}/dex
+      # The one URL a browser needs: Dex's own issuer (dex/config.yaml.tpl) is the internal
+      # address, unreachable from outside the compose network, so this -- published, offset
+      # in dev/prod like every other port (ADR 0033) -- is what bi/superset_config.py sends
+      # a signing-in browser to instead.
+      DEX_ISSUER: ${DEX_ISSUER:-}
     ports:
       - "127.0.0.1:${PFP_BI_PORT:-8088}:8088"
     volumes:

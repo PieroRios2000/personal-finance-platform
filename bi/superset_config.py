@@ -94,15 +94,17 @@ OAUTH_PROVIDERS = [
             "client_id": os.environ["PFP_BI_OAUTH_CLIENT_ID"],
             "client_secret": os.environ["PFP_BI_OAUTH_CLIENT_SECRET"],
             "client_kwargs": {"scope": "openid email profile"},
-            # Superset's backend and the browser cannot reach Dex through the same
-            # host: one is on the compose network, the other only has the published
-            # port. So the discovery document (token exchange, userinfo, jwks) is
-            # fetched from the internal one, and only the browser redirect is
-            # pointed at the public one.
+            # Dex's own issuer (dex/config.yaml.tpl) is the compose-network address:
+            # every URL its discovery document hands back -- token exchange, userinfo,
+            # jwks -- is that same internal host, correct for the backend-to-backend
+            # calls those are. The one call a browser makes, the redirect to sign in,
+            # is not one of them: it is set explicitly, to the published port, since
+            # nothing derived from the (internal) discovery document would resolve
+            # there.
             "server_metadata_url": (
-                f"{os.environ['DEX_ISSUER']}/.well-known/openid-configuration"
+                "http://dex:5556/dex/.well-known/openid-configuration"
             ),
-            "authorize_url": f"{os.environ['DEX_PUBLIC_ISSUER']}/auth",
+            "authorize_url": f"{os.environ['DEX_ISSUER']}/auth",
         },
     }
 ]

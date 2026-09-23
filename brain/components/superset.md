@@ -17,7 +17,7 @@ their own email through [Dex](dex.md) (T39, ADR 0034), not a shared admin passwo
 | Piece | What it does |
 |---|---|
 | [`bi/docker-compose.yml`](../../bi/docker-compose.yml) | Behind the `bi` profile of the one Compose project (`pfp-poc`, ADR 0032): `bi-init` (creates Superset's role and database, after Postgres is healthy) and `superset` (port 8088 on 127.0.0.1) |
-| [`bi/Dockerfile`](../../bi/Dockerfile) | `apache/superset:5.0.0` plus the Postgres driver the official image lacks |
+| [`bi/Dockerfile`](../../bi/Dockerfile) | `apache/superset:5.0.0` plus the Postgres driver and `authlib` (T39, Dex sign-in), both missing from the official image |
 | [`bi/superset_config.py`](../../bi/superset_config.py) | Secret key, metadata database URI, and sign-in through Dex (T39, ADR 0034), all from the environment |
 | [`bi/init-metadata.sh`](../../bi/init-metadata.sh) | Idempotent: the `superset` role and database in PFP's Postgres |
 | [`bi/start.sh`](../../bi/start.sh) | Migrate, create admin, import `bi/assets` (password filled in from the environment), serve |

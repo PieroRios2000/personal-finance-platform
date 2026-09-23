@@ -14,6 +14,8 @@ import yaml
 
 _ROOT = Path(__file__).resolve().parent.parent
 _TEMPLATE = (_ROOT / "dex" / "config.yaml.tpl").read_text()
+_SUPERSET_CONFIG = (_ROOT / "bi" / "superset_config.py").read_text()
+_INTERNAL_ISSUER = "http://dex:5556/dex"
 
 
 def _compose() -> dict[str, Any]:
@@ -54,13 +56,27 @@ def test_the_template_never_hardcodes_a_user_or_a_client_secret() -> None:
     assert "@" not in _TEMPLATE.split("staticPasswords:", 1)[1]
 
 
+def test_dexs_own_issuer_is_the_internal_address_not_the_published_one() -> None:
+    """Confirmed by actually running the login (see ADR 0034): every URL Dex's own
+    discovery document hands back -- token, userinfo, jwks -- comes from whatever
+    `issuer` says, and those are all calls Superset's backend makes, never the
+    browser. Pointing this at the published port instead left the token exchange
+    connecting to itself (the Superset container), not Dex."""
+    assert f"issuer: {_INTERNAL_ISSUER}" in _TEMPLATE
+    assert 'getenv "DEX_ISSUER"' not in _TEMPLATE
+
+
+def test_superset_reaches_dex_internally_but_browser_hits_the_published_port() -> None:
+    assert f"{_INTERNAL_ISSUER}/.well-known/openid-configuration" in _SUPERSET_CONFIG
+    assert "f\"{os.environ['DEX_ISSUER']}/auth\"" in _SUPERSET_CONFIG
+
+
 @pytest.mark.skipif(shutil.which("gomplate") is None, reason="gomplate not installed")
 def test_the_template_renders_valid_dex_config() -> None:
     """The official image templates this file through its bundled gomplate before
     `dex serve` reads it (cmd/docker-entrypoint in dexidp/dex); render it the same
     way here."""
     env = {
-        "DEX_ISSUER": "http://dex:5556/dex",
         "PFP_BI_BASE_URL": "http://localhost:8088",
         "DEX_STATIC_PASSWORDS": (
             "piero@example.com:$2b$12$abcxyzHASH:piero:"
@@ -76,7 +92,7 @@ def test_the_template_renders_valid_dex_config() -> None:
     ).stdout
     config = yaml.safe_load(rendered)
 
-    assert config["issuer"] == env["DEX_ISSUER"]
+    assert config["issuer"] == _INTERNAL_ISSUER
     assert config["enablePasswordDB"] is True
     assert config["staticPasswords"] == [
         {
@@ -91,7 +107,6 @@ def test_the_template_renders_valid_dex_config() -> None:
 @pytest.mark.skipif(shutil.which("gomplate") is None, reason="gomplate not installed")
 def test_the_template_renders_with_no_users_configured_yet() -> None:
     env = {
-        "DEX_ISSUER": "http://dex:5556/dex",
         "PFP_BI_BASE_URL": "http://localhost:8088",
         "DEX_STATIC_PASSWORDS": "",
     }
