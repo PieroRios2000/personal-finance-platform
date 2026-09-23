@@ -65,12 +65,15 @@ def test_the_port_offset_moves_every_published_port_together() -> None:
     assert values["PFP_PG_PORT"] == "5532"
     assert values["PFP_BI_PORT"] == "8188"
     assert values["OPENMETADATA_PORT"] == "8685"
+    assert values["PFP_DEX_PORT"] == "5656"
+    assert values["DEX_ISSUER"] == "http://localhost:5656/dex"  # path kept too
 
 
 def test_no_offset_leaves_todays_ports() -> None:
     values = _values(init_env.render(_TEMPLATE))
 
     assert (values["PFP_PG_PORT"], values["PFP_BI_PORT"]) == ("5432", "8088")
+    assert values["DEX_ISSUER"] == "http://localhost:5556/dex"
 
 
 def test_prod_only_runs_the_code_of_main(tmp_path: Path) -> None:

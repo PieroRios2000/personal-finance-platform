@@ -27,7 +27,7 @@ PFP = docker compose -p $(PFP_PROJECT)
 # Each environment's OpenMetadata artifacts (they hold a token and the Postgres password).
 export PFP_OM_ARTIFACTS = ./artifacts/$(PFP_ENV)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -102,7 +102,7 @@ poc:
 # Compose's `include` reads every file even for a stopped profile, so `${VAR:?}` cannot live
 # in them: `bi-check` verifies the Superset variables before `up`. The project name did not
 # change, so the volumes of an existing install (lake, Postgres) are kept.
-BI_SERVICES = bi-init superset
+BI_SERVICES = bi-init dex superset
 CATALOG_SERVICES = postgresql elasticsearch execute-migrate-all openmetadata-server ingestion
 OM_VOLUMES = om-postgres-data es-data ingestion-volume-dag-airflow ingestion-volume-dags ingestion-volume-tmp
 
@@ -158,6 +158,7 @@ bi-check: pg-check
 	{ [ -n "$$PFP_BI_DB_PASSWORD" ] || missing="$$missing PFP_BI_DB_PASSWORD"; } && \
 	{ [ -n "$$PFP_BI_ADMIN_PASSWORD" ] || missing="$$missing PFP_BI_ADMIN_PASSWORD"; } && \
 	{ [ -n "$$PFP_BI_SECRET_KEY" ] || missing="$$missing PFP_BI_SECRET_KEY"; } && \
+	{ [ -n "$$PFP_BI_OAUTH_CLIENT_SECRET" ] || missing="$$missing PFP_BI_OAUTH_CLIENT_SECRET"; } && \
 	{ [ -z "$$missing" ] || { echo "set$$missing in .env (see .env.example, SETUP.md section 12)" >&2; exit 2; }; }
 
 # Before T37 Superset and OpenMetadata ran as their own projects (`pfp-bi`, `pfp-om`), on
@@ -183,7 +184,8 @@ status:
 	@$(LOAD_ENV) && $(PFP) --profile bi --profile catalog ps --format 'table {{.Name}}\t{{.Status}}'
 	@$(LOAD_ENV) && \
 	echo "" && echo "Storage (S3):  http://localhost:$${SEAWEEDFS_S3_PORT:-8333}" && \
-	echo "Superset:      http://localhost:$${PFP_BI_PORT:-8088}   (admin / PFP_BI_ADMIN_PASSWORD)" && \
+	echo "Superset:      http://localhost:$${PFP_BI_PORT:-8088}   (sign in with your email, via Dex)" && \
+	echo "Dex:           http://localhost:$${PFP_DEX_PORT:-5556}/dex   (make dex-add-user EMAIL=...)" && \
 	echo "OpenMetadata:  http://localhost:$${OPENMETADATA_PORT:-8585}   (only after make up-catalog)" && \
 	echo "Dagster:       uv run dagster dev  ->  http://localhost:3000"
 
@@ -218,7 +220,7 @@ om-down:
 # its containers. Its dashboards are in bi/assets (committed) and come back on the next start.
 bi-up: bi-check legacy-down
 	$(LOAD_ENV) && $(PFP) --profile bi up -d --build --wait $(BI_SERVICES)
-	@$(LOAD_ENV) && echo "Superset: http://localhost:$${PFP_BI_PORT:-8088} (user admin, password PFP_BI_ADMIN_PASSWORD in $(ENV_FILE))"
+	@$(LOAD_ENV) && echo "Superset: http://localhost:$${PFP_BI_PORT:-8088} (sign in with your email, via Dex: make dex-add-user EMAIL=...)"
 
 bi-down:
 	$(LOAD_ENV) && $(PFP) --profile bi rm -sf $(BI_SERVICES)
@@ -233,6 +235,12 @@ bi-reset: bi-down
 # Rewrites bi/assets from a fresh Superset: `rm bi/assets/*`, `make bi-reset bi-up`, this.
 bi-export:
 	$(LOAD_ENV) && uv run python bi/build_dashboards.py
+
+# Dex (T39, ADR 0034): hash a chosen password and print the line to add to
+# DEX_STATIC_PASSWORDS in .env, then `make up` (or bi-up) to pick it up.
+dex-add-user:
+	@test -n "$(EMAIL)" || { echo "usage: make dex-add-user EMAIL=you@example.com" >&2; exit 2; }
+	uv run python -m scripts.dex_add_user "$(EMAIL)"
 
 # Phase 7 (alerting, SETUP.md section 11): send the errors of the last `dbt build`
 # now and queue its warnings; `alert-digest` sends the queued warnings as one

@@ -3,6 +3,7 @@ name = "personal-finance-platform"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "bcrypt>=5.0.0",
     "dagster>=1.13.23",
     "dagster-dbt>=0.29.23",
     "dbt-duckdb>=1.11.0",
@@ -112,6 +113,18 @@ exclude = "^dbt/dbt_packages/"
 [[tool.mypy.overrides]]
 module = ["pytesseract", "pyarrow", "pyarrow.*"]
 ignore_missing_imports = true
+
+# bi/superset_config.py (T39, ADR 0034) runs inside Superset's own container, where
+# flask-appbuilder and superset are installed; adding them as a local dependency just for
+# stubs would pull in the whole Superset package. Same escape hatch as above; subclassing
+# their (unstubbed, so `Any`-typed) SupersetSecurityManager needs the one extra flag too.
+[[tool.mypy.overrides]]
+module = ["flask_appbuilder.*", "superset.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "superset_config"
+disallow_subclassing_any = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
