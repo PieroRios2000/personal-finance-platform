@@ -22,7 +22,6 @@ services:
     command: ["dex", "serve", "/etc/dex/config.yaml"]
     environment:
       PFP_BI_BASE_URL: http://localhost:${PFP_BI_PORT:-8088}
-      PFP_BI_OAUTH_CLIENT_ID: ${PFP_BI_OAUTH_CLIENT_ID:-}
       PFP_BI_OAUTH_CLIENT_SECRET: ${PFP_BI_OAUTH_CLIENT_SECRET:-}
       DEX_STATIC_PASSWORDS: ${DEX_STATIC_PASSWORDS:-}
     ports:
@@ -70,7 +69,6 @@ services:
       PFP_BI_DB_PASSWORD: ${PFP_BI_DB_PASSWORD:-}
       PFP_BI_ADMIN_PASSWORD: ${PFP_BI_ADMIN_PASSWORD:-}
       PFP_PG_BI_PASSWORD: ${PFP_PG_BI_PASSWORD:-}
-      PFP_BI_OAUTH_CLIENT_ID: ${PFP_BI_OAUTH_CLIENT_ID:-}
       PFP_BI_OAUTH_CLIENT_SECRET: ${PFP_BI_OAUTH_CLIENT_SECRET:-}
       # The one URL a browser needs: Dex's own issuer (dex/config.yaml.tpl) is the internal
       # address, unreachable from outside the compose network, so this -- published, offset

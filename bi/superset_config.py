@@ -91,7 +91,7 @@ OAUTH_PROVIDERS = [
         "icon": "fa-address-card",
         "token_key": "access_token",
         "remote_app": {
-            "client_id": os.environ["PFP_BI_OAUTH_CLIENT_ID"],
+            "client_id": "superset",  # public, matches dex/config.yaml.tpl's `id`
             "client_secret": os.environ["PFP_BI_OAUTH_CLIENT_SECRET"],
             "client_kwargs": {"scope": "openid email profile"},
             # Dex's own issuer (dex/config.yaml.tpl) is the compose-network address:

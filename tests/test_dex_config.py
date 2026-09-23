@@ -49,7 +49,9 @@ def test_no_credential_is_hardcoded() -> None:
 
 
 def test_the_template_never_hardcodes_a_user_or_a_client_secret() -> None:
-    assert "staticClients" in _TEMPLATE and "idEnv: PFP_BI_OAUTH_CLIENT_ID" in _TEMPLATE
+    # The client id (below) is public, an OAuth client secret is not: only the latter is
+    # indirected through the environment.
+    assert "staticClients" in _TEMPLATE and "id: superset" in _TEMPLATE
     assert "secretEnv: PFP_BI_OAUTH_CLIENT_SECRET" in _TEMPLATE
     assert "enablePasswordDB: true" in _TEMPLATE
     # Real users only ever come from the environment, never from this committed file.

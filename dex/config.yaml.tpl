@@ -6,9 +6,10 @@
 # The official image's entrypoint renders this file through gomplate before starting Dex
 # (`CMD ["dex", "serve", "/etc/dex/config.yaml"]`; see cmd/docker-entrypoint in dexidp/dex),
 # so every gomplate action below is resolved from the container's environment at startup, not
-# committed with real values. `idEnv`/`secretEnv` are Dex's own env-var indirection for a
-# client's two scalar secret fields; the user list has no such indirection, so it is templated
-# by hand from one env var, one user per comma.
+# committed with real values. `secretEnv` is Dex's own env-var indirection for a client's
+# secret (its `id` is not one -- an OAuth client id is public, the same way a username is);
+# the user list has no such indirection, so it is templated by hand from one env var, one
+# user per comma.
 #
 # The issuer is the Compose network address, never the published one: it drives every URL
 # Dex's discovery document hands back (token, userinfo, jwks), and those are all backend-to-
@@ -37,7 +38,7 @@ oauth2:
   passwordConnector: local
 
 staticClients:
-  - idEnv: PFP_BI_OAUTH_CLIENT_ID
+  - id: superset
     secretEnv: PFP_BI_OAUTH_CLIENT_SECRET
     name: 'Superset'
     redirectURIs:
