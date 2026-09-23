@@ -3,6 +3,9 @@
 import os
 from urllib.parse import quote
 
+from flask_appbuilder.security.manager import AUTH_OAUTH
+from superset.security import SupersetSecurityManager
+
 SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
 
 # Superset's own metadata (users, charts, dashboards) lives in its own database of
@@ -39,3 +42,67 @@ HTML_SANITIZATION_SCHEMA_EXTENSIONS = {
     "tagNames": ["style"],
     "attributes": {"*": ["className", "style"]},
 }
+
+
+class DexSecurityManager(SupersetSecurityManager):
+    """Flask-AppBuilder only knows how to read the userinfo response for a handful
+    of named providers (google, okta, auth0, keycloak...); Dex is a plain OIDC
+    provider, not one of them, so it needs this one method. Modelled on FAB's own
+    Auth0 branch: fetch `userinfo` from the metadata Superset's backend already
+    discovered, and use the email as the username -- it is the one thing every
+    login has, and the identity alerts and a future per-user data view (T39
+    follow-up) will key on."""
+
+    def oauth_user_info(
+        self, provider: str, response: dict[str, str] | None = None
+    ) -> dict[str, str | list[str]]:
+        if provider != "dex":
+            passthrough: dict[str, str | list[str]] = super().oauth_user_info(
+                provider, response
+            )
+            return passthrough
+        data = self.appbuilder.sm.oauth_remotes[provider].userinfo()
+        email: str = data["email"]
+        return {
+            "username": email,
+            "first_name": data.get("name", email),
+            "last_name": "",
+            "email": email,
+            "role_keys": [],
+        }
+
+
+CUSTOM_SECURITY_MANAGER = DexSecurityManager
+
+# Sign in with Dex (T39, ADR 0034): people who are not in DEX_STATIC_PASSWORDS
+# cannot reach Dex's login screen at all, so anyone who comes back from it is
+# trusted with the one role this project has today -- a finer, per-user view is
+# the follow-up PR the owner asked for. `bi/build_dashboards.py` and
+# `bi/cleanup_stale.py` still use the separate `admin` account
+# (PFP_BI_ADMIN_PASSWORD) over the REST API: FAB's DB auth backend answers that
+# endpoint regardless of AUTH_TYPE, so OAuth for human login does not touch it.
+AUTH_TYPE = AUTH_OAUTH
+AUTH_USER_REGISTRATION = True
+AUTH_USER_REGISTRATION_ROLE = "Admin"
+AUTH_ROLES_SYNC_AT_LOGIN = True
+OAUTH_PROVIDERS = [
+    {
+        "name": "dex",
+        "icon": "fa-address-card",
+        "token_key": "access_token",
+        "remote_app": {
+            "client_id": os.environ["PFP_BI_OAUTH_CLIENT_ID"],
+            "client_secret": os.environ["PFP_BI_OAUTH_CLIENT_SECRET"],
+            "client_kwargs": {"scope": "openid email profile"},
+            # Superset's backend and the browser cannot reach Dex through the same
+            # host: one is on the compose network, the other only has the published
+            # port. So the discovery document (token exchange, userinfo, jwks) is
+            # fetched from the internal one, and only the browser redirect is
+            # pointed at the public one.
+            "server_metadata_url": (
+                f"{os.environ['DEX_ISSUER']}/.well-known/openid-configuration"
+            ),
+            "authorize_url": f"{os.environ['DEX_PUBLIC_ISSUER']}/auth",
+        },
+    }
+]

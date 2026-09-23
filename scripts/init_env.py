@@ -24,7 +24,13 @@ _ACCOUNT_KEY_BYTES = 32
 _SECRET_BYTES = 16
 _SAFE_USER = re.compile(r"[A-Za-z0-9_-]+")
 # Published host ports, moved together for a second environment on the same machine.
-_PORTS = ("SEAWEEDFS_S3_PORT", "PFP_PG_PORT", "PFP_BI_PORT", "OPENMETADATA_PORT")
+_PORTS = (
+    "SEAWEEDFS_S3_PORT",
+    "PFP_PG_PORT",
+    "PFP_BI_PORT",
+    "OPENMETADATA_PORT",
+    "PFP_DEX_PORT",
+)
 _GENERATED = (
     "PFP_ACCOUNT_KEY",
     "AWS_ACCESS_KEY_ID",
@@ -34,6 +40,7 @@ _GENERATED = (
     "PFP_BI_DB_PASSWORD",
     "PFP_BI_ADMIN_PASSWORD",
     "PFP_BI_SECRET_KEY",
+    "PFP_BI_OAUTH_CLIENT_SECRET",
 )
 
 
@@ -51,9 +58,13 @@ def render(template: str, user: str = "demo", port_offset: int = 0) -> str:
                 line = f"{name}={values[name]}"
             elif name in _PORTS:
                 line = f"{name}={int(value) + port_offset}"
-            elif name == "AWS_ENDPOINT_URL":
+            elif name in ("AWS_ENDPOINT_URL", "DEX_ISSUER"):
                 prefix, _, port = value.rpartition(":")
-                line = f"{name}={prefix}:{int(port) + port_offset}"
+                path = ""
+                if "/" in port:
+                    port, _, rest = port.partition("/")
+                    path = f"/{rest}"
+                line = f"{name}={prefix}:{int(port) + port_offset}{path}"
         lines.append(line)
     return "\n".join(lines) + "\n"
 
@@ -91,7 +102,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     with os.fdopen(descriptor, "w") as handle:
         handle.write(text)
     print(f"wrote {args.out} (mode 600) with generated secrets.")
-    print("Superset login: user admin, password = PFP_BI_ADMIN_PASSWORD in that file.")
+    print("Sign in to Superset with your email: `make dex-add-user EMAIL=you@ex.com`.")
     print(
         f"PFP_USER={args.user}: use another name for real statements (demo mixes in)."
     )
