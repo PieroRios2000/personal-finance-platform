@@ -412,15 +412,17 @@ loading every chart** (one container; the image is 3.7 GB on disk), far below Op
 so no `.wslconfig` change is needed on top of section 10's.
 
 ```bash
-# fill in .env (see .env.example): PFP_BI_DB_PASSWORD, PFP_BI_ADMIN_PASSWORD, PFP_BI_SECRET_KEY
-make up                              # storage + Postgres + Superset; builds the image the first time (~2 minutes)
+# fill in .env (see .env.example): PFP_BI_DB_PASSWORD, PFP_BI_ADMIN_PASSWORD, PFP_BI_SECRET_KEY,
+# PFP_BI_OAUTH_CLIENT_SECRET (T39, ADR 0034 -- signing in goes through Dex, section 12b below)
+make up                              # storage + Postgres + Dex + Superset; builds the image the first time (~2 minutes)
+make dex-add-user EMAIL=you@example.com   # paste the printed line into DEX_STATIC_PASSWORDS, then `make up` again
 set -a && source .env && set +a
 uv run pfp ingest --user "$PFP_USER"                    # your data, as in section 6
 uv run dbt build --project-dir dbt --profiles-dir dbt   # gold tables the charts read
 ```
 
-Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admin`, password
-`PFP_BI_ADMIN_PASSWORD`, then *Dashboards* -> **PFP finance**. From the top:
+Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`) and sign in with the email
+you just added, then *Dashboards* -> **PFP finance**. From the top:
 
 - **Summary cards** (HTML made with Superset's Handlebars chart): money in, money out, **net saved**,
   **% saved** (net ÷ income, where income is the money that came into your accounts from outside, without
@@ -501,6 +503,19 @@ tables and a continuous `dim_date`), then `make bi-down && make bi-up`.
 - If `pfp_bi` cannot log in: its password is only read when the Postgres volume is first created
   (`postgres/init-roles.sh`); if you changed `PFP_PG_BI_PASSWORD` since, either recreate the volume or
   `alter role pfp_bi password '...'`.
+
+**Signing in (T39, ADR 0034):** people sign in with their own email through
+[Dex](https://dexidp.io), an OpenID Connect provider running as its own service
+(`dex/config.yaml.tpl`, `bi/docker-compose.yml`), never with a shared password. `make
+dex-add-user EMAIL=you@example.com` asks for a password (never shown or logged), hashes
+it, and prints one `email:hash:username:userID` line -- paste it into
+`DEX_STATIC_PASSWORDS` in `.env` (single-quoted: the hash contains `$`; more than one
+person is comma-separated) and `make up` again to pick it up. Only people added this way
+can reach Dex's login screen at all; anyone who does gets Superset's Admin role, since
+this project has only one today -- a per-user view of the data is a follow-up PR. The
+`admin` / `PFP_BI_ADMIN_PASSWORD` account is now only for `bi/build_dashboards.py` and
+`bi/cleanup_stale.py`, which still authenticate over the REST API directly, unaffected by
+the login screen's change.
 
 ## 11. Alerts by email or Microsoft Teams (Phase 7)
 
