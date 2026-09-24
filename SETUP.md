@@ -517,6 +517,25 @@ this project has only one today -- a per-user view of the data is a follow-up PR
 `bi/cleanup_stale.py`, which still authenticate over the REST API directly, unaffected by
 the login screen's change.
 
+**Letting someone add themselves (T40, ADR 0035):** at <http://localhost:5559> (another
+port: `PFP_DEX_REGISTER_PORT`), `dex-register` is a small page where a new person picks
+their own email and password instead of you running `dex-add-user` for them. It needs
+`PFP_DEX_INVITE_CODE` in `.env` (generated like the secrets above): the page asks for
+that code before creating anything, so **share the code, never this URL alone, with
+whoever you want to be able to sign up** -- and rotate it in `.env` (`make up` again) to
+close the door to new signups without touching anyone's existing account. Because there
+is still only one role in this project, anyone who signs up sees everything, the same as
+someone the operator added; the invite code is what stands between the page being public
+and a stranger creating an account, not a limit on what that account can see.
+
+**A public URL (T40, ADR 0035):** optional, and someone else's action to enable --
+`docker-compose.override.yml.dist` explains how to reach Superset, Dex and `dex-register`
+through a Cloudflare Tunnel you already run on this machine (`cp` it to
+`docker-compose.override.yml`, fill in `PFP_TUNNEL_NETWORK` in `.env`, add three Public
+Hostname routes on your own Cloudflare Zero Trust dashboard -- the file has the exact
+steps). Everything still keeps its `127.0.0.1` port too; the override only adds a second,
+public way in.
+
 ## 11. Alerts by email or Microsoft Teams (Phase 7)
 
 Errors are sent **the moment they appear**; warnings are **queued and sent once a week** as one
