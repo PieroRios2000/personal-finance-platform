@@ -67,6 +67,7 @@ def test_the_port_offset_moves_every_published_port_together() -> None:
     assert values["OPENMETADATA_PORT"] == "8685"
     assert values["PFP_DEX_PORT"] == "5656"
     assert values["DEX_ISSUER"] == "http://localhost:5656/dex"  # path kept too
+    assert values["PFP_DEX_REGISTER_PORT"] == "5659"
 
 
 def test_no_offset_leaves_todays_ports() -> None:
