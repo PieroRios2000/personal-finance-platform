@@ -1,17 +1,41 @@
-# Apache Superset: dashboards over PFP's gold schema (T32, ADR 0030).
+# Apache Superset: dashboards over PFP's gold schema (T32, ADR 0030), signed into through Dex
+# (T39, ADR 0034) so each person logs in with their own email.
 #
 # Part of the platform's one Compose project (T37, ADR 0032): the root docker-compose.yml
-# includes this file and both services sit behind the `bi` profile, so `make up` starts
+# includes this file and every service sits behind the `bi` profile, so `make up` starts
 # them with storage and Postgres, and CI never does. They share the project's network: the
 # read-only role `pfp_bi` reaches Postgres as `postgres:5432` and sees `gold` and nothing
 # else. Superset's own metadata is in a separate `superset` database of that Postgres
-# (init-metadata.sh). Only 8088 is published, on 127.0.0.1.
+# (init-metadata.sh). Only 8088 (Superset) and 5556 (Dex) are published, on 127.0.0.1.
 #
 # No `${VAR:-}` here: an included file is read even when its profile is off, so a required
 # variable would break every project that does not use Superset. `make up` checks the
-# three PFP_BI_* variables first (`make bi-check`).
+# required variables first (`make bi-check`).
 
 services:
+  # Dex (T39, ADR 0034): OpenID Connect provider so people sign in with their own email
+  # instead of a shared admin password. Only Superset uses it today, so it sits in the `bi`
+  # profile; OpenMetadata and Dagster are follow-up PRs. Config: ../dex/config.yaml.tpl.
+  dex:
+    profiles: ["bi"]
+    image: ghcr.io/dexidp/dex:v2.43.1
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    environment:
+      PFP_BI_BASE_URL: http://localhost:${PFP_BI_PORT:-8088}
+      PFP_BI_OAUTH_CLIENT_SECRET: ${PFP_BI_OAUTH_CLIENT_SECRET:-}
+      DEX_STATIC_PASSWORDS: ${DEX_STATIC_PASSWORDS:-}
+    ports:
+      - "127.0.0.1:${PFP_DEX_PORT:-5556}:5556"
+    volumes:
+      - ../dex/config.yaml.tpl:/etc/dex/config.yaml:ro
+      - dex-data:/var/dex
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5556/dex/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
   bi-init:
     profiles: ["bi"]
     # It runs psql against PFP's Postgres, defined in the root file of this same project:
@@ -36,6 +60,8 @@ services:
     depends_on:
       bi-init:
         condition: service_completed_successfully
+      dex:
+        condition: service_healthy
     entrypoint: ["/bin/sh", "/app/start.sh"]
     environment:
       SUPERSET_CONFIG_PATH: /app/superset_config.py
@@ -43,6 +69,12 @@ services:
       PFP_BI_DB_PASSWORD: ${PFP_BI_DB_PASSWORD:-}
       PFP_BI_ADMIN_PASSWORD: ${PFP_BI_ADMIN_PASSWORD:-}
       PFP_PG_BI_PASSWORD: ${PFP_PG_BI_PASSWORD:-}
+      PFP_BI_OAUTH_CLIENT_SECRET: ${PFP_BI_OAUTH_CLIENT_SECRET:-}
+      # The one URL a browser needs: Dex's own issuer (dex/config.yaml.tpl) is the internal
+      # address, unreachable from outside the compose network, so this -- published, offset
+      # in dev/prod like every other port (ADR 0033) -- is what bi/superset_config.py sends
+      # a signing-in browser to instead.
+      DEX_ISSUER: ${DEX_ISSUER:-}
     ports:
       - "127.0.0.1:${PFP_BI_PORT:-8088}:8088"
     volumes:
@@ -56,3 +88,6 @@ services:
       timeout: 5s
       retries: 30
       start_period: 60s
+
+volumes:
+  dex-data:

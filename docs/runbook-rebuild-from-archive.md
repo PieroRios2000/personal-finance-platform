@@ -12,6 +12,9 @@ the end. If a volume is already gone, use the last counts you recorded in [`oper
 
 ## Steps
 
+For a non-default environment add `PFP_ENV=dev` (or `prod`) to every `make` command and use `make ingest` /
+`make build` instead of sourcing `.env` by hand ([SETUP.md section 14](../SETUP.md#14-dev-and-prod-environments-t38)).
+
 ```bash
 git pull                                   # be on the latest develop, with `uv sync --locked`
 make up                                    # storage + Postgres + Superset, empty (SETUP.md section 13)

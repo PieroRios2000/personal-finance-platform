@@ -20,6 +20,7 @@ _GENERATED = (
     "PFP_BI_DB_PASSWORD",
     "PFP_BI_ADMIN_PASSWORD",
     "PFP_BI_SECRET_KEY",
+    "PFP_BI_OAUTH_CLIENT_SECRET",
 )
 
 
@@ -89,7 +90,7 @@ def test_a_different_demo_user_can_be_chosen(
     init_env.main(["--out", str(target), "--user", "ana"])
 
     assert _values(target.read_text())["PFP_USER"] == "ana"
-    assert "PFP_BI_ADMIN_PASSWORD" in capsys.readouterr().out  # says where to find it
+    assert "dex-add-user" in capsys.readouterr().out  # says how to sign in
 
 
 def test_a_user_name_that_would_break_sourcing_the_file_is_refused(

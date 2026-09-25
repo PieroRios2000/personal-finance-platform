@@ -412,15 +412,17 @@ loading every chart** (one container; the image is 3.7 GB on disk), far below Op
 so no `.wslconfig` change is needed on top of section 10's.
 
 ```bash
-# fill in .env (see .env.example): PFP_BI_DB_PASSWORD, PFP_BI_ADMIN_PASSWORD, PFP_BI_SECRET_KEY
-make up                              # storage + Postgres + Superset; builds the image the first time (~2 minutes)
+# fill in .env (see .env.example): PFP_BI_DB_PASSWORD, PFP_BI_ADMIN_PASSWORD, PFP_BI_SECRET_KEY,
+# PFP_BI_OAUTH_CLIENT_SECRET (T39, ADR 0034 -- signing in goes through Dex, section 12b below)
+make up                              # storage + Postgres + Dex + Superset; builds the image the first time (~2 minutes)
+make dex-add-user EMAIL=you@example.com   # paste the printed line into DEX_STATIC_PASSWORDS, then `make up` again
 set -a && source .env && set +a
 uv run pfp ingest --user "$PFP_USER"                    # your data, as in section 6
 uv run dbt build --project-dir dbt --profiles-dir dbt   # gold tables the charts read
 ```
 
-Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`), user `admin`, password
-`PFP_BI_ADMIN_PASSWORD`, then *Dashboards* -> **PFP finance**. From the top:
+Open <http://localhost:8088> (another port: `PFP_BI_PORT` in `.env`) and sign in with the email
+you just added, then *Dashboards* -> **PFP finance**. From the top:
 
 - **Summary cards** (HTML made with Superset's Handlebars chart): money in, money out, **net saved**,
   **% saved** (net ÷ income, where income is the money that came into your accounts from outside, without
@@ -502,6 +504,19 @@ tables and a continuous `dim_date`), then `make bi-down && make bi-up`.
   (`postgres/init-roles.sh`); if you changed `PFP_PG_BI_PASSWORD` since, either recreate the volume or
   `alter role pfp_bi password '...'`.
 
+**Signing in (T39, ADR 0034):** people sign in with their own email through
+[Dex](https://dexidp.io), an OpenID Connect provider running as its own service
+(`dex/config.yaml.tpl`, `bi/docker-compose.yml`), never with a shared password. `make
+dex-add-user EMAIL=you@example.com` asks for a password (never shown or logged), hashes
+it, and prints one `email:hash:username:userID` line -- paste it into
+`DEX_STATIC_PASSWORDS` in `.env` (single-quoted: the hash contains `$`; more than one
+person is comma-separated) and `make up` again to pick it up. Only people added this way
+can reach Dex's login screen at all; anyone who does gets Superset's Admin role, since
+this project has only one today -- a per-user view of the data is a follow-up PR. The
+`admin` / `PFP_BI_ADMIN_PASSWORD` account is now only for `bi/build_dashboards.py` and
+`bi/cleanup_stale.py`, which still authenticate over the REST API directly, unaffected by
+the login screen's change.
+
 ## 11. Alerts by email or Microsoft Teams (Phase 7)
 
 Errors are sent **the moment they appear**; warnings are **queued and sent once a week** as one
@@ -568,6 +583,41 @@ is not a container: `uv run dagster dev` (http://localhost:3000). **Upgrading fr
 `make up` first stops the old `pfp-bi` and `pfp-om` projects (their ports would clash) and keeps your
 lake and Postgres data, since the project name did not change. `make poc-up` still starts only storage and
 Postgres, and CI is unchanged.
+
+## 14. Dev and prod environments (T38)
+
+One machine, several **environments**: each is its own Compose project with its own volumes,
+Postgres, Superset and catalog, an env file and ports (ADR 0033). `PFP_ENV` picks it (default `poc`:
+today's stack, unchanged).
+
+| `PFP_ENV` | Project · env file · ports | Data | Code |
+|---|---|---|---|
+| `dev` | `pfp-dev` · `.env.dev` · +100 | your **real** statements | develop and feature branches |
+| `prod` | `pfp-prod` · `.env.prod` · +200 | **artificial** (`make demo`) | `main` only |
+
+```bash
+# dev: try a change with your real data (from your develop or feature checkout)
+make env PFP_ENV=dev USER_NAME=piero      # writes .env.dev: generated secrets, ports +100
+make up PFP_ENV=dev                       # its own storage, Postgres, Superset
+make ingest PFP_ENV=dev                   # your inbox (PFP_USER) -> bronze; refuses the demo user
+make build PFP_ENV=dev                    # dbt build; then open the Superset URL `make status PFP_ENV=dev` prints
+make up-catalog PFP_ENV=dev               # optional: the catalog for this environment
+
+# prod: what others see, on the code of main, with artificial data
+git worktree add ../pfp-prod main && cd ../pfp-prod
+make env PFP_ENV=prod                     # PFP_USER=demo
+make up PFP_ENV=prod && make demo PFP_ENV=prod
+```
+
+The flow: change on a branch -> `make up PFP_ENV=dev` from that checkout and look at it with the real data ->
+merge to `develop`, then to `main` -> update prod's checkout (`git pull` in `../pfp-prod`) and
+`make up PFP_ENV=prod`. **Guards:** prod refuses to start unless the checkout is on `main`, dev refuses `main`
+(`FORCE=1` overrides), `make demo` needs `PFP_USER=demo` in the env file and `make ingest` refuses it, so a real
+dashboard never gets demo rows. `make down`, `make status`, `make up-catalog`, `make om-sync` and the rest take the
+same `PFP_ENV`. Run the catalog in one environment at a time (4.6 GiB each). A new environment's `make build`
+fails until it has ingested at least one statement (an empty lake has no `bronze.transactions` yet). Moving your
+current `poc` data to dev means re-ingesting your archive into it: the [runbook](docs/runbook-rebuild-from-archive.md)
+with `PFP_ENV=dev`.
 
 ## Reproducing CI locally (`make ci-local`)
 
