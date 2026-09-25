@@ -13,7 +13,7 @@ def test_the_entry_has_four_fields_and_the_hash_verifies() -> None:
 
     email, digest, username, user_id = line.split(":", 3)
     assert email == "piero@example.com"
-    assert username == "piero"  # defaults to the part before @
+    assert username == "piero@example.com"  # defaults to the email, not "piero"
     assert bcrypt.checkpw(b"hunter2", digest.encode())
     assert len(user_id) == 36  # a uuid4, so two users never collide
 
