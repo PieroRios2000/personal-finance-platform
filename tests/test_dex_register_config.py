@@ -64,6 +64,15 @@ def test_the_generated_grpc_stubs_are_never_committed() -> None:
     assert "grpc_tools.protoc" in _DOCKERFILE
 
 
+def test_a_failed_grpc_call_never_crashes_the_request() -> None:
+    """A bare `stub.CreatePassword(...)` with no try/except would let `grpc.RpcError`
+    (Dex unreachable, restarting...) propagate out of `do_POST`, which crashes the
+    request mid-response -- ERR_EMPTY_RESPONSE in the browser, and a traceback in the
+    container's logs that tells a stranger with the invite code more than they should
+    know. Found by actually hitting this in production (see the incident writeup)."""
+    assert "except grpc.RpcError" in _APP
+
+
 def test_the_password_is_only_ever_used_to_validate_and_to_hash() -> None:
     """The submitted password is read exactly twice: passed to `validate`, then
     hashed. `_page(...)` is never built from an f-string or a `fields[...]` value, so

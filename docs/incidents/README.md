@@ -11,6 +11,7 @@ data in them: counts and names only ([ADR 0004](../../brain/decisions/0004-real-
 | Date | Incident | Impact |
 |---|---|---|
 | 2026-09-21 | [`make poc-down` wiped the real stack while testing on a throwaway one](2026-09-21-poc-down-wiped-the-real-stack.md) | Lake, tables and Superset metadata deleted; rebuilt from the archive, counts identical |
+| 2026-09-25 | [dex-register crashed on the owner's first real sign-up attempt](2026-09-25-dex-register-crashed-on-first-real-signup.md) | No data lost or wrong; the page crashed instead of showing an error, fixed |
 
 Operations run on the owner's real environment (pulls, builds, backfills, restarts) are recorded, one
 line each, in [`../operations-log.md`](../operations-log.md).
