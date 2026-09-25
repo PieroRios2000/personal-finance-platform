@@ -511,11 +511,17 @@ dex-add-user EMAIL=you@example.com` asks for a password (never shown or logged),
 it, and prints one `email:hash:username:userID` line -- paste it into
 `DEX_STATIC_PASSWORDS` in `.env` (single-quoted: the hash contains `$`; more than one
 person is comma-separated) and `make up` again to pick it up. Only people added this way
-can reach Dex's login screen at all; anyone who does gets Superset's Admin role, since
-this project has only one today -- a per-user view of the data is a follow-up PR. The
-`admin` / `PFP_BI_ADMIN_PASSWORD` account is now only for `bi/build_dashboards.py` and
-`bi/cleanup_stale.py`, which still authenticate over the REST API directly, unaffected by
-the login screen's change.
+can reach Dex's login screen at all. The `admin` / `PFP_BI_ADMIN_PASSWORD` account is
+only for `bi/build_dashboards.py` and `bi/cleanup_stale.py`, which still authenticate
+over the REST API directly, unaffected by the login screen's change.
+
+**Who sees what (T41, ADR 0036):** by default, signing in shows **no data at all**.
+`PFP_BI_OWNER_EMAIL` in `.env` is the one email that sees everything; anyone else sees
+only the `user_id` their Dex account was explicitly scoped to, via `make dex-add-user
+EMAIL=... --username <user_id>` (the same `user_id` your statements were ingested under,
+`--user` in `pfp ingest`) -- `--username` defaults to the full email, which never
+matches a real `user_id` (none contains `@`), so skipping it is the safe default, not an
+oversight.
 
 **Letting someone add themselves (T40, ADR 0035):** at <http://localhost:5559> (another
 port: `PFP_DEX_REGISTER_PORT`), `dex-register` is a small page where a new person picks
@@ -523,10 +529,9 @@ their own email and password instead of you running `dex-add-user` for them. It 
 `PFP_DEX_INVITE_CODE` in `.env` (generated like the secrets above): the page asks for
 that code before creating anything, so **share the code, never this URL alone, with
 whoever you want to be able to sign up** -- and rotate it in `.env` (`make up` again) to
-close the door to new signups without touching anyone's existing account. Because there
-is still only one role in this project, anyone who signs up sees everything, the same as
-someone the operator added; the invite code is what stands between the page being public
-and a stranger creating an account, not a limit on what that account can see.
+close the door to new signups without touching anyone's existing account. A self-
+registered account sees no data (the paragraph above) until you re-scope it the same
+way; the invite code only gates creating an account, never what it can see.
 
 **A public URL (T40, ADR 0035):** optional, and someone else's action to enable --
 `docker-compose.override.yml.dist` explains how to reach Superset, Dex and `dex-register`
