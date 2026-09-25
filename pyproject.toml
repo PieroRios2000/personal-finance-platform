@@ -122,6 +122,13 @@ ignore_missing_imports = true
 module = ["flask_appbuilder.*", "superset.*"]
 ignore_missing_imports = true
 
+# dex-register/app.py (T40, ADR 0035) runs in its own tiny container; grpc and the
+# generated Dex API client (api_pb2*, produced from api.proto at image build time, never
+# committed) are not local dependencies for the same reason as the two overrides above.
+[[tool.mypy.overrides]]
+module = ["grpc", "api_pb2", "api_pb2_grpc"]
+ignore_missing_imports = true
+
 [[tool.mypy.overrides]]
 module = "superset_config"
 disallow_subclassing_any = false

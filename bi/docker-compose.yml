@@ -1,12 +1,15 @@
 # Apache Superset: dashboards over PFP's gold schema (T32, ADR 0030), signed into through Dex
-# (T39, ADR 0034) so each person logs in with their own email.
+# (T39, ADR 0034) so each person logs in with their own email, added either by the operator
+# (`make dex-add-user`) or by themselves through dex-register (T40, ADR 0035), gated by an
+# invite code.
 #
 # Part of the platform's one Compose project (T37, ADR 0032): the root docker-compose.yml
 # includes this file and every service sits behind the `bi` profile, so `make up` starts
 # them with storage and Postgres, and CI never does. They share the project's network: the
 # read-only role `pfp_bi` reaches Postgres as `postgres:5432` and sees `gold` and nothing
 # else. Superset's own metadata is in a separate `superset` database of that Postgres
-# (init-metadata.sh). Only 8088 (Superset) and 5556 (Dex) are published, on 127.0.0.1.
+# (init-metadata.sh). Only 8088 (Superset), 5556 (Dex) and 5559 (dex-register) are
+# published, on 127.0.0.1; Dex's gRPC API (5557) never is -- see dex-register below.
 #
 # No `${VAR:-}` here: an included file is read even when its profile is off, so a required
 # variable would break every project that does not use Superset. `make up` checks the
@@ -35,6 +38,31 @@ services:
       timeout: 5s
       retries: 30
       start_period: 20s
+
+  # dex-register (T40, ADR 0035): a friendly sign-up page instead of `make dex-add-user`,
+  # gated by a shared invite code (PFP_DEX_INVITE_CODE) so a public URL (a Cloudflare
+  # Tunnel, docker-compose.override.yml.dist) doesn't let a stranger create an account.
+  # Creates the person straight in Dex's storage over its gRPC API -- reachable only from
+  # here, over the compose network (never a published port): that API has full control
+  # over every account.
+  dex-register:
+    profiles: ["bi"]
+    build: ../dex-register
+    image: pfp-dex-register:1.0.0
+    depends_on:
+      dex:
+        condition: service_healthy
+    environment:
+      PFP_DEX_INVITE_CODE: ${PFP_DEX_INVITE_CODE:-}
+      PFP_DEX_GRPC_ADDR: dex:5557
+    ports:
+      - "127.0.0.1:${PFP_DEX_REGISTER_PORT:-5559}:5559"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:5559/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
   bi-init:
     profiles: ["bi"]

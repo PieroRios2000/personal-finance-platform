@@ -102,7 +102,7 @@ poc:
 # Compose's `include` reads every file even for a stopped profile, so `${VAR:?}` cannot live
 # in them: `bi-check` verifies the Superset variables before `up`. The project name did not
 # change, so the volumes of an existing install (lake, Postgres) are kept.
-BI_SERVICES = bi-init dex superset
+BI_SERVICES = bi-init dex dex-register superset
 CATALOG_SERVICES = postgresql elasticsearch execute-migrate-all openmetadata-server ingestion
 OM_VOLUMES = om-postgres-data es-data ingestion-volume-dag-airflow ingestion-volume-dags ingestion-volume-tmp
 
@@ -159,6 +159,7 @@ bi-check: pg-check
 	{ [ -n "$$PFP_BI_ADMIN_PASSWORD" ] || missing="$$missing PFP_BI_ADMIN_PASSWORD"; } && \
 	{ [ -n "$$PFP_BI_SECRET_KEY" ] || missing="$$missing PFP_BI_SECRET_KEY"; } && \
 	{ [ -n "$$PFP_BI_OAUTH_CLIENT_SECRET" ] || missing="$$missing PFP_BI_OAUTH_CLIENT_SECRET"; } && \
+	{ [ -n "$$PFP_DEX_INVITE_CODE" ] || missing="$$missing PFP_DEX_INVITE_CODE"; } && \
 	{ [ -z "$$missing" ] || { echo "set$$missing in .env (see .env.example, SETUP.md section 12)" >&2; exit 2; }; }
 
 # Before T37 Superset and OpenMetadata ran as their own projects (`pfp-bi`, `pfp-om`), on
@@ -185,7 +186,8 @@ status:
 	@$(LOAD_ENV) && \
 	echo "" && echo "Storage (S3):  http://localhost:$${SEAWEEDFS_S3_PORT:-8333}" && \
 	echo "Superset:      http://localhost:$${PFP_BI_PORT:-8088}   (sign in with your email, via Dex)" && \
-	echo "Dex:           http://localhost:$${PFP_DEX_PORT:-5556}/dex   (make dex-add-user EMAIL=...)" && \
+	echo "Dex:           http://localhost:$${PFP_DEX_PORT:-5556}/dex" && \
+	echo "Sign up:       http://localhost:$${PFP_DEX_REGISTER_PORT:-5559}   (needs PFP_DEX_INVITE_CODE)" && \
 	echo "OpenMetadata:  http://localhost:$${OPENMETADATA_PORT:-8585}   (only after make up-catalog)" && \
 	echo "Dagster:       uv run dagster dev  ->  http://localhost:3000"
 

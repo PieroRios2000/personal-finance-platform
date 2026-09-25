@@ -39,9 +39,11 @@ def test_superset_waits_for_a_healthy_dex() -> None:
 
 
 def test_no_credential_is_hardcoded() -> None:
+    services = _compose()["services"]
     environment = {
-        **_compose()["services"]["dex"]["environment"],
-        **_compose()["services"]["superset"]["environment"],
+        **services["dex"]["environment"],
+        **services["superset"]["environment"],
+        **services["dex-register"]["environment"],
     }
     secrets = [v for k, v in environment.items() if "SECRET" in k or "PASSWORD" in k]
 

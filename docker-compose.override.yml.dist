@@ -1,0 +1,37 @@
+# A public URL for Superset, Dex and dex-register (T40, ADR 0035), through a Cloudflare
+# Tunnel you already run on this machine, for another project -- reusing it instead of a
+# second tunnel or opening a port on your router. Optional, personal, never committed:
+#
+#   cp docker-compose.override.yml.dist docker-compose.override.yml
+#
+# Compose reads that file automatically next to docker-compose.yml, alongside
+# docker-compose.yml itself (no flag needed); .gitignore keeps the real one out.
+#
+# 1. Find the Docker network your `cloudflared` container is already on:
+#      docker inspect <container> --format '{{.HostConfig.NetworkMode}}'
+#    and put it in `.env` as PFP_TUNNEL_NETWORK=that-network-name.
+# 2. In Cloudflare Zero Trust (Networks > Tunnels > your tunnel > Public Hostname), add
+#    one route per service, to the *container* name and port below (not 127.0.0.1: once
+#    these services share a network with `cloudflared`, it reaches them by that name) --
+#      superset.yourdomain.com  -> http://superset:8088
+#      dex.yourdomain.com       -> http://dex:5556
+#      signup.yourdomain.com    -> http://dex-register:5559
+#    That last route, and only it, is meant to be shared outside your household: it is
+#    the one page a stranger with the link but not the invite code can reach and get
+#    nothing from.
+#
+# Every service keeps its 127.0.0.1 port too (bi/docker-compose.yml): this only adds a
+# second, public way in, it does not remove the local one.
+
+networks:
+  tunnel:
+    name: ${PFP_TUNNEL_NETWORK}
+    external: true
+
+services:
+  superset:
+    networks: [default, tunnel]
+  dex:
+    networks: [default, tunnel]
+  dex-register:
+    networks: [default, tunnel]
