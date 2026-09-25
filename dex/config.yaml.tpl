@@ -33,6 +33,15 @@ web:
 telemetry:
   http: 0.0.0.0:5558
 
+# T40, ADR 0035: dex-register (the self-service sign-up page) calls CreatePassword here
+# to add a person immediately, no restart -- confirmed against a throwaway Dex that a
+# password created this way logs in right away, the same as one seeded from
+# DEX_STATIC_PASSWORDS. No TLS: this is never published as a host port, only reachable
+# from dex-register over the compose network, and that API grants full control over
+# every account, so it must stay that way.
+grpc:
+  addr: 0.0.0.0:5557
+
 oauth2:
   skipApprovalScreen: true
   passwordConnector: local

@@ -1,0 +1,30 @@
+// Trimmed to the one RPC this page calls, from dexidp/dex api/v2/api.proto at tag
+// v2.43.1 (matches the pinned image in bi/docker-compose.yml). T40, ADR 0035: gRPC
+// dispatches by method path ("/api.Dex/CreatePassword") and only the messages actually
+// exchanged need to match the server's wire format, so a client proto with just this one
+// RPC works the same as vendoring the whole ~280-line file (verified against a real Dex).
+
+syntax = "proto3";
+
+package api;
+
+// Password is an email for password mapping managed by the storage.
+message Password {
+  string email = 1;
+  // Currently we do not accept plain text passwords. Could be an option in the future.
+  bytes hash = 2;
+  string username = 3;
+  string user_id = 4;
+}
+
+message CreatePasswordReq {
+  Password password = 1;
+}
+
+message CreatePasswordResp {
+  bool already_exists = 1;
+}
+
+service Dex {
+  rpc CreatePassword(CreatePasswordReq) returns (CreatePasswordResp) {};
+}
