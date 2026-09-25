@@ -106,7 +106,12 @@ class Handler(BaseHTTPRequestHandler):
                     password=Password(
                         email=email,
                         hash=digest,
-                        username=email.split("@", 1)[0],
+                        # Not the part before @: Superset's row-level security (T41,
+                        # ADR 0036) matches this against a real user_id, and no
+                        # user_id this project writes contains "@" -- a self-
+                        # registered account sees no data until the operator
+                        # explicitly re-scopes it (make dex-add-user --username).
+                        username=email,
                         user_id=str(uuid4()),
                     )
                 )

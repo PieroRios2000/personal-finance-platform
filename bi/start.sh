@@ -30,6 +30,8 @@ PY
     superset import-directory /tmp/assets --overwrite
     # Earlier imports left charts and datasets behind; drop what is not in this export.
     python /app/bi-cleanup.py /tmp/assets || echo "cleanup failed; the dashboard still works"
+    # Row-level access (T41, ADR 0036): Gamma on the gold datasets, filtered by user_id.
+    python /app/setup_access.py
 fi
 
 exec gunicorn --bind 0.0.0.0:8088 --workers 2 --timeout 120 \
