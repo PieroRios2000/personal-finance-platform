@@ -100,24 +100,34 @@ class Handler(BaseHTTPRequestHandler):
         email = fields["email"]
         digest = bcrypt.hashpw(fields["password"].encode(), bcrypt.gensalt())
         stub = DexStub(grpc.insecure_channel(_GRPC_ADDR))
-        response = stub.CreatePassword(
-            CreatePasswordReq(
-                password=Password(
-                    email=email,
-                    hash=digest,
-                    username=email.split("@", 1)[0],
-                    user_id=str(uuid4()),
+        try:
+            response = stub.CreatePassword(
+                CreatePasswordReq(
+                    password=Password(
+                        email=email,
+                        hash=digest,
+                        username=email.split("@", 1)[0],
+                        user_id=str(uuid4()),
+                    )
                 )
             )
-        )
+        except grpc.RpcError:
+            # Dex unreachable, restarting, or similar: an unhandled exception here
+            # would crash the request mid-response (ERR_EMPTY_RESPONSE in the
+            # browser) and print a traceback that tells a stranger with the invite
+            # code more than they need to know about this machine.
+            self._respond(
+                _page('<p class="error">Try again in a moment.</p>'), status=503
+            )
+            return
         if response.already_exists:
             error = '<p class="error">That email is already signed up.</p>'
             self._respond(_page(error))
             return
         self._respond(_page("<p>Account created. You can sign in now.</p>"))
 
-    def _respond(self, body: bytes) -> None:
-        self.send_response(200)
+    def _respond(self, body: bytes, status: int = 200) -> None:
+        self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
