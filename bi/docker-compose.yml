@@ -1,6 +1,6 @@
 # Apache Superset: dashboards over PFP's gold schema (T32, ADR 0030), signed into through Dex
 # (T39, ADR 0034) so each person logs in with their own email, added either by the operator
-# (`make dex-add-user`) or by themselves through dex-register (T40, ADR 0035), gated by an
+# (`make dex-add-user`, ADR 0039) or by themselves through dex-register (T40, ADR 0035), gated by an
 # invite code.
 #
 # Part of the platform's one Compose project (T37, ADR 0032): the root docker-compose.yml
@@ -34,7 +34,6 @@ services:
       PFP_UPLOAD_BASE_URL: http://localhost:${PFP_UPLOAD_PORT:-5560}
       PFP_UPLOAD_PUBLIC_URL: ${PFP_UPLOAD_PUBLIC_URL:-}
       PFP_BI_OAUTH_CLIENT_SECRET: ${PFP_BI_OAUTH_CLIENT_SECRET:-}
-      DEX_STATIC_PASSWORDS: ${DEX_STATIC_PASSWORDS:-}
     ports:
       - "127.0.0.1:${PFP_DEX_PORT:-5556}:5556"
     volumes:

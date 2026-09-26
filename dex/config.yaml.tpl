@@ -1,5 +1,5 @@
 # Dex (T39, ADR 0034): one OpenID Connect login per person, by email, instead of a shared
-# admin password per tool. Local users only for now (staticPasswords); who is behind each
+# admin password per tool. Local users only (stored in Dex, ADR 0039); who is behind each
 # login is Dex's job, not the BI tool's -- Superset (and, later, OpenMetadata and Dagster)
 # only need to trust this issuer.
 #
@@ -7,9 +7,8 @@
 # (`CMD ["dex", "serve", "/etc/dex/config.yaml"]`; see cmd/docker-entrypoint in dexidp/dex),
 # so every gomplate action below is resolved from the container's environment at startup, not
 # committed with real values. `secretEnv` is Dex's own env-var indirection for a client's
-# secret (its `id` is not one -- an OAuth client id is public, the same way a username is);
-# the user list has no such indirection, so it is templated by hand from one env var, one
-# user per comma.
+# secret (its `id` is not one -- an OAuth client id is public, the same way a username is).
+# The accounts themselves are never in this file: they live in Dex's storage.
 #
 # The issuer is the Compose network address, never the published one: it drives every URL
 # Dex's discovery document hands back (token, userinfo, jwks), and those are all backend-to-
@@ -35,8 +34,7 @@ telemetry:
 
 # T40, ADR 0035: dex-register (the self-service sign-up page) calls CreatePassword here
 # to add a person immediately, no restart -- confirmed against a throwaway Dex that a
-# password created this way logs in right away, the same as one seeded from
-# DEX_STATIC_PASSWORDS. No TLS: this is never published as a host port, only reachable
+# password created this way logs in right away. No TLS: this is never published as a host port, only reachable
 # from dex-register over the compose network, and that API grants full control over
 # every account, so it must stay that way.
 grpc:
@@ -75,22 +73,8 @@ staticClients:
       - {{ getenv "PFP_UPLOAD_PUBLIC_URL" }}/callback
 {{- end }}
 
-# Local password database: `make dex-add-user EMAIL=...` (scripts/dex_add_user.py) hashes a
-# chosen password with bcrypt and prints one "email:hash:username:userID" entry to add to
-# DEX_STATIC_PASSWORDS in .env, comma-separated for more than one person. Never committed --
-# .env is gitignored, like every other secret in this project.
+# Local password database. Accounts are created and changed over the gRPC API above, by
+# dex-register (sign-up, password reset) and `make dex-add-user` / `make dex-scope`, never
+# listed here: a config-seeded (static) account is read-only for that API, so it could
+# not be reset or re-scoped (ADR 0039).
 enablePasswordDB: true
-
-staticPasswords:
-{{- $raw := getenv "DEX_STATIC_PASSWORDS" }}
-{{- if $raw }}
-{{- range (strings.Split "," $raw) }}
-{{- $fields := strings.Split ":" . }}
-  - email: {{ index $fields 0 }}
-    hash: {{ index $fields 1 }}
-    username: {{ index $fields 2 }}
-    userID: {{ index $fields 3 }}
-{{ end -}}
-{{- else }}
-  []
-{{- end }}

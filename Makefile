@@ -27,7 +27,7 @@ PFP = docker compose -p $(PFP_PROJECT)
 # Each environment's OpenMetadata artifacts (they hold a token and the Postgres password).
 export PFP_OM_ARTIFACTS = ./artifacts/$(PFP_ENV)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -248,11 +248,17 @@ bi-reset: bi-down
 bi-export:
 	$(LOAD_ENV) && uv run python bi/build_dashboards.py
 
-# Dex (T39, ADR 0034): hash a chosen password and print the line to add to
-# DEX_STATIC_PASSWORDS in .env, then `make up` (or bi-up) to pick it up.
+# Dex accounts (ADR 0039), created over Dex's gRPC API from inside the dex-register container
+# (the API is never published). `dex-add-user` asks for a password; USERNAME is the user_id the
+# account is filtered to in Superset (T41), default: none, so it sees no data. `dex-scope` changes
+# that later. Needs the stack up (`make up`).
 dex-add-user:
-	@test -n "$(EMAIL)" || { echo "usage: make dex-add-user EMAIL=you@example.com" >&2; exit 2; }
-	uv run python -m scripts.dex_add_user "$(EMAIL)"
+	@test -n "$(EMAIL)" || { echo "usage: make dex-add-user EMAIL=you@example.com [USERNAME=user_id]" >&2; exit 2; }
+	$(LOAD_ENV) && $(PFP) exec dex-register python manage.py add "$(EMAIL)" $(if $(USERNAME),--username "$(USERNAME)")
+
+dex-scope:
+	@test -n "$(EMAIL)" -a -n "$(USERNAME)" || { echo "usage: make dex-scope EMAIL=you@example.com USERNAME=user_id" >&2; exit 2; }
+	$(LOAD_ENV) && $(PFP) exec dex-register python manage.py scope "$(EMAIL)" "$(USERNAME)"
 
 # Phase 7 (alerting, SETUP.md section 11): send the errors of the last `dbt build`
 # now and queue its warnings; `alert-digest` sends the queued warnings as one

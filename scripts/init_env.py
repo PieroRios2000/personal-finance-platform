@@ -107,7 +107,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     with os.fdopen(descriptor, "w") as handle:
         handle.write(text)
     print(f"wrote {args.out} (mode 600) with generated secrets.")
-    print("Sign in to Superset with your email: `make dex-add-user EMAIL=you@ex.com`.")
+    print("Once `make up` is running: `make dex-add-user EMAIL=you@ex.com`.")
     print(
         f"PFP_USER={args.user}: use another name for real statements (demo mixes in)."
     )

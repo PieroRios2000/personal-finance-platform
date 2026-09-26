@@ -415,7 +415,7 @@ so no `.wslconfig` change is needed on top of section 10's.
 # fill in .env (see .env.example): PFP_BI_DB_PASSWORD, PFP_BI_ADMIN_PASSWORD, PFP_BI_SECRET_KEY,
 # PFP_BI_OAUTH_CLIENT_SECRET (T39, ADR 0034 -- signing in goes through Dex, section 12b below)
 make up                              # storage + Postgres + Dex + Superset; builds the image the first time (~2 minutes)
-make dex-add-user EMAIL=you@example.com   # paste the printed line into DEX_STATIC_PASSWORDS, then `make up` again
+make dex-add-user EMAIL=you@example.com   # asks for a password; creates your account in Dex (or use the sign-up page)
 set -a && source .env && set +a
 uv run pfp ingest --user "$PFP_USER"                    # your data, as in section 6
 uv run dbt build --project-dir dbt --profiles-dir dbt   # gold tables the charts read
@@ -507,19 +507,19 @@ tables and a continuous `dim_date`), then `make bi-down && make bi-up`.
 **Signing in (T39, ADR 0034):** people sign in with their own email through
 [Dex](https://dexidp.io), an OpenID Connect provider running as its own service
 (`dex/config.yaml.tpl`, `bi/docker-compose.yml`), never with a shared password. `make
-dex-add-user EMAIL=you@example.com` asks for a password (never shown or logged), hashes
-it, and prints one `email:hash:username:userID` line -- paste it into
-`DEX_STATIC_PASSWORDS` in `.env` (single-quoted: the hash contains `$`; more than one
-person is comma-separated) and `make up` again to pick it up. Only people added this way
-can reach Dex's login screen at all. The `admin` / `PFP_BI_ADMIN_PASSWORD` account is
+dex-add-user EMAIL=you@example.com` asks for a password (never shown or logged) and creates
+the account in Dex right away, no restart (ADR 0039: there are no accounts in `.env`; `make
+dex-scope` and the reset by email work on every one). It runs inside the `dex-register`
+container, so the stack must be up. Only people with an account can get past Dex's login
+screen. The `admin` / `PFP_BI_ADMIN_PASSWORD` account is
 only for `bi/build_dashboards.py` and `bi/cleanup_stale.py`, which still authenticate
 over the REST API directly, unaffected by the login screen's change.
 
 **Who sees what (T41, ADR 0036):** by default, signing in shows **no data at all**.
 `PFP_BI_OWNER_EMAIL` in `.env` is the one email that sees everything; anyone else sees
 only the `user_id` their Dex account was explicitly scoped to, via `make dex-add-user
-EMAIL=... --username <user_id>` (the same `user_id` your statements were ingested under,
-`--user` in `pfp ingest`) -- `--username` defaults to the full email, which never
+EMAIL=... USERNAME=<user_id>`, or later `make dex-scope EMAIL=... USERNAME=<user_id>` (the same
+`user_id` your statements were ingested under, `--user` in `pfp ingest`) -- the username defaults to the full email, which never
 matches a real `user_id` (none contains `@`), so skipping it is the safe default, not an
 oversight.
 
@@ -540,9 +540,7 @@ It needs, in `.env`: `PFP_REGISTER_PUBLIC_URL` (e.g. `https://register.<domain>`
 slash; also what the login-form links use) and the alerting's SMTP variables (section 11:
 `ALERT_SMTP_HOST`, `ALERT_SMTP_PORT`, `ALERT_SMTP_USER`, `ALERT_SMTP_PASSWORD`,
 `ALERT_EMAIL_FROM`; most providers need an *app password*). Without them the page says reset is
-not set up. Accounts made with `make dex-add-user` cannot be reset this way (they live in `.env`,
-read-only for Dex's API): remove the entry from `DEX_STATIC_PASSWORDS` and sign up again on the
-sign-up page if you want that account to be able to.
+not set up. Every account can be reset this way (ADR 0039: none are static).
 
 **Letting people upload their statements (T44, ADR 0040):** signed-in people send their bank
 PDFs at <http://localhost:5560> (another port: `PFP_UPLOAD_PORT`). Choose the bank, type the PDF's

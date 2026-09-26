@@ -63,4 +63,4 @@ uploader. Four things were open (backlog, 2026-09-26) and the owner decided them
 [ADR 0004](0004-real-pdfs-never-leave-your-machine.md),
 [ADR 0009](0009-multi-user-multi-account-content-over-filename.md),
 [ADR 0036](0036-row-level-security-by-ingesting-user.md),
-ADR 0039 (every Dex account is dynamic; linked once it is on `develop`).
+[ADR 0039](0039-all-dex-accounts-are-dynamic.md).
