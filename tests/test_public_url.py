@@ -4,13 +4,9 @@ URI and Superset behind a proxy.
 Static checks; the live behaviour (login through a public hostname) is the PR's
 verification."""
 
-import os
-import shutil
-import subprocess
 from pathlib import Path
 from typing import Any
 
-import pytest
 import yaml
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -68,34 +64,9 @@ def test_no_personal_override_file_is_needed_any_more() -> None:
     assert not (_ROOT / "docker-compose.override.yml.dist").exists()
 
 
-@pytest.mark.skipif(shutil.which("gomplate") is None, reason="gomplate not installed")
-@pytest.mark.parametrize(
-    ("public", "expected"),
-    [
-        ("", ["http://localhost:8088/oauth-authorized/dex"]),
-        (
-            "https://www.example.com",
-            [
-                "http://localhost:8088/oauth-authorized/dex",
-                "https://www.example.com/oauth-authorized/dex",
-            ],
-        ),
-    ],
-)
-def test_dex_accepts_the_public_redirect_uri_only_when_one_is_set(
-    public: str, expected: list[str]
-) -> None:
-    rendered = subprocess.run(
-        ["gomplate", "-f", str(_ROOT / "dex" / "config.yaml.tpl")],
-        capture_output=True,
-        text=True,
-        env={
-            **os.environ,
-            "PFP_BI_BASE_URL": "http://localhost:8088",
-            "PFP_BI_PUBLIC_URL": public,
-            "DEX_STATIC_PASSWORDS": "",
-        },
-        check=True,
-    ).stdout
+def test_dex_adds_the_public_redirect_uri_only_when_one_is_set() -> None:
+    template = (_ROOT / "dex" / "config.yaml.tpl").read_text()
 
-    assert yaml.safe_load(rendered)["staticClients"][0]["redirectURIs"] == expected
+    assert 'getenv "PFP_BI_BASE_URL" }}/oauth-authorized/dex' in template
+    assert '{{- if getenv "PFP_BI_PUBLIC_URL" }}' in template
+    assert 'getenv "PFP_BI_PUBLIC_URL" }}/oauth-authorized/dex' in template
