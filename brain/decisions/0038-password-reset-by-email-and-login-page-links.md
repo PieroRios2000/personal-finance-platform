@@ -45,9 +45,8 @@ except the operator, and Dex's login page offered no way to create an account ei
 
 ## Consequences
 
-- Accounts created by `make dex-add-user` are *static* (config, read-only over gRPC):
-  their reset fails with a message that says so. Recreate them through the sign-up page
-  (remove the entry from `DEX_STATIC_PASSWORDS` first), or keep the operator route.
+- Accounts made by the old `make dex-add-user` were *static* (config, read-only over gRPC)
+  and could not be reset; [ADR 0039](0039-all-dex-accounts-are-dynamic.md) removes them.
 - Dex upgrades must re-copy `password.html` from the new image and re-add the links; a
   test checks the file is still Dex's own login form.
 - Sending mail from a public page is an abuse surface: hence the per-IP and per-email

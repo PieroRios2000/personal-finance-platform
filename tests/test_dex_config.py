@@ -3,13 +3,9 @@
 Static checks on the Compose service, the config template and the Superset OAuth wiring;
 the live behaviour (a real login) is the PR's verification."""
 
-import os
-import shutil
-import subprocess
 from pathlib import Path
 from typing import Any
 
-import pytest
 import yaml
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -56,8 +52,7 @@ def test_the_template_never_hardcodes_a_user_or_a_client_secret() -> None:
     assert "staticClients" in _TEMPLATE and "id: superset" in _TEMPLATE
     assert "secretEnv: PFP_BI_OAUTH_CLIENT_SECRET" in _TEMPLATE
     assert "enablePasswordDB: true" in _TEMPLATE
-    # Real users only ever come from the environment, never from this committed file.
-    assert "@" not in _TEMPLATE.split("staticPasswords:", 1)[1]
+    assert "@" not in _TEMPLATE.split("enablePasswordDB:", 1)[1]
 
 
 def test_dexs_own_issuer_is_the_internal_address_not_the_published_one() -> None:
@@ -75,51 +70,12 @@ def test_superset_reaches_dex_internally_but_browser_hits_the_published_port() -
     assert "f\"{os.environ['DEX_ISSUER']}/auth\"" in _SUPERSET_CONFIG
 
 
-@pytest.mark.skipif(shutil.which("gomplate") is None, reason="gomplate not installed")
-def test_the_template_renders_valid_dex_config() -> None:
-    """The official image templates this file through its bundled gomplate before
-    `dex serve` reads it (cmd/docker-entrypoint in dexidp/dex); render it the same
-    way here."""
-    env = {
-        "PFP_BI_BASE_URL": "http://localhost:8088",
-        "DEX_STATIC_PASSWORDS": (
-            "piero@example.com:$2b$12$abcxyzHASH:piero:"
-            "5f2f0000-0000-0000-0000-000000000001"
-        ),
-    }
-    rendered = subprocess.run(
-        ["gomplate", "-f", str(_ROOT / "dex" / "config.yaml.tpl")],
-        capture_output=True,
-        text=True,
-        env={**os.environ, **env},
-        check=True,
-    ).stdout
-    config = yaml.safe_load(rendered)
-
-    assert config["issuer"] == _INTERNAL_ISSUER
-    assert config["enablePasswordDB"] is True
-    assert config["staticPasswords"] == [
-        {
-            "email": "piero@example.com",
-            "hash": "$2b$12$abcxyzHASH",
-            "username": "piero",
-            "userID": "5f2f0000-0000-0000-0000-000000000001",
-        }
-    ]
-
-
-@pytest.mark.skipif(shutil.which("gomplate") is None, reason="gomplate not installed")
-def test_the_template_renders_with_no_users_configured_yet() -> None:
-    env = {
-        "PFP_BI_BASE_URL": "http://localhost:8088",
-        "DEX_STATIC_PASSWORDS": "",
-    }
-    rendered = subprocess.run(
-        ["gomplate", "-f", str(_ROOT / "dex" / "config.yaml.tpl")],
-        capture_output=True,
-        text=True,
-        env={**os.environ, **env},
-        check=True,
-    ).stdout
-
-    assert yaml.safe_load(rendered)["staticPasswords"] == []
+def test_accounts_live_in_dex_not_in_the_config_or_the_env_file() -> None:
+    """ADR 0039: a config-seeded (static) account is read-only over Dex's gRPC API, so
+    it could not be reset or re-scoped. Every account is created over that API."""
+    assert "staticPasswords" not in _TEMPLATE
+    assert "DEX_STATIC_PASSWORDS" not in _TEMPLATE
+    assert (
+        "DEX_STATIC_PASSWORDS" not in (_ROOT / "bi" / "docker-compose.yml").read_text()
+    )
+    assert "DEX_STATIC_PASSWORDS" not in (_ROOT / ".env.example").read_text()
