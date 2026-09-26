@@ -58,6 +58,12 @@ a supported bank and kind. It is written into the file as `/PFPCurrency`, and `m
 groups by bank, kind and currency. As with the bank, it is a hint: the parsers read the currency
 from the content.
 
+**The owner is told when a file is kept for review**: an email over the alerting's channel (Phase 7,
+the same `ALERT_SMTP_*` and `ALERT_EMAIL_TO`; nothing is sent while `ALERT_EMAIL_TO` is unset). It is
+immediate, not the weekly digest of ADR 0026, because a person is waiting on an answer, and it says
+only bank, kind, currency and how many (never a file name, a person or a page, ADR 0004). It is sent
+from a thread, at most 6 an hour whatever people upload; the rest stay listed by `make review-uploads`.
+
 ## Alternatives considered
 
 - **Store passwords (encrypted)**: convenient, but holds other people's bank secrets.
