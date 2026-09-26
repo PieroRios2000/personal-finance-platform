@@ -11,7 +11,8 @@ branch and PR when it is picked up; see [`CLAUDE.md`](../CLAUDE.md) for how.
       silently. Either read subfolders or say so in the report.
 - [ ] Decide whether a failing continuity test should skip every downstream node (today one
       failing source test skipped 93 of 127 nodes, silver and gold included).
-- [ ] Numeric CI rules leave warn-mode on 2026-09-26 (two-line change).
+- [x] Numeric CI rules leave warn-mode on 2026-09-26 (T19): the `-` and `continue-on-error` came off for coverage, pip-audit, bandit and import-linter.
+- [ ] Benchmark comparison: still warns (a single outlier made the mean 50% worse on identical code). Decide: gate on the median (`--benchmark-compare-fail=median:20%`) instead of the mean, then it can block.
 
 ## CI parity (done 2026-09-19)
 
@@ -73,10 +74,9 @@ order agreed:
       with an expiry** (only its hash stored), emailed over the SMTP the alerting already configures
       (Phase 7), handled by `dex-register` (`/forgot`, `/reset?token=`) and applied over gRPC
       `UpdatePassword`. It must answer the same whether the email exists or not, and rate-limit.
-      Depends on T42 (the link must open from outside) and on SMTP. **Open:** accounts added with
-      `make dex-add-user` are *static* (read-only over gRPC, found out re-scoping the owner's own
-      account) and cannot be reset this way: migrate them to dynamic storage first.
-- [ ] **The upload portal** ([Phase 5](../PROJECT.md)): upload -> `inbox/<user_id>/` -> pipeline.
+      Depends on T42 (the link must open from outside) and on SMTP. Static accounts, which cannot be reset,
+      are gone: every account is dynamic (ADR 0039).
+- [ ] **The upload portal** ([Phase 5](../PROJECT.md); ADR 0040: **bank-statement section built (T44)**, decisions taken; left: the card-balance and manual-Excel sections): upload -> `inbox/<user_id>/` -> pipeline.
       Sections by **file type** (statement PDFs, card balance, manual Excel: savings and
       investments), not by bank: bank and account are detected from the content
       ([ADR 0009](../brain/decisions/0009-multi-user-multi-account-content-over-filename.md)) and
@@ -84,14 +84,15 @@ order agreed:
       mismatch goes to `_needs_review`. Decide first (each needs an ADR):
       - the destination `user_id` comes from the signed-in session, never a form field;
       - how a new account gets a safe `user_id` and is bound to it (today it sees no data until
-        the operator runs `make dex-add-user --username`);
+        the operator runs `make dex-scope`);
       - PDF passwords: one per bank in `.env` today; several people need one each, and storing
         other people's passwords is a security decision;
       - privacy: [ADR 0004](../brain/decisions/0004-real-pdfs-never-leave-your-machine.md) covers
         the owner's own statements, not receiving other people's.
-- [ ] **"Upload your files" button in Superset**, last, once the portal exists: a Handlebars chart
-      that renders the message and the link only when its query returns 0 rows (which is what a
-      row-level-filtered new account gets).
+- [x] **"Upload your files" button in Superset** (T45): the first row of the dashboard. A
+      Handlebars chart counts the movements the account may see (row-level security): 0 shows a
+      "No data yet" message and a button to the portal, otherwise a slim "Have more statements?"
+      link. (A chart cannot be empty in Superset, hence the count and the constant `upload_url()`.)
 
 ## Next phases (planned, nothing built)
 

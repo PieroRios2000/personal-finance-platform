@@ -15,6 +15,9 @@ SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
 # jinja_context.get_template_processor), matching no row rather than the signed-in
 # user's.
 FEATURE_FLAGS = {"ENABLE_TEMPLATE_PROCESSING": True}
+# `{{ upload_url() }}` in a chart's SQL: where the dashboard's "Upload your files" link
+# goes (the upload portal, T44, ADR 0040), public when there is a public URL.
+JINJA_CONTEXT_ADDONS = {"upload_url": lambda: os.environ.get("PFP_UPLOAD_URL", "")}
 
 # Superset's own metadata (users, charts, dashboards) lives in its own database of
 # PFP's Postgres, owned by its own role -- never in `pfp`, where dbt writes. The
@@ -60,7 +63,7 @@ class DexSecurityManager(SupersetSecurityManager):
     discovered.
 
     The Superset *username* is Dex's own `username` field (its ID token's `name`
-    claim), not the email -- `scripts/dex_add_user.py --username` and
+    claim), not the email -- `make dex-add-user USERNAME=` / `make dex-scope` and
     `dex-register`'s own default both leave it equal to the email unless the
     operator deliberately sets it to a real `user_id` from the gold tables (T41,
     ADR 0036), which is what the row-level filter below matches against. Defaulting
@@ -117,8 +120,8 @@ ENABLE_PROXY_FIX = True
 PROXY_FIX_CONFIG = {"x_for": 1, "x_proto": 1, "x_host": 1, "x_prefix": 0}
 SESSION_COOKIE_SECURE = os.environ.get("PFP_BI_PUBLIC_URL", "").startswith("https://")
 
-# Sign in with Dex (T39, ADR 0034): people who are not in DEX_STATIC_PASSWORDS
-# cannot reach Dex's login screen at all. `bi/build_dashboards.py` and
+# Sign in with Dex (T39, ADR 0034): only people with an account in Dex get past its
+# login screen. `bi/build_dashboards.py` and
 # `bi/cleanup_stale.py` still use the separate `admin` account
 # (PFP_BI_ADMIN_PASSWORD) over the REST API: FAB's DB auth backend answers that
 # endpoint regardless of AUTH_TYPE, so OAuth for human login does not touch it.

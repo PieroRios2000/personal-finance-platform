@@ -31,6 +31,7 @@ _PORTS = (
     "OPENMETADATA_PORT",
     "PFP_DEX_PORT",
     "PFP_DEX_REGISTER_PORT",
+    "PFP_UPLOAD_PORT",
 )
 _GENERATED = (
     "PFP_ACCOUNT_KEY",
@@ -41,6 +42,8 @@ _GENERATED = (
     "PFP_BI_DB_PASSWORD",
     "PFP_BI_ADMIN_PASSWORD",
     "PFP_BI_SECRET_KEY",
+    "PFP_UPLOAD_SECRET_KEY",
+    "PFP_UPLOAD_OAUTH_CLIENT_SECRET",
     "PFP_BI_OAUTH_CLIENT_SECRET",
     "PFP_DEX_INVITE_CODE",
 )
@@ -104,7 +107,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     with os.fdopen(descriptor, "w") as handle:
         handle.write(text)
     print(f"wrote {args.out} (mode 600) with generated secrets.")
-    print("Sign in to Superset with your email: `make dex-add-user EMAIL=you@ex.com`.")
+    print("Once `make up` is running: `make dex-add-user EMAIL=you@ex.com`.")
     print(
         f"PFP_USER={args.user}: use another name for real statements (demo mixes in)."
     )

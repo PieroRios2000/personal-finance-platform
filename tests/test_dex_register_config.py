@@ -82,3 +82,16 @@ def test_the_password_is_only_ever_used_to_validate_and_to_hash() -> None:
     assert _APP.count('fields["password"]') == 2
     assert '_page(f"' not in _APP
     assert "_page(fields[" not in _APP
+
+
+def test_operator_commands_reach_dex_from_inside_the_container_only() -> None:
+    """`make dex-add-user` / `dex-scope` run `manage.py` in the dex-register container:
+    Dex's gRPC API is never published (ADR 0039), so nothing on the host can call it."""
+    manage = (_ROOT / "dex-register" / "manage.py").read_text()
+    makefile = (_ROOT / "Makefile").read_text()
+
+    assert "manage.py" in _DOCKERFILE
+    assert 'grpc.insecure_channel("dex:5557")' in manage
+    assert "exec dex-register python manage.py add" in makefile
+    assert "exec dex-register python manage.py scope" in makefile
+    assert not (_ROOT / "scripts" / "dex_add_user.py").exists()
