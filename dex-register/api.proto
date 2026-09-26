@@ -1,4 +1,4 @@
-// Trimmed to the one RPC this page calls, from dexidp/dex api/v2/api.proto at tag
+// Trimmed to the RPCs this page calls (T43 adds ListPasswords and UpdatePassword), from dexidp/dex api/v2/api.proto at tag
 // v2.43.1 (matches the pinned image in bi/docker-compose.yml). T40, ADR 0035: gRPC
 // dispatches by method path ("/api.Dex/CreatePassword") and only the messages actually
 // exchanged need to match the server's wire format, so a client proto with just this one
@@ -25,6 +25,24 @@ message CreatePasswordResp {
   bool already_exists = 1;
 }
 
+message UpdatePasswordReq {
+  string email = 1;
+  bytes new_hash = 2;
+  string new_username = 3;
+}
+
+message UpdatePasswordResp {
+  bool not_found = 1;
+}
+
+message ListPasswordReq {}
+
+message ListPasswordResp {
+  repeated Password passwords = 1;
+}
+
 service Dex {
   rpc CreatePassword(CreatePasswordReq) returns (CreatePasswordResp) {};
+  rpc UpdatePassword(UpdatePasswordReq) returns (UpdatePasswordResp) {};
+  rpc ListPasswords(ListPasswordReq) returns (ListPasswordResp) {};
 }

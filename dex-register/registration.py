@@ -28,6 +28,11 @@ def validate(
         return "That invite code is wrong."
     if not EMAIL.fullmatch(email):
         return "That doesn't look like an email address."
+    return validate_password(password, confirm)
+
+
+def validate_password(password: str, confirm: str) -> str | None:
+    """Shared by sign-up and password reset (T43)."""
     if len(password) < MIN_PASSWORD_LENGTH:
         return f"Use a password of at least {MIN_PASSWORD_LENGTH} characters."
     if password != confirm:
@@ -40,7 +45,8 @@ class Throttle:
     is public, so the invite code is the only thing standing between a stranger and an
     account, and a code long enough to be safe is still worth slowing brute force on."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_attempts: int = MAX_ATTEMPTS) -> None:
+        self._max_attempts = max_attempts
         self._failures: dict[str, list[float]] = {}
         self._lock = threading.Lock()
 
@@ -49,7 +55,7 @@ class Throttle:
         with self._lock:
             recent = [t for t in self._failures.get(ip, []) if now - t < WINDOW_SECONDS]
             self._failures[ip] = recent
-            return len(recent) >= MAX_ATTEMPTS
+            return len(recent) >= self._max_attempts
 
     def record_failure(self, ip: str, now: float | None = None) -> None:
         now = time.time() if now is None else now

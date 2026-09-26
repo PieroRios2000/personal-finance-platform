@@ -5,7 +5,7 @@
 FROM python:3.12-slim
 WORKDIR /app
 RUN pip install --no-cache-dir grpcio==1.84.0 grpcio-tools==1.84.0 protobuf==7.36.2 bcrypt==5.0.0
-COPY api.proto registration.py app.py ./
+COPY api.proto registration.py reset.py app.py ./
 RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. api.proto
 USER nobody
 EXPOSE 5559
