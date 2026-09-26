@@ -89,8 +89,9 @@ order agreed:
         other people's passwords is a security decision;
       - privacy: [ADR 0004](../brain/decisions/0004-real-pdfs-never-leave-your-machine.md) covers
         the owner's own statements, not receiving other people's.
-- [ ] **Extraction for new banks and kinds** (T46 keeps the files apart; each one is its own request):
-      whatever `make review-uploads` lists that no parser reads (another bank, BCP's credit card),
+- [ ] **Extraction for new banks, kinds and currencies** (T46 keeps the files apart; each one is its own request):
+      whatever `make review-uploads` lists that no parser reads (another bank, BCP's credit card, a currency
+      other than soles and dollars),
       studied one at a time from a masked layout sample ([layout inspector](../brain/components/layout-inspector.md),
       ADR 0004): a parser, its synthetic fixture, and adding its pair to `SUPPORTED` in
       `upload/portal.py`. Nothing waiting yet.

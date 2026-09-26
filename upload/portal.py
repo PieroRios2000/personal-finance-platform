@@ -7,10 +7,21 @@ import re
 import secrets
 import threading
 import time
+from typing import NamedTuple
 
 # Must match ingestion.dispatcher (tested).
 BANKS = ("BCP", "Scotiabank")
 OTHER_BANK = "Other bank"
+# The currency the file is in. The pipeline reads soles and dollars (a card statement
+# usually has both at once, hence BOTH); any other currency is its own request, like
+# another bank (ADR 0040).
+OTHER_CURRENCY = "OTHER"
+CURRENCIES = {
+    "PEN": "Soles (PEN)",
+    "USD": "Dollars (USD)",
+    "BOTH": "Both soles and dollars (a card statement usually has both)",
+    OTHER_CURRENCY: "Another currency",
+}
 # What someone can say a file is: a bank account statement (estado de cuenta) or a
 # credit card statement (tarjeta de credito).
 KINDS = {
@@ -58,17 +69,32 @@ def clean_bank_name(raw: str) -> str:
     return " ".join(_BANK_NAME.sub("", raw).split())[:40]
 
 
-def route(bank: str, kind: str, other_bank: str) -> tuple[bool, str] | None:
-    """Where an upload goes: `(True, bank)` to the pipeline, `(False, name)` to the
-    review folder, or None when the form is invalid (an unknown kind or bank, or "other"
-    with no name)."""
-    if kind not in KINDS:
+class Route(NamedTuple):
+    supported: bool  # True: the pipeline reads it; False: kept for the owner to review
+    bank: str
+    currency: str
+
+
+def route(
+    bank: str, kind: str, other_bank: str, currency: str, other_currency: str
+) -> Route | None:
+    """Where an upload goes, or None when the form is invalid (an unknown kind, bank or
+    currency, or an "other" with no name). It goes to the pipeline only when the bank
+    and kind are a supported pair *and* the currency is one the pipeline reads."""
+    if kind not in KINDS or currency not in CURRENCIES:
         return None
+    if currency == OTHER_CURRENCY:
+        currency = clean_bank_name(other_currency).upper()[:20]
+        if not currency:
+            return None
+        known = False
+    else:
+        known = True
     if bank in BANKS:
-        return ((bank, kind) in SUPPORTED, bank)
+        return Route(known and (bank, kind) in SUPPORTED, bank, currency)
     if bank == OTHER_BANK:
         name = clean_bank_name(other_bank)
-        return (False, name) if name else None
+        return Route(False, name, currency) if name else None
     return None
 
 

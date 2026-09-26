@@ -149,18 +149,38 @@ def test_processing_what_was_uploaded_is_one_command_over_every_inbox_folder() -
 
 
 def test_supported_pairs_go_to_the_pipeline_and_the_rest_to_review() -> None:
-    assert portal.route("BCP", "account", "") == (True, "BCP")
-    assert portal.route("Scotiabank", "card", "") == (True, "Scotiabank")
-    assert portal.route("Scotiabank", "account", "") == (True, "Scotiabank")
-    assert portal.route("BCP", "card", "") == (False, "BCP")  # no BCP card parser yet
-    assert portal.route(portal.OTHER_BANK, "card", "Interbank") == (False, "Interbank")
+    route = portal.Route
+    assert portal.route("BCP", "account", "", "PEN", "") == route(True, "BCP", "PEN")
+    assert portal.route("Scotiabank", "card", "", "BOTH", "") == route(
+        True, "Scotiabank", "BOTH"
+    )
+    assert portal.route("Scotiabank", "account", "", "USD", "") == route(
+        True, "Scotiabank", "USD"
+    )
+    # No BCP card parser yet, and another bank has none at all.
+    assert portal.route("BCP", "card", "", "PEN", "") == route(False, "BCP", "PEN")
+    assert portal.route(portal.OTHER_BANK, "card", "Interbank", "PEN", "") == route(
+        False, "Interbank", "PEN"
+    )
+
+
+def test_another_currency_is_its_own_request_even_for_a_supported_bank() -> None:
+    result = portal.route("BCP", "account", "", portal.OTHER_CURRENCY, "euros")
+
+    assert result == portal.Route(False, "BCP", "EUROS")
 
 
 def test_a_form_that_is_not_one_of_the_options_is_refused() -> None:
-    assert portal.route("BCP", "loan", "") is None
-    assert portal.route("Evil Bank", "account", "") is None
-    assert portal.route(portal.OTHER_BANK, "account", "   ") is None
-    assert portal.route(portal.OTHER_BANK, "account", "<>") is None
+    assert portal.route("BCP", "loan", "", "PEN", "") is None
+    assert portal.route("Evil Bank", "account", "", "PEN", "") is None
+    assert portal.route("BCP", "account", "", "GOLD", "") is None
+    assert portal.route(portal.OTHER_BANK, "account", "   ", "PEN", "") is None
+    assert portal.route(portal.OTHER_BANK, "account", "<>", "PEN", "") is None
+    assert portal.route("BCP", "account", "", portal.OTHER_CURRENCY, " ") is None
+
+
+def test_the_currencies_offered_include_the_two_the_pipeline_reads() -> None:
+    assert {"PEN", "USD", "BOTH", portal.OTHER_CURRENCY} == set(portal.CURRENCIES)
 
 
 def test_a_bank_name_is_reduced_before_it_reaches_a_file_or_its_metadata() -> None:

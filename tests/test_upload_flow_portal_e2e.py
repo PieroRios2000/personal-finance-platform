@@ -76,6 +76,8 @@ def _upload(
     bank: str,
     kind: str = "account",
     other_bank: str = "",
+    currency: str = "PEN",
+    other_currency: str = "",
 ) -> str:
     response = session.post(
         f"{_UPLOAD}/upload",
@@ -84,6 +86,8 @@ def _upload(
             "bank": bank,
             "kind": kind,
             "other_bank": other_bank,
+            "currency": currency,
+            "other_currency": other_currency,
             "password": password,
         },
         files={"files": ("statement.pdf", content, "application/pdf")},
@@ -166,7 +170,7 @@ def test_a_file_for_a_bank_no_parser_reads_is_kept_apart_from_the_pipeline(
 
     assert "saved for review" in answer and "Banco Nuevo" in answer
     (parked,) = inbox.glob("*/_new_bank/*.pdf")
-    assert unlock.tags(parked) == ("Banco Nuevo", "card")
+    assert unlock.tags(parked) == ("Banco Nuevo", "card", "PEN")
     # Nothing new for the pipeline: `organize` only looks in the folder above.
     monkeypatch.setenv("PFP_ACCOUNT_KEY", "0" * 64)
     report = organizer.organize(
@@ -183,3 +187,25 @@ def test_the_form_asks_what_kind_of_file_it_is() -> None:
 
     assert "Credit card statement" in page and "Bank account statement" in page
     assert "Other bank" in page and 'name="other_bank"' in page
+    assert "Soles (PEN)" in page and "Dollars (USD)" in page
+    assert 'name="other_currency"' in page
+
+
+def test_a_supported_bank_in_another_currency_is_kept_apart_too() -> None:
+    session, csrf = _signed_in_session()
+    inbox = Path(os.environ["PFP_INBOX_DIR"])
+    before = set(inbox.glob("*/_new_bank/*.pdf"))
+
+    answer = _upload(
+        session,
+        csrf,
+        _encrypted_bcp(),
+        password=_PDF_PASSWORD,
+        bank="BCP",
+        currency="OTHER",
+        other_currency="euros",
+    )
+
+    assert "saved for review" in answer and "EUROS" in answer
+    (parked,) = set(inbox.glob("*/_new_bank/*.pdf")) - before
+    assert unlock.tags(parked) == ("BCP", "account", "EUROS")

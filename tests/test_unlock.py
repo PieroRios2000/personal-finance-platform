@@ -53,9 +53,13 @@ def test_the_kind_is_recorded_beside_the_bank(tmp_path: Path) -> None:
     path = tmp_path / "stored.pdf"
     path.write_bytes(
         unlock.unlock(
-            _locked("theirs"), password="theirs", bank="Interbank", kind="card"
+            _locked("theirs"),
+            password="theirs",
+            bank="Interbank",
+            kind="card",
+            currency="EUR",
         )
     )
 
-    assert unlock.tags(path) == ("Interbank", "card")
-    assert unlock.tags(tmp_path / "missing.pdf") == (None, None)
+    assert unlock.tags(path) == ("Interbank", "card", "EUR")
+    assert unlock.tags(tmp_path / "missing.pdf") == (None, None, None)

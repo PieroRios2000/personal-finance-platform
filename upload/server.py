@@ -88,9 +88,14 @@ type is used once to unlock the file and is never saved.</p>
     <option>{{ other }}</option></select></label>
   <label>If it is another bank, its name
     <input type="text" name="other_bank" maxlength="40" autocomplete="off"></label>
+  <label>Currency <select name="currency">
+    {% for key, label in currencies.items() %}
+    <option value="{{ key }}">{{ label }}</option>{% endfor %}</select></label>
+  <label>If it is another currency, its name or code
+    <input type="text" name="other_currency" maxlength="20" autocomplete="off"></label>
   <p class="notice">Only some are read today (BCP accounts; Scotiabank cards and
-  accounts). Anything else is kept safely, and the owner first reviews how to read
-  it.</p>
+  accounts; soles and dollars). Anything else is kept safely, and the owner first
+  reviews how to read it.</p>
   <label>PDF password (leave empty if the file has none)
     <input type="password" name="password" autocomplete="off"></label>
   <label>Files <input type="file" name="files" accept="application/pdf" multiple
@@ -130,6 +135,7 @@ def _render(results: list[tuple[bool, str]] | None = None, message: str = "") ->
         banks=portal.BANKS,
         other=portal.OTHER_BANK,
         kinds=portal.KINDS,
+        currencies=portal.CURRENCIES,
         results=results or [],
         message=message,
         dashboard=_DASHBOARD,
@@ -185,14 +191,16 @@ def upload() -> Response | str:
         request.form.get("bank", ""),
         request.form.get("kind", ""),
         request.form.get("other_bank", ""),
+        request.form.get("currency", ""),
+        request.form.get("other_currency", ""),
     )
     files = [f for f in request.files.getlist("files") if f.filename]
     if where is None or not files:
         return _render(
-            message="Choose the kind of file, the bank (name it if it is another "
-            "one) and at least one PDF."
+            message="Choose the kind of file, the bank and the currency (name them "
+            "if they are another one) and at least one PDF."
         )
-    supported, bank = where
+    supported, bank, currency = where
     kind = request.form["kind"]
     if len(files) > portal.MAX_FILES_PER_UPLOAD:
         return _render(
@@ -218,7 +226,13 @@ def upload() -> Response | str:
         try:
             _store(
                 user_id,
-                unlock(content, password=password, bank=bank, kind=kind),
+                unlock(
+                    content,
+                    password=password,
+                    bank=bank,
+                    kind=kind,
+                    currency=currency,
+                ),
                 review="" if supported else bank,
             )
         except pikepdf.PasswordError:
@@ -231,7 +245,8 @@ def upload() -> Response | str:
                 if supported
                 else (
                     True,
-                    f"{name}: saved for review. {bank} ({portal.KINDS[kind].lower()}) "
+                    f"{name}: saved for review. {bank} "
+                    f"({portal.KINDS[kind].lower()}, {currency}) "
                     "is not read yet: the owner will look at how to read it, and it "
                     "will not show on your dashboard until then.",
                 )

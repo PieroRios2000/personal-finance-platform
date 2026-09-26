@@ -51,6 +51,13 @@ a file name or a page. Each new bank or kind is then **its own isolated request*
 looks at a masked sample of the layout (ADR 0004, the layout inspector) and decides how to write
 the extraction, as was done for BCP and Scotiabank.
 
+The form also asks **the currency**: soles, dollars, **both** (a card statement usually carries both
+at once, as Scotiabank's does) or **another currency**, named. Soles, dollars and both are what the
+pipeline reads; another currency is its own request, so a file in one goes to `_new_bank/` even for
+a supported bank and kind. It is written into the file as `/PFPCurrency`, and `make review-uploads`
+groups by bank, kind and currency. As with the bank, it is a hint: the parsers read the currency
+from the content.
+
 ## Alternatives considered
 
 - **Store passwords (encrypted)**: convenient, but holds other people's bank secrets.
