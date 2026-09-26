@@ -47,6 +47,7 @@ jobs:
       benchmarks: ${{ steps.impact.outputs.benchmarks }}
       integration: ${{ steps.impact.outputs.integration }}
       dbt_select: ${{ steps.impact.outputs.dbt_select }}
+      portal: ${{ steps.impact.outputs.portal }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -63,6 +64,7 @@ jobs:
               echo "benchmarks=true"
               echo "integration=true"
               echo "dbt_select=all"
+              echo "portal=true"
             } >> "$GITHUB_OUTPUT"
           fi
           {
@@ -491,6 +493,85 @@ jobs:
         run: |
           result="${{ needs.ephemeral-integration.result }}"
           echo "ephemeral-integration reported: $result"
+          if [ "$result" = "success" ] || [ "$result" = "skipped" ]; then
+            exit 0
+          fi
+          exit 1
+
+  # T44 (ADR 0040): the upload portal end to end. Brings up the real Dex, dex-register and
+  # upload service with `docker compose` and runs the `portal`-marked test: sign up, sign
+  # in through Dex, upload a password-protected synthetic statement, and the owner's
+  # pipeline reads it with none of the owner's passwords. It catches what static tests
+  # cannot: an image that no longer builds, a Dex config that no longer starts, a login
+  # redirect that broke, a change in the pipeline that no longer accepts an upload.
+  # Gated on the paths the portal is made of (scripts/ci_impact.py) and made required
+  # through its own gate job below, the same way as ephemeral-integration (ADR 0019).
+  # No secrets: every value is a fixed, local-only dummy, like the other jobs'.
+  portal-e2e:
+    name: portal-e2e
+    needs: changes
+    if: needs.changes.outputs.portal == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMPOSE_PROJECT: pfp-portal-${{ github.event.pull_request.number || github.run_id }}
+      AWS_ACCESS_KEY_ID: pfp-ci-dummy-key
+      AWS_SECRET_ACCESS_KEY: pfp-ci-dummy-secret
+      PFP_PG_PASSWORD: pfp-ci-dummy-pg-password
+      PFP_PG_BI_PASSWORD: pfp-ci-dummy-bi-password
+      PFP_BI_OAUTH_CLIENT_SECRET: pfp-ci-dummy-superset-client-secret
+      PFP_UPLOAD_OAUTH_CLIENT_SECRET: pfp-ci-dummy-portal-client-secret
+      PFP_UPLOAD_SECRET_KEY: pfp-ci-dummy-portal-session-key
+      PFP_DEX_INVITE_CODE: pfp-ci-dummy-invite-code
+      DEX_ISSUER: http://localhost:5556/dex
+      PFP_INBOX_DIR: /tmp/pfp-portal-inbox
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - run: uv sync --locked
+
+      - name: bring up Dex, dex-register and the upload portal
+        run: |
+          mkdir -p "$PFP_INBOX_DIR"
+          export PFP_UID="$(id -u)" PFP_GID="$(id -g)"
+          docker compose -p "$COMPOSE_PROJECT" --profile bi up -d --build --wait dex dex-register upload
+
+      - name: portal end to end
+        run: uv run pytest -m portal -p no:cacheprovider
+
+      - name: save logs
+        if: always()
+        run: |
+          docker compose -p "$COMPOSE_PROJECT" --profile bi logs --no-color dex dex-register upload > portal-logs.txt 2>&1 || true
+
+      - name: upload logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: portal-e2e-logs
+          path: portal-logs.txt
+          retention-days: 7
+
+      - name: tear down
+        if: always()
+        run: docker compose -p "$COMPOSE_PROJECT" --profile bi down -v
+
+  # Required through a gate, not directly (ADR 0019): a skipped job would block a PR that
+  # does not touch the portal.
+  portal-e2e-gate:
+    name: portal-e2e-gate
+    needs: portal-e2e
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: pass through portal-e2e's real result
+        run: |
+          result="${{ needs.portal-e2e.result }}"
+          echo "portal-e2e reported: $result"
           if [ "$result" = "success" ] || [ "$result" = "skipped" ]; then
             exit 0
           fi

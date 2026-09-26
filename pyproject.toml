@@ -142,10 +142,11 @@ disallow_subclassing_any = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-m 'not real_pdf and not integration and not benchmark'"
+addopts = "-m 'not real_pdf and not integration and not benchmark and not portal'"
 markers = [
     "real_pdf: runs against the owner's real PDFs; deselected by default (ADR 0004). Run with `pytest -m real_pdf`.",
     "integration: needs local S3 (SeaweedFS, T13) running via `docker compose up`; deselected by default. Run with `pytest -m integration`.",
+    "portal: needs the upload portal, Dex and dex-register running via `docker compose` (T44); deselected by default. CI's `portal-e2e` job runs `pytest -m portal`.",
     "benchmark: measures performance instead of behavior (T15); deselected by default, since a timing is only meaningful against a baseline on the same machine. CI's `benchmarks` job runs them base vs PR on one runner. Run with `pytest -m benchmark`.",
 ]
 
