@@ -76,7 +76,7 @@ order agreed:
       Depends on T42 (the link must open from outside) and on SMTP. **Open:** accounts added with
       `make dex-add-user` are *static* (read-only over gRPC, found out re-scoping the owner's own
       account) and cannot be reset this way: migrate them to dynamic storage first.
-- [ ] **The upload portal** ([Phase 5](../PROJECT.md)): upload -> `inbox/<user_id>/` -> pipeline.
+- [ ] **The upload portal** ([Phase 5](../PROJECT.md); ADR 0040: **bank-statement section built (T44)**, decisions taken; left: the card-balance and manual-Excel sections): upload -> `inbox/<user_id>/` -> pipeline.
       Sections by **file type** (statement PDFs, card balance, manual Excel: savings and
       investments), not by bank: bank and account are detected from the content
       ([ADR 0009](../brain/decisions/0009-multi-user-multi-account-content-over-filename.md)) and
