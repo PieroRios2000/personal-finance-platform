@@ -15,6 +15,9 @@ SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
 # jinja_context.get_template_processor), matching no row rather than the signed-in
 # user's.
 FEATURE_FLAGS = {"ENABLE_TEMPLATE_PROCESSING": True}
+# `{{ upload_url() }}` in a chart's SQL: where the dashboard's "Upload your files" link
+# goes (the upload portal, T44, ADR 0040), public when there is a public URL.
+JINJA_CONTEXT_ADDONS = {"upload_url": lambda: os.environ.get("PFP_UPLOAD_URL", "")}
 
 # Superset's own metadata (users, charts, dashboards) lives in its own database of
 # PFP's Postgres, owned by its own role -- never in `pfp`, where dbt writes. The
