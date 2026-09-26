@@ -88,9 +88,10 @@ order agreed:
         other people's passwords is a security decision;
       - privacy: [ADR 0004](../brain/decisions/0004-real-pdfs-never-leave-your-machine.md) covers
         the owner's own statements, not receiving other people's.
-- [ ] **"Upload your files" button in Superset**, last, once the portal exists: a Handlebars chart
-      that renders the message and the link only when its query returns 0 rows (which is what a
-      row-level-filtered new account gets).
+- [x] **"Upload your files" button in Superset** (T45): the first row of the dashboard. A
+      Handlebars chart counts the movements the account may see (row-level security): 0 shows a
+      "No data yet" message and a button to the portal, otherwise a slim "Have more statements?"
+      link. (A chart cannot be empty in Superset, hence the count and the constant `upload_url()`.)
 
 ## Next phases (planned, nothing built)
 
