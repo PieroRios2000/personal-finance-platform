@@ -76,6 +76,8 @@ _BALANCE_KPI = (_TEMPLATES / "balance_kpi.hbs").read_text()
 _CAPITAL_KPI = (_TEMPLATES / "capital_kpi.hbs").read_text()
 _RANGE_KPI = (_TEMPLATES / "range_kpi.hbs").read_text()
 _DEBT_KPI = (_TEMPLATES / "debt_kpi.hbs").read_text()
+_UPLOAD_PROMPT = (_TEMPLATES / "upload_prompt.hbs").read_text()
+_UPLOAD_STYLE = (_TEMPLATES / "upload_prompt.css").read_text()
 
 
 # Money in and out are read from `signed_amount` (ADR 0031): the effect on you, the same
@@ -480,6 +482,28 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "row_limit": 200,
         },
     ),
+    (
+        "rpt_movements",
+        "Upload your files",
+        "handlebars",
+        {
+            "query_mode": "aggregate",
+            "groupby": [],
+            # No time-range filter on purpose: it counts every movement the signed-in
+            # account may see (row-level security, T41), whatever the dashboard's date
+            # filter says. 0 -> the empty-state message; otherwise a slim link to the
+            # portal (T44, ADR 0040). `upload_url()` is a Jinja helper of
+            # bi/superset_config.py.
+            "metrics": [
+                _sql_metric("COUNT(*)", "movements"),
+                _sql_metric("'{{ upload_url() }}'::text", "upload_url"),
+            ],
+            "adhoc_filters": [],
+            "row_limit": 1,
+            "handlebarsTemplate": _UPLOAD_PROMPT,
+            "styleTemplate": _UPLOAD_STYLE,
+        },
+    ),
 ]
 
 
@@ -606,6 +630,7 @@ NOTE_TEXT = (
 
 # The grid: (chart name prefix, width out of 12, height) per cell, row by row.
 LAYOUT: list[list[tuple[str, int, int]]] = [
+    [("Upload your files", 12, 10)],
     [("Cash flow summary", 12, 22)],
     [("Period analysed", 6, 22), ("Debt at the end", 6, 22)],
     [("Capital summary", 6, 22), ("Net position summary", 6, 22)],

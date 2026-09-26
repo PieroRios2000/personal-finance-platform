@@ -129,7 +129,7 @@ def test_every_dated_chart_has_a_time_range_filter_for_the_date_range() -> None:
     """Superset's Date range filter only narrows a chart that already has a time-range
     (TEMPORAL_RANGE) filter on its date column; without one it does nothing."""
     for name, chart in _charts().items():
-        if name.startswith("Reconciliation"):  # per account, not per month
+        if name.startswith(("Reconciliation", "Upload")):  # not per month
             assert chart[3]["adhoc_filters"] == []
             continue
         ranges = [
@@ -325,3 +325,42 @@ def test_the_savings_rate_is_net_over_real_income_without_transfers() -> None:
     template = card[3]["handlebarsTemplate"]
     assert "{{savings_rate}}" in template
     assert "% saved" in template and "income" in template.lower()
+
+
+def test_the_dashboard_starts_with_a_link_to_the_upload_portal() -> None:
+    """T44 (ADR 0040): an account with no data sees a message and a button, one with
+    data a slim link. The count goes through row-level security, so it is 0 exactly for
+    an account nobody has loaded anything for."""
+    builder = _builder()
+    chart = next(c for c in builder.CHARTS if c[1] == "Upload your files")
+    asset = yaml.safe_load(
+        next((_BI / "assets" / "charts").glob("Upload_your_files_*.yaml")).read_text()
+    )
+    dashboard = yaml.safe_load(
+        next((_BI / "assets" / "dashboards").glob("*.yaml")).read_text()
+    )
+    first_row = dashboard["position"]["GRID_ID"]["children"][0]
+    first_chart = dashboard["position"][dashboard["position"][first_row]["children"][0]]
+
+    assert builder.LAYOUT[0][0][0] == "Upload your files"
+    assert first_chart["meta"]["sliceName"] == "Upload your files"
+    assert asset["params"]["metrics"] == chart[3]["metrics"]
+    assert asset["params"]["handlebarsTemplate"] == chart[3]["handlebarsTemplate"]
+    # No date filter: it counts what the account may see, not what the filters leave.
+    assert chart[3]["adhoc_filters"] == []
+
+
+def test_the_link_is_the_portals_address_from_the_environment() -> None:
+    metrics = [
+        m["sqlExpression"]
+        for m in _builder().CHARTS[-1][3]["metrics"]
+        if "upload_url" in m["sqlExpression"]
+    ]
+    template = (_BI / "templates" / "upload_prompt.hbs").read_text()
+    config = (_BI / "superset_config.py").read_text()
+    environment = _compose()["services"]["superset"]["environment"]
+
+    assert metrics == ["'{{ upload_url() }}'::text"]  # a constant: it survives 0 rows
+    assert 'href="{{upload_url}}"' in template and "{{#if movements}}" in template
+    assert '"upload_url": lambda: os.environ.get("PFP_UPLOAD_URL", "")' in config
+    assert environment["PFP_UPLOAD_URL"].startswith("${PFP_UPLOAD_PUBLIC_URL:-http://")
