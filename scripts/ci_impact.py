@@ -60,6 +60,23 @@ INTEGRATION_PATHS = (
 _TESTS = "tests/"
 _INTEGRATION_TEST_SUFFIX = "_integration.py"
 
+# What the portal's end-to-end run exercises (T44, ADR 0040): the three services it
+# brings up and everything they are built from, the ingestion code its uploads go
+# through, the compose files that wire them, and the job's own definition. Its tests are
+# the `_portal_e2e.py` ones, for the same reason as the suffix above.
+PORTAL_PATHS = (
+    "upload/",
+    "dex/",
+    "dex-register/",
+    "ingestion/",
+    "bi/docker-compose.yml",
+    "docker-compose.yml",
+    ".github/",
+    "pyproject.toml",
+    "uv.lock",
+)
+_PORTAL_TEST_SUFFIX = "_portal_e2e.py"
+
 # The one trigger that can narrow the build. If a change touches the dbt project
 # and nothing else this job cares about, dbt can rebuild just the modified models
 # and their descendants, compared against a manifest parsed from the base branch.
@@ -84,6 +101,16 @@ def runs_integration(changed_files: Iterable[str]) -> bool:
     return any(_affects_integration(path) for path in changed_files)
 
 
+def runs_portal(changed_files: Iterable[str]) -> bool:
+    """True if any of `changed_files` can affect the portal's end-to-end run."""
+    return any(
+        path.endswith(_PORTAL_TEST_SUFFIX)
+        if path.startswith(_TESTS)
+        else path.startswith(PORTAL_PATHS)
+        for path in changed_files
+    )
+
+
 def dbt_selection(changed_files: Iterable[str]) -> str:
     """What that job's `dbt build` should build: every model (`all`), or only
     what changed and whatever depends on it (`state:modified+`)."""
@@ -98,6 +125,7 @@ def main() -> int:
     print(f"benchmarks={str(runs_benchmarks(changed)).lower()}")
     print(f"integration={str(runs_integration(changed)).lower()}")
     print(f"dbt_select={dbt_selection(changed)}")
+    print(f"portal={str(runs_portal(changed)).lower()}")
     return 0
 
 

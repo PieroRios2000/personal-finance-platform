@@ -2,7 +2,7 @@
 type: component
 phase: 1
 status: in-progress
-task: T5, T15, T17, T17b, T19-follow-up
+task: T5, T15, T17, T17b, T19-follow-up, T44
 ---
 
 # CI
@@ -23,6 +23,7 @@ GitHub Actions PR run to confirm the wiring itself, since this session can't tri
 | `benchmarks` job (T15) | Built | Measures the base branch and the PR on the same runner (only `ingestion/` and `lakehouse/` swapped between the two runs), `--benchmark-compare-fail=mean:20%`; warns until 2026-09-26 |
 | `ephemeral-integration` job (T17, [ADR 0007](../decisions/0007-ephemeral-per-pr-environments.md); [ADR 0021](../decisions/0021-ci-invokes-the-dagster-pipeline.md); [ADR 0022](../decisions/0022-elementary-anomaly-detection-and-warn-mode.md)) | Built | Local S3 up under a per-run project name, `dagster asset materialize --select '*'` (T21: bronze + dbt build together, impact-narrowed per ADR 0008/0021 — Elementary's own models and its `silver.transactions` anomaly test run inside this same build too, T22) twice (idempotency, checked via `scripts/count_bronze_statements.py`'s real row count — a multi-asset materialize doesn't stream a step's own log text to stdout), `sqlfluff lint`, the `integration`-marked tests, a dedicated `continue-on-error: true` re-run of just the Elementary anomaly test (T22, warn-mode) and `edr report` (also `continue-on-error: true`, uploaded as an artifact), then always torn down; logs, dbt's artifacts and the Elementary report saved first |
 | `ephemeral-integration-gate` job ([ADR 0019](../decisions/0019-ephemeral-integration-required-via-gate-job.md)) | Built | The job the ruleset actually requires — always runs (`if: always()`), turns `ephemeral-integration`'s own `success`/`skipped` conclusion into a pass and `failure`/`cancelled` into a fail, since a ruleset-required check left "skipped" isn't reliably accepted as satisfied |
+| `portal-e2e` and `portal-e2e-gate` jobs ([ADR 0040](../decisions/0040-upload-portal-unlocks-at-upload-and-owner-processes.md)) | Built (T44) | Bring up the real Dex, dex-register and upload portal with `docker compose` and run `pytest -m portal`: sign up, sign in through Dex, upload a password-protected synthetic statement, and the pipeline reads it with none of the owner's passwords. Run when the portal's paths change (`scripts/ci_impact.py`, `portal` output); required through the gate, like ephemeral-integration |
 | `make poc` (T17) | Built | The same flow, once, locally, against Piero's real PDFs; prints only pass/fail and reconciliation *counts* (ADR 0004) |
 | `pr-data-diff` job (T17b, [ADR 0014](../decisions/0014-pr-data-diff-shared-instance-full-build.md)) | Built | Ingest + `dbt build` run twice against the base branch's commit and the PR's, isolated by a `LAKEHOUSE_URI` prefix and a Postgres database (`pfp_diff_base` / `pfp_diff_pr`, created by [`scripts/pg_databases.py`](../../scripts/pg_databases.py)) on one shared SeaweedFS and Postgres; [`scripts/data_diff.py`](../../scripts/data_diff.py) attaches both databases read-only, diffs `silver` and `gold`, and posts Markdown to the job summary. Warn-only, gated on the same `integration` output as `ephemeral-integration` but runs in parallel with it |
 

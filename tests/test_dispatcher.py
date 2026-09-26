@@ -6,7 +6,7 @@ from pathlib import Path
 import pikepdf
 import pytest
 
-from ingestion import dispatcher
+from ingestion import dispatcher, unlock
 from tests.fixtures.synthetic_pdfs import bcp_statement_pdf, scotiabank_statement_pdf
 
 
@@ -89,3 +89,48 @@ def test_detect_does_not_match_scotiabank_with_the_wrong_password(
 
     with pytest.raises(dispatcher.UnrecognizedBankError):
         dispatcher.detect(path)
+
+
+def _uploaded(tmp_path: Path, content: bytes, *, bank: str) -> Path:
+    """What the upload portal stores: unlocked, tagged with the chosen bank."""
+    path = tmp_path / "upload.pdf"
+    path.write_bytes(
+        unlock.unlock(
+            _encrypted(content, password="theirs"), password="theirs", bank=bank
+        )
+    )
+    return path
+
+
+def test_an_unlocked_bcp_upload_is_found_by_its_bank_hint(tmp_path: Path) -> None:
+    """Unlocking drops BCP's `$BOP$` prefix, the only thing that told it apart."""
+    path = _uploaded(tmp_path, b"$BOP$" + bcp_statement_pdf(), bank="BCP")
+
+    assert dispatcher.detect(path).bank == "BCP"
+
+
+def test_an_unlocked_scotiabank_upload_is_found_by_its_bank_hint(
+    tmp_path: Path,
+) -> None:
+    path = _uploaded(tmp_path, scotiabank_statement_pdf(), bank="Scotiabank")
+
+    assert dispatcher.detect(path).bank == "Scotiabank"
+
+
+def test_an_unlocked_upload_parses_with_no_password_of_the_owners(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PFP_ACCOUNT_KEY", "0" * 64)
+    path = _uploaded(tmp_path, b"$BOP$" + bcp_statement_pdf(), bank="BCP")
+
+    statements = dispatcher.parse(path, user_id="ana-1234", file_sha256="0" * 64)
+
+    assert statements and all(s.user_id == "ana-1234" for s in statements)
+
+
+def test_a_hint_naming_no_registered_bank_is_ignored(tmp_path: Path) -> None:
+    """The normal passes run: here the password fallback, which opens any unlocked PDF
+    (and so claims it for Scotiabank; its parser then rejects what is not one)."""
+    path = _uploaded(tmp_path, scotiabank_statement_pdf(), bank="NoSuchBank")
+
+    assert dispatcher.detect(path).bank == "Scotiabank"

@@ -19,7 +19,8 @@ one that opens without raising `pikepdf.PikepdfError` (a wrong password, or a
 file that isn't even a valid PDF — see `_decrypts()`) is the match. The fast
 pass always runs first and never touches the environment, so BCP's detection
 stays instant and never depends on any password being configured, correct or
-not.
+not. Between the two, a file unlocked and tagged by the upload portal names its bank
+(`ingestion.unlock`, ADR 0040).
 """
 
 import os
@@ -29,6 +30,7 @@ from typing import NamedTuple
 
 import pikepdf
 
+from ingestion import unlock
 from ingestion.parsers import bcp, scotiabank
 from ingestion.schema import Statement
 
@@ -84,6 +86,13 @@ def detect(path: Path) -> _Parser:
     """
     for parser in _PARSERS:
         if parser.detect is not None and parser.detect(path):
+            return parser
+    # An upload through the portal is unlocked and tagged with the bank the person chose
+    # (ADR 0040): a hint, since the parser still has to accept the content. Before the
+    # password fallback, which would claim any unlocked PDF for Scotiabank.
+    hinted = unlock.hinted_bank(path)
+    for parser in _PARSERS:
+        if parser.bank == hinted:
             return parser
     for parser in _PARSERS:
         if parser.detect is None:

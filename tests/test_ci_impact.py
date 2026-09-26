@@ -162,6 +162,7 @@ def test_main_writes_the_github_actions_outputs_for_an_affected_change(
         "benchmarks=true",
         "integration=true",
         "dbt_select=all",
+        "portal=true",
     ]
 
 
@@ -175,6 +176,7 @@ def test_main_writes_the_github_actions_outputs_for_a_docs_only_change(
         "benchmarks=false",
         "integration=false",
         "dbt_select=all",
+        "portal=false",
     ]
 
 
@@ -190,4 +192,30 @@ def test_main_writes_the_narrowed_dbt_selection(
         "benchmarks=false",
         "integration=true",
         "dbt_select=state:modified+",
+        "portal=false",
     ]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "upload/server.py",
+        "upload/Dockerfile",
+        "dex/templates/password.html",
+        "dex-register/app.py",
+        "ingestion/unlock.py",
+        "bi/docker-compose.yml",
+        ".github/workflows/ci.yml",
+        "tests/test_upload_flow_portal_e2e.py",
+    ],
+)
+def test_what_the_portal_is_made_of_or_runs_through_runs_its_end_to_end_job(
+    path: str,
+) -> None:
+    assert ci_impact.runs_portal([path]) is True
+
+
+def test_docs_dbt_and_ordinary_tests_do_not_run_the_portal_job() -> None:
+    assert ci_impact.runs_portal(DOCS_ONLY) is False
+    assert ci_impact.runs_portal(["dbt/models/gold/x.sql", "tests/test_x.py"]) is False
+    assert ci_impact.runs_portal([]) is False

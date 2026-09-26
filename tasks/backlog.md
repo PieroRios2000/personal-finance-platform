@@ -75,7 +75,7 @@ order agreed:
       `UpdatePassword`. It must answer the same whether the email exists or not, and rate-limit.
       Depends on T42 (the link must open from outside) and on SMTP. Static accounts, which cannot be reset,
       are gone: every account is dynamic (ADR 0039).
-- [ ] **The upload portal** ([Phase 5](../PROJECT.md)): upload -> `inbox/<user_id>/` -> pipeline.
+- [ ] **The upload portal** ([Phase 5](../PROJECT.md); ADR 0040: **bank-statement section built (T44)**, decisions taken; left: the card-balance and manual-Excel sections): upload -> `inbox/<user_id>/` -> pipeline.
       Sections by **file type** (statement PDFs, card balance, manual Excel: savings and
       investments), not by bank: bank and account are detected from the content
       ([ADR 0009](../brain/decisions/0009-multi-user-multi-account-content-over-filename.md)) and

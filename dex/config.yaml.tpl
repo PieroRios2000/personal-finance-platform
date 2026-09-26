@@ -63,6 +63,15 @@ staticClients:
 {{- if getenv "PFP_BI_PUBLIC_URL" }}
       - {{ getenv "PFP_BI_PUBLIC_URL" }}/oauth-authorized/dex
 {{- end }}
+  # The upload portal (T44, ADR 0040): same login, its own client.
+  - id: portal
+    secretEnv: PFP_UPLOAD_OAUTH_CLIENT_SECRET
+    name: 'Upload portal'
+    redirectURIs:
+      - {{ getenv "PFP_UPLOAD_BASE_URL" }}/callback
+{{- if getenv "PFP_UPLOAD_PUBLIC_URL" }}
+      - {{ getenv "PFP_UPLOAD_PUBLIC_URL" }}/callback
+{{- end }}
 
 # Local password database. Accounts are created and changed over the gRPC API above, by
 # dex-register (sign-up, password reset) and `make dex-add-user` / `make dex-scope`, never
