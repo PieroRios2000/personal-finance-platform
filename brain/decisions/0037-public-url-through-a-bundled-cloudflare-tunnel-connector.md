@@ -22,7 +22,7 @@ to live inside this stack, so everything starts together.
   project network, so the routes on Cloudflare's dashboard point at container names
   (`http://superset:8088`, `http://dex:5556`, `http://dex-register:5559`), no published
   port and no router change. The override file and `PFP_TUNNEL_NETWORK` are gone.
-- **Three hostnames, one domain** (`www.` Superset, `login.` Dex, `registro.`
+- **Three hostnames, one domain** (`www.` Superset, `login.` Dex, `register.`
   `dex-register`): Dex must be reachable by the browser, since it draws the login form.
   The OAuth token exchange stays internal (Dex's `issuer` remains the compose address,
   ADR 0034).
