@@ -129,6 +129,12 @@ ignore_missing_imports = true
 module = ["grpc", "api_pb2", "api_pb2_grpc"]
 ignore_missing_imports = true
 
+# upload/server.py (T44, ADR 0040) likewise runs in its own container, with Flask and
+# Authlib installed there, not here.
+[[tool.mypy.overrides]]
+module = ["flask", "authlib.*", "werkzeug.*"]
+ignore_missing_imports = true
+
 [[tool.mypy.overrides]]
 module = "superset_config"
 disallow_subclassing_any = false

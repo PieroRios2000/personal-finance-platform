@@ -33,10 +33,10 @@ def test_the_connector_is_pinned_opt_in_and_takes_its_token_from_the_environment
     assert "ports" not in connector
 
 
-def test_the_connector_waits_for_the_three_services_it_routes_to() -> None:
+def test_the_connector_waits_for_the_services_it_routes_to() -> None:
     depends = _services()["cloudflared"]["depends_on"]
 
-    assert set(depends) == {"superset", "dex", "dex-register"}
+    assert set(depends) == {"superset", "dex", "dex-register", "upload"}
     assert all(d == {"condition": "service_healthy"} for d in depends.values())
 
 

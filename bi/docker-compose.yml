@@ -29,6 +29,10 @@ services:
       # Where the login form's "Forgot your password?" / "Create an account" links go
       # (T43, ADR 0038): dex-register, public when there is a public URL.
       PFP_REGISTER_PUBLIC_URL: ${PFP_REGISTER_PUBLIC_URL:-http://localhost:${PFP_DEX_REGISTER_PORT:-5559}}
+      # The upload portal's own OIDC client (T44, ADR 0040) and where it is reachable.
+      PFP_UPLOAD_OAUTH_CLIENT_SECRET: ${PFP_UPLOAD_OAUTH_CLIENT_SECRET:-}
+      PFP_UPLOAD_BASE_URL: http://localhost:${PFP_UPLOAD_PORT:-5560}
+      PFP_UPLOAD_PUBLIC_URL: ${PFP_UPLOAD_PUBLIC_URL:-}
       PFP_BI_OAUTH_CLIENT_SECRET: ${PFP_BI_OAUTH_CLIENT_SECRET:-}
       DEX_STATIC_PASSWORDS: ${DEX_STATIC_PASSWORDS:-}
     ports:
@@ -72,6 +76,41 @@ services:
       - "127.0.0.1:${PFP_DEX_REGISTER_PORT:-5559}:5559"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:5559/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  # Upload portal (T44, ADR 0040): signed-in people send their bank statements; each is
+  # unlocked with the password typed for it (never stored) and saved in that person's
+  # folder of the inbox, for the owner to process with `pfp ingest`. Signs in through Dex
+  # (client `portal`) and, for an account nobody scoped yet, gives it a user_id over Dex's
+  # gRPC API. The inbox is the owner's own folder, mounted read-write.
+  upload:
+    profiles: ["bi"]
+    build:
+      context: ..
+      dockerfile: upload/Dockerfile
+    image: pfp-upload:1.0.0
+    # The host user's id, so the files it writes are the owner's own on the host.
+    user: "${PFP_UID:-1000}:${PFP_GID:-1000}"
+    depends_on:
+      dex:
+        condition: service_healthy
+    environment:
+      PFP_UPLOAD_SECRET_KEY: ${PFP_UPLOAD_SECRET_KEY:-}
+      PFP_UPLOAD_OAUTH_CLIENT_SECRET: ${PFP_UPLOAD_OAUTH_CLIENT_SECRET:-}
+      PFP_UPLOAD_PUBLIC_URL: ${PFP_UPLOAD_PUBLIC_URL:-}
+      PFP_BI_PUBLIC_URL: ${PFP_BI_PUBLIC_URL:-}
+      DEX_ISSUER: ${DEX_ISSUER:-}
+      PFP_DEX_GRPC_ADDR: dex:5557
+      PFP_INBOX_ROOT: /inbox
+    ports:
+      - "127.0.0.1:${PFP_UPLOAD_PORT:-5560}:5560"
+    volumes:
+      - ${PFP_INBOX_DIR:-${HOME}/finance-data/inbox}:/inbox
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:5560/health')"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -153,6 +192,8 @@ services:
       dex:
         condition: service_healthy
       dex-register:
+        condition: service_healthy
+      upload:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "cloudflared", "tunnel", "--metrics", "localhost:2000", "ready"]

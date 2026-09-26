@@ -27,7 +27,7 @@ PFP = docker compose -p $(PFP_PROJECT)
 # Each environment's OpenMetadata artifacts (they hold a token and the Postgres password).
 export PFP_OM_ARTIFACTS = ./artifacts/$(PFP_ENV)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -102,7 +102,7 @@ poc:
 # Compose's `include` reads every file even for a stopped profile, so `${VAR:?}` cannot live
 # in them: `bi-check` verifies the Superset variables before `up`. The project name did not
 # change, so the volumes of an existing install (lake, Postgres) are kept.
-BI_SERVICES = bi-init dex dex-register superset
+BI_SERVICES = bi-init dex dex-register upload superset
 CATALOG_SERVICES = postgresql elasticsearch execute-migrate-all openmetadata-server ingestion
 OM_VOLUMES = om-postgres-data es-data ingestion-volume-dag-airflow ingestion-volume-dags ingestion-volume-tmp
 
@@ -138,6 +138,12 @@ ingest:
 	@$(MAKE) --no-print-directory guard-user TARGET=ingest
 	$(LOAD_ENV) && uv run pfp ingest --user "$$PFP_USER"
 
+# Everyone's inbox, the owner's and what the upload portal saved (T44, ADR 0040): one
+# `pfp ingest` per folder, named by its user_id. Idempotent. Then `make build`.
+ingest-uploads:
+	$(LOAD_ENV) && for dir in "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}"/*/; do \
+		uv run pfp ingest --user "$$(basename "$$dir")" || exit $$?; done
+
 build:
 	$(LOAD_ENV) && uv run dbt deps --project-dir dbt --profiles-dir dbt && \
 	uv run dbt build --project-dir dbt --profiles-dir dbt
@@ -160,6 +166,8 @@ bi-check: pg-check
 	{ [ -n "$$PFP_BI_SECRET_KEY" ] || missing="$$missing PFP_BI_SECRET_KEY"; } && \
 	{ [ -n "$$PFP_BI_OAUTH_CLIENT_SECRET" ] || missing="$$missing PFP_BI_OAUTH_CLIENT_SECRET"; } && \
 	{ [ -n "$$PFP_DEX_INVITE_CODE" ] || missing="$$missing PFP_DEX_INVITE_CODE"; } && \
+	{ [ -n "$$PFP_UPLOAD_SECRET_KEY" ] || missing="$$missing PFP_UPLOAD_SECRET_KEY"; } && \
+	{ [ -n "$$PFP_UPLOAD_OAUTH_CLIENT_SECRET" ] || missing="$$missing PFP_UPLOAD_OAUTH_CLIENT_SECRET"; } && \
 	{ [ -z "$$missing" ] || { echo "set$$missing in .env (see .env.example, SETUP.md section 12)" >&2; exit 2; }; }
 
 # Before T37 Superset and OpenMetadata ran as their own projects (`pfp-bi`, `pfp-om`), on
@@ -187,6 +195,7 @@ status:
 	echo "" && echo "Storage (S3):  http://localhost:$${SEAWEEDFS_S3_PORT:-8333}" && \
 	echo "Superset:      http://localhost:$${PFP_BI_PORT:-8088}   (sign in with your email, via Dex)" && \
 	echo "Dex:           http://localhost:$${PFP_DEX_PORT:-5556}/dex" && \
+	echo "Upload:        $${PFP_UPLOAD_PUBLIC_URL:-http://localhost:$${PFP_UPLOAD_PORT:-5560}}   (sign in with your email)" && \
 	echo "Sign up:       http://localhost:$${PFP_DEX_REGISTER_PORT:-5559}   (needs PFP_DEX_INVITE_CODE)" && \
 	echo "Public URL:    $${PFP_BI_PUBLIC_URL:-off (set PFP_BI_PUBLIC_URL and PFP_TUNNEL_TOKEN, SETUP.md section 12)}" && \
 	echo "OpenMetadata:  http://localhost:$${OPENMETADATA_PORT:-8585}   (only after make up-catalog)" && \
