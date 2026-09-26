@@ -8,6 +8,8 @@ RUN pip install --no-cache-dir flask==3.1.2 gunicorn==23.0.0 authlib==1.8.0 requ
 COPY dex-register/api.proto ./
 RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. api.proto
 COPY ingestion/unlock.py ingestion/__init__.py ./ingestion/
+# The alerting's email channel (Phase 7, stdlib only): the same ALERT_* variables.
+COPY alerting/__init__.py alerting/channels.py ./alerting/
 COPY upload/portal.py upload/server.py ./
 USER nobody
 EXPOSE 5560

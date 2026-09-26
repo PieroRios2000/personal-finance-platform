@@ -204,3 +204,39 @@ def test_the_pipeline_never_looks_in_the_review_folder() -> None:
     organizer = (_ROOT / "ingestion" / "organizer.py").read_text()
 
     assert 'inbox.glob("*.pdf")' in organizer and "rglob" not in organizer
+
+
+def test_the_alert_to_the_owner_has_names_and_counts_only() -> None:
+    subject, body = portal.review_alert(
+        {("Banco de Prueba", "card", "PEN"): 2, ("BCP", "account", "EUROS"): 1}
+    )
+
+    assert "3 file(s)" in subject
+    assert "- Banco de Prueba / card / PEN: 2" in body
+    assert "- BCP / account / EUROS: 1" in body
+    assert "make review-uploads" in body
+    assert "@" not in subject + body and ".pdf" not in subject + body
+
+
+def test_the_alerts_are_limited_so_uploads_cannot_flood_the_owners_inbox() -> None:
+    limit = portal.AlertLimit()
+
+    assert all(limit.allow(now=t) for t in range(portal.MAX_ALERTS_PER_HOUR))
+    assert not limit.allow(now=100)
+    assert limit.allow(now=portal.WINDOW_SECONDS + 100)
+
+
+def test_the_owner_is_told_off_the_request_thread_over_the_alerting_email_channel() -> (
+    None
+):
+    dockerfile = (_ROOT / "upload" / "Dockerfile").read_text()
+    environment = _compose()["upload"]["environment"]
+
+    assert "from alerting.channels import EmailChannel" in _SERVER
+    assert "_EMAIL = EmailChannel.from_env(os.environ)" in _SERVER
+    assert "target=_alert_owner" in _SERVER
+    assert "COPY alerting/__init__.py alerting/channels.py" in dockerfile
+    for name in ("ALERT_SMTP_HOST", "ALERT_SMTP_PASSWORD", "ALERT_EMAIL_TO"):
+        assert environment[name].startswith("${"), name
+    # A failure writes what the channel returns (a type name), never a secret.
+    assert 'sys.stderr.write(f"review alert not sent: {error}' in _SERVER

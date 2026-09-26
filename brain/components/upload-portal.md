@@ -20,6 +20,7 @@ of the inbox for the owner to process. Design in
 | [`ingestion/unlock.py`](../../ingestion/unlock.py) | Unlocks a PDF with the typed password and tags it with the chosen bank; the dispatcher reads the tag as a hint |
 | [`bi/docker-compose.yml`](../../bi/docker-compose.yml) | The `upload` service (port 5560 on 127.0.0.1), the inbox mounted read-write |
 | [`scripts/review_uploads.py`](../../scripts/review_uploads.py) | `make review-uploads`: files kept in `_new_bank/` (another bank, a kind or a currency no parser reads), counted by bank, kind and currency |
+| [`alerting/channels.py`](../../alerting/channels.py) (reused) | The email to the owner when a file is kept for review: bank, kind, currency, counts |
 | `make ingest-uploads` | One `pfp ingest` per inbox folder, then `make build` |
 
 ## Tests

@@ -13,6 +13,7 @@ uses. The PDF password is typed per upload, used once to unlock the file
 import hmac
 import os
 import secrets
+import sys
 import threading
 from pathlib import Path
 
@@ -25,12 +26,15 @@ from authlib.integrations.flask_client import OAuth
 from flask import Flask, redirect, render_template_string, request, session, url_for
 from werkzeug.wrappers import Response
 
+from alerting.channels import EmailChannel
 from ingestion.unlock import unlock
 
 _INBOX_ROOT = Path(os.environ.get("PFP_INBOX_ROOT", "/inbox"))
 _GRPC_ADDR = os.environ.get("PFP_DEX_GRPC_ADDR", "dex:5557")
 _DASHBOARD = os.environ.get("PFP_BI_PUBLIC_URL", "")
 _LIMIT = portal.UploadLimit()
+_ALERT_LIMIT = portal.AlertLimit()
+_EMAIL = EmailChannel.from_env(os.environ)  # None until ALERT_EMAIL_TO etc. are set
 _RESOLVE_LOCK = threading.Lock()
 
 app = Flask(__name__)
@@ -154,6 +158,16 @@ def _store(user_id: str, content: bytes, *, review: str = "") -> None:
         handle.write(content)
 
 
+def _alert_owner(groups: dict[tuple[str, str, str], int]) -> None:
+    """Off the request thread. `send` never raises and never says more than the kind of
+    failure, which is all that is written down."""
+    if _EMAIL is None or not _ALERT_LIMIT.allow():
+        return
+    error = _EMAIL.send(*portal.review_alert(groups))
+    if error:
+        sys.stderr.write(f"review alert not sent: {error}\n")
+
+
 def health() -> str:
     return "ok"
 
@@ -217,6 +231,7 @@ def upload() -> Response | str:
 
     password = request.form.get("password", "")
     results: list[tuple[bool, str]] = []
+    kept = 0
     for file in files:
         name = file.filename or "file"
         content = file.read(portal.MAX_FILE_BYTES + 1)
@@ -240,6 +255,7 @@ def upload() -> Response | str:
         except pikepdf.PdfError:
             results.append((False, f"{name}: not a readable PDF."))
         else:
+            kept += 0 if supported else 1
             results.append(
                 (True, f"{name}: saved.")
                 if supported
@@ -251,6 +267,10 @@ def upload() -> Response | str:
                     "will not show on your dashboard until then.",
                 )
             )
+    if kept:
+        threading.Thread(
+            target=_alert_owner, args=({(bank, kind, currency): kept},), daemon=True
+        ).start()
     return _render(results=results)
 
 
