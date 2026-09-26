@@ -533,6 +533,17 @@ close the door to new signups without touching anyone's existing account. A self
 registered account sees no data (the paragraph above) until you re-scope it the same
 way; the invite code only gates creating an account, never what it can see.
 
+**Forgot your password (T43, ADR 0038):** Dex's login form has "Forgot your password?" and
+"Create an account" links (they open `dex-register`). Reset sends a single-use link, valid for
+30 minutes, to the email of an account that exists (the page answers the same for any email).
+It needs, in `.env`: `PFP_REGISTER_PUBLIC_URL` (e.g. `https://register.<domain>`, no trailing
+slash; also what the login-form links use) and the alerting's SMTP variables (section 11:
+`ALERT_SMTP_HOST`, `ALERT_SMTP_PORT`, `ALERT_SMTP_USER`, `ALERT_SMTP_PASSWORD`,
+`ALERT_EMAIL_FROM`; most providers need an *app password*). Without them the page says reset is
+not set up. Accounts made with `make dex-add-user` cannot be reset this way (they live in `.env`,
+read-only for Dex's API): remove the entry from `DEX_STATIC_PASSWORDS` and sign up again on the
+sign-up page if you want that account to be able to.
+
 **A public URL (T42, ADR 0037):** optional. Needs a domain in your Cloudflare account and a
 tunnel (Zero Trust > Networks > Tunnels > Create a tunnel > Cloudflared > Docker):
 
@@ -541,11 +552,11 @@ tunnel (Zero Trust > Networks > Tunnels > Create a tunnel > Cloudflared > Docker
 2. In the tunnel's *Public Hostname* tab add three routes, type **HTTP**, to the container
    names (the connector runs on the stack's own network):
    `www.<domain>` -> `superset:8088`, `login.<domain>` -> `dex:5556`,
-   `registro.<domain>` -> `dex-register:5559`.
+   `register.<domain>` -> `dex-register:5559`.
 3. In `.env` set `PFP_BI_PUBLIC_URL=https://www.<domain>` (no trailing slash) and
    `DEX_ISSUER=https://login.<domain>/dex`.
 4. `make up`. The `cloudflared` service starts when the token is set; `make status` shows
-   the public URL. Sign-up is then at `https://registro.<domain>`, gated by the invite code.
+   the public URL. Sign-up is then at `https://register.<domain>`, gated by the invite code.
 
 Everything keeps its `127.0.0.1` port too. Cost: only the domain (about USD 10-11 a year);
 Tunnel and Zero Trust Free (up to 50 users) are free and not metered, so keep the plan and

@@ -42,6 +42,16 @@ telemetry:
 grpc:
   addr: 0.0.0.0:5557
 
+# T43, ADR 0038: the login form's two links ("Forgot your password?", "Create an
+# account") point at dex-register, a different host once the URL is public;
+# dex/templates/password.html reads the address back with `extra "register_url"`. `dir`
+# makes Dex read its templates from disk (they are embedded in the binary otherwise),
+# which is where that modified copy is mounted.
+frontend:
+  dir: /srv/dex/web
+  extra:
+    register_url: {{ getenv "PFP_REGISTER_PUBLIC_URL" }}
+
 oauth2:
   skipApprovalScreen: true
   passwordConnector: local

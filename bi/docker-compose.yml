@@ -26,12 +26,16 @@ services:
     environment:
       PFP_BI_BASE_URL: http://localhost:${PFP_BI_PORT:-8088}
       PFP_BI_PUBLIC_URL: ${PFP_BI_PUBLIC_URL:-}
+      # Where the login form's "Forgot your password?" / "Create an account" links go
+      # (T43, ADR 0038): dex-register, public when there is a public URL.
+      PFP_REGISTER_PUBLIC_URL: ${PFP_REGISTER_PUBLIC_URL:-http://localhost:${PFP_DEX_REGISTER_PORT:-5559}}
       PFP_BI_OAUTH_CLIENT_SECRET: ${PFP_BI_OAUTH_CLIENT_SECRET:-}
       DEX_STATIC_PASSWORDS: ${DEX_STATIC_PASSWORDS:-}
     ports:
       - "127.0.0.1:${PFP_DEX_PORT:-5556}:5556"
     volumes:
       - ../dex/config.yaml.tpl:/etc/dex/config.yaml:ro
+      - ../dex/templates/password.html:/srv/dex/web/templates/password.html:ro
       - dex-data:/var/dex
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:5556/dex/healthz"]
@@ -56,6 +60,14 @@ services:
     environment:
       PFP_DEX_INVITE_CODE: ${PFP_DEX_INVITE_CODE:-}
       PFP_DEX_GRPC_ADDR: dex:5557
+      # Password reset by email (T43, ADR 0038): the link's public address, and the same
+      # SMTP the alerting uses (Phase 7). Either empty: the page says reset is not set up.
+      PFP_REGISTER_PUBLIC_URL: ${PFP_REGISTER_PUBLIC_URL:-}
+      ALERT_SMTP_HOST: ${ALERT_SMTP_HOST:-}
+      ALERT_SMTP_PORT: ${ALERT_SMTP_PORT:-}
+      ALERT_SMTP_USER: ${ALERT_SMTP_USER:-}
+      ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
     ports:
       - "127.0.0.1:${PFP_DEX_REGISTER_PORT:-5559}:5559"
     healthcheck:
