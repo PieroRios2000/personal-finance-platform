@@ -110,6 +110,13 @@ class DexSecurityManager(SupersetSecurityManager):
 
 CUSTOM_SECURITY_MANAGER = DexSecurityManager
 
+# Public URL (T42, ADR 0037): behind Cloudflare's HTTPS the app sees plain HTTP, so
+# trust the forwarded scheme and host (else the OAuth redirect_uri comes out as http://)
+# and, when a public https URL is set, mark the session cookie Secure.
+ENABLE_PROXY_FIX = True
+PROXY_FIX_CONFIG = {"x_for": 1, "x_proto": 1, "x_host": 1, "x_prefix": 0}
+SESSION_COOKIE_SECURE = os.environ.get("PFP_BI_PUBLIC_URL", "").startswith("https://")
+
 # Sign in with Dex (T39, ADR 0034): people who are not in DEX_STATIC_PASSWORDS
 # cannot reach Dex's login screen at all. `bi/build_dashboards.py` and
 # `bi/cleanup_stale.py` still use the separate `admin` account
