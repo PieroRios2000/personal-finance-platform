@@ -61,9 +61,9 @@ Built so far on the Dex line: login by email (T39, ADR 0034), self-service sign-
 invite code (T40, ADR 0035), row-level data by `user_id` (T41, ADR 0036). What is left, in the
 order agreed:
 
-- [ ] **A public URL** (T42): Superset, Dex and `dex-register` reachable from the internet through
-      a Cloudflare Tunnel (the opt-in `docker-compose.override.yml.dist` from T40 already attaches
-      the network). Needs the owner's domain and, in this repo, the public hostnames wherever
+- [ ] **A public URL** (T42, ADR 0037; built, waiting on the owner's real tunnel test): Superset,
+      Dex and `dex-register` reachable from the internet through a Cloudflare Tunnel whose
+      `cloudflared` connector runs inside the stack. Needs the owner's domain and, in this repo, the public hostnames wherever
       `localhost` is hard-coded today (Dex's `redirectURIs` and the browser-facing `DEX_ISSUER`,
       Superset behind an HTTPS proxy). Cost: the tunnel and Zero Trust (up to 50 users) are free;
       only a domain costs (about USD 10-11 a year, no metered billing), so the spend cap is
