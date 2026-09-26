@@ -53,9 +53,14 @@ uploader. Four things were open (backlog, 2026-09-26) and the owner decided them
 - Verified with synthetic PDFs (an encrypted BCP one, uploaded and processed with none of
   the owner's passwords); real statements need the owner's own check.
 
+- **CI keeps it from breaking**: a `portal-e2e` job (and its gate, ADR 0019) brings the
+  real services up and runs the whole path (sign up, sign in, upload, pipeline) on every
+  change to the portal's paths. The `portal-e2e-gate` check has to be added to the
+  ruleset's required checks by the owner (GitHub setting, not code).
+
 ## Related
 
 [ADR 0004](0004-real-pdfs-never-leave-your-machine.md),
 [ADR 0009](0009-multi-user-multi-account-content-over-filename.md),
 [ADR 0036](0036-row-level-security-by-ingesting-user.md),
-[ADR 0039](0039-all-dex-accounts-are-dynamic.md).
+ADR 0039 (every Dex account is dynamic; linked once it is on `develop`).
