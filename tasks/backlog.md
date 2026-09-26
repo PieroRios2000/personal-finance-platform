@@ -11,7 +11,8 @@ branch and PR when it is picked up; see [`CLAUDE.md`](../CLAUDE.md) for how.
       silently. Either read subfolders or say so in the report.
 - [ ] Decide whether a failing continuity test should skip every downstream node (today one
       failing source test skipped 93 of 127 nodes, silver and gold included).
-- [x] Numeric CI rules leave warn-mode on 2026-09-26 (T19): the `-` and `continue-on-error` came off.
+- [x] Numeric CI rules leave warn-mode on 2026-09-26 (T19): the `-` and `continue-on-error` came off for coverage, pip-audit, bandit and import-linter.
+- [ ] Benchmark comparison: still warns (a single outlier made the mean 50% worse on identical code). Decide: gate on the median (`--benchmark-compare-fail=median:20%`) instead of the mean, then it can block.
 
 ## CI parity (done 2026-09-19)
 

@@ -62,14 +62,16 @@ catch these, and Piero reviews them at PR time:
 
 Warned until **2026-09-26** (two weeks to calibrate the numbers without slowing down the
 work) and **block since**: the `-` in the `Makefile` and the `continue-on-error` in CI (T5) came
-off that day (T19).
+off that day (T19), except the benchmark comparison: on 2026-09-26 it flagged a 50% "regression"
+of identical code (same min and median, one 284 ms outlier in the mean). It stays a warning until
+the owner decides whether to gate on the median instead of the mean.
 
 | Rule | Threshold | Command | Where it runs | Mode | Why |
 |---|---|---|---|---|---|
 | Coverage of changed lines | ≥ 80% | `uv run pytest --cov --cov-report=xml` then `uv run diff-cover coverage.xml --compare-branch=origin/develop --fail-under=80` | `make check-full`, CI | Blocks (warned until 2026-09-26) | Forces testing what's new without requiring it for every config line |
 | Security: dependencies | 0 known vulnerabilities | `uv run pip-audit` | `make check-full`, CI | Blocks (warned until 2026-09-26) | pip-audit doesn't filter by severity, so it's stricter than "no high severity": any published vulnerability fails it. If no fixed version exists, an exception is requested (`--ignore-vuln <ID>`) |
 | Security: code | 0 high-severity findings | `uv run bandit -q -r . -x ./.venv,./dbt/dbt_packages --severity-level high` | `make check-full`, CI | Blocks (warned until 2026-09-26) | Below high tends to be noise (e.g. `assert` in tests). `dbt/dbt_packages` (T22) excluded for the same reason `.venv` already is: vendored third-party code (Elementary's own dbt package), never this project's own |
-| Performance | The mean doesn't get worse by more than 20% | `uv run pytest -m benchmark --benchmark-min-rounds=10 --benchmark-compare --benchmark-compare-fail=mean:20%`, base vs PR on the same runner | CI's `benchmarks` job (T15) | Blocks (warned until 2026-09-26) | Leaves room for runner noise: two runs of the *same* code came out 17% apart at pytest-benchmark's default 5 rounds and ~3% apart at the 10 rounds the job uses. An artificial `time.sleep(0.1)` in `bcp.parse` is caught as `mean` +42.6% (T15's verification). The benchmarks only run when the change affects them (ADR 0008) |
+| Performance | The mean doesn't get worse by more than 20% | `uv run pytest -m benchmark --benchmark-min-rounds=10 --benchmark-compare --benchmark-compare-fail=mean:20%`, base vs PR on the same runner | CI's `benchmarks` job (T15) | Warns (still: the mean is noisy on a shared runner, see below) | Leaves room for runner noise: two runs of the *same* code came out 17% apart at pytest-benchmark's default 5 rounds and ~3% apart at the 10 rounds the job uses. An artificial `time.sleep(0.1)` in `bcp.parse` is caught as `mean` +42.6% (T15's verification). The benchmarks only run when the change affects them (ADR 0008) |
 | Architecture | 0 broken contracts | `uv run lint-imports` | `make check-task`, CI | Blocks (warned until 2026-09-26) | See "Architecture contracts" |
 
 ### Architecture contracts
