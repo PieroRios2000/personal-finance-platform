@@ -89,6 +89,10 @@ order agreed:
         other people's passwords is a security decision;
       - privacy: [ADR 0004](../brain/decisions/0004-real-pdfs-never-leave-your-machine.md) covers
         the owner's own statements, not receiving other people's.
+- [x] **Requests up to 10 files, accepted or rejected whole, sender emailed** (T48, ADR 0041).
+- [ ] **The portal's Excel section for savings and investments** (next; needs the owner's OK on the design: generic
+      template with free-text funds, upload to `manual/<user_id>/`, full validation by the importer when the owner runs
+      it, which the portal container cannot do because it must not hold `PFP_ACCOUNT_KEY`).
 - [ ] **Extraction for new banks, kinds and currencies** (T46 keeps the files apart; each one is its own request):
       whatever `make review-uploads` lists that no parser reads (another bank, BCP's credit card, a currency
       other than soles and dollars),
