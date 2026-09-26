@@ -1,7 +1,7 @@
 # Quality-bar checks. Rules, thresholds and reasons live in CONSTRAINTS.md;
 # if this file and CONSTRAINTS.md disagree, CONSTRAINTS.md wins.
-# Lines with "-" are rules in warn mode until 2026-09-26: they show the failure but
-# don't stop the recipe. That day the "-" comes off and they start blocking.
+# The numeric rules (coverage of changed lines, security, architecture, performance) warned
+# until 2026-09-26 and have blocked since: a failing one stops the recipe.
 
 BASE ?= origin/develop
 
@@ -40,14 +40,14 @@ check-fast:
 check-task: check-fast
 	uv run pytest --cov --cov-report=term-missing --cov-report=xml
 	uv run python scripts/floor_guard.py --base $(BASE)
-	-uv run lint-imports --no-logo
+	uv run lint-imports --no-logo
 
 # Before the PR: the above + security and coverage of the changed lines. This is what CI
 # runs except gitleaks, which runs in pre-commit on every commit (and in CI from T5 on).
 check-full: check-task
-	-uv run pip-audit
-	-uv run bandit -q -r . -x ./.venv,./dbt/dbt_packages --severity-level high
-	-uv run diff-cover coverage.xml --compare-branch=$(BASE) --fail-under=80
+	uv run pip-audit
+	uv run bandit -q -r . -x ./.venv,./dbt/dbt_packages --severity-level high
+	uv run diff-cover coverage.xml --compare-branch=$(BASE) --fail-under=80
 
 # Local S3 (SeaweedFS) for the lakehouse (ADR 0003, ADR 0007). Fixed project name:
 # fine for one developer's machine; T17 gives each CI job its own project name.

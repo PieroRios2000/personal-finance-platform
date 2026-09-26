@@ -129,7 +129,7 @@ Every parser validates that the sum of the extracted transactions matches the ba
 - Gold is a star schema (`fact_transactions` + `dim_date`/`dim_account`/`dim_bank`/`dim_user`). No `dim_category` (Phase 3) and no FX conversion in these layers, by decision (only the Phase 6 projection converts, on top of gold).
 - Quality: **Elementary** was chosen over Great Expectations (the plan left it open); a single row-count anomaly test on silver, in warn-mode.
 - Catalog: **OpenMetadata** was chosen over DataHub. It is optional and local (not in CI) and needs a ~4.8 GiB peak; OpenMetadata 2.0.2 has no DuckDB connector, so a small script registers the tables (ADR 0023).
-- Still open: real-data validation of the Scotiabank parser, and the numeric CI rules leaving warn-mode on 2026-09-26.
+- Still open: real-data validation of the Scotiabank parser, and (done on 2026-09-26, T19) the numeric CI rules leaving warn-mode.
 
 **Extension (added 2026-09-19, T26–T33): PostgreSQL as dbt's store, then the dashboard.** The owner wants to look at the data in an open-source BI tool, and the catalog (OpenMetadata) and the pipeline (Dagster) related to it, while dbt builds. A DuckDB file has a single writer, so this phase was reopened on purpose ([ADR 0029](brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)):
 - dbt keeps DuckDB as the engine (it reads bronze from the lake) and stores silver and gold in **PostgreSQL** (T26); the scripts, Dagster wiring and tests that opened the DuckDB file read Postgres (T27); Elementary keeps its own small DuckDB file (T28); CI's ephemeral environment and the PR data diff run on Postgres (T29).

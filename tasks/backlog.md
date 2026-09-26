@@ -11,7 +11,7 @@ branch and PR when it is picked up; see [`CLAUDE.md`](../CLAUDE.md) for how.
       silently. Either read subfolders or say so in the report.
 - [ ] Decide whether a failing continuity test should skip every downstream node (today one
       failing source test skipped 93 of 127 nodes, silver and gold included).
-- [ ] Numeric CI rules leave warn-mode on 2026-09-26 (two-line change).
+- [x] Numeric CI rules leave warn-mode on 2026-09-26 (T19): the `-` and `continue-on-error` came off.
 
 ## CI parity (done 2026-09-19)
 
