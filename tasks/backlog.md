@@ -61,14 +61,14 @@ Built so far on the Dex line: login by email (T39, ADR 0034), self-service sign-
 invite code (T40, ADR 0035), row-level data by `user_id` (T41, ADR 0036). What is left, in the
 order agreed:
 
-- [ ] **A public URL** (T42, ADR 0037; built, waiting on the owner's real tunnel test): Superset,
+- [x] **A public URL** (T42, ADR 0037; live and tested by the owner): Superset,
       Dex and `dex-register` reachable from the internet through a Cloudflare Tunnel whose
       `cloudflared` connector runs inside the stack. Needs the owner's domain and, in this repo, the public hostnames wherever
       `localhost` is hard-coded today (Dex's `redirectURIs` and the browser-facing `DEX_ISSUER`,
       Superset behind an HTTPS proxy). Cost: the tunnel and Zero Trust (up to 50 users) are free;
       only a domain costs (about USD 10-11 a year, no metered billing), so the spend cap is
       "do not upgrade the plan" and "turn auto-renew off".
-- [ ] **Login page links and password reset** (T43): "Create account" and "Forgot password" on Dex's
+- [x] **Login page links and password reset** (T43, ADR 0038; built, needs the owner's SMTP to send real mail): "Create account" and "Forgot password" on Dex's
       login page (Dex lets its web templates be customized). Reset by a **single-use random token
       with an expiry** (only its hash stored), emailed over the SMTP the alerting already configures
       (Phase 7), handled by `dex-register` (`/forgot`, `/reset?token=`) and applied over gRPC

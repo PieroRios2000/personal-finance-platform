@@ -74,10 +74,11 @@ def test_a_failed_grpc_call_never_crashes_the_request() -> None:
 
 
 def test_the_password_is_only_ever_used_to_validate_and_to_hash() -> None:
-    """The submitted password is read exactly twice: passed to `validate`, then
-    hashed. `_page(...)` is never built from an f-string or a `fields[...]` value, so
-    nothing user-typed -- the password least of all -- reaches the HTML response."""
-    assert _APP.count('fields.get("password"') == 1
-    assert _APP.count('fields["password"]') == 1
+    """The submitted password is read exactly twice per form (sign-up, and the reset of
+    T43): passed to the validator, then hashed. `_page(...)` is never built from an
+    f-string or a `fields[...]` value, so nothing user-typed -- the password least of
+    all -- reaches the HTML response."""
+    assert _APP.count('fields.get("password"') == 2
+    assert _APP.count('fields["password"]') == 2
     assert '_page(f"' not in _APP
     assert "_page(fields[" not in _APP
