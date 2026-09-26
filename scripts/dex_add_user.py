@@ -1,12 +1,18 @@
 """Add one person to Dex's local user database (T39, ADR 0034).
 
-    uv run python -m scripts.dex_add_user you@example.com
+    uv run python -m scripts.dex_add_user you@example.com [--username piero]
 
 Asks for a password (typed twice, never shown or logged), hashes it with bcrypt, and
 prints one line: `email:hash:username:userID`. Add it to DEX_STATIC_PASSWORDS in `.env`
 (single-quoted: the hash contains `$`); more than one person is comma-separated. Dex
 reads that variable at container start (dex/config.yaml.tpl) -- restart it
 (`make up`) for a new or changed line to take effect.
+
+`--username` is also what Superset's row-level security matches against (T41,
+ADR 0036): defaulting it to the email, not the part before `@`, is deliberate -- no
+`user_id` this project ever writes contains `@`, so someone you add with no
+`--username` sees no data until you explicitly set it to a real one from the gold
+tables (e.g. `--username piero`).
 """
 
 import argparse
@@ -24,7 +30,7 @@ def entry(email: str, password: str, username: str | None = None) -> str:
     """One `email:hash:username:userID` line for DEX_STATIC_PASSWORDS."""
     if any(c in email for c in _SEPARATOR_FREE):
         raise ValueError(f"email must not contain {_SEPARATOR_FREE!r}: {email!r}")
-    name = username or email.split("@", 1)[0]
+    name = username or email
     if any(c in name for c in _SEPARATOR_FREE):
         raise ValueError(f"username must not contain {_SEPARATOR_FREE!r}: {name!r}")
     digest = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -34,7 +40,9 @@ def entry(email: str, password: str, username: str | None = None) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("email")
-    parser.add_argument("--username", help="defaults to the part before @")
+    parser.add_argument(
+        "--username", help="defaults to the email; set to a real user_id to grant data"
+    )
     args = parser.parse_args(argv)
 
     password = getpass.getpass("Password: ")

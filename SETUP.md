@@ -511,11 +511,17 @@ dex-add-user EMAIL=you@example.com` asks for a password (never shown or logged),
 it, and prints one `email:hash:username:userID` line -- paste it into
 `DEX_STATIC_PASSWORDS` in `.env` (single-quoted: the hash contains `$`; more than one
 person is comma-separated) and `make up` again to pick it up. Only people added this way
-can reach Dex's login screen at all; anyone who does gets Superset's Admin role, since
-this project has only one today -- a per-user view of the data is a follow-up PR. The
-`admin` / `PFP_BI_ADMIN_PASSWORD` account is now only for `bi/build_dashboards.py` and
-`bi/cleanup_stale.py`, which still authenticate over the REST API directly, unaffected by
-the login screen's change.
+can reach Dex's login screen at all. The `admin` / `PFP_BI_ADMIN_PASSWORD` account is
+only for `bi/build_dashboards.py` and `bi/cleanup_stale.py`, which still authenticate
+over the REST API directly, unaffected by the login screen's change.
+
+**Who sees what (T41, ADR 0036):** by default, signing in shows **no data at all**.
+`PFP_BI_OWNER_EMAIL` in `.env` is the one email that sees everything; anyone else sees
+only the `user_id` their Dex account was explicitly scoped to, via `make dex-add-user
+EMAIL=... --username <user_id>` (the same `user_id` your statements were ingested under,
+`--user` in `pfp ingest`) -- `--username` defaults to the full email, which never
+matches a real `user_id` (none contains `@`), so skipping it is the safe default, not an
+oversight.
 
 **Letting someone add themselves (T40, ADR 0035):** at <http://localhost:5559> (another
 port: `PFP_DEX_REGISTER_PORT`), `dex-register` is a small page where a new person picks
@@ -523,18 +529,27 @@ their own email and password instead of you running `dex-add-user` for them. It 
 `PFP_DEX_INVITE_CODE` in `.env` (generated like the secrets above): the page asks for
 that code before creating anything, so **share the code, never this URL alone, with
 whoever you want to be able to sign up** -- and rotate it in `.env` (`make up` again) to
-close the door to new signups without touching anyone's existing account. Because there
-is still only one role in this project, anyone who signs up sees everything, the same as
-someone the operator added; the invite code is what stands between the page being public
-and a stranger creating an account, not a limit on what that account can see.
+close the door to new signups without touching anyone's existing account. A self-
+registered account sees no data (the paragraph above) until you re-scope it the same
+way; the invite code only gates creating an account, never what it can see.
 
-**A public URL (T40, ADR 0035):** optional, and someone else's action to enable --
-`docker-compose.override.yml.dist` explains how to reach Superset, Dex and `dex-register`
-through a Cloudflare Tunnel you already run on this machine (`cp` it to
-`docker-compose.override.yml`, fill in `PFP_TUNNEL_NETWORK` in `.env`, add three Public
-Hostname routes on your own Cloudflare Zero Trust dashboard -- the file has the exact
-steps). Everything still keeps its `127.0.0.1` port too; the override only adds a second,
-public way in.
+**A public URL (T42, ADR 0037):** optional. Needs a domain in your Cloudflare account and a
+tunnel (Zero Trust > Networks > Tunnels > Create a tunnel > Cloudflared > Docker):
+
+1. Copy only the token (`eyJ...`) of the Docker command into `.env` as
+   `PFP_TUNNEL_TOKEN='eyJ...'`. Never commit it.
+2. In the tunnel's *Public Hostname* tab add three routes, type **HTTP**, to the container
+   names (the connector runs on the stack's own network):
+   `www.<domain>` -> `superset:8088`, `login.<domain>` -> `dex:5556`,
+   `registro.<domain>` -> `dex-register:5559`.
+3. In `.env` set `PFP_BI_PUBLIC_URL=https://www.<domain>` (no trailing slash) and
+   `DEX_ISSUER=https://login.<domain>/dex`.
+4. `make up`. The `cloudflared` service starts when the token is set; `make status` shows
+   the public URL. Sign-up is then at `https://registro.<domain>`, gated by the invite code.
+
+Everything keeps its `127.0.0.1` port too. Cost: only the domain (about USD 10-11 a year);
+Tunnel and Zero Trust Free (up to 50 users) are free and not metered, so keep the plan and
+turn auto-renew off as the cap.
 
 ## 11. Alerts by email or Microsoft Teams (Phase 7)
 

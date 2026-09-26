@@ -1,12 +1,20 @@
 """Superset settings (T32, ADR 0030). Everything secret comes from the environment."""
 
 import os
+from typing import Any
 from urllib.parse import quote
 
 from flask_appbuilder.security.manager import AUTH_OAUTH
 from superset.security import SupersetSecurityManager
 
 SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
+
+# Off by default in Superset itself -- confirmed live (T41, ADR 0036): without it, a
+# row-level security clause's `{{ current_username() }}` reaches Postgres as that
+# literal string, unrendered (NoOpTemplateProcessor,
+# jinja_context.get_template_processor), matching no row rather than the signed-in
+# user's.
+FEATURE_FLAGS = {"ENABLE_TEMPLATE_PROCESSING": True}
 
 # Superset's own metadata (users, charts, dashboards) lives in its own database of
 # PFP's Postgres, owned by its own role -- never in `pfp`, where dbt writes. The
@@ -49,9 +57,16 @@ class DexSecurityManager(SupersetSecurityManager):
     of named providers (google, okta, auth0, keycloak...); Dex is a plain OIDC
     provider, not one of them, so it needs this one method. Modelled on FAB's own
     Auth0 branch: fetch `userinfo` from the metadata Superset's backend already
-    discovered, and use the email as the username -- it is the one thing every
-    login has, and the identity alerts and a future per-user data view (T39
-    follow-up) will key on."""
+    discovered.
+
+    The Superset *username* is Dex's own `username` field (its ID token's `name`
+    claim), not the email -- `scripts/dex_add_user.py --username` and
+    `dex-register`'s own default both leave it equal to the email unless the
+    operator deliberately sets it to a real `user_id` from the gold tables (T41,
+    ADR 0036), which is what the row-level filter below matches against. Defaulting
+    to the email, never a short handle, is deliberate: no `user_id` this project
+    ever writes can contain `@`, so a login nobody explicitly scoped can never
+    accidentally match someone else's data."""
 
     def oauth_user_info(
         self, provider: str, response: dict[str, str] | None = None
@@ -63,28 +78,64 @@ class DexSecurityManager(SupersetSecurityManager):
             return passthrough
         data = self.appbuilder.sm.oauth_remotes[provider].userinfo()
         email: str = data["email"]
+        username: str = data.get("name", email)
+        is_owner = email.lower() == os.environ.get("PFP_BI_OWNER_EMAIL", "").lower()
         return {
-            "username": email,
-            "first_name": data.get("name", email),
+            "username": username,
+            "first_name": username,
             "last_name": "",
             "email": email,
-            "role_keys": [],
+            "role_keys": ["owner"] if is_owner else [],
         }
+
+    def auth_user_oauth(self, userinfo: dict[str, Any]) -> Any:
+        """Flask-AppBuilder finds the user by username alone, but `ab_user.email` is
+        unique too: once the operator re-scopes an account (a new Dex username), the
+        next login would try to create a second user with the same email and fail
+        (UniqueViolation, found re-scoping the owner's own account). So rename the
+        existing user first; and refuse a username that already belongs to another
+        email -- they would share one Superset user, and the roles recomputed at each
+        login would flap between them (ADR 0036)."""
+        email, username = userinfo.get("email"), userinfo.get("username")
+        if email and username:
+            existing = self.find_user(email=email)
+            by_name = self.find_user(username=username)
+            if by_name is not None and by_name.email.lower() != email.lower():
+                return None
+            if existing is not None and existing.username != username:
+                existing.username = username
+                self.update_user(existing)
+        return super().auth_user_oauth(userinfo)
 
 
 CUSTOM_SECURITY_MANAGER = DexSecurityManager
 
+# Public URL (T42, ADR 0037): behind Cloudflare's HTTPS the app sees plain HTTP, so
+# trust the forwarded scheme and host (else the OAuth redirect_uri comes out as http://)
+# and, when a public https URL is set, mark the session cookie Secure.
+ENABLE_PROXY_FIX = True
+PROXY_FIX_CONFIG = {"x_for": 1, "x_proto": 1, "x_host": 1, "x_prefix": 0}
+SESSION_COOKIE_SECURE = os.environ.get("PFP_BI_PUBLIC_URL", "").startswith("https://")
+
 # Sign in with Dex (T39, ADR 0034): people who are not in DEX_STATIC_PASSWORDS
-# cannot reach Dex's login screen at all, so anyone who comes back from it is
-# trusted with the one role this project has today -- a finer, per-user view is
-# the follow-up PR the owner asked for. `bi/build_dashboards.py` and
+# cannot reach Dex's login screen at all. `bi/build_dashboards.py` and
 # `bi/cleanup_stale.py` still use the separate `admin` account
 # (PFP_BI_ADMIN_PASSWORD) over the REST API: FAB's DB auth backend answers that
 # endpoint regardless of AUTH_TYPE, so OAuth for human login does not touch it.
+#
+# Row-level data (T41, ADR 0036): everyone gets Gamma -- read access to the
+# dashboard, and (bi/setup_access.py) to the gold datasets, filtered by the row-
+# level security rule to their own `user_id`. Only the email in PFP_BI_OWNER_EMAIL
+# also gets `role_keys: ["owner"]` (above), mapped to Admin here, which the same
+# rule exempts: unfiltered. AUTH_ROLES_SYNC_AT_LOGIN recomputes this on every
+# login, not just the first, so changing PFP_BI_OWNER_EMAIL or a person's Dex
+# username takes effect the next time they sign in (an existing Superset user is
+# renamed to the new username by `auth_user_oauth` above, not duplicated).
 AUTH_TYPE = AUTH_OAUTH
 AUTH_USER_REGISTRATION = True
-AUTH_USER_REGISTRATION_ROLE = "Admin"
+AUTH_USER_REGISTRATION_ROLE = "Gamma"
 AUTH_ROLES_SYNC_AT_LOGIN = True
+AUTH_ROLES_MAPPING = {"owner": ["Admin"]}
 OAUTH_PROVIDERS = [
     {
         "name": "dex",

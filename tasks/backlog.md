@@ -55,6 +55,44 @@ not which tests inside it. Options, in the order they are worth doing:
 - [ ] Skip the second Dagster idempotency pass unless `ingestion/` or `lakehouse/` changed
       (about 0.7 min; small, last).
 
+## Identity, public access and the upload portal (raised 2026-09-26)
+
+Built so far on the Dex line: login by email (T39, ADR 0034), self-service sign-up with an
+invite code (T40, ADR 0035), row-level data by `user_id` (T41, ADR 0036). What is left, in the
+order agreed:
+
+- [ ] **A public URL** (T42, ADR 0037; built, waiting on the owner's real tunnel test): Superset,
+      Dex and `dex-register` reachable from the internet through a Cloudflare Tunnel whose
+      `cloudflared` connector runs inside the stack. Needs the owner's domain and, in this repo, the public hostnames wherever
+      `localhost` is hard-coded today (Dex's `redirectURIs` and the browser-facing `DEX_ISSUER`,
+      Superset behind an HTTPS proxy). Cost: the tunnel and Zero Trust (up to 50 users) are free;
+      only a domain costs (about USD 10-11 a year, no metered billing), so the spend cap is
+      "do not upgrade the plan" and "turn auto-renew off".
+- [ ] **Login page links and password reset** (T43): "Create account" and "Forgot password" on Dex's
+      login page (Dex lets its web templates be customized). Reset by a **single-use random token
+      with an expiry** (only its hash stored), emailed over the SMTP the alerting already configures
+      (Phase 7), handled by `dex-register` (`/forgot`, `/reset?token=`) and applied over gRPC
+      `UpdatePassword`. It must answer the same whether the email exists or not, and rate-limit.
+      Depends on T42 (the link must open from outside) and on SMTP. **Open:** accounts added with
+      `make dex-add-user` are *static* (read-only over gRPC, found out re-scoping the owner's own
+      account) and cannot be reset this way: migrate them to dynamic storage first.
+- [ ] **The upload portal** ([Phase 5](../PROJECT.md)): upload -> `inbox/<user_id>/` -> pipeline.
+      Sections by **file type** (statement PDFs, card balance, manual Excel: savings and
+      investments), not by bank: bank and account are detected from the content
+      ([ADR 0009](../brain/decisions/0009-multi-user-multi-account-content-over-filename.md)) and
+      archived under `raw/<user>/<bank>/<account>/`; what the user picks is only a hint, and a
+      mismatch goes to `_needs_review`. Decide first (each needs an ADR):
+      - the destination `user_id` comes from the signed-in session, never a form field;
+      - how a new account gets a safe `user_id` and is bound to it (today it sees no data until
+        the operator runs `make dex-add-user --username`);
+      - PDF passwords: one per bank in `.env` today; several people need one each, and storing
+        other people's passwords is a security decision;
+      - privacy: [ADR 0004](../brain/decisions/0004-real-pdfs-never-leave-your-machine.md) covers
+        the owner's own statements, not receiving other people's.
+- [ ] **"Upload your files" button in Superset**, last, once the portal exists: a Handlebars chart
+      that renders the message and the link only when its query returns 0 rows (which is what a
+      row-level-filtered new account gets).
+
 ## Next phases (planned, nothing built)
 
 - [x] [Phase 7 — Alerting](../brain/phases/phase-7.md): built. Left: Dagster-triggered alerts.

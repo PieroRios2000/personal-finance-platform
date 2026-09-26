@@ -5,9 +5,6 @@
 *.pem
 *.key
 
-# Personal Compose overrides (T40, ADR 0035): which network reaches your own Cloudflare
-# Tunnel, machine-specific. The template is docker-compose.override.yml.dist.
-docker-compose.override.yml
 
 # Real financial data: lives outside the repo (~/finance-data) and in the lake
 *.[pP][dD][fF]

@@ -172,7 +172,7 @@ legacy-down:
 	done
 
 up: env-guard bi-check legacy-down
-	$(LOAD_ENV) && $(PFP) --profile bi up -d --build --wait seaweedfs postgres $(BI_SERVICES)
+	$(LOAD_ENV) && $(PFP) --profile bi $${PFP_TUNNEL_TOKEN:+--profile tunnel} up -d --build --wait seaweedfs postgres $(BI_SERVICES) $${PFP_TUNNEL_TOKEN:+cloudflared}
 	$(LOAD_ENV) && $(PFP) run --rm bucket-init
 	@$(MAKE) --no-print-directory status
 
@@ -188,6 +188,7 @@ status:
 	echo "Superset:      http://localhost:$${PFP_BI_PORT:-8088}   (sign in with your email, via Dex)" && \
 	echo "Dex:           http://localhost:$${PFP_DEX_PORT:-5556}/dex" && \
 	echo "Sign up:       http://localhost:$${PFP_DEX_REGISTER_PORT:-5559}   (needs PFP_DEX_INVITE_CODE)" && \
+	echo "Public URL:    $${PFP_BI_PUBLIC_URL:-off (set PFP_BI_PUBLIC_URL and PFP_TUNNEL_TOKEN, SETUP.md section 12)}" && \
 	echo "OpenMetadata:  http://localhost:$${OPENMETADATA_PORT:-8585}   (only after make up-catalog)" && \
 	echo "Dagster:       uv run dagster dev  ->  http://localhost:3000"
 
