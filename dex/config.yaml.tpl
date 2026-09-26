@@ -52,6 +52,9 @@ staticClients:
     name: 'Superset'
     redirectURIs:
       - {{ getenv "PFP_BI_BASE_URL" }}/oauth-authorized/dex
+{{- if getenv "PFP_BI_PUBLIC_URL" }}
+      - {{ getenv "PFP_BI_PUBLIC_URL" }}/oauth-authorized/dex
+{{- end }}
 
 # Local password database: `make dex-add-user EMAIL=...` (scripts/dex_add_user.py) hashes a
 # chosen password with bcrypt and prints one "email:hash:username:userID" entry to add to

@@ -25,6 +25,7 @@ services:
     command: ["dex", "serve", "/etc/dex/config.yaml"]
     environment:
       PFP_BI_BASE_URL: http://localhost:${PFP_BI_PORT:-8088}
+      PFP_BI_PUBLIC_URL: ${PFP_BI_PUBLIC_URL:-}
       PFP_BI_OAUTH_CLIENT_SECRET: ${PFP_BI_OAUTH_CLIENT_SECRET:-}
       DEX_STATIC_PASSWORDS: ${DEX_STATIC_PASSWORDS:-}
     ports:
@@ -41,7 +42,7 @@ services:
 
   # dex-register (T40, ADR 0035): a friendly sign-up page instead of `make dex-add-user`,
   # gated by a shared invite code (PFP_DEX_INVITE_CODE) so a public URL (a Cloudflare
-  # Tunnel, docker-compose.override.yml.dist) doesn't let a stranger create an account.
+  # Tunnel, the `cloudflared` service below) doesn't let a stranger create an account.
   # Creates the person straight in Dex's storage over its gRPC API -- reachable only from
   # here, over the compose network (never a published port): that API has full control
   # over every account.
@@ -106,6 +107,8 @@ services:
       # Row-level data (T41, ADR 0036): whoever signs in with this email gets Admin
       # (sees everything); everyone else gets Gamma, filtered to their own user_id.
       PFP_BI_OWNER_EMAIL: ${PFP_BI_OWNER_EMAIL:-}
+      # Public URL (T42, ADR 0037): empty means local only.
+      PFP_BI_PUBLIC_URL: ${PFP_BI_PUBLIC_URL:-}
     ports:
       - "127.0.0.1:${PFP_BI_PORT:-8088}:8088"
     volumes:
@@ -120,6 +123,31 @@ services:
       timeout: 5s
       retries: 30
       start_period: 60s
+
+  # Cloudflare Tunnel connector (T42, ADR 0037): the public URL, without opening a port on
+  # your router. Behind its own `tunnel` profile, which `make up` turns on only when
+  # PFP_TUNNEL_TOKEN is set. It shares this project's network, so the routes you add on
+  # Cloudflare (Networks > Tunnels > Public Hostname) point at the container names:
+  # http://superset:8088, http://dex:5556, http://dex-register:5559.
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:2026.9.3
+    command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "run"]
+    environment:
+      TUNNEL_TOKEN: ${PFP_TUNNEL_TOKEN:-}
+    depends_on:
+      superset:
+        condition: service_healthy
+      dex:
+        condition: service_healthy
+      dex-register:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "localhost:2000", "ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
 volumes:
   dex-data:

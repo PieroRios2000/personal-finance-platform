@@ -47,7 +47,7 @@ reachable publicly only through the owner's own Cloudflare Tunnel.**
   to be public. A per-IP throttle (5 wrong codes / 5 minutes) slows brute force on top of
   the code itself being long and random, generated like every other secret
   (`PFP_DEX_INVITE_CODE`).
-- **The public URL is the owner's own action, not this repo's.** A committed
+- **(Superseded by [ADR 0037](0037-public-url-through-a-bundled-cloudflare-tunnel-connector.md): the connector now lives in the stack.) The public URL is the owner's own action, not this repo's.** A committed
   `docker-compose.override.yml.dist` (copied to a gitignored, personal
   `docker-compose.override.yml`) attaches `superset`, `dex` and `dex-register` to a
   second, externally-defined network (`PFP_TUNNEL_NETWORK` in `.env`) -- the one the

@@ -39,7 +39,9 @@ def test_bi_and_catalog_services_sit_behind_their_profile() -> None:
         services = _load(name)["services"]
         assert services
         for service, definition in services.items():
-            assert definition["profiles"] == [profile], (name, service)
+            # The Cloudflare connector (T42) is opt-in on its own, on top of `bi`.
+            expected = ["tunnel"] if service == "cloudflared" else [profile]
+            assert definition["profiles"] == expected, (name, service)
     for service, definition in _load("root")["services"].items():
         assert "profiles" not in definition, service  # storage and Postgres always
 

@@ -533,13 +533,23 @@ close the door to new signups without touching anyone's existing account. A self
 registered account sees no data (the paragraph above) until you re-scope it the same
 way; the invite code only gates creating an account, never what it can see.
 
-**A public URL (T40, ADR 0035):** optional, and someone else's action to enable --
-`docker-compose.override.yml.dist` explains how to reach Superset, Dex and `dex-register`
-through a Cloudflare Tunnel you already run on this machine (`cp` it to
-`docker-compose.override.yml`, fill in `PFP_TUNNEL_NETWORK` in `.env`, add three Public
-Hostname routes on your own Cloudflare Zero Trust dashboard -- the file has the exact
-steps). Everything still keeps its `127.0.0.1` port too; the override only adds a second,
-public way in.
+**A public URL (T42, ADR 0037):** optional. Needs a domain in your Cloudflare account and a
+tunnel (Zero Trust > Networks > Tunnels > Create a tunnel > Cloudflared > Docker):
+
+1. Copy only the token (`eyJ...`) of the Docker command into `.env` as
+   `PFP_TUNNEL_TOKEN='eyJ...'`. Never commit it.
+2. In the tunnel's *Public Hostname* tab add three routes, type **HTTP**, to the container
+   names (the connector runs on the stack's own network):
+   `www.<domain>` -> `superset:8088`, `login.<domain>` -> `dex:5556`,
+   `registro.<domain>` -> `dex-register:5559`.
+3. In `.env` set `PFP_BI_PUBLIC_URL=https://www.<domain>` (no trailing slash) and
+   `DEX_ISSUER=https://login.<domain>/dex`.
+4. `make up`. The `cloudflared` service starts when the token is set; `make status` shows
+   the public URL. Sign-up is then at `https://registro.<domain>`, gated by the invite code.
+
+Everything keeps its `127.0.0.1` port too. Cost: only the domain (about USD 10-11 a year);
+Tunnel and Zero Trust Free (up to 50 users) are free and not metered, so keep the plan and
+turn auto-renew off as the cap.
 
 ## 11. Alerts by email or Microsoft Teams (Phase 7)
 
