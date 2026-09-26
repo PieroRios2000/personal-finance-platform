@@ -16,26 +16,40 @@ from pathlib import Path
 import pikepdf
 
 BANK_KEY = "/PFPBank"
+KIND_KEY = "/PFPKind"
+CURRENCY_KEY = "/PFPCurrency"
 
 
-def unlock(content: bytes, *, password: str, bank: str) -> bytes:
+def unlock(
+    content: bytes, *, password: str, bank: str, kind: str = "", currency: str = ""
+) -> bytes:
     """The same PDF with no password, tagged with `bank`.
 
     Raises `pikepdf.PasswordError` for a wrong password and `pikepdf.PdfError` for
     something that is not a PDF (the caller tells the person, without either)."""
     with pikepdf.open(io.BytesIO(content), password=password) as pdf:
         pdf.docinfo[BANK_KEY] = bank
+        if kind:
+            pdf.docinfo[KIND_KEY] = kind
+        if currency:
+            pdf.docinfo[CURRENCY_KEY] = currency
         unlocked = io.BytesIO()
         pdf.save(unlocked)
     return unlocked.getvalue()
 
 
+def tags(path: Path) -> tuple[str | None, str | None, str | None]:
+    """The bank, kind and currency an upload was tagged with (any may be None)."""
+    try:
+        with pikepdf.open(path) as pdf:
+            found = [pdf.docinfo.get(key) for key in (BANK_KEY, KIND_KEY, CURRENCY_KEY)]
+    except (pikepdf.PikepdfError, OSError):
+        return None, None, None
+    bank, kind, currency = (None if v is None else str(v) for v in found)
+    return bank, kind, currency
+
+
 def hinted_bank(path: Path) -> str | None:
     """The bank an unlocked upload was tagged with, or None (an encrypted file, a file
     that never went through the portal, anything unreadable)."""
-    try:
-        with pikepdf.open(path) as pdf:
-            hint = pdf.docinfo.get(BANK_KEY)
-    except (pikepdf.PikepdfError, OSError):
-        return None
-    return str(hint) if hint is not None else None
+    return tags(path)[0]

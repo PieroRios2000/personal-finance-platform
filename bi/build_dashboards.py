@@ -630,7 +630,7 @@ NOTE_TEXT = (
 
 # The grid: (chart name prefix, width out of 12, height) per cell, row by row.
 LAYOUT: list[list[tuple[str, int, int]]] = [
-    [("Upload your files", 12, 10)],
+    [("Upload your files", 12, 21)],
     [("Cash flow summary", 12, 22)],
     [("Period analysed", 6, 22), ("Debt at the end", 6, 22)],
     [("Capital summary", 6, 22), ("Net position summary", 6, 22)],

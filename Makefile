@@ -27,7 +27,7 @@ PFP = docker compose -p $(PFP_PROJECT)
 # Each environment's OpenMetadata artifacts (they hold a token and the Postgres password).
 export PFP_OM_ARTIFACTS = ./artifacts/$(PFP_ENV)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads review-uploads build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -143,6 +143,10 @@ ingest:
 ingest-uploads:
 	$(LOAD_ENV) && for dir in "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}"/*/; do \
 		uv run pfp ingest --user "$$(basename "$$dir")" || exit $$?; done
+
+# Files people uploaded for a bank or kind no parser reads yet (T46): counts by bank and kind.
+review-uploads:
+	$(LOAD_ENV) && uv run python -m scripts.review_uploads --inbox-root "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}"
 
 build:
 	$(LOAD_ENV) && uv run dbt deps --project-dir dbt --profiles-dir dbt && \

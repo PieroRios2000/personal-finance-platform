@@ -47,3 +47,19 @@ def test_a_file_that_never_went_through_the_portal_has_no_hint(tmp_path: Path) -
     assert unlock.hinted_bank(plain) is None
     assert unlock.hinted_bank(locked) is None  # cannot be opened: no hint, no error
     assert unlock.hinted_bank(tmp_path / "missing.pdf") is None
+
+
+def test_the_kind_is_recorded_beside_the_bank(tmp_path: Path) -> None:
+    path = tmp_path / "stored.pdf"
+    path.write_bytes(
+        unlock.unlock(
+            _locked("theirs"),
+            password="theirs",
+            bank="Interbank",
+            kind="card",
+            currency="EUR",
+        )
+    )
+
+    assert unlock.tags(path) == ("Interbank", "card", "EUR")
+    assert unlock.tags(tmp_path / "missing.pdf") == (None, None, None)

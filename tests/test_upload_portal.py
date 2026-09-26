@@ -146,3 +146,61 @@ def test_processing_what_was_uploaded_is_one_command_over_every_inbox_folder() -
 
     assert "ingest-uploads:" in makefile
     assert 'uv run pfp ingest --user "$$(basename "$$dir")"' in makefile
+
+
+def test_supported_pairs_go_to_the_pipeline_and_the_rest_to_review() -> None:
+    route = portal.Route
+    assert portal.route("BCP", "account", "", "PEN", "") == route(True, "BCP", "PEN")
+    assert portal.route("Scotiabank", "card", "", "BOTH", "") == route(
+        True, "Scotiabank", "BOTH"
+    )
+    assert portal.route("Scotiabank", "account", "", "USD", "") == route(
+        True, "Scotiabank", "USD"
+    )
+    # No BCP card parser yet, and another bank has none at all.
+    assert portal.route("BCP", "card", "", "PEN", "") == route(False, "BCP", "PEN")
+    assert portal.route(portal.OTHER_BANK, "card", "Interbank", "PEN", "") == route(
+        False, "Interbank", "PEN"
+    )
+
+
+def test_another_currency_is_its_own_request_even_for_a_supported_bank() -> None:
+    result = portal.route("BCP", "account", "", portal.OTHER_CURRENCY, "euros")
+
+    assert result == portal.Route(False, "BCP", "EUROS")
+
+
+def test_a_form_that_is_not_one_of_the_options_is_refused() -> None:
+    assert portal.route("BCP", "loan", "", "PEN", "") is None
+    assert portal.route("Evil Bank", "account", "", "PEN", "") is None
+    assert portal.route("BCP", "account", "", "GOLD", "") is None
+    assert portal.route(portal.OTHER_BANK, "account", "   ", "PEN", "") is None
+    assert portal.route(portal.OTHER_BANK, "account", "<>", "PEN", "") is None
+    assert portal.route("BCP", "account", "", portal.OTHER_CURRENCY, " ") is None
+
+
+def test_the_currencies_offered_include_the_two_the_pipeline_reads() -> None:
+    assert {"PEN", "USD", "BOTH", portal.OTHER_CURRENCY} == set(portal.CURRENCIES)
+
+
+def test_a_bank_name_is_reduced_before_it_reaches_a_file_or_its_metadata() -> None:
+    assert (
+        portal.clean_bank_name("  Banco <b>Falabella</b>\n  Peru ")
+        == "Banco bFalabellab Peru"
+    )
+    assert portal.clean_bank_name("../../etc/passwd") == "....etcpasswd"
+    assert len(portal.clean_bank_name("x" * 200)) == 40
+
+
+def test_the_review_folder_is_the_one_the_owners_tool_reads() -> None:
+    from scripts import review_uploads
+
+    assert portal.REVIEW_FOLDER == review_uploads.REVIEW_FOLDER
+    assert "/" not in portal.REVIEW_FOLDER and not portal.REVIEW_FOLDER.endswith(".pdf")
+
+
+def test_the_pipeline_never_looks_in_the_review_folder() -> None:
+    """`organize()` globs `*.pdf` in the person's inbox folder, not beneath it."""
+    organizer = (_ROOT / "ingestion" / "organizer.py").read_text()
+
+    assert 'inbox.glob("*.pdf")' in organizer and "rglob" not in organizer
