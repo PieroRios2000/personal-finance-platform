@@ -2,9 +2,10 @@
 # and once a week (ADR 0008). Rules, thresholds and reasons are in CONSTRAINTS.md; if this
 # file and CONSTRAINTS.md disagree, CONSTRAINTS.md wins.
 #
-# `continue-on-error: true` marks the numeric rules that only warn until 2026-09-26 (T19
-# removes it so they start blocking). The floor (lint-types, tests' pytest step, gitleaks,
-# floor-guard) has no continue-on-error and blocks from day 1.
+# The numeric rules (diff-cover, pip-audit, bandit, import-linter) warned until 2026-09-26
+# and block since (T19); the benchmark comparison still warns (see its step). The floor (lint-types, tests' pytest step,
+# gitleaks, floor-guard) blocked from day 1. `continue-on-error` remains only where a broken
+# input must not block (the base branch's own measurements, Elementary, the data diff).
 name: ci
 
 on:
@@ -140,8 +141,7 @@ jobs:
             tail -n 5 pytest.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: diff-cover (warns until 2026-09-26, see CONSTRAINTS.md)
-        continue-on-error: true
+      - name: diff-cover (blocks, see CONSTRAINTS.md)
         run: >-
           uv run diff-cover coverage.xml
           --compare-branch="origin/$PFP_BASE_REF"
@@ -164,11 +164,9 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
       - run: uv sync --locked
-      - name: pip-audit (warns until 2026-09-26, see CONSTRAINTS.md)
-        continue-on-error: true
+      - name: pip-audit (blocks, see CONSTRAINTS.md)
         run: uv run pip-audit
-      - name: bandit (warns until 2026-09-26, see CONSTRAINTS.md)
-        continue-on-error: true
+      - name: bandit (blocks, see CONSTRAINTS.md)
         run: uv run bandit -q -r . -x ./.venv,./dbt/dbt_packages --severity-level high
 
   architecture:
@@ -182,8 +180,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
       - run: uv sync --locked
-      - name: import-linter (warns until 2026-09-26, see CONSTRAINTS.md)
-        continue-on-error: true
+      - name: import-linter (blocks, see CONSTRAINTS.md)
         run: uv run lint-imports --no-logo
 
   floor-guard:
@@ -244,7 +241,10 @@ jobs:
       - name: restore this change's code
         if: always()
         run: git checkout HEAD -- ingestion lakehouse
-      - name: compare (warns until 2026-09-26, see CONSTRAINTS.md)
+      # Still warns: the mean this compares is not robust to one slow round on a shared
+      # runner (T19: identical code, identical min and median, a 284 ms outlier made the
+      # mean 50% worse). Blocking needs the owner's call on the statistic (median).
+      - name: compare (warns, see CONSTRAINTS.md)
         continue-on-error: true
         run: |
           set -o pipefail
@@ -540,7 +540,9 @@ jobs:
           docker compose -p "$COMPOSE_PROJECT" --profile bi up -d --build --wait dex dex-register upload
 
       - name: portal end to end
-        run: uv run pytest -m portal -p no:cacheprovider
+        # Only that file: collecting the rest of the suite imports modules (Dagster's) that
+        # need environment this job does not have.
+        run: uv run pytest -m portal -p no:cacheprovider tests/test_upload_flow_portal_e2e.py
 
       - name: save logs
         if: always()
