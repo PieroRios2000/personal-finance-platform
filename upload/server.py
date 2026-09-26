@@ -27,7 +27,8 @@ from flask import Flask, redirect, render_template_string, request, session, url
 from werkzeug.wrappers import Response
 
 from alerting.channels import EmailChannel
-from ingestion.unlock import unlock
+from ingestion import submissions
+from ingestion.unlock import TooManyPagesError, unlock
 
 _INBOX_ROOT = Path(os.environ.get("PFP_INBOX_ROOT", "/inbox"))
 _GRPC_ADDR = os.environ.get("PFP_DEX_GRPC_ADDR", "dex:5557")
@@ -147,25 +148,20 @@ def _render(results: list[tuple[bool, str]] | None = None, message: str = "") ->
     return page
 
 
-def _store(user_id: str, content: bytes, *, review: str = "") -> None:
-    """In the person's inbox folder, where `pfp ingest` looks; or, for a file no parser
-    reads yet, in `_new_bank/` beneath it, which nothing reads."""
-    folder = _INBOX_ROOT / user_id / (portal.REVIEW_FOLDER if review else "")
-    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-    target = folder / f"{secrets.token_hex(8)}.pdf"
-    descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(descriptor, "wb") as handle:
-        handle.write(content)
-
-
-def _alert_owner(groups: dict[tuple[str, str, str], int]) -> None:
-    """Off the request thread. `send` never raises and never says more than the kind of
-    failure, which is all that is written down."""
-    if _EMAIL is None or not _ALERT_LIMIT.allow():
+def _announce(manifest: submissions.Manifest) -> None:
+    """Off the request thread: tell the sender it arrived and, when it waits for a
+    review, the owner. `send` never raises and never says more than the kind of failure,
+    which is all that is written down."""
+    if _EMAIL is None:
         return
-    error = _EMAIL.send(*portal.review_alert(groups))
+    error = _EMAIL.to(manifest.email).send(*submissions.received_mail(manifest))
     if error:
-        sys.stderr.write(f"review alert not sent: {error}\n")
+        sys.stderr.write(f"receipt not sent: {error}\n")
+    if manifest.status == submissions.REVIEW and _ALERT_LIMIT.allow():
+        key = (manifest.bank, manifest.kind, manifest.currency)
+        error = _EMAIL.send(*portal.review_alert({key: manifest.files}))
+        if error:
+            sys.stderr.write(f"review alert not sent: {error}\n")
 
 
 def health() -> str:
@@ -197,6 +193,8 @@ def logout() -> Response:
 
 
 def upload() -> Response | str:
+    """One request, all or nothing: every file is checked first and, if any fails, none
+    is kept (ADR 0041)."""
     if "email" not in session:
         return redirect(url_for("login"))
     if not hmac.compare_digest(request.form.get("csrf", ""), session.get("csrf", "-")):
@@ -214,11 +212,9 @@ def upload() -> Response | str:
             message="Choose the kind of file, the bank and the currency (name them "
             "if they are another one) and at least one PDF."
         )
-    supported, bank, currency = where
-    kind = request.form["kind"]
     if len(files) > portal.MAX_FILES_PER_UPLOAD:
         return _render(
-            message=f"At most {portal.MAX_FILES_PER_UPLOAD} files at a time."
+            message=f"At most {portal.MAX_FILES_PER_UPLOAD} files in one request."
         )
     if not _LIMIT.allow(session["email"], len(files)):
         return _render(message="Too many uploads this hour. Try later.")
@@ -229,49 +225,65 @@ def upload() -> Response | str:
     if user_id is None:
         return _render(message="This account cannot upload files. Ask the owner.")
 
+    supported, bank, currency = where
+    kind = request.form["kind"]
     password = request.form.get("password", "")
-    results: list[tuple[bool, str]] = []
-    kept = 0
-    for file in files:
+    unlocked: list[bytes] = []
+    failures: list[tuple[bool, str]] = []
+    for number, file in enumerate(files, start=1):
         name = file.filename or "file"
         content = file.read(portal.MAX_FILE_BYTES + 1)
-        if len(content) > portal.MAX_FILE_BYTES:
-            results.append((False, f"{name}: larger than 15 MB."))
-            continue
         try:
-            _store(
-                user_id,
+            if len(content) > portal.MAX_FILE_BYTES:
+                raise ValueError("larger than 15 MB")
+            unlocked.append(
                 unlock(
                     content,
                     password=password,
                     bank=bank,
                     kind=kind,
                     currency=currency,
-                ),
-                review="" if supported else bank,
-            )
-        except pikepdf.PasswordError:
-            results.append((False, f"{name}: wrong password."))
-        except pikepdf.PdfError:
-            results.append((False, f"{name}: not a readable PDF."))
-        else:
-            kept += 0 if supported else 1
-            results.append(
-                (True, f"{name}: saved.")
-                if supported
-                else (
-                    True,
-                    f"{name}: saved for review. {bank} "
-                    f"({portal.KINDS[kind].lower()}, {currency}) "
-                    "is not read yet: the owner will look at how to read it, and it "
-                    "will not show on your dashboard until then.",
                 )
             )
-    if kept:
-        threading.Thread(
-            target=_alert_owner, args=({(bank, kind, currency): kept},), daemon=True
-        ).start()
-    return _render(results=results)
+        except pikepdf.PasswordError:
+            failures.append((False, f"File {number} ({name}): wrong password."))
+        except TooManyPagesError:
+            failures.append((False, f"File {number} ({name}): too many pages."))
+        except ValueError as error:
+            failures.append((False, f"File {number} ({name}): {error}."))
+        except pikepdf.PdfError:
+            failures.append((False, f"File {number} ({name}): not a readable PDF."))
+    if failures:
+        failures.append(
+            (False, "Nothing was saved: fix these and send the whole request again.")
+        )
+        return _render(results=failures)
+
+    manifest = submissions.create(
+        _INBOX_ROOT / user_id,
+        email=session["email"],
+        kind=kind,
+        bank=bank,
+        currency=currency,
+        contents=unlocked,
+        review=not supported,
+    )
+    threading.Thread(target=_announce, args=(manifest,), daemon=True).start()
+    return _render(
+        results=[
+            (
+                True,
+                f"Request {manifest.id} received: {manifest.files} file(s). "
+                + (
+                    "This bank, kind or currency is not read yet: the owner will look "
+                    "at how to read it first."
+                    if not supported
+                    else "The owner will process it."
+                )
+                + " You will get an email with the decision.",
+            )
+        ]
+    )
 
 
 # Not decorators: Flask is not a dependency of the main project (it runs only in this

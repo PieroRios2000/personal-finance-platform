@@ -204,6 +204,8 @@ def test_main_writes_the_narrowed_dbt_selection(
         "dex/templates/password.html",
         "dex-register/app.py",
         "ingestion/unlock.py",
+        "ingestion/submissions.py",
+        "scripts/process_submissions.py",
         "bi/docker-compose.yml",
         ".github/workflows/ci.yml",
         "tests/test_upload_flow_portal_e2e.py",

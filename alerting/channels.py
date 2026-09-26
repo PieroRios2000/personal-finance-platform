@@ -10,7 +10,7 @@ import smtplib
 import ssl
 import urllib.request
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from email.message import EmailMessage
 from typing import Protocol
 
@@ -51,6 +51,10 @@ class EmailChannel:
             user=env.get("ALERT_SMTP_USER") or None,
             password=env.get("ALERT_SMTP_PASSWORD") or None,
         )
+
+    def to(self, recipient: str) -> "EmailChannel":
+        """The same server and sender, addressed to one person (the submitter, T48)."""
+        return replace(self, recipients=(recipient,))
 
     def send(self, subject: str, body: str) -> str | None:
         if not self.recipients:

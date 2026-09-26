@@ -11,13 +11,15 @@ import io
 import os
 import re
 import stat
+from decimal import Decimal
 from pathlib import Path
 
 import pikepdf
 import pytest
 import requests
 
-from ingestion import organizer, unlock
+from ingestion import organizer, submissions, unlock
+from scripts import process_submissions, review_uploads
 from tests.fixtures.synthetic_pdfs import bcp_statement_pdf
 
 pytestmark = pytest.mark.portal
@@ -30,10 +32,13 @@ _PASSWORD = "an-account-password-1"
 _PDF_PASSWORD = "the-statement-password"
 
 
-def _encrypted_bcp() -> bytes:
+def _encrypted_bcp(opening: str = "1000.00", *, reconciles: bool = True) -> bytes:
     buffer = io.BytesIO()
-    with pikepdf.open(io.BytesIO(b"$BOP$" + bcp_statement_pdf())) as plain:
-        plain.save(buffer, encryption=pikepdf.Encryption(owner="o", user=_PDF_PASSWORD))
+    plain = b"$BOP$" + bcp_statement_pdf(
+        opening_balance=Decimal(opening), reconciles=reconciles
+    )
+    with pikepdf.open(io.BytesIO(plain)) as pdf:
+        pdf.save(buffer, encryption=pikepdf.Encryption(owner="o", user=_PDF_PASSWORD))
     return buffer.getvalue()
 
 
@@ -70,10 +75,10 @@ def _signed_in_session() -> tuple[requests.Session, str]:
 def _upload(
     session: requests.Session,
     csrf: str,
-    content: bytes,
+    contents: list[bytes],
     *,
-    password: str,
-    bank: str,
+    password: str = _PDF_PASSWORD,
+    bank: str = "BCP",
     kind: str = "account",
     other_bank: str = "",
     currency: str = "PEN",
@@ -90,10 +95,48 @@ def _upload(
             "other_currency": other_currency,
             "password": password,
         },
-        files={"files": ("statement.pdf", content, "application/pdf")},
-        timeout=60,
+        files=[
+            ("files", (f"statement-{n}.pdf", content, "application/pdf"))
+            for n, content in enumerate(contents, start=1)
+        ],
+        timeout=90,
     )
     return response.text
+
+
+def _inbox() -> Path:
+    return Path(os.environ["PFP_INBOX_DIR"])
+
+
+def _folders() -> set[Path]:
+    return set(_inbox().glob(f"*/{submissions.FOLDER}/*"))
+
+
+def _request_id(answer: str) -> str:
+    found = re.search(r"Request ([0-9a-f]{8}) received", answer)
+    assert found is not None, answer
+    return found.group(1)
+
+
+def _submission(request_id: str) -> tuple[str, Path, submissions.Manifest]:
+    (found,) = [
+        f
+        for f in submissions.find(_inbox(), *submissions.STATUSES)
+        if f[2].id == request_id
+    ]
+    return found
+
+
+class _Outbox:
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, tuple[str, str]]] = []
+
+    def __call__(self, email: str, message: tuple[str, str]) -> None:
+        self.sent.append((email, message))
+
+
+def _ingest(user_id: str) -> tuple[int, int, int, int]:
+    return (2, 0, 0, 2)
 
 
 def test_the_login_form_offers_the_links_to_sign_up_and_reset() -> None:
@@ -103,84 +146,7 @@ def test_the_login_form_offers_the_links_to_sign_up_and_reset() -> None:
     assert "Create an account" in login.text
 
 
-def test_someone_can_sign_up_sign_in_upload_and_the_pipeline_reads_it(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    session, csrf = _signed_in_session()
-    inbox = Path(os.environ["PFP_INBOX_DIR"])
-
-    assert "wrong password" in _upload(
-        session, csrf, _encrypted_bcp(), password="guess", bank="BCP"
-    )
-    assert "not a readable PDF" in _upload(
-        session, csrf, b"not a pdf", password="", bank="BCP"
-    )
-    assert not list(inbox.glob("*/*.pdf"))  # neither was stored
-
-    assert "statement.pdf: saved." in _upload(
-        session, csrf, _encrypted_bcp(), password=_PDF_PASSWORD, bank="BCP"
-    )
-
-    (folder,) = [d for d in inbox.iterdir() if d.is_dir()]
-    assert "@" not in folder.name and re.fullmatch(r"anaperez-[0-9a-f]{4}", folder.name)
-    (stored,) = folder.glob("*.pdf")
-    assert stat.S_IMODE(stored.stat().st_mode) == 0o600
-    with pikepdf.open(stored) as pdf:  # unlocked: opens with no password
-        assert not pdf.is_encrypted
-
-    # The owner's side: none of the owner's bank passwords exist here.
-    monkeypatch.setenv("PFP_ACCOUNT_KEY", "0" * 64)
-    for name in ("BCP_PDF_PASSWORD", "SCOTIABANK_PDF_PASSWORD"):
-        monkeypatch.delenv(name, raising=False)
-    report = organizer.organize(
-        folder.name, inbox_root=inbox, archive_root=tmp_path / "archive"
-    )
-    assert len(report.archived) == 1 and not report.needs_review
-
-
-def test_a_form_without_the_pages_own_token_is_refused() -> None:
-    session, _ = _signed_in_session()
-
-    assert "The form expired" in _upload(
-        session, "not-the-token", b"x", password="", bank="BCP"
-    )
-
-
-def test_an_upload_without_signing_in_goes_to_the_login() -> None:
-    response = requests.post(f"{_UPLOAD}/upload", data={"bank": "BCP"}, timeout=30)
-
-    assert response.url.startswith(_DEX)
-
-
-def test_a_file_for_a_bank_no_parser_reads_is_kept_apart_from_the_pipeline(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    session, csrf = _signed_in_session()
-    inbox = Path(os.environ["PFP_INBOX_DIR"])
-
-    answer = _upload(
-        session,
-        csrf,
-        _encrypted_bcp(),
-        password=_PDF_PASSWORD,
-        bank="Other bank",
-        kind="card",
-        other_bank="Banco Nuevo",
-    )
-
-    assert "saved for review" in answer and "Banco Nuevo" in answer
-    (parked,) = inbox.glob("*/_new_bank/*.pdf")
-    assert unlock.tags(parked) == ("Banco Nuevo", "card", "PEN")
-    # Nothing new for the pipeline: `organize` only looks in the folder above.
-    monkeypatch.setenv("PFP_ACCOUNT_KEY", "0" * 64)
-    report = organizer.organize(
-        parked.parents[1].name, inbox_root=inbox, archive_root=tmp_path / "archive"
-    )
-    assert parked.exists()
-    assert not report.archived and not report.needs_review
-
-
-def test_the_form_asks_what_kind_of_file_it_is() -> None:
+def test_the_form_asks_kind_bank_and_currency() -> None:
     session, _ = _signed_in_session()
 
     page = session.get(f"{_UPLOAD}/", timeout=30).text
@@ -191,21 +157,142 @@ def test_the_form_asks_what_kind_of_file_it_is() -> None:
     assert 'name="other_currency"' in page
 
 
-def test_a_supported_bank_in_another_currency_is_kept_apart_too() -> None:
+def test_one_bad_file_among_several_sinks_the_whole_request() -> None:
     session, csrf = _signed_in_session()
-    inbox = Path(os.environ["PFP_INBOX_DIR"])
-    before = set(inbox.glob("*/_new_bank/*.pdf"))
+    before = _folders()
 
     answer = _upload(
         session,
         csrf,
-        _encrypted_bcp(),
-        password=_PDF_PASSWORD,
-        bank="BCP",
-        currency="OTHER",
-        other_currency="euros",
+        [_encrypted_bcp("1000.00"), b"not a pdf", _encrypted_bcp("2000.00")],
     )
 
-    assert "saved for review" in answer and "EUROS" in answer
-    (parked,) = set(inbox.glob("*/_new_bank/*.pdf")) - before
-    assert unlock.tags(parked) == ("BCP", "account", "EUROS")
+    assert "File 2 (statement-2.pdf): not a readable PDF" in answer
+    assert "Nothing was saved" in answer
+    assert _folders() == before  # not even the good ones
+
+
+def test_a_wrong_password_sinks_the_whole_request() -> None:
+    session, csrf = _signed_in_session()
+    before = _folders()
+
+    answer = _upload(session, csrf, [_encrypted_bcp()], password="guess")
+
+    assert "wrong password" in answer and "Nothing was saved" in answer
+    assert _folders() == before
+
+
+def test_at_most_ten_files_go_in_one_request() -> None:
+    session, csrf = _signed_in_session()
+    before = _folders()
+
+    answer = _upload(
+        session, csrf, [_encrypted_bcp(f"{n}000.00") for n in range(1, 12)]
+    )
+
+    assert "At most 10 files in one request" in answer
+    assert _folders() == before
+
+
+def test_several_months_go_in_one_request_and_are_processed_together(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    session, csrf = _signed_in_session()
+
+    answer = _upload(
+        session, csrf, [_encrypted_bcp("1000.00"), _encrypted_bcp("2000.00")]
+    )
+
+    user_id, folder, manifest = _submission(_request_id(answer))
+    assert "@" not in user_id and re.fullmatch(r"anaperez-[0-9a-f]{4}", user_id)
+    assert manifest.status == submissions.RECEIVED and manifest.files == 2
+    assert manifest.email == _EMAIL
+    stored = sorted(folder.glob("*.pdf"))
+    assert len(stored) == 2 and stat.S_IMODE(stored[0].stat().st_mode) == 0o600
+    with pikepdf.open(stored[0]) as pdf:  # unlocked: opens with no password
+        assert not pdf.is_encrypted
+
+    # The owner's side: none of the owner's bank passwords exist here.
+    monkeypatch.setenv("PFP_ACCOUNT_KEY", "0" * 64)
+    for name in ("BCP_PDF_PASSWORD", "SCOTIABANK_PDF_PASSWORD"):
+        monkeypatch.delenv(name, raising=False)
+    outbox = _Outbox()
+    process_submissions.run(_inbox(), ingest=_ingest, notify=outbox)
+
+    assert submissions.read(folder).status == submissions.ACCEPTED
+    assert outbox.sent[0][0] == _EMAIL and "processed" in outbox.sent[0][1][0]
+    report = organizer.organize(
+        user_id, inbox_root=_inbox(), archive_root=tmp_path / "archive"
+    )
+    assert len(report.archived) == 2 and not report.needs_review
+
+
+def test_a_file_that_does_not_read_rejects_its_whole_request_after_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, csrf = _signed_in_session()
+    answer = _upload(
+        session,
+        csrf,
+        [_encrypted_bcp("1000.00"), _encrypted_bcp("2000.00", reconciles=False)],
+    )
+    user_id, folder, _ = _submission(_request_id(answer))
+    monkeypatch.setenv("PFP_ACCOUNT_KEY", "0" * 64)
+    outbox = _Outbox()
+
+    process_submissions.run(_inbox(), ingest=_ingest, notify=outbox)
+
+    saved = submissions.read(folder)
+    assert saved.status == submissions.REJECTED
+    assert saved.reason == "file 2: its balances do not add up"
+    assert not list((_inbox() / user_id).glob(f"{saved.id}-*.pdf"))
+    assert "rejected" in outbox.sent[0][1][0]
+
+
+def test_a_file_for_a_bank_no_parser_reads_waits_for_the_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, csrf = _signed_in_session()
+
+    answer = _upload(
+        session,
+        csrf,
+        [_encrypted_bcp()],
+        bank="Other bank",
+        kind="card",
+        other_bank="Banco Nuevo",
+    )
+
+    _user, folder, manifest = _submission(_request_id(answer))
+    assert "not read yet" in answer and manifest.status == submissions.REVIEW
+    assert manifest.bank == "Banco Nuevo"
+    assert unlock.tags(next(folder.glob("*.pdf"))) == ("Banco Nuevo", "card", "PEN")
+    assert manifest.id in review_uploads.render(_inbox())
+    monkeypatch.setenv("PFP_ACCOUNT_KEY", "0" * 64)
+    process_submissions.run(_inbox(), ingest=_ingest, notify=_Outbox())
+    assert submissions.read(folder).status == submissions.REVIEW  # untouched
+
+
+def test_a_supported_bank_in_another_currency_waits_too() -> None:
+    session, csrf = _signed_in_session()
+
+    answer = _upload(
+        session, csrf, [_encrypted_bcp()], currency="OTHER", other_currency="euros"
+    )
+
+    _user, folder, manifest = _submission(_request_id(answer))
+    assert manifest.status == submissions.REVIEW and manifest.currency == "EUROS"
+
+
+def test_a_form_without_the_pages_own_token_is_refused() -> None:
+    session, _ = _signed_in_session()
+    before = _folders()
+
+    assert "The form expired" in _upload(session, "not-the-token", [b"x"])
+    assert _folders() == before
+
+
+def test_an_upload_without_signing_in_goes_to_the_login() -> None:
+    response = requests.post(f"{_UPLOAD}/upload", data={"bank": "BCP"}, timeout=30)
+
+    assert response.url.startswith(_DEX)
