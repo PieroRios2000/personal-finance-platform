@@ -146,3 +146,41 @@ def test_processing_what_was_uploaded_is_one_command_over_every_inbox_folder() -
 
     assert "ingest-uploads:" in makefile
     assert 'uv run pfp ingest --user "$$(basename "$$dir")"' in makefile
+
+
+def test_supported_pairs_go_to_the_pipeline_and_the_rest_to_review() -> None:
+    assert portal.route("BCP", "account", "") == (True, "BCP")
+    assert portal.route("Scotiabank", "card", "") == (True, "Scotiabank")
+    assert portal.route("Scotiabank", "account", "") == (True, "Scotiabank")
+    assert portal.route("BCP", "card", "") == (False, "BCP")  # no BCP card parser yet
+    assert portal.route(portal.OTHER_BANK, "card", "Interbank") == (False, "Interbank")
+
+
+def test_a_form_that_is_not_one_of_the_options_is_refused() -> None:
+    assert portal.route("BCP", "loan", "") is None
+    assert portal.route("Evil Bank", "account", "") is None
+    assert portal.route(portal.OTHER_BANK, "account", "   ") is None
+    assert portal.route(portal.OTHER_BANK, "account", "<>") is None
+
+
+def test_a_bank_name_is_reduced_before_it_reaches_a_file_or_its_metadata() -> None:
+    assert (
+        portal.clean_bank_name("  Banco <b>Falabella</b>\n  Peru ")
+        == "Banco bFalabellab Peru"
+    )
+    assert portal.clean_bank_name("../../etc/passwd") == "....etcpasswd"
+    assert len(portal.clean_bank_name("x" * 200)) == 40
+
+
+def test_the_review_folder_is_the_one_the_owners_tool_reads() -> None:
+    from scripts import review_uploads
+
+    assert portal.REVIEW_FOLDER == review_uploads.REVIEW_FOLDER
+    assert "/" not in portal.REVIEW_FOLDER and not portal.REVIEW_FOLDER.endswith(".pdf")
+
+
+def test_the_pipeline_never_looks_in_the_review_folder() -> None:
+    """`organize()` globs `*.pdf` in the person's inbox folder, not beneath it."""
+    organizer = (_ROOT / "ingestion" / "organizer.py").read_text()
+
+    assert 'inbox.glob("*.pdf")' in organizer and "rglob" not in organizer

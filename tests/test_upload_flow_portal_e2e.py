@@ -17,7 +17,7 @@ import pikepdf
 import pytest
 import requests
 
-from ingestion import organizer
+from ingestion import organizer, unlock
 from tests.fixtures.synthetic_pdfs import bcp_statement_pdf
 
 pytestmark = pytest.mark.portal
@@ -68,11 +68,24 @@ def _signed_in_session() -> tuple[requests.Session, str]:
 
 
 def _upload(
-    session: requests.Session, csrf: str, content: bytes, *, password: str, bank: str
+    session: requests.Session,
+    csrf: str,
+    content: bytes,
+    *,
+    password: str,
+    bank: str,
+    kind: str = "account",
+    other_bank: str = "",
 ) -> str:
     response = session.post(
         f"{_UPLOAD}/upload",
-        data={"csrf": csrf, "bank": bank, "password": password},
+        data={
+            "csrf": csrf,
+            "bank": bank,
+            "kind": kind,
+            "other_bank": other_bank,
+            "password": password,
+        },
         files={"files": ("statement.pdf", content, "application/pdf")},
         timeout=60,
     )
@@ -133,3 +146,40 @@ def test_an_upload_without_signing_in_goes_to_the_login() -> None:
     response = requests.post(f"{_UPLOAD}/upload", data={"bank": "BCP"}, timeout=30)
 
     assert response.url.startswith(_DEX)
+
+
+def test_a_file_for_a_bank_no_parser_reads_is_kept_apart_from_the_pipeline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    session, csrf = _signed_in_session()
+    inbox = Path(os.environ["PFP_INBOX_DIR"])
+
+    answer = _upload(
+        session,
+        csrf,
+        _encrypted_bcp(),
+        password=_PDF_PASSWORD,
+        bank="Other bank",
+        kind="card",
+        other_bank="Banco Nuevo",
+    )
+
+    assert "saved for review" in answer and "Banco Nuevo" in answer
+    (parked,) = inbox.glob("*/_new_bank/*.pdf")
+    assert unlock.tags(parked) == ("Banco Nuevo", "card")
+    # Nothing new for the pipeline: `organize` only looks in the folder above.
+    monkeypatch.setenv("PFP_ACCOUNT_KEY", "0" * 64)
+    report = organizer.organize(
+        parked.parents[1].name, inbox_root=inbox, archive_root=tmp_path / "archive"
+    )
+    assert parked.exists()
+    assert not report.archived and not report.needs_review
+
+
+def test_the_form_asks_what_kind_of_file_it_is() -> None:
+    session, _ = _signed_in_session()
+
+    page = session.get(f"{_UPLOAD}/", timeout=30).text
+
+    assert "Credit card statement" in page and "Bank account statement" in page
+    assert "Other bank" in page and 'name="other_bank"' in page

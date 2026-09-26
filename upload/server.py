@@ -80,8 +80,17 @@ type is used once to unlock the file and is never saved.</p>
 <h2>Bank statements (PDF)</h2>
 <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>What is it <select name="kind">
+    {% for key, label in kinds.items() %}<option value="{{ key }}">{{ label }}</option>
+    {% endfor %}</select></label>
   <label>Bank <select name="bank">
-    {% for bank in banks %}<option>{{ bank }}</option>{% endfor %}</select></label>
+    {% for bank in banks %}<option>{{ bank }}</option>{% endfor %}
+    <option>{{ other }}</option></select></label>
+  <label>If it is another bank, its name
+    <input type="text" name="other_bank" maxlength="40" autocomplete="off"></label>
+  <p class="notice">Only some are read today (BCP accounts; Scotiabank cards and
+  accounts). Anything else is kept safely, and the owner first reviews how to read
+  it.</p>
   <label>PDF password (leave empty if the file has none)
     <input type="password" name="password" autocomplete="off"></label>
   <label>Files <input type="file" name="files" accept="application/pdf" multiple
@@ -119,6 +128,8 @@ def _render(results: list[tuple[bool, str]] | None = None, message: str = "") ->
         email=session["email"],
         csrf=session["csrf"],
         banks=portal.BANKS,
+        other=portal.OTHER_BANK,
+        kinds=portal.KINDS,
         results=results or [],
         message=message,
         dashboard=_DASHBOARD,
@@ -126,8 +137,10 @@ def _render(results: list[tuple[bool, str]] | None = None, message: str = "") ->
     return page
 
 
-def _store(user_id: str, content: bytes) -> None:
-    folder = _INBOX_ROOT / user_id
+def _store(user_id: str, content: bytes, *, review: str = "") -> None:
+    """In the person's inbox folder, where `pfp ingest` looks; or, for a file no parser
+    reads yet, in `_new_bank/` beneath it, which nothing reads."""
+    folder = _INBOX_ROOT / user_id / (portal.REVIEW_FOLDER if review else "")
     folder.mkdir(mode=0o700, parents=True, exist_ok=True)
     target = folder / f"{secrets.token_hex(8)}.pdf"
     descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -168,10 +181,19 @@ def upload() -> Response | str:
         return redirect(url_for("login"))
     if not hmac.compare_digest(request.form.get("csrf", ""), session.get("csrf", "-")):
         return _render(message="The form expired. Try again.")
-    bank = request.form.get("bank", "")
+    where = portal.route(
+        request.form.get("bank", ""),
+        request.form.get("kind", ""),
+        request.form.get("other_bank", ""),
+    )
     files = [f for f in request.files.getlist("files") if f.filename]
-    if bank not in portal.BANKS or not files:
-        return _render(message="Choose a bank and at least one PDF.")
+    if where is None or not files:
+        return _render(
+            message="Choose the kind of file, the bank (name it if it is another "
+            "one) and at least one PDF."
+        )
+    supported, bank = where
+    kind = request.form["kind"]
     if len(files) > portal.MAX_FILES_PER_UPLOAD:
         return _render(
             message=f"At most {portal.MAX_FILES_PER_UPLOAD} files at a time."
@@ -194,13 +216,26 @@ def upload() -> Response | str:
             results.append((False, f"{name}: larger than 15 MB."))
             continue
         try:
-            _store(user_id, unlock(content, password=password, bank=bank))
+            _store(
+                user_id,
+                unlock(content, password=password, bank=bank, kind=kind),
+                review="" if supported else bank,
+            )
         except pikepdf.PasswordError:
             results.append((False, f"{name}: wrong password."))
         except pikepdf.PdfError:
             results.append((False, f"{name}: not a readable PDF."))
         else:
-            results.append((True, f"{name}: saved."))
+            results.append(
+                (True, f"{name}: saved.")
+                if supported
+                else (
+                    True,
+                    f"{name}: saved for review. {bank} ({portal.KINDS[kind].lower()}) "
+                    "is not read yet: the owner will look at how to read it, and it "
+                    "will not show on your dashboard until then.",
+                )
+            )
     return _render(results=results)
 
 
