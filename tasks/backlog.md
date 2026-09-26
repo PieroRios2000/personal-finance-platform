@@ -73,9 +73,8 @@ order agreed:
       with an expiry** (only its hash stored), emailed over the SMTP the alerting already configures
       (Phase 7), handled by `dex-register` (`/forgot`, `/reset?token=`) and applied over gRPC
       `UpdatePassword`. It must answer the same whether the email exists or not, and rate-limit.
-      Depends on T42 (the link must open from outside) and on SMTP. **Open:** accounts added with
-      `make dex-add-user` are *static* (read-only over gRPC, found out re-scoping the owner's own
-      account) and cannot be reset this way: migrate them to dynamic storage first.
+      Depends on T42 (the link must open from outside) and on SMTP. Static accounts, which cannot be reset,
+      are gone: every account is dynamic (ADR 0039).
 - [ ] **The upload portal** ([Phase 5](../PROJECT.md)): upload -> `inbox/<user_id>/` -> pipeline.
       Sections by **file type** (statement PDFs, card balance, manual Excel: savings and
       investments), not by bank: bank and account are detected from the content
@@ -84,7 +83,7 @@ order agreed:
       mismatch goes to `_needs_review`. Decide first (each needs an ADR):
       - the destination `user_id` comes from the signed-in session, never a form field;
       - how a new account gets a safe `user_id` and is bound to it (today it sees no data until
-        the operator runs `make dex-add-user --username`);
+        the operator runs `make dex-scope`);
       - PDF passwords: one per bank in `.env` today; several people need one each, and storing
         other people's passwords is a security decision;
       - privacy: [ADR 0004](../brain/decisions/0004-real-pdfs-never-leave-your-machine.md) covers
