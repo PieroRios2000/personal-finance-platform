@@ -95,3 +95,20 @@ def test_template_processing_is_on_or_rls_never_actually_filters() -> None:
     literal string -- matching no row rather than the signed-in user's, so `member`
     saw 0 rows instead of the data they were scoped to until this was set."""
     assert 'FEATURE_FLAGS = {"ENABLE_TEMPLATE_PROCESSING": True}' in _SUPERSET_CONFIG
+
+
+def test_a_rescoped_account_renames_its_superset_user_not_duplicates_it() -> None:
+    """Superset finds a user by username only, and `ab_user.email` is unique: after the
+    operator re-scopes a Dex account (a new `--username`), the next login would try to
+    create a second user with the same email and fail with a UniqueViolation. Found by
+    re-scoping the owner's own already-registered account -- see ADR 0036."""
+    assert "def auth_user_oauth" in _SUPERSET_CONFIG
+    assert "self.find_user(email=email)" in _SUPERSET_CONFIG
+    assert "self.update_user(existing)" in _SUPERSET_CONFIG
+
+
+def test_a_username_that_belongs_to_another_email_refuses_the_login() -> None:
+    """Two Dex accounts sharing one username would share one Superset user, and the
+    roles recomputed at each login would flap between them: a non-owner's still-open
+    session could inherit the owner's Admin. Refuse instead."""
+    assert "by_name.email.lower() != email.lower()" in _SUPERSET_CONFIG
