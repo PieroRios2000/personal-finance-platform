@@ -2,11 +2,9 @@
 page so a new person can pick their own email and password, gated by a shared invite
 code, instead of the operator running `make dex-add-user` for them -- and a way back in
 for someone who forgot the password. Talks to Dex's storage over its gRPC API
-(`CreatePassword`, `UpdatePassword`, `ListPasswords`): the same store a restart would
-read `DEX_STATIC_PASSWORDS` into, but a write here takes effect immediately, no
-restart, because it goes past the read-only, config-seeded overlay straight to the
-underlying storage (confirmed by creating a user this way and logging in with it right
-after, in a throwaway Dex, before wiring this up: see the PR).
+(`CreatePassword`, `UpdatePassword`, `ListPasswords`); a write takes effect immediately,
+no restart (confirmed by creating a user this way and logging in with it right after, in
+a throwaway Dex, before wiring this up: see the PR).
 
 Pages: "/" (sign up), "/forgot" (asks for an email, sends a link), "/reset?token=..."
 (the link: a new password). `api_pb2*` are generated from `api.proto` at image build
@@ -87,10 +85,6 @@ _RESET_FORM = """<form method="post">
 _ERROR = '<p class="error">{}</p>'
 _LATER = "Try again in a moment."
 _EXPIRED = "That link is invalid or has expired. Ask for a new one."
-_STATIC_HINT = (
-    "If it keeps failing, this account may have been created by the operator, "
-    "and can't be reset here."
-)
 
 
 def _page(title: str, message: str = "", form: str = "") -> bytes:
@@ -261,11 +255,7 @@ class Handler(BaseHTTPRequestHandler):
                 UpdatePasswordReq(email=email, new_hash=digest)
             )
         except grpc.RpcError:
-            # Also what Dex answers for an account made by `make dex-add-user`: those
-            # live in the config (read-only), not in its storage.
-            self._respond(
-                _reset(token, _ERROR.format(_LATER + " " + _STATIC_HINT)), status=503
-            )
+            self._respond(_reset(token, _ERROR.format(_LATER)), status=503)
             return
         if response.not_found:
             self._respond(_forgot(_ERROR.format(_EXPIRED)))
