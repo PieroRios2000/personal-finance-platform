@@ -540,7 +540,9 @@ jobs:
           docker compose -p "$COMPOSE_PROJECT" --profile bi up -d --build --wait dex dex-register upload
 
       - name: portal end to end
-        run: uv run pytest -m portal -p no:cacheprovider
+        # Only that file: collecting the rest of the suite imports modules (Dagster's) that
+        # need environment this job does not have.
+        run: uv run pytest -m portal -p no:cacheprovider tests/test_upload_flow_portal_e2e.py
 
       - name: save logs
         if: always()
