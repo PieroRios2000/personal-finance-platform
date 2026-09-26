@@ -560,6 +560,7 @@ so the emails go out):
   masked layout sample, and then `make decide-submission ID=<id> DECISION=reject` (the person is told no) or
   `DECISION=release` (once a parser exists and its pair is in `SUPPORTED` in `upload/portal.py`; the next
   `make ingest-uploads` processes it).
+**Savings and investments (Excel):** the portal's second section (T49). The person downloads a generic template, fills at least one sheet (`Ahorros` or `Inversiones`, the other can keep just its headers) and sends **one workbook**. On arrival only its structure is checked (size, sheets, columns, no leftover `EJEMPLO` rows, no macros); `make ingest-uploads` then reads every row with your account key, and either loads it with `pfp import-manual` or rejects the **whole workbook** and tells them the row numbers and columns (never values). Investments are what feed the dashboard's fund charts (`docs/manual-data.md`).
 The person gets an email when the request arrives, and when it is accepted or rejected. Emails say counts and file numbers
 only. To try the whole path locally see `.github/workflows/ci.yml`'s `portal-e2e` job (`uv run pytest -m portal`).
 For a public address add the route `upload.<domain>` -> `upload:5560` and `PFP_UPLOAD_PUBLIC_URL=https://upload.<domain>`.

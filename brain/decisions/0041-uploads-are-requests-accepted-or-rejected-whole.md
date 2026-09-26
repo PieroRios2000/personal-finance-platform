@@ -40,6 +40,22 @@ part of it, and telling the sender what happened to their files.
   rejected. A forged statement whose numbers reconcile cannot be told from a real one by any
   parser: that limit is the reason the owner still sees what is loaded.
 
+## Amendment: the savings and investments workbook (T49)
+
+The portal has a second section, **savings and investments (Excel)**, on the same request model:
+the person downloads a **generic template** (`ingestion/manual_layout.py`: the owner's template
+with funds and accounts in free text instead of a Tyba/Flip drop-down), fills at least one sheet
+(the other may keep only its headers) and sends **one workbook**. On arrival only its *structure*
+is checked, with no secret: at most 5 MB, a real `.xlsx` that does not unpack to more than 50 MB
+(a zip bomb), no macros, the right sheets and columns, no leftover `EJEMPLO` rows, at most 20,000
+rows, not both sheets empty. Any problem keeps nothing. The *content* (each row, balances that
+follow from the previous one) is read later by `make ingest-uploads` with the owner's account key,
+which the portal container must not hold: if any problem is found the **whole workbook is
+rejected** and the sender is told the row numbers and column names (never a value); otherwise
+`pfp import-manual` loads it and they get an accepted email. A new workbook replaces the months
+it contains. To let an investments-only person leave the savings sheet with headers, the importer
+now accepts an empty savings sheet when the investments sheet has data.
+
 ## Consequences
 
 - `make ingest-uploads` now decides requests (and emails) instead of looping over folders; the
