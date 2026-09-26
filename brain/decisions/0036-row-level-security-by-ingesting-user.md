@@ -70,10 +70,20 @@ multi-user from Phase 1).
 
 - Someone added with no `--username` override, or who self-registers, sees nothing --
   the safe default. Scoping them to real data is one explicit operator action.
-- Rotating `PFP_BI_OWNER_EMAIL` or re-scoping a person's username takes effect on their
-  next login; no data migration, no restart of anything but Superset's own container
-  picking up the new `.env` value (`--force-recreate`, same as any other bind-mounted
-  config change, ADR 0034's incident).
+- Rotating `PFP_BI_OWNER_EMAIL` takes effect on the next login. **Re-scoping an
+  already-registered account (a new Dex `--username`) needed a code fix this ADR first
+  missed** -- it claimed "no migration": Flask-AppBuilder finds a user by username alone,
+  but `ab_user.email` is unique, so the next login tried to create a second user with the
+  same email and failed (`UniqueViolation ... ab_user_email_key`, reproduced live).
+  `DexSecurityManager.auth_user_oauth` now renames the existing user (found by email) to
+  the new username first. It also **refuses a login whose username already belongs to a
+  different email**: two Dex accounts sharing one username would share one Superset user,
+  and the roles recomputed at each login would flap between them (a non-owner's open
+  session could inherit the owner's Admin). One Dex username per person; to give two
+  people the same data, give each their own login and scope them to the same `user_id`
+  only if that ever needs a different mechanism.
+- Changing `PFP_BI_OWNER_EMAIL` or the env needs Superset recreated
+  (`--force-recreate`, ADR 0034's incident), not just restarted.
 - `bi/setup_access.py` re-runs on every `bi-up`; granting an already-granted permission
   or updating the same-named RLS rule is a no-op, not a duplicate.
 

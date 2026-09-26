@@ -1,6 +1,7 @@
 """Superset settings (T32, ADR 0030). Everything secret comes from the environment."""
 
 import os
+from typing import Any
 from urllib.parse import quote
 
 from flask_appbuilder.security.manager import AUTH_OAUTH
@@ -87,6 +88,25 @@ class DexSecurityManager(SupersetSecurityManager):
             "role_keys": ["owner"] if is_owner else [],
         }
 
+    def auth_user_oauth(self, userinfo: dict[str, Any]) -> Any:
+        """Flask-AppBuilder finds the user by username alone, but `ab_user.email` is
+        unique too: once the operator re-scopes an account (a new Dex username), the
+        next login would try to create a second user with the same email and fail
+        (UniqueViolation, found re-scoping the owner's own account). So rename the
+        existing user first; and refuse a username that already belongs to another
+        email -- they would share one Superset user, and the roles recomputed at each
+        login would flap between them (ADR 0036)."""
+        email, username = userinfo.get("email"), userinfo.get("username")
+        if email and username:
+            existing = self.find_user(email=email)
+            by_name = self.find_user(username=username)
+            if by_name is not None and by_name.email.lower() != email.lower():
+                return None
+            if existing is not None and existing.username != username:
+                existing.username = username
+                self.update_user(existing)
+        return super().auth_user_oauth(userinfo)
+
 
 CUSTOM_SECURITY_MANAGER = DexSecurityManager
 
@@ -102,7 +122,8 @@ CUSTOM_SECURITY_MANAGER = DexSecurityManager
 # also gets `role_keys: ["owner"]` (above), mapped to Admin here, which the same
 # rule exempts: unfiltered. AUTH_ROLES_SYNC_AT_LOGIN recomputes this on every
 # login, not just the first, so changing PFP_BI_OWNER_EMAIL or a person's Dex
-# username takes effect the next time they sign in, no migration needed.
+# username takes effect the next time they sign in (an existing Superset user is
+# renamed to the new username by `auth_user_oauth` above, not duplicated).
 AUTH_TYPE = AUTH_OAUTH
 AUTH_USER_REGISTRATION = True
 AUTH_USER_REGISTRATION_ROLE = "Gamma"
