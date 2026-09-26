@@ -115,7 +115,13 @@ def _run_import_manual(args: argparse.Namespace) -> int:
     except MissingAccountKeyError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    problems = list(dict.fromkeys([*savings.problems, *investments.problems]))
+    savings_problems = savings.problems
+    if investments.months and savings_problems == [
+        f"{manual_excel.SHEET}: the sheet has no rows"
+    ]:
+        # Someone who only tracks investments leaves the savings sheet with its headers.
+        savings_problems = []
+    problems = list(dict.fromkeys([*savings_problems, *investments.problems]))
     if problems:
         for problem in problems:
             print(f"error: {problem}", file=sys.stderr)

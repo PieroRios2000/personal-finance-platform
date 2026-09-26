@@ -27,7 +27,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from alerting.channels import EmailChannel
-from ingestion import dispatcher, submissions
+from ingestion import dispatcher, manual_excel, submissions
 from ingestion.dedup import file_sha256
 from ingestion.organizer import DEFAULT_INBOX_ROOT
 from ingestion.reconciliation import ReconciliationError
@@ -36,10 +36,15 @@ from ingestion.schema import MissingAccountKeyError, Statement
 _ASSET_KINDS = {"account": "asset", "card": "liability"}
 _SUMMARY = re.compile(r"Archived: (\d+)\s+Duplicates: (\d+)\s+Needs review: (\d+)")
 _WRITTEN = re.compile(r"Bronze: (\d+) statement\(s\) written")
+_SAVINGS_WRITTEN = re.compile(r"Ahorros: (\d+) statement\(s\) written")
+_FUNDS_WRITTEN = re.compile(r"Inversiones: (\d+) month\(s\) written")
+_NO_SAVINGS_ROWS = f"{manual_excel.SHEET}: the sheet has no rows"
 
 Parse = Callable[..., list[Statement]]
 Ingest = Callable[[str], "tuple[int, int, int, int] | None"]
 Notify = Callable[[str, tuple[str, str]], str | None]
+CheckExcel = Callable[[Path, str], list[str]]
+ImportExcel = Callable[[Path, str], "int | None"]
 
 
 def check_file(
@@ -86,6 +91,36 @@ def check_submission(
     return "; ".join(reasons)
 
 
+def excel_problems(path: Path, user_id: str) -> list[str]:
+    """What stops this workbook from loading: row numbers and column names, never
+    a value.
+    A person who only tracks investments leaves the savings sheet with its headers, and
+    the other way round: an empty sheet is a problem only when both are."""
+    savings = manual_excel.read_savings(path, user_id=user_id)
+    funds = manual_excel.read_investments(path, user_id=user_id)
+    savings_problems = savings.problems
+    if funds.months and savings_problems == [_NO_SAVINGS_ROWS]:
+        savings_problems = []
+    return list(dict.fromkeys([*savings_problems, *funds.problems]))
+
+
+def import_with_pfp(path: Path, user_id: str) -> int | None:
+    """Statements plus fund-months `pfp import-manual` loaded, or None if it failed."""
+    done = subprocess.run(
+        ["uv", "run", "pfp", "import-manual", str(path), "--user", user_id],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if done.returncode != 0:
+        return None
+    total = 0
+    for pattern in (_SAVINGS_WRITTEN, _FUNDS_WRITTEN):
+        found = pattern.search(done.stdout)
+        total += int(found.group(1)) if found else 0
+    return total
+
+
 def ingest_with_pfp(user_id: str) -> tuple[int, int, int, int] | None:
     """(archived, duplicates, needs review, written) from `pfp ingest`, or None."""
     done = subprocess.run(
@@ -116,10 +151,17 @@ def run(
     parse: Parse = dispatcher.parse,
     ingest: Ingest = ingest_with_pfp,
     notify: Notify = notify_by_email,
+    check_excel: CheckExcel = excel_problems,
+    import_excel: ImportExcel = import_with_pfp,
 ) -> list[str]:
     """One line per submission decided: `<id> accepted|rejected ...`."""
     lines = []
     for user_id, folder, manifest in submissions.find(inbox_root, submissions.RECEIVED):
+        if manifest.kind == submissions.EXCEL:
+            lines.append(
+                _run_excel(user_id, folder, manifest, check_excel, import_excel, notify)
+            )
+            continue
         reason = check_submission(folder, manifest, user_id, parse)
         if reason:
             manifest.status, manifest.reason = submissions.REJECTED, reason
@@ -148,6 +190,36 @@ def run(
             f"{manifest.duplicates} duplicate(s)" + _mail_note(error)
         )
     return lines
+
+
+def _run_excel(
+    user_id: str,
+    folder: Path,
+    manifest: submissions.Manifest,
+    check_excel: CheckExcel,
+    import_excel: ImportExcel,
+    notify: Notify,
+) -> str:
+    """A workbook is read whole: any problem rejects all of it and nothing loads."""
+    path = next(folder.glob("*.xlsx"))
+    problems = check_excel(path, user_id)
+    if problems:
+        manifest.status = submissions.REJECTED
+        manifest.reason = "; ".join(problems[:8])
+        submissions.write(folder, manifest)
+        error = notify(manifest.email, submissions.rejected_mail(manifest))
+        return f"{manifest.id} rejected ({len(problems)} problem(s))" + _mail_note(
+            error
+        )
+    loaded = import_excel(path, user_id)
+    if loaded is None:
+        manifest.reason = "import failed: run `pfp import-manual` for this user"
+        submissions.write(folder, manifest)
+        return f"{manifest.id} read fine but the import FAILED: not emailed"
+    manifest.status, manifest.loaded = submissions.ACCEPTED, loaded
+    submissions.write(folder, manifest)
+    error = notify(manifest.email, submissions.accepted_mail(manifest))
+    return f"{manifest.id} accepted: {loaded} loaded" + _mail_note(error)
 
 
 def decide(

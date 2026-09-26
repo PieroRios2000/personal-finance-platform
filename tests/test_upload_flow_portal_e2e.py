@@ -11,14 +11,16 @@ import io
 import os
 import re
 import stat
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 import pikepdf
 import pytest
 import requests
+from openpyxl import Workbook
 
-from ingestion import organizer, submissions, unlock
+from ingestion import manual_layout, organizer, submissions, unlock
 from scripts import process_submissions, review_uploads
 from tests.fixtures.synthetic_pdfs import bcp_statement_pdf
 
@@ -296,3 +298,121 @@ def test_an_upload_without_signing_in_goes_to_the_login() -> None:
     response = requests.post(f"{_UPLOAD}/upload", data={"bank": "BCP"}, timeout=30)
 
     assert response.url.startswith(_DEX)
+
+
+def _workbook(
+    savings: list[tuple[object, ...]] | None = None,
+    funds: list[tuple[object, ...]] | None = None,
+) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    assert sheet is not None
+    sheet.title = manual_layout.SHEET
+    sheet.append(list(manual_layout.SAVINGS_COLUMNS))
+    for row in savings or []:
+        sheet.append(list(row))
+    second = workbook.create_sheet(manual_layout.INVESTMENT_SHEET)
+    second.append(list(manual_layout.INVESTMENT_COLUMNS))
+    for row in funds or []:
+        second.append(list(row))
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+_FUNDS: list[tuple[object, ...]] = [
+    ("Fondo A", date(2026, 7, 5), "aporte", 100, "PEN", 100, None),
+    ("Fondo A", date(2026, 7, 31), "valorizacion", 0, "PEN", 102, None),
+    ("Fondo A", date(2026, 8, 10), "retiro", 50, "PEN", 53, None),
+    ("Fondo A", date(2026, 8, 31), "valorizacion", 0, "PEN", 54, None),
+]
+
+
+def _send_workbook(session: requests.Session, csrf: str, content: bytes) -> str:
+    return session.post(
+        f"{_UPLOAD}/upload-excel",
+        data={"csrf": csrf},
+        files={"workbook": ("finanzas.xlsx", content, "application/octet-stream")},
+        timeout=60,
+    ).text
+
+
+def test_the_template_can_be_downloaded_and_the_page_offers_it() -> None:
+    session, _ = _signed_in_session()
+
+    page = session.get(f"{_UPLOAD}/", timeout=30).text
+    downloaded = session.get(f"{_UPLOAD}/template.xlsx", timeout=30)
+
+    assert "Savings and investments (Excel)" in page and "template.xlsx" in page
+    assert downloaded.status_code == 200
+    assert (
+        downloaded.content == manual_layout.generic_template()
+        or downloaded.content[:2] == b"PK"
+    )
+
+
+def test_the_untouched_template_is_refused_and_nothing_is_kept() -> None:
+    session, csrf = _signed_in_session()
+    before = _folders()
+
+    answer = _send_workbook(session, csrf, manual_layout.generic_template())
+
+    assert "example row(s) are still in the sheet" in answer
+    assert "Nothing was saved" in answer and _folders() == before
+
+
+def test_a_workbook_that_is_not_one_is_refused() -> None:
+    session, csrf = _signed_in_session()
+    before = _folders()
+
+    answer = _send_workbook(session, csrf, b"not a workbook")
+
+    assert "not a readable .xlsx workbook" in answer and _folders() == before
+
+
+def test_a_filled_workbook_is_kept_then_read_whole_by_the_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, csrf = _signed_in_session()
+    answer = _send_workbook(session, csrf, _workbook(funds=_FUNDS))
+
+    user_id, folder, manifest = _submission(_request_id(answer))
+    assert (
+        manifest.kind == submissions.EXCEL and manifest.status == submissions.RECEIVED
+    )
+    assert len(list(folder.glob("*.xlsx"))) == 1 and manifest.email == _EMAIL
+
+    monkeypatch.setenv("PFP_ACCOUNT_KEY", "0" * 64)
+    outbox = _Outbox()
+    process_submissions.run(_inbox(), notify=outbox, import_excel=lambda path, user: 2)
+
+    assert submissions.read(folder).status == submissions.ACCEPTED
+    assert "a workbook of savings and investments" in outbox.sent[0][1][1]
+
+
+def test_a_workbook_whose_balances_do_not_follow_is_rejected_whole(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, csrf = _signed_in_session()
+    wrong_savings: list[tuple[object, ...]] = [
+        ("Mi cuenta", date(2026, 7, 5), "deposito", 100, "PEN", 100),
+        ("Mi cuenta", date(2026, 7, 6), "deposito", 50, "PEN", 999),
+    ]
+    answer = _send_workbook(
+        session, csrf, _workbook(savings=wrong_savings, funds=_FUNDS)
+    )
+    _user, folder, _manifest = _submission(_request_id(answer))
+    monkeypatch.setenv("PFP_ACCOUNT_KEY", "0" * 64)
+    outbox = _Outbox()
+    imported: list[str] = []
+
+    def never(path: Path, user: str) -> int:
+        imported.append(user)
+        return 1
+
+    process_submissions.run(_inbox(), notify=outbox, import_excel=never)
+
+    saved = submissions.read(folder)
+    assert saved.status == submissions.REJECTED and "Ahorros row 3" in saved.reason
+    assert imported == []  # the good investments did not load either
+    assert "rejected" in outbox.sent[0][1][0]
