@@ -64,8 +64,9 @@ def test_parse_a_multipage_statement(
     monkeypatch.setenv("PFP_ACCOUNT_KEY", "benchmark-key")
     file_sha256 = hashlib.sha256(statement_pdf.read_bytes()).hexdigest()
 
-    statement = benchmark(
+    # `parse` returns a list of statements (one PDF can hold several, T18).
+    statements = benchmark(
         bcp.parse, statement_pdf, user_id="benchmark", file_sha256=file_sha256
     )
 
-    assert len(statement.transactions) == ROWS
+    assert sum(len(s.transactions) for s in statements) == ROWS
