@@ -42,6 +42,7 @@ _BANK_NAME = re.compile(r"[^A-Za-z0-9 .&-]")
 MAX_FILE_BYTES = 15 * 1024 * 1024
 MAX_FILES_PER_UPLOAD = 12
 MAX_UPLOADS_PER_HOUR = 40
+MAX_ALERTS_PER_HOUR = 6
 WINDOW_SECONDS = 3600
 
 _USER_ID = re.compile(r"[a-z0-9][a-z0-9_-]{2,40}")
@@ -120,4 +121,41 @@ class UploadLimit:
                 self._seen[who] = recent
                 return False
             self._seen[who] = recent + [now] * count
+            return True
+
+
+def review_alert(groups: dict[tuple[str, str, str], int]) -> tuple[str, str]:
+    """The email to the owner when files are kept for review: bank, kind, currency and
+    how many, never a file name, a person or a page (ADR 0026, ADR 0004)."""
+    lines = [
+        f"- {bank} / {kind} / {currency}: {n}"
+        for (bank, kind, currency), n in groups.items()
+    ]
+    total = sum(groups.values())
+    subject = f"PFP: {total} file(s) waiting for review (no parser reads them yet)"
+    body = (
+        "Someone uploaded files no parser reads yet. They are kept apart, not "
+        "processed:\n\n"
+        + "\n".join(lines)
+        + "\n\nSee everything waiting with `make review-uploads`. Each new bank, "
+        "kind or currency is its own request: share a masked sample of its layout."
+    )
+    return subject, body
+
+
+class AlertLimit:
+    """At most MAX_ALERTS_PER_HOUR emails an hour, whatever people upload: the rest are
+    still kept and listed by `make review-uploads`, just not announced one by one."""
+
+    def __init__(self) -> None:
+        self._sent: list[float] = []
+        self._lock = threading.Lock()
+
+    def allow(self, now: float | None = None) -> bool:
+        now = time.time() if now is None else now
+        with self._lock:
+            self._sent = [t for t in self._sent if now - t < WINDOW_SECONDS]
+            if len(self._sent) >= MAX_ALERTS_PER_HOUR:
+                return False
+            self._sent.append(now)
             return True
