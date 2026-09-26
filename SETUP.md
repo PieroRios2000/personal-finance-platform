@@ -541,11 +541,11 @@ tunnel (Zero Trust > Networks > Tunnels > Create a tunnel > Cloudflared > Docker
 2. In the tunnel's *Public Hostname* tab add three routes, type **HTTP**, to the container
    names (the connector runs on the stack's own network):
    `www.<domain>` -> `superset:8088`, `login.<domain>` -> `dex:5556`,
-   `registro.<domain>` -> `dex-register:5559`.
+   `register.<domain>` -> `dex-register:5559`.
 3. In `.env` set `PFP_BI_PUBLIC_URL=https://www.<domain>` (no trailing slash) and
    `DEX_ISSUER=https://login.<domain>/dex`.
 4. `make up`. The `cloudflared` service starts when the token is set; `make status` shows
-   the public URL. Sign-up is then at `https://registro.<domain>`, gated by the invite code.
+   the public URL. Sign-up is then at `https://register.<domain>`, gated by the invite code.
 
 Everything keeps its `127.0.0.1` port too. Cost: only the domain (about USD 10-11 a year);
 Tunnel and Zero Trust Free (up to 50 users) are free and not metered, so keep the plan and
