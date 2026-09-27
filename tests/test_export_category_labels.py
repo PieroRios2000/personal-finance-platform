@@ -76,11 +76,74 @@ def test_main_writes_the_template_with_a_guess_already_filled_in(
     )
     out = tmp_path / "labels.xlsx"
 
-    assert ecl.main(["--user", "piero", "--out", str(out)]) == 0
+    assert (
+        ecl.main(
+            [
+                "--user",
+                "piero",
+                "--out",
+                str(out),
+                "--model-path",
+                str(tmp_path / "no-model-here.joblib"),
+            ]
+        )
+        == 0
+    )
 
     rows = list(load_workbook(out)["Categorias"].iter_rows(min_row=2, values_only=True))
     assert rows[0] == ("BCP", "NETFLIX.COM", 3, "Servicios", "Servicios")
     assert rows[1] == ("BCP", "XYZ CORP", 1, "Sin categorizar", "Gastos varios")
+
+
+def test_main_uses_the_trained_model_when_one_has_been_saved(
+    environment: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        ecl, "fetch_groups", lambda user_id: [("BCP", "SOME NEW MERCHANT", 2)]
+    )
+    model_path = tmp_path / "model.joblib"
+    model_path.write_bytes(b"stand-in; ecl.load_model is monkeypatched below")
+    monkeypatch.setattr(ecl, "load_model", lambda path: object())
+    monkeypatch.setattr(
+        ecl, "predict_category", lambda pipeline, description: ("Deporte", 0.91)
+    )
+    out = tmp_path / "labels.xlsx"
+
+    assert (
+        ecl.main(
+            ["--user", "piero", "--out", str(out), "--model-path", str(model_path)]
+        )
+        == 0
+    )
+
+    rows = list(load_workbook(out)["Categorias"].iter_rows(min_row=2, values_only=True))
+    assert rows[0] == ("BCP", "SOME NEW MERCHANT", 2, "Deporte", "Deporte")
+
+
+def test_main_falls_back_to_rules_when_no_model_has_been_saved(
+    environment: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        ecl, "fetch_groups", lambda user_id: [("BCP", "NETFLIX.COM", 3)]
+    )
+    out = tmp_path / "labels.xlsx"
+
+    assert (
+        ecl.main(
+            [
+                "--user",
+                "piero",
+                "--out",
+                str(out),
+                "--model-path",
+                str(tmp_path / "no-model-here.joblib"),
+            ]
+        )
+        == 0
+    )
+
+    rows = list(load_workbook(out)["Categorias"].iter_rows(min_row=2, values_only=True))
+    assert rows[0] == ("BCP", "NETFLIX.COM", 3, "Servicios", "Servicios")
 
 
 def test_main_requires_a_user(monkeypatch: pytest.MonkeyPatch) -> None:
