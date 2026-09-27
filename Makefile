@@ -141,16 +141,18 @@ ingest:
 # What people sent through the upload portal (T48, ADR 0041): each request is read whole, accepted
 # (its files go through `pfp ingest`) or rejected, and the person is emailed either way. Then
 # `make build`. `make submissions` lists them; `make decide-submission ID=... DECISION=reject|release`
-# answers one that waits for review (another bank, kind or currency).
+# answers one that waits for review (another bank, kind or currency). PFP_ARCHIVE_DIR pairs with
+# PFP_INBOX_DIR: an environment with its own inbox (a demo, ADR 0042) needs its own archive too,
+# or accepted files would be archived into the real one.
 ingest-uploads:
-	$(LOAD_ENV) && uv run python -m scripts.process_submissions --inbox-root "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}" run
+	$(LOAD_ENV) && uv run python -m scripts.process_submissions --inbox-root "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}" --archive-root "$${PFP_ARCHIVE_DIR:-$$HOME/finance-data/raw}" run
 
 submissions:
-	$(LOAD_ENV) && uv run python -m scripts.process_submissions --inbox-root "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}" list
+	$(LOAD_ENV) && uv run python -m scripts.process_submissions --inbox-root "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}" --archive-root "$${PFP_ARCHIVE_DIR:-$$HOME/finance-data/raw}" list
 
 decide-submission:
 	@test -n "$(ID)" -a -n "$(DECISION)" || { echo "usage: make decide-submission ID=<id> DECISION=reject|release" >&2; exit 2; }
-	$(LOAD_ENV) && uv run python -m scripts.process_submissions --inbox-root "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}" decide "$(ID)" "$(DECISION)"
+	$(LOAD_ENV) && uv run python -m scripts.process_submissions --inbox-root "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}" --archive-root "$${PFP_ARCHIVE_DIR:-$$HOME/finance-data/raw}" decide "$(ID)" "$(DECISION)"
 
 # Files people uploaded for a bank or kind no parser reads yet (T46): counts by bank and kind.
 review-uploads:

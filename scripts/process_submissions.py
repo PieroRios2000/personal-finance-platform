@@ -29,7 +29,7 @@ from pathlib import Path
 from alerting.channels import EmailChannel
 from ingestion import dispatcher, manual_excel, submissions
 from ingestion.dedup import file_sha256
-from ingestion.organizer import DEFAULT_INBOX_ROOT
+from ingestion.organizer import DEFAULT_ARCHIVE_ROOT, DEFAULT_INBOX_ROOT
 from ingestion.reconciliation import ReconciliationError
 from ingestion.schema import MissingAccountKeyError, Statement
 
@@ -41,7 +41,7 @@ _FUNDS_WRITTEN = re.compile(r"Inversiones: (\d+) month\(s\) written")
 _NO_SAVINGS_ROWS = f"{manual_excel.SHEET}: the sheet has no rows"
 
 Parse = Callable[..., list[Statement]]
-Ingest = Callable[[str], "tuple[int, int, int, int] | None"]
+Ingest = Callable[[str, Path, Path], "tuple[int, int, int, int] | None"]
 Notify = Callable[[str, tuple[str, str]], str | None]
 CheckExcel = Callable[[Path, str], list[str]]
 ImportExcel = Callable[[Path, str], "int | None"]
@@ -121,10 +121,28 @@ def import_with_pfp(path: Path, user_id: str) -> int | None:
     return total
 
 
-def ingest_with_pfp(user_id: str) -> tuple[int, int, int, int] | None:
-    """(archived, duplicates, needs review, written) from `pfp ingest`, or None."""
+def ingest_with_pfp(
+    user_id: str, inbox_root: Path, archive_root: Path
+) -> tuple[int, int, int, int] | None:
+    """(archived, duplicates, needs review, written) from `pfp ingest`, or None.
+
+    Same inbox and archive `run()` moved this request's files into and reads requests
+    from: without `--inbox-root`/`--archive-root`, the CLI would default to
+    `~/finance-data/inbox`/`raw` and silently ingest nothing on an environment (like a
+    demo, ADR 0042) that uses its own, separate ones."""
     done = subprocess.run(
-        ["uv", "run", "pfp", "ingest", "--user", user_id],
+        [
+            "uv",
+            "run",
+            "pfp",
+            "ingest",
+            "--user",
+            user_id,
+            "--inbox-root",
+            str(inbox_root),
+            "--archive-root",
+            str(archive_root),
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -148,6 +166,7 @@ def notify_by_email(email: str, message: tuple[str, str]) -> str | None:
 def run(
     inbox_root: Path,
     *,
+    archive_root: Path = DEFAULT_ARCHIVE_ROOT,
     parse: Parse = dispatcher.parse,
     ingest: Ingest = ingest_with_pfp,
     notify: Notify = notify_by_email,
@@ -172,7 +191,7 @@ def run(
         for number, path in enumerate(sorted(folder.glob("*.pdf")), start=1):
             path.rename(inbox_root / user_id / f"{manifest.id}-{number:02d}.pdf")
         manifest.status = submissions.ACCEPTED
-        result = ingest(user_id)
+        result = ingest(user_id, inbox_root, archive_root)
         if result is None:
             manifest.reason = (
                 "ingest failed: run `pfp ingest` for this user, then tell them"
@@ -257,6 +276,7 @@ def listing(inbox_root: Path) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inbox-root", type=Path, default=DEFAULT_INBOX_ROOT)
+    parser.add_argument("--archive-root", type=Path, default=DEFAULT_ARCHIVE_ROOT)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("run")
     commands.add_parser("list")
@@ -271,7 +291,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(decide(args.inbox_root, args.id, args.decision, notify=notify_by_email))
     else:
         try:
-            lines = run(args.inbox_root)
+            lines = run(args.inbox_root, archive_root=args.archive_root)
         except MissingAccountKeyError as error:
             print(f"error: {error}", file=sys.stderr)
             return 1
