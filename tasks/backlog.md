@@ -76,19 +76,17 @@ order agreed:
       `UpdatePassword`. It must answer the same whether the email exists or not, and rate-limit.
       Depends on T42 (the link must open from outside) and on SMTP. Static accounts, which cannot be reset,
       are gone: every account is dynamic (ADR 0039).
-- [ ] **The upload portal** ([Phase 5](../PROJECT.md); ADR 0040: **bank-statement section built (T44)**, decisions taken; left: the card-balance and manual-Excel sections): upload -> `inbox/<user_id>/` -> pipeline.
-      Sections by **file type** (statement PDFs, card balance, manual Excel: savings and
-      investments), not by bank: bank and account are detected from the content
-      ([ADR 0009](../brain/decisions/0009-multi-user-multi-account-content-over-filename.md)) and
-      archived under `raw/<user>/<bank>/<account>/`; what the user picks is only a hint, and a
-      mismatch goes to `_needs_review`. Decide first (each needs an ADR):
-      - the destination `user_id` comes from the signed-in session, never a form field;
-      - how a new account gets a safe `user_id` and is bound to it (today it sees no data until
-        the operator runs `make dex-scope`);
-      - PDF passwords: one per bank in `.env` today; several people need one each, and storing
-        other people's passwords is a security decision;
-      - privacy: [ADR 0004](../brain/decisions/0004-real-pdfs-never-leave-your-machine.md) covers
-        the owner's own statements, not receiving other people's.
+- [x] **The upload portal** ([Phase 5](../PROJECT.md), ADR 0040/0041): upload -> `inbox/<user_id>/`
+      -> pipeline, built end to end: bank statements by kind, bank and currency (T44, T46), the
+      Excel section for savings and investments (T49), requests of up to 10 files accepted or
+      rejected whole (T48), a review-alert email to the owner (T47), the dashboard link (T45). The
+      four decisions raised here are resolved: the destination `user_id` comes from the signed-in
+      session, never a form field; a new account gets a safe `user_id` automatically
+      (`portal.new_user_id`), no operator step; the PDF password is typed per upload and never
+      stored; privacy is covered by keeping the public URL on fictional data only (ADR 0042) --
+      real statements, the owner's or anyone else's, stay off the internet-facing instance. Left:
+      a distinct "card balance" file type was never built (folded into the bullet below, since it
+      is the same "not read yet, its own request" path as any other unsupported bank or kind).
 - [x] **Requests up to 10 files, accepted or rejected whole, sender emailed** (T48, ADR 0041).
 - [x] **The portal's Excel section for savings and investments** (T49, ADR 0041 amendment): generic template, structure checked at upload, every row read by the owner's import with the account key, whole workbook accepted or rejected, sender emailed.
 - [ ] **Extraction for new banks, kinds and currencies** (T46 keeps the files apart; each one is its own request):
