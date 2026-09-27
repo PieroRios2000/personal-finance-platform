@@ -27,7 +27,7 @@ PFP = docker compose -p $(PFP_PROJECT)
 # Each environment's OpenMetadata artifacts (they hold a token and the Postgres password).
 export PFP_OM_ARTIFACTS = ./artifacts/$(PFP_ENV)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels train-category-model build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -168,6 +168,13 @@ export-category-labels:
 import-category-labels:
 	@test -n "$(WORKBOOK)" || { echo "usage: make import-category-labels WORKBOOK=~/finance-data/manual/categorias-transacciones.xlsx" >&2; exit 2; }
 	$(LOAD_ENV) && uv run python -m scripts.import_category_labels "$(WORKBOOK)" --user "$$PFP_USER"
+
+# T52 (ADR 0044): trains on every label imported so far and reports the model's macro-F1
+# and per-category precision next to the rules-based guesser's, so the print-out itself
+# answers "does the model beat the rules". The model and MLflow's run both stay under
+# ~/finance-data -- never the repo (a fitted model's vocabulary is real transaction text).
+train-category-model:
+	$(LOAD_ENV) && uv run python -m scripts.train_category_model --user "$$PFP_USER"
 
 build:
 	$(LOAD_ENV) && uv run dbt deps --project-dir dbt --profiles-dir dbt && \
