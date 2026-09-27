@@ -6,5 +6,7 @@
 -- same reasoning as every other dimension in this star schema (fact_transactions.sql):
 -- no separate master-data source to generate a surrogate key against.
 
-select category, description
+select
+    category,
+    description
 from {{ ref('category') }}

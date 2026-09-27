@@ -31,7 +31,8 @@ from {{ ref('fact_transactions') }} as facts
 inner join {{ ref('dim_date') }} as calendar
     on facts.date = calendar.date
 left join {{ ref('category_labels') }} as labels
-    on facts.user_id = labels.user_id
-    and facts.bank = labels.bank
-    and facts.description = labels.description
+    on
+        facts.user_id = labels.user_id
+        and facts.bank = labels.bank
+        and facts.description = labels.description
 where facts.date < {{ first_day_of_current_month() }}
