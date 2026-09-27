@@ -405,3 +405,25 @@ def test_the_default_ingest_passes_this_environments_inbox_and_archive_roots(
     (cmd,) = captured
     assert cmd[cmd.index("--inbox-root") + 1] == str(inbox)
     assert cmd[cmd.index("--archive-root") + 1] == str(archive)
+
+
+def test_main_passes_the_archive_root_through_to_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    captured: dict[str, Path] = {}
+
+    def fake_run(
+        inbox_root: Path, *, archive_root: Path, **kwargs: object
+    ) -> list[str]:
+        captured["inbox_root"], captured["archive_root"] = inbox_root, archive_root
+        return ["some-id accepted"]
+
+    monkeypatch.setattr(ps, "run", fake_run)
+    inbox, archive = tmp_path / "inbox", tmp_path / "archive"
+
+    assert (
+        ps.main(["--inbox-root", str(inbox), "--archive-root", str(archive), "run"])
+        == 0
+    )
+    assert captured == {"inbox_root": inbox, "archive_root": archive}
+    assert "some-id accepted" in capsys.readouterr().out
