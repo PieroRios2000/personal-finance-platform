@@ -102,6 +102,13 @@ order agreed:
       "No data yet" message and a button to the portal, otherwise a slim "Have more statements?"
       link. (A chart cannot be empty in Superset, hence the count and the constant `upload_url()`.)
 
+## Later, if a real business (out of scope for the portfolio, ADR 0042)
+
+- [ ] A privacy policy, consent flow and breach-handling process before any real stranger's real
+      financial data may be accepted -- required by Ley 29733 once `prod`'s portal takes a real
+      upload, which the current banner does not prevent.
+- [ ] A technical control against a real-looking upload on the demo environment (today: notice only).
+
 ## Next phases (planned, nothing built)
 
 - [x] [Phase 7 — Alerting](../brain/phases/phase-7.md): built. Left: Dagster-triggered alerts.

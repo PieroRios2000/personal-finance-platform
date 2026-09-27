@@ -243,3 +243,11 @@ def test_processing_uploads_is_one_command_that_reads_each_request_whole() -> No
     assert "ingest-uploads:" in makefile
     assert "scripts.process_submissions" in makefile and " run" in makefile
     assert "decide-submission:" in makefile
+
+
+def test_an_optional_banner_is_off_by_default_never_hardcoded() -> None:
+    environment = _compose()["upload"]["environment"]
+
+    assert environment["PFP_UPLOAD_NOTICE"] == "${PFP_UPLOAD_NOTICE:-}"
+    assert '_NOTICE = os.environ.get("PFP_UPLOAD_NOTICE", "")' in _SERVER
+    assert "{% if notice %}" in _SERVER and "notice=_NOTICE" in _SERVER
