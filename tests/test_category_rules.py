@@ -7,23 +7,25 @@ def test_a_known_merchant_matches_its_category() -> None:
     assert rules.guess("COMPRA NETFLIX.COM") == "Servicios"
     assert rules.guess("GRIFO PRIMAX AV BRASIL") == "Transporte"
     assert rules.guess("RESTAURANT CHIFA WA LOK") == "Restaurantes"
+    assert rules.guess("PLAZA VEA SAN MIGUEL") == "Alimentacion"
     assert rules.guess("HOTEL COSTA DEL SOL") == "Viajes"
     assert rules.guess("GIMNASIO SMARTFIT MIRAFLORES") == "Deporte"
     assert rules.guess("COMISION MANTENIMIENTO DE CUENTA") == "Servicios"
+    assert rules.guess("SUELDO PLANILLA SEP") == "Ingresos"
+    assert rules.guess("TRANSFERENCIA A TERCEROS") == "Transferencias"
 
 
 def test_something_with_no_match_is_unknown() -> None:
     assert rules.guess("XYZ CORP SAC 00123") == rules.UNKNOWN
 
 
-def test_groceries_income_transfers_and_card_payments_have_no_dedicated_rule() -> None:
-    """The owner's six categories are spending-only (2026-09-27): these fall through
-    to UNKNOWN on purpose, and the labeling template then defaults them to
-    "Gastos varios" (categorization/labels.py)."""
-    assert rules.guess("PLAZA VEA SAN MIGUEL") == rules.UNKNOWN
-    assert rules.guess("SUELDO PLANILLA SEP") == rules.UNKNOWN
-    assert rules.guess("TRANSFERENCIA A TERCEROS") == rules.UNKNOWN
-    assert rules.guess("PAGO TARJETA DE CREDITO") == rules.UNKNOWN
+def test_a_transfer_to_the_owners_own_card_has_no_dedicated_rule() -> None:
+    """This description can never actually reach `guess` in practice --
+    `export_category_labels.py` excludes every `is_internal_transfer` movement first
+    (ADR 0017), and paying off the owner's own card is exactly that. Guarded here
+    anyway: no keyword rule should ever claim to recognize "paying my own card" as a
+    spending category, since it isn't one."""
+    assert rules.guess("PAGO TARJETA DE CREDITO PROPIA") == rules.UNKNOWN
 
 
 def test_matching_is_case_insensitive_to_how_normalize_description_leaves_it() -> None:

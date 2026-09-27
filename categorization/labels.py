@@ -27,12 +27,22 @@ COLUMNS = (
 # narrow the list further only once these stop being enough ("después podemos
 # desglosarlo"). Add here, never a random new string in the file --
 # import_category_labels.py rejects anything else.
+#
+# "Alimentacion", "Ingresos" and "Transferencias" (2026-09-27, ADR 0043's amendment)
+# fill the gap the original six left open: groceries, income and transfers to someone
+# else's account genuinely have nowhere else to go. A transfer to the owner's *own*
+# other account (including paying off his own credit card) never reaches this list at
+# all -- `export_category_labels.py` excludes every `is_internal_transfer` movement
+# before this file is even written (ADR 0017), so it needs no category of its own.
 CATEGORIES = (
     "Servicios",
     "Restaurantes",
+    "Alimentacion",
     "Viajes",
     "Transporte",
     "Deporte",
+    "Ingresos",
+    "Transferencias",
     "Gastos varios",
 )
 
