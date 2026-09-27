@@ -141,9 +141,13 @@ Every parser validates that the sum of the extracted transactions matches the ba
 **Goal:** deploy and monitor, not just train.
 - Automatic transaction categorization (classification): the model proposes a category, the owner
   confirms or overrides -- never assigned silently ([ADR 0043](brain/decisions/0043-transaction-categorization-human-in-the-loop-labeling.md)).
-  Label-collection infrastructure **built** (a cold-start guesser, the labeling file,
-  `gold.dim_category`, `gold.rpt_movements.category`); a classifier trained on the owner's own
-  confirmed labels, MLflow tracking, FastAPI serving and Evidently drift monitoring are next.
+  Label-collection infrastructure and a **trained classifier both built** (a cold-start guesser,
+  the labeling file, `gold.dim_category`/`gold.rpt_movements.category`; TF-IDF character n-grams +
+  logistic regression, MLflow-tracked, scored against the rules baseline --
+  [ADR 0044](brain/decisions/0044-category-classifier-char-ngrams-vs-rules-baseline.md)) and
+  verified against synthetic categories; the owner's own real labels are still to come.
+  Categorizing new movements as a batch step (at ingest) and Evidently drift monitoring are next;
+  a live FastAPI endpoint is optional, only if a real caller ever needs one.
 - Monthly spend forecasting (time series).
 - Anomalous-charge detection.
 

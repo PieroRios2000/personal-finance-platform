@@ -108,17 +108,24 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
 - [x] **Category labeling infrastructure** (T51, ADR 0043): the cold-start guesser, the labeling
       file (export/import), `gold.dim_category`, `gold.rpt_movements.category`. Verified end to
       end with synthetic demo data; the owner's own labels are still to come.
-- [ ] **A trained classifier** (T52): once there are real, owner-confirmed labels, train on them
-      (not a pretrained/off-the-shelf model -- the owner wants one built for this project's own
-      data), replacing the rules-based guesser as what the labeling file proposes. Track with
-      MLflow.
-- [ ] **Serve categorization for new movements** (T53): a FastAPI endpoint, called after ingest so
-      new transactions get a proposed category automatically (still reviewed via the labeling
-      file, never written to gold unconfirmed).
-- [ ] **Drift monitoring** (T54): Evidently over the classifier's input/prediction distribution.
+- [x] **A trained classifier** (T52, ADR 0044): TF-IDF character n-grams + logistic regression,
+      scored (macro-F1, precision per category) against the rules-based baseline on every run
+      (`make train-category-model`). Built and verified against synthetic, general categories; the
+      owner's own real labels are still to come.
+- [ ] **Wire the trained model into the labeling file's suggestion** (T53): once enough real
+      labels exist, `export_category_labels.py` proposes from the trained model instead of the
+      rules-based guesser -- still reviewed, never assigned outright.
+- [ ] **Categorize new movements as a batch step** (T54; reviewer feedback, 2026-09-27): a
+      statement is categorized once, at ingest -- the natural integration is a step of
+      `pfp ingest`/`make ingest-uploads` or the Dagster pipeline that writes the prediction into
+      gold, not a live request. **A FastAPI endpoint is optional**, only if a real caller ever
+      needs one (e.g. the upload portal previewing a category before the owner processes a
+      request) -- not built speculatively ahead of that.
+- [ ] **Drift monitoring** (T55): Evidently over the classifier's input/prediction distribution.
 - [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
-      model -- accuracy, latency, cost per transaction, cost per month at this project's real
-      volume. A concrete MLOps tradeoff narrative, not built until T52 exists to compare against.
+      model -- macro-F1 and per-category precision (not just accuracy), latency, cost per
+      transaction, cost per month at this project's real volume, against the same held-out labels.
+      A concrete MLOps tradeoff narrative, buildable now that T52 exists to compare against.
 
 ## Later, if a real business (out of scope for the portfolio, ADR 0042)
 

@@ -49,3 +49,8 @@ coverage.xml
 # OpenMetadata (T24): the dbt artifacts and generated workflow config the ingestion
 # container reads (holds a short-lived admin token) -- written by scripts/openmetadata_sync.py.
 openmetadata/artifacts/
+
+# T52 (ADR 0044): a safety net in case MLflow's own default tracking URI (a bare
+# "mlruns" folder in the current directory) is ever hit by mistake -- the real one
+# lives outside the repo, under ~/finance-data (train_category_model.py's default).
+mlruns/
