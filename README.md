@@ -1,13 +1,13 @@
 # Personal Finance Data Platform
 
-A local, zero-cost data platform that turns real bank statement PDFs into a governed,
-reconciled lakehouse — built to demonstrate Data Engineering / Data Lead practice end to end:
-ingestion, schema validation, medallion modeling, CI/CD, and architectural documentation, on
-100% open-source tooling.
+**A local, zero-cost lakehouse that turns real, password-protected bank statement PDFs into a
+reconciled, governed star schema — ingestion, dbt, orchestration, CI/CD and architectural
+decisions, all built and verified against the owner's own real data.** 90 seconds in: skip to
+[**Built the hard way**](#built-the-hard-way) for the part worth reading first.
 
 [![CI](https://github.com/PieroRios2000/personal-finance-platform/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/PieroRios2000/personal-finance-platform/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
-![status](https://img.shields.io/badge/phase%202-extension%20in%20progress:%20postgres%20store%20%2B%20dashboard-yellow)
+![status](https://img.shields.io/badge/phase%202-closed%3A%20postgres%20store%20%2B%20dashboard-brightgreen)
 
 ## What this is
 
