@@ -117,9 +117,12 @@ models:
               values:
                 - Servicios
                 - Restaurantes
+                - Alimentacion
                 - Viajes
                 - Transporte
                 - Deporte
+                - Ingresos
+                - Transferencias
                 - Gastos varios
 
   - name: fact_transactions
