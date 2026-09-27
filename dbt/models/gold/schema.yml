@@ -115,20 +115,15 @@ models:
           - unique
           - accepted_values:
               values:
-                - Alimentacion
-                - Restaurantes
-                - Transporte
-                - Entretenimiento
-                - Salud
                 - Servicios
-                - Educacion
-                - Vivienda
-                - Ropa
-                - Comisiones bancarias
-                - Ingreso
-                - Pago de tarjeta
+                - Restaurantes
+                - Alimentacion
+                - Viajes
+                - Transporte
+                - Deporte
+                - Ingresos
                 - Transferencias
-                - Otros
+                - Gastos varios
 
   - name: fact_transactions
     description: >

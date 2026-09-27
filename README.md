@@ -1,13 +1,14 @@
 # Personal Finance Data Platform
 
 **A local, zero-cost lakehouse that turns real, password-protected bank statement PDFs into a
-reconciled, governed star schema — ingestion, dbt, orchestration, CI/CD and architectural
-decisions, all built and verified against the owner's own real data.** 90 seconds in: skip to
+reconciled, governed star schema, now growing an ML layer on top (transaction categorization,
+human in the loop) — ingestion, dbt, orchestration, CI/CD, ML and architectural decisions, all
+built and verified against the owner's own real data.** 90 seconds in: skip to
 [**Built the hard way**](#built-the-hard-way) for the part worth reading first.
 
 [![CI](https://github.com/PieroRios2000/personal-finance-platform/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/PieroRios2000/personal-finance-platform/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
-![status](https://img.shields.io/badge/phase%202-closed%3A%20postgres%20store%20%2B%20dashboard-brightgreen)
+![status](https://img.shields.io/badge/phase%203-in%20progress%3A%20ML%20categorization-blue)
 
 ## What this is
 
@@ -93,7 +94,7 @@ date or an amount wrong while the balances still add up.
 | Quality and observability | ✅ Elementary as a dbt package: a row-count anomaly test on silver (warn-mode) and a local HTML report |
 | Catalog and column-level lineage | ✅ OpenMetadata (optional, local only, ~4.8 GiB at peak): `fact_transactions.amount` traces back to `bronze.transactions.amount` |
 | Alerting (Phase 7) | ✅ Errors sent the moment they appear, warnings in a weekly digest, by email and/or Microsoft Teams; names and counts only, never real data ([ADR 0026](brain/decisions/0026-alerts-errors-now-warnings-weekly-names-and-counts-only.md)) |
-| ML, categories | Later phases — see [PROJECT.md](PROJECT.md) |
+| ML, categories | Phase 3, in progress — see below |
 
 #### Phase 2 extension (closed 2026-09-21): PostgreSQL store and dashboard
 
@@ -116,6 +117,23 @@ source, zero cost) reads them. Built in dependency order, T26–T37:
 
 Details: [`tasks/todo-phase2.md`](tasks/todo-phase2.md); how the numbers are derived and checked:
 [SETUP.md §12](SETUP.md#12-dashboards-in-apache-superset-t32).
+
+### Phase 3 — ML in production *(in progress)*
+
+Automatic transaction categorization, human in the loop: a model proposes a category, the owner
+confirms or overrides it — never assigned silently
+([ADR 0043](brain/decisions/0043-transaction-categorization-human-in-the-loop-labeling.md)).
+
+| Piece | Status |
+|---|---|
+| Label collection | ✅ A cold-start, keyword-based guesser proposes a category for every distinct description; the owner edits a local Excel file to confirm or correct it, never typing a category from scratch. Nothing about a real description is ever sent anywhere |
+| The category dimension | ✅ `gold.dim_category` (a fixed, short list) and `gold.rpt_movements.category`, left-joined from the owner's confirmed labels, `'Sin categorizar'` until something is labeled |
+| A trained classifier | ✅ TF-IDF over character n-grams + logistic regression, trained on the owner's own confirmed labels (not a pretrained model). Reports macro-F1 and precision *per category* — not plain accuracy, which hides a bad category behind a good average when classes are uneven — for the trained model **and** the rules-based guesser side by side, so "does the model beat the rules" has a printed answer every run ([ADR 0044](brain/decisions/0044-category-classifier-char-ngrams-vs-rules-baseline.md)). MLflow-tracked; the model file never leaves the machine, same discipline as a real PDF |
+| Serving new movements | Planned as a batch step at ingest (categorization happens once, when a statement comes in, not live) — a FastAPI endpoint is optional, only if a real caller ever needs one |
+| Drift monitoring | Planned: Evidently over the classifier's input/prediction distribution |
+
+Verified end to end against synthetic, general categories first — the owner's own real labels
+come next. Details: [`tasks/backlog.md`](tasks/backlog.md#phase-3--ml-in-production-started-2026-09-27).
 
 ### Planned
 
