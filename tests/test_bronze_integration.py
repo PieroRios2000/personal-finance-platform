@@ -109,3 +109,45 @@ def test_write_statement_round_trips_through_real_s3(user_id: str) -> None:
                 DeltaTable(uri, storage_options=options).delete(
                     predicate=f"user_id = '{user_id}'"
                 )
+
+
+def test_replace_category_labels_round_trips_and_replaces_the_whole_set(
+    user_id: str,
+) -> None:
+    reason = _skip_reason()
+    if reason:
+        pytest.skip(reason)
+
+    from deltalake import DeltaTable
+
+    from lakehouse.storage import storage_options
+
+    options = storage_options()
+    uri = table_uri("category_labels")
+
+    bronze.replace_category_labels(
+        user_id,
+        [
+            ("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion"),
+            ("BCP", "UBER TRIP", "Transporte"),
+        ],
+    )
+
+    def categories() -> list[str]:
+        table = DeltaTable(uri, storage_options=options).to_pyarrow_table(
+            partitions=[("user_id", "=", user_id)]
+        )
+        return sorted(table.column("category").to_pylist())
+
+    try:
+        assert categories() == ["Alimentacion", "Transporte"]
+
+        # Re-running with a corrected set replaces it, not appends to it.
+        bronze.replace_category_labels(
+            user_id, [("BCP", "PLAZA VEA SAN MIGUEL", "Otros")]
+        )
+        assert categories() == ["Otros"]
+    finally:
+        DeltaTable(uri, storage_options=options).delete(
+            predicate=f"user_id = '{user_id}'"
+        )

@@ -417,3 +417,79 @@ def test_two_users_land_in_separate_partitions_and_are_independent(
     )
     assert remaining.num_rows == 1
     assert remaining.column("user_id").to_pylist() == ["piero"]
+
+
+def test_replace_category_labels_writes_one_row_per_label(lakehouse: Path) -> None:
+    from deltalake import DeltaTable
+
+    bronze.replace_category_labels(
+        "piero",
+        [
+            ("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion"),
+            ("BCP", "UBER TRIP", "Transporte"),
+        ],
+    )
+
+    table = DeltaTable(str(lakehouse / "bronze" / "category_labels")).to_pyarrow_table()
+    assert sorted(table.column("category").to_pylist()) == [
+        "Alimentacion",
+        "Transporte",
+    ]
+    assert set(table.column("user_id").to_pylist()) == {"piero"}
+
+
+def test_replace_category_labels_replaces_the_whole_set_not_appends(
+    lakehouse: Path,
+) -> None:
+    from deltalake import DeltaTable
+
+    bronze.replace_category_labels(
+        "piero", [("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion")]
+    )
+    bronze.replace_category_labels("piero", [("BCP", "PLAZA VEA SAN MIGUEL", "Otros")])
+
+    table = DeltaTable(str(lakehouse / "bronze" / "category_labels")).to_pyarrow_table()
+    assert table.column("category").to_pylist() == ["Otros"]
+
+
+def test_replace_category_labels_is_scoped_to_the_user(lakehouse: Path) -> None:
+    from deltalake import DeltaTable
+
+    bronze.replace_category_labels("ana", [("BCP", "X", "Otros")])
+    bronze.replace_category_labels("bea", [("BCP", "Y", "Alimentacion")])
+    bronze.replace_category_labels("ana", [("BCP", "X", "Transporte")])
+
+    table = DeltaTable(str(lakehouse / "bronze" / "category_labels")).to_pyarrow_table()
+    rows = sorted(
+        zip(
+            table.column("user_id").to_pylist(),
+            table.column("category").to_pylist(),
+            strict=True,
+        )
+    )
+    assert rows == [("ana", "Transporte"), ("bea", "Alimentacion")]
+
+
+def test_replace_category_labels_with_an_empty_set_deletes_and_writes_nothing(
+    lakehouse: Path,
+) -> None:
+    from deltalake import DeltaTable
+
+    bronze.replace_category_labels("piero", [("BCP", "X", "Otros")])
+
+    bronze.replace_category_labels("piero", [])
+
+    table = DeltaTable(str(lakehouse / "bronze" / "category_labels")).to_pyarrow_table()
+    assert table.num_rows == 0
+
+
+def test_replace_category_labels_on_a_fresh_lake_deletes_nothing_first(
+    lakehouse: Path,
+) -> None:
+    """No table exists yet: the delete-before-write guard must not error."""
+    bronze.replace_category_labels("piero", [("BCP", "X", "Otros")])
+
+    from deltalake import DeltaTable
+
+    table = DeltaTable(str(lakehouse / "bronze" / "category_labels")).to_pyarrow_table()
+    assert table.num_rows == 1

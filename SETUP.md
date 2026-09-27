@@ -705,6 +705,25 @@ fails until it has ingested at least one statement (an empty lake has no `bronze
 current `poc` data to dev means re-ingesting your archive into it: the [runbook](docs/runbook-rebuild-from-archive.md)
 with `PFP_ENV=dev`.
 
+## 15. Transaction categorization (T51, Phase 3, ADR 0043)
+
+The model proposes, you decide. `gold.rpt_movements.category` reads `'Sin categorizar'` until you
+label something:
+
+```bash
+make export-category-labels PFP_USER=piero
+# opens ~/finance-data/manual/categorias-transacciones.xlsx: one row per (bank, description) in
+# your gold data, a cold-start guess already in the editable 'category' column. Fix what's wrong
+# (the full category list is on the Instrucciones sheet), save.
+make import-category-labels WORKBOOK=~/finance-data/manual/categorias-transacciones.xlsx PFP_USER=piero
+make build   # rpt_movements picks up the labels
+```
+
+Re-running the export after new statements arrive lists every description again (already-labeled
+ones keep their category as the prefilled value); re-importing replaces your whole label set, same
+as the manual Excel's investment months. Nothing here ever leaves your machine: the file is written
+and read locally, never seen by Claude (ADR 0004 applies to it exactly as it does to a real PDF).
+
 ## Reproducing CI locally (`make ci-local`)
 
 A PR can fail in CI for a reason that never shows on your machine: a variable CI does not set, a
