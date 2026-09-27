@@ -2,7 +2,7 @@
 type: component
 phase: 3
 status: in-progress
-task: T51, T52
+task: T51, T52, T53
 ---
 
 # Categorization
@@ -24,12 +24,17 @@ confirms or overrides, never assigned silently. Design in
 | [`dbt/seeds/category.csv`](../../dbt/seeds/category.csv) → `gold.dim_category` | The fixed, short category list |
 | [`dbt/models/silver/category_labels.sql`](../../dbt/models/silver/category_labels.sql), [`gold/rpt_movements.sql`](../../dbt/models/gold/rpt_movements.sql) | The bronze source modeled to silver, left-joined into the reporting layer, coalesced to `'Sin categorizar'` |
 
-| [`categorization/model.py`](../../categorization/model.py) | The classifier (TF-IDF char n-grams + logistic regression): `train()`, `predict()`, `score_rules()` for the same metrics on the baseline |
+| [`categorization/model.py`](../../categorization/model.py) | The classifier (TF-IDF char n-grams + logistic regression): `train()`, `predict()`, `score_rules()` for the same metrics on the baseline, `load()` for a saved one |
 | [`scripts/train_category_model.py`](../../scripts/train_category_model.py) | `make train-category-model`: trains on every label imported so far, reports macro-F1 and precision per category next to the rules baseline, logs to a local MLflow, saves the model under `~/finance-data/models/` |
+
+`export_category_labels.py`'s suggestion is the trained model's prediction once one has been
+saved there, the rules-based guess until then (T53) -- the same "propose, never decide" shape
+either way, never a silent switch the owner has to know about.
 
 ## What's next
 
-Once there are enough real, confirmed labels: wire the trained model into `export_category_labels.py` as the suggestion (replacing the rules-based guess, still reviewed, never assigned outright), integrate categorization as a batch step of ingest/Dagster rather than a live service, and drift monitoring (Evidently). FastAPI serving stays optional, only if a real caller shows up.
+Integrate categorization as a batch step of ingest/Dagster rather than a live service (T54), and
+drift monitoring (Evidently, T55). FastAPI serving stays optional, only if a real caller shows up.
 
 ## Related
 
