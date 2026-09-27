@@ -14,7 +14,9 @@ discipline as the account key -- see `scripts/train_category_model.py`.
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
+import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, precision_score
@@ -23,6 +25,13 @@ from sklearn.pipeline import Pipeline
 
 MIN_EXAMPLES = 10
 MIN_PER_CLASS = 2
+
+# The one place this path is spelled out (`scripts/train_category_model.py` and
+# `scripts/export_category_labels.py` both import it): under `~/finance-data/`, never
+# in the repo, same discipline as the account key (ADR 0004) -- see this module's own
+# docstring. No suffix here; callers that save append `.joblib` themselves
+# (`train_category_model.py`), callers that only load expect it already appended.
+DEFAULT_MODEL_PATH = Path.home() / "finance-data" / "models" / "category_classifier"
 
 
 class NotEnoughDataError(ValueError):
@@ -136,3 +145,15 @@ def predict(pipeline: Pipeline, description: str) -> tuple[str, float]:
     probabilities = pipeline.predict_proba([description])[0]
     confidence = float(max(probabilities))
     return str(category), confidence
+
+
+def load(path: Path) -> Pipeline | None:
+    """The pipeline saved at `path` (`scripts/train_category_model.py`'s own
+    `joblib.dump`), or `None` if nothing has been trained yet -- the cold start
+    `scripts/export_category_labels.py` falls back to the rules-based guesser for."""
+    if not path.exists():
+        return None
+    pipeline = joblib.load(path)
+    if not isinstance(pipeline, Pipeline):
+        raise TypeError(f"{path} does not contain a scikit-learn Pipeline")
+    return pipeline
