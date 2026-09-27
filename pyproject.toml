@@ -157,7 +157,7 @@ source = ["ingestion", "lakehouse", "scripts"]
 # `ignore_imports` declares the one allowed dependency (T14): ingestion.cli orchestrates
 # both organizer and bronze; lakehouse depends only on the schema, never on the parsers.
 [tool.importlinter]
-root_packages = ["ingestion", "lakehouse", "orchestration", "alerting"]
+root_packages = ["ingestion", "lakehouse", "orchestration", "alerting", "categorization"]
 
 [[tool.importlinter.contracts]]
 name = "Parsing does not import lakehouse (only ingestion.cli orchestrates both)"
@@ -196,4 +196,13 @@ forbidden_modules = ["orchestration"]
 name = "alerting is standalone: no parsers, no lake, no orchestration (ADR 0026)"
 type = "forbidden"
 source_modules = ["alerting"]
+forbidden_modules = ["ingestion", "lakehouse", "orchestration"]
+
+# categorization (T51, ADR 0043) is the guesser and the labeling file's shape only: no
+# knowledge of how a statement is parsed or a Delta table written. The scripts that call
+# it (export/import) are what wires it to lakehouse, not this package itself.
+[[tool.importlinter.contracts]]
+name = "categorization is standalone: no parsers, no lake, no orchestration"
+type = "forbidden"
+source_modules = ["categorization"]
 forbidden_modules = ["ingestion", "lakehouse", "orchestration"]

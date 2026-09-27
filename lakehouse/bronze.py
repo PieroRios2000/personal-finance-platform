@@ -89,6 +89,20 @@ _INGESTED_FILES_SCHEMA = pa.schema(
     ]
 )
 
+# T51 (ADR 0043): a lookup, not a fact -- the owner's own mapping from a movement's
+# (bank, description) to a category, confirmed or overridden from a cold-start guess.
+# One row per group, the whole set replaced on every import (no history kept: the
+# labeling file itself, kept locally, is the source of truth for what changed).
+_CATEGORY_LABELS_SCHEMA = pa.schema(
+    [
+        ("user_id", pa.string()),
+        ("bank", pa.string()),
+        ("description", pa.string()),
+        ("category", pa.string()),
+        ("ingested_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
+
 
 def _append(name: str, schema: pa.Schema, rows: list[dict[str, Any]]) -> None:
     write_deltalake(
@@ -130,6 +144,40 @@ def _delete_file_rows(name: str, column: str, user_id: str, file_sha256: str) ->
             f"AND {column} = {_sql_literal(file_sha256)}"
         )
     )
+
+
+def _delete_user_rows(name: str, user_id: str) -> None:
+    """Delete every row of `bronze/<name>` that belongs to `user_id` -- the whole-set
+    replace `replace_category_labels()` needs, since a label file has no per-file
+    identity of its own to scope a narrower delete by."""
+    uri = table_uri(name)
+    options = storage_options()
+    if not DeltaTable.is_deltatable(uri, storage_options=options):
+        return
+    DeltaTable(uri, storage_options=options).delete(
+        predicate=f"user_id = {_sql_literal(user_id)}"
+    )
+
+
+def replace_category_labels(user_id: str, labels: list[tuple[str, str, str]]) -> None:
+    """Replace `user_id`'s whole category-labels set with `labels`
+    (`[(bank, description, category), ...]`): re-running the import after fixing a
+    row in the file changes only what changed, same as `replace_investment_month`."""
+    _delete_user_rows("category_labels", user_id)
+    if not labels:
+        return
+    ingested_at = datetime.now(UTC)
+    rows = [
+        {
+            "user_id": user_id,
+            "bank": bank,
+            "description": description,
+            "category": category,
+            "ingested_at": ingested_at,
+        }
+        for bank, description, category in labels
+    ]
+    _append("category_labels", _CATEGORY_LABELS_SCHEMA, rows)
 
 
 def is_ingested(user_id: str, file_sha256: str) -> bool:

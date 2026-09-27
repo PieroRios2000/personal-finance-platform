@@ -27,7 +27,7 @@ PFP = docker compose -p $(PFP_PROJECT)
 # Each environment's OpenMetadata artifacts (they hold a token and the Postgres password).
 export PFP_OM_ARTIFACTS = ./artifacts/$(PFP_ENV)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -157,6 +157,17 @@ decide-submission:
 # Files people uploaded for a bank or kind no parser reads yet (T46): counts by bank and kind.
 review-uploads:
 	$(LOAD_ENV) && uv run python -m scripts.review_uploads --inbox-root "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}"
+
+# Transaction categorization (Phase 3, T51, ADR 0043): a labeling file with a cold-start guess
+# already filled in, one row per distinct (bank, description). Open it, fix what's wrong, save,
+# then import. PFP_USER, like ingest/demo. Needs `make up` (reads gold) then `make ingest build`
+# (writes bronze) run once beforehand -- movements have to exist to be labeled.
+export-category-labels:
+	$(LOAD_ENV) && uv run python -m scripts.export_category_labels --user "$$PFP_USER"
+
+import-category-labels:
+	@test -n "$(WORKBOOK)" || { echo "usage: make import-category-labels WORKBOOK=~/finance-data/manual/categorias-transacciones.xlsx" >&2; exit 2; }
+	$(LOAD_ENV) && uv run python -m scripts.import_category_labels "$(WORKBOOK)" --user "$$PFP_USER"
 
 build:
 	$(LOAD_ENV) && uv run dbt deps --project-dir dbt --profiles-dir dbt && \

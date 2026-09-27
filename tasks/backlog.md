@@ -100,6 +100,26 @@ order agreed:
       "No data yet" message and a button to the portal, otherwise a slim "Have more statements?"
       link. (A chart cannot be empty in Superset, hence the count and the constant `upload_url()`.)
 
+## Phase 3 — ML in production (started 2026-09-27)
+
+The identity/portal line (T39-T50) is frozen: built, documented, verified; no more effort there
+unless something breaks. Phase 3 starts with categorization, per the owner's decision.
+
+- [x] **Category labeling infrastructure** (T51, ADR 0043): the cold-start guesser, the labeling
+      file (export/import), `gold.dim_category`, `gold.rpt_movements.category`. Verified end to
+      end with synthetic demo data; the owner's own labels are still to come.
+- [ ] **A trained classifier** (T52): once there are real, owner-confirmed labels, train on them
+      (not a pretrained/off-the-shelf model -- the owner wants one built for this project's own
+      data), replacing the rules-based guesser as what the labeling file proposes. Track with
+      MLflow.
+- [ ] **Serve categorization for new movements** (T53): a FastAPI endpoint, called after ingest so
+      new transactions get a proposed category automatically (still reviewed via the labeling
+      file, never written to gold unconfirmed).
+- [ ] **Drift monitoring** (T54): Evidently over the classifier's input/prediction distribution.
+- [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
+      model -- accuracy, latency, cost per transaction, cost per month at this project's real
+      volume. A concrete MLOps tradeoff narrative, not built until T52 exists to compare against.
+
 ## Later, if a real business (out of scope for the portfolio, ADR 0042)
 
 - [ ] A privacy policy, consent flow and breach-handling process before any real stranger's real

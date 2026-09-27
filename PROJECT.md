@@ -137,14 +137,19 @@ Every parser validates that the sum of the extracted transactions matches the ba
 - **Apache Superset** (open source, zero cost, its own stack) over a read-only role on gold, with dashboards for cash flow, savings and each fund's monthly return (T32).
 - Phase 3 (ML) starts after T33. Details: [`tasks/todo-phase2.md`](tasks/todo-phase2.md).
 
-### Phase 3 — ML in production
+### Phase 3 — ML in production *(started 2026-09-27)*
 **Goal:** deploy and monitor, not just train.
-- Automatic transaction categorization (classification).
+- Automatic transaction categorization (classification): the model proposes a category, the owner
+  confirms or overrides -- never assigned silently ([ADR 0043](brain/decisions/0043-transaction-categorization-human-in-the-loop-labeling.md)).
+  Label-collection infrastructure **built** (a cold-start guesser, the labeling file,
+  `gold.dim_category`, `gold.rpt_movements.category`); a classifier trained on the owner's own
+  confirmed labels, MLflow tracking, FastAPI serving and Evidently drift monitoring are next.
 - Monthly spend forecasting (time series).
 - Anomalous-charge detection.
-- MLflow (tracking), FastAPI (serving), Evidently (drift).
 
-**Closes:** MLOps.
+**Closes:** MLOps. Identity, the public URL and the upload portal (T39-T50) are frozen once this
+starts: built and documented, but no target audience for this portfolio values them, so no more
+effort goes there unless something breaks (owner's call, 2026-09-27).
 
 ### Phase 4 — Cloud + IaC
 **Goal:** the cloud "nice to have" that shows up in job postings.
