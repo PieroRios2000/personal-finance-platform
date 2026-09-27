@@ -25,8 +25,8 @@ import psycopg
 from psycopg.conninfo import make_conninfo
 
 from categorization import model, rules
+from categorization.model import DEFAULT_MODEL_PATH
 
-DEFAULT_MODEL_PATH = Path.home() / "finance-data" / "models" / "category_classifier"
 # MLflow deprecated the plain filesystem store (3.x): sqlite is the current,
 # supported local backend for a single-user project like this one.
 DEFAULT_TRACKING_URI = f"sqlite:///{Path.home() / 'finance-data' / 'mlflow.db'}"
