@@ -34,6 +34,9 @@ from ingestion.unlock import TooManyPagesError, unlock
 _INBOX_ROOT = Path(os.environ.get("PFP_INBOX_ROOT", "/inbox"))
 _GRPC_ADDR = os.environ.get("PFP_DEX_GRPC_ADDR", "dex:5557")
 _DASHBOARD = os.environ.get("PFP_BI_PUBLIC_URL", "")
+# An optional banner (e.g. "this is a demo environment"), set per environment, never
+# hardcoded: the same image runs the owner's real, local-only instance too.
+_NOTICE = os.environ.get("PFP_UPLOAD_NOTICE", "")
 _LIMIT = portal.UploadLimit()
 _ALERT_LIMIT = portal.AlertLimit()
 _EMAIL = EmailChannel.from_env(os.environ)  # None until ALERT_EMAIL_TO etc. are set
@@ -71,8 +74,11 @@ _PAGE = """<!doctype html>
   input, select { width: 100%; padding: 0.4rem; box-sizing: border-box; }
   button { margin-top: 1.5rem; padding: 0.5rem 1.5rem; }
   .notice { background: #f3f4f6; padding: 0.75rem 1rem; border-radius: 4px; }
+  .banner { background: #fef3c7; border: 1px solid #f59e0b; padding: 0.6rem 1rem;
+    border-radius: 4px; font-weight: 600; }
   .error { color: #b91c1c; } .ok { color: #166534; }
 </style></head><body>
+{% if notice %}<p class="banner">{{ notice }}</p>{% endif %}
 <h1>Upload statements</h1>
 <p>Signed in as {{ email }}. <a href="{{ url_for('logout') }}">Sign out</a>
 {% if dashboard %} &middot;
@@ -157,6 +163,7 @@ def _render(results: list[tuple[bool, str]] | None = None, message: str = "") ->
         results=results or [],
         message=message,
         dashboard=_DASHBOARD,
+        notice=_NOTICE,
     )
     return page
 
