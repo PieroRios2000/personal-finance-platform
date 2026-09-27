@@ -44,7 +44,7 @@ position:
     - ROW-0
     meta:
       width: 12
-      height: 21
+      height: 32
       chartId: 49
       uuid: b68cd88f-cb4f-51d4-95c4-762284ff9368
       sliceName: Upload your files

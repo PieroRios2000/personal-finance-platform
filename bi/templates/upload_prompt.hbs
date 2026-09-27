@@ -1,12 +1,23 @@
 {{#each data}}
 <div class="upload">
 {{#if movements}}
-  <div class="row"><span class="text">Have more statements?</span>
-    <a class="btn small" href="{{upload_url}}" target="_blank" rel="noopener">Upload your files</a></div>
+  <div class="row">
+    <div class="icon">&#8593;</div>
+    <div class="copy">
+      <div class="title small">Have more statements?</div>
+      <div class="text">Send more bank statements whenever you have them.</div>
+    </div>
+    <a class="btn" href="{{upload_url}}" target="_blank" rel="noopener">Upload your files</a>
+  </div>
 {{else}}
-  <div class="title">No data yet</div>
-  <div class="text">Send your bank statements and they will show up here once they have been processed.</div>
-  <a class="btn" href="{{upload_url}}" target="_blank" rel="noopener">Upload your files</a>
+  <div class="row">
+    <div class="icon">&#8593;</div>
+    <div class="copy">
+      <div class="title">No data yet</div>
+      <div class="text">Send your bank statements and they will show up here once they have been processed.</div>
+    </div>
+    <a class="btn" href="{{upload_url}}" target="_blank" rel="noopener">Upload your files</a>
+  </div>
 {{/if}}
 </div>
 {{/each}}
