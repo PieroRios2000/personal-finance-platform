@@ -35,12 +35,9 @@ KINDS = {
 SUPPORTED = frozenset(
     {("BCP", "account"), ("Scotiabank", "account"), ("Scotiabank", "card")}
 )
-REVIEW_FOLDER = (
-    "_new_bank"  # under the person's inbox folder: the pipeline never looks in it
-)
 _BANK_NAME = re.compile(r"[^A-Za-z0-9 .&-]")
 MAX_FILE_BYTES = 15 * 1024 * 1024
-MAX_FILES_PER_UPLOAD = 12
+MAX_FILES_PER_UPLOAD = 10
 MAX_UPLOADS_PER_HOUR = 40
 MAX_ALERTS_PER_HOUR = 6
 WINDOW_SECONDS = 3600

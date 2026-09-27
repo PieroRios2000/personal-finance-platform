@@ -64,6 +64,9 @@ immediate, not the weekly digest of ADR 0026, because a person is waiting on an 
 only bank, kind, currency and how many (never a file name, a person or a page, ADR 0004). It is sent
 from a thread, at most 6 an hour whatever people upload; the rest stay listed by `make review-uploads`.
 
+**Amended by [ADR 0041](0041-uploads-are-requests-accepted-or-rejected-whole.md)**: an upload is a request of up to
+10 files, accepted or rejected whole, kept in `_submissions/`, and the sender is emailed at each step.
+
 ## Alternatives considered
 
 - **Store passwords (encrypted)**: convenient, but holds other people's bank secrets.

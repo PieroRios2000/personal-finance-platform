@@ -1,56 +1,49 @@
-"""Tests for scripts.review_uploads: what waits for the owner to study (T46)."""
+"""Tests for scripts.review_uploads: what waits for the owner to study (T46, T48)."""
 
 from pathlib import Path
 
 import pytest
 
-from ingestion import unlock
+from ingestion import submissions
 from scripts import review_uploads
-from tests.fixtures.synthetic_pdfs import scotiabank_statement_pdf
 
 
-def _park(root: Path, user: str, bank: str, kind: str, currency: str = "PEN") -> None:
-    folder = root / user / review_uploads.REVIEW_FOLDER
-    folder.mkdir(parents=True, exist_ok=True)
-    content = unlock.unlock(
-        scotiabank_statement_pdf(),
-        password="",
+def _submit(root: Path, user: str, bank: str, status: str, files: int = 1) -> str:
+    manifest = submissions.create(
+        root / user,
+        email=f"{user}@example.com",
+        kind="card",
         bank=bank,
-        kind=kind,
-        currency=currency,
+        currency="PEN",
+        contents=[b"%PDF-"] * files,
+        review=status == submissions.REVIEW,
     )
-    (folder / f"{len(list(folder.iterdir()))}.pdf").write_bytes(content)
+    return manifest.id
 
 
-def test_files_waiting_are_counted_by_bank_and_kind_with_no_file_names(
+def test_only_requests_waiting_for_review_are_listed_with_no_file_or_person(
     tmp_path: Path,
 ) -> None:
-    _park(tmp_path, "ana-1111", "Interbank", "card")
-    _park(tmp_path, "ana-1111", "Interbank", "card")
-    _park(tmp_path, "bea-2222", "Interbank", "card")
-    _park(tmp_path, "bea-2222", "BCP", "card", "USD")
-    (tmp_path / "ana-1111" / "plain-inbox-file.pdf").write_bytes(b"not for review")
+    waiting = _submit(tmp_path, "ana-1111", "Interbank", submissions.REVIEW, files=3)
+    _submit(tmp_path, "bea-2222", "BCP", submissions.RECEIVED)  # not for review
 
-    text = review_uploads.render(review_uploads.pending(tmp_path))
+    text = review_uploads.render(tmp_path)
 
     assert text.splitlines() == [
-        "bank | kind | currency | files | people",
-        "BCP | card | USD | 1 | 1",
-        "Interbank | card | PEN | 3 | 2",
+        "id | bank | kind | currency | files",
+        f"{waiting} | Interbank | card | PEN | 3",
     ]
-    assert ".pdf" not in text and "ana-1111" not in text
+    assert ".pdf" not in text and "ana-1111" not in text and "@" not in text
 
 
 def test_nothing_waiting_says_so(tmp_path: Path) -> None:
-    assert review_uploads.render(review_uploads.pending(tmp_path)) == (
-        "Nothing waiting for review."
-    )
+    assert review_uploads.render(tmp_path) == "Nothing waiting for review."
 
 
 def test_main_prints_the_summary(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    _park(tmp_path, "ana-1111", "Interbank", "account")
+    waiting = _submit(tmp_path, "ana-1111", "Interbank", submissions.REVIEW)
 
     assert review_uploads.main(["--inbox-root", str(tmp_path)]) == 0
-    assert "Interbank | account | PEN | 1 | 1" in capsys.readouterr().out
+    assert waiting in capsys.readouterr().out
