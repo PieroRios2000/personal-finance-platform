@@ -13,6 +13,7 @@ uses. The PDF password is typed per upload, used once to unlock the file
 import hmac
 import os
 import secrets
+import sys
 import threading
 from pathlib import Path
 
@@ -25,12 +26,17 @@ from authlib.integrations.flask_client import OAuth
 from flask import Flask, redirect, render_template_string, request, session, url_for
 from werkzeug.wrappers import Response
 
-from ingestion.unlock import unlock
+from alerting.channels import EmailChannel
+from ingestion import submissions
+from ingestion.manual_layout import MAX_BYTES, check_workbook, generic_template
+from ingestion.unlock import TooManyPagesError, unlock
 
 _INBOX_ROOT = Path(os.environ.get("PFP_INBOX_ROOT", "/inbox"))
 _GRPC_ADDR = os.environ.get("PFP_DEX_GRPC_ADDR", "dex:5557")
 _DASHBOARD = os.environ.get("PFP_BI_PUBLIC_URL", "")
 _LIMIT = portal.UploadLimit()
+_ALERT_LIMIT = portal.AlertLimit()
+_EMAIL = EmailChannel.from_env(os.environ)  # None until ALERT_EMAIL_TO etc. are set
 _RESOLVE_LOCK = threading.Lock()
 
 app = Flask(__name__)
@@ -80,13 +86,39 @@ type is used once to unlock the file and is never saved.</p>
 <h2>Bank statements (PDF)</h2>
 <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>What is it <select name="kind">
+    {% for key, label in kinds.items() %}<option value="{{ key }}">{{ label }}</option>
+    {% endfor %}</select></label>
   <label>Bank <select name="bank">
-    {% for bank in banks %}<option>{{ bank }}</option>{% endfor %}</select></label>
+    {% for bank in banks %}<option>{{ bank }}</option>{% endfor %}
+    <option>{{ other }}</option></select></label>
+  <label>If it is another bank, its name
+    <input type="text" name="other_bank" maxlength="40" autocomplete="off"></label>
+  <label>Currency <select name="currency">
+    {% for key, label in currencies.items() %}
+    <option value="{{ key }}">{{ label }}</option>{% endfor %}</select></label>
+  <label>If it is another currency, its name or code
+    <input type="text" name="other_currency" maxlength="20" autocomplete="off"></label>
+  <p class="notice">Only some are read today (BCP accounts; Scotiabank cards and
+  accounts; soles and dollars). Anything else is kept safely, and the owner first
+  reviews how to read it.</p>
   <label>PDF password (leave empty if the file has none)
     <input type="password" name="password" autocomplete="off"></label>
   <label>Files <input type="file" name="files" accept="application/pdf" multiple
     required></label>
   <button type="submit">Upload</button>
+</form>
+<h2>Savings and investments (Excel)</h2>
+<p>For accounts and funds that give you no statement. Download the template, fill in
+at least one sheet (the other may stay empty) and send it back. It is read as a whole:
+if anything is wrong, nothing is loaded and you are told what.</p>
+<p><a href="{{ url_for('template') }}">Download the template (.xlsx)</a></p>
+<form method="post" action="{{ url_for('upload_excel') }}"
+  enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Your workbook <input type="file" name="workbook" required
+    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+  <button type="submit">Upload the workbook</button>
 </form>
 </body></html>
 """
@@ -119,6 +151,9 @@ def _render(results: list[tuple[bool, str]] | None = None, message: str = "") ->
         email=session["email"],
         csrf=session["csrf"],
         banks=portal.BANKS,
+        other=portal.OTHER_BANK,
+        kinds=portal.KINDS,
+        currencies=portal.CURRENCIES,
         results=results or [],
         message=message,
         dashboard=_DASHBOARD,
@@ -126,13 +161,20 @@ def _render(results: list[tuple[bool, str]] | None = None, message: str = "") ->
     return page
 
 
-def _store(user_id: str, content: bytes) -> None:
-    folder = _INBOX_ROOT / user_id
-    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-    target = folder / f"{secrets.token_hex(8)}.pdf"
-    descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(descriptor, "wb") as handle:
-        handle.write(content)
+def _announce(manifest: submissions.Manifest) -> None:
+    """Off the request thread: tell the sender it arrived and, when it waits for a
+    review, the owner. `send` never raises and never says more than the kind of failure,
+    which is all that is written down."""
+    if _EMAIL is None:
+        return
+    error = _EMAIL.to(manifest.email).send(*submissions.received_mail(manifest))
+    if error:
+        sys.stderr.write(f"receipt not sent: {error}\n")
+    if manifest.status == submissions.REVIEW and _ALERT_LIMIT.allow():
+        key = (manifest.bank, manifest.kind, manifest.currency)
+        error = _EMAIL.send(*portal.review_alert({key: manifest.files}))
+        if error:
+            sys.stderr.write(f"review alert not sent: {error}\n")
 
 
 def health() -> str:
@@ -158,23 +200,92 @@ def callback() -> Response:
     return redirect(url_for("index"))
 
 
+def template() -> Response:
+    if "email" not in session:
+        return redirect(url_for("login"))
+    return Response(
+        generic_template(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=finanzas-manual.xlsx"},
+    )
+
+
+def upload_excel() -> Response | str:
+    """A workbook of savings and investments: one file, all or nothing. Only its
+    structure is checked here; the owner's import reads every row (this container
+    has no account key)."""
+    if "email" not in session:
+        return redirect(url_for("login"))
+    if not hmac.compare_digest(request.form.get("csrf", ""), session.get("csrf", "-")):
+        return _render(message="The form expired. Try again.")
+    file = request.files.get("workbook")
+    if file is None or not file.filename:
+        return _render(message="Choose a workbook.")
+    if not _LIMIT.allow(session["email"], 1):
+        return _render(message="Too many uploads this hour. Try later.")
+    try:
+        user_id = _user_id(session["email"])
+    except grpc.RpcError:
+        return _render(message="Try again in a moment.")
+    if user_id is None:
+        return _render(message="This account cannot upload files. Ask the owner.")
+    content = file.read(MAX_BYTES + 1)
+    problems = check_workbook(content)
+    if problems:
+        return _render(
+            results=[(False, f"{problem}.") for problem in problems]
+            + [(False, "Nothing was saved: fix these and send the workbook again.")]
+        )
+    manifest = submissions.create(
+        _INBOX_ROOT / user_id,
+        email=session["email"],
+        kind=submissions.EXCEL,
+        bank="Excel",
+        currency="-",
+        contents=[content],
+        review=False,
+        suffix=".xlsx",
+    )
+    threading.Thread(target=_announce, args=(manifest,), daemon=True).start()
+    return _render(
+        results=[
+            (
+                True,
+                f"Request {manifest.id} received: your workbook. The owner will "
+                "read it; you will get an email with the decision.",
+            )
+        ]
+    )
+
+
 def logout() -> Response:
     session.clear()
     return redirect(url_for("index"))
 
 
 def upload() -> Response | str:
+    """One request, all or nothing: every file is checked first and, if any fails, none
+    is kept (ADR 0041)."""
     if "email" not in session:
         return redirect(url_for("login"))
     if not hmac.compare_digest(request.form.get("csrf", ""), session.get("csrf", "-")):
         return _render(message="The form expired. Try again.")
-    bank = request.form.get("bank", "")
+    where = portal.route(
+        request.form.get("bank", ""),
+        request.form.get("kind", ""),
+        request.form.get("other_bank", ""),
+        request.form.get("currency", ""),
+        request.form.get("other_currency", ""),
+    )
     files = [f for f in request.files.getlist("files") if f.filename]
-    if bank not in portal.BANKS or not files:
-        return _render(message="Choose a bank and at least one PDF.")
+    if where is None or not files:
+        return _render(
+            message="Choose the kind of file, the bank and the currency (name them "
+            "if they are another one) and at least one PDF."
+        )
     if len(files) > portal.MAX_FILES_PER_UPLOAD:
         return _render(
-            message=f"At most {portal.MAX_FILES_PER_UPLOAD} files at a time."
+            message=f"At most {portal.MAX_FILES_PER_UPLOAD} files in one request."
         )
     if not _LIMIT.allow(session["email"], len(files)):
         return _render(message="Too many uploads this hour. Try later.")
@@ -185,23 +296,65 @@ def upload() -> Response | str:
     if user_id is None:
         return _render(message="This account cannot upload files. Ask the owner.")
 
+    supported, bank, currency = where
+    kind = request.form["kind"]
     password = request.form.get("password", "")
-    results: list[tuple[bool, str]] = []
-    for file in files:
+    unlocked: list[bytes] = []
+    failures: list[tuple[bool, str]] = []
+    for number, file in enumerate(files, start=1):
         name = file.filename or "file"
         content = file.read(portal.MAX_FILE_BYTES + 1)
-        if len(content) > portal.MAX_FILE_BYTES:
-            results.append((False, f"{name}: larger than 15 MB."))
-            continue
         try:
-            _store(user_id, unlock(content, password=password, bank=bank))
+            if len(content) > portal.MAX_FILE_BYTES:
+                raise ValueError("larger than 15 MB")
+            unlocked.append(
+                unlock(
+                    content,
+                    password=password,
+                    bank=bank,
+                    kind=kind,
+                    currency=currency,
+                )
+            )
         except pikepdf.PasswordError:
-            results.append((False, f"{name}: wrong password."))
+            failures.append((False, f"File {number} ({name}): wrong password."))
+        except TooManyPagesError:
+            failures.append((False, f"File {number} ({name}): too many pages."))
+        except ValueError as error:
+            failures.append((False, f"File {number} ({name}): {error}."))
         except pikepdf.PdfError:
-            results.append((False, f"{name}: not a readable PDF."))
-        else:
-            results.append((True, f"{name}: saved."))
-    return _render(results=results)
+            failures.append((False, f"File {number} ({name}): not a readable PDF."))
+    if failures:
+        failures.append(
+            (False, "Nothing was saved: fix these and send the whole request again.")
+        )
+        return _render(results=failures)
+
+    manifest = submissions.create(
+        _INBOX_ROOT / user_id,
+        email=session["email"],
+        kind=kind,
+        bank=bank,
+        currency=currency,
+        contents=unlocked,
+        review=not supported,
+    )
+    threading.Thread(target=_announce, args=(manifest,), daemon=True).start()
+    return _render(
+        results=[
+            (
+                True,
+                f"Request {manifest.id} received: {manifest.files} file(s). "
+                + (
+                    "This bank, kind or currency is not read yet: the owner will look "
+                    "at how to read it first."
+                    if not supported
+                    else "The owner will process it."
+                )
+                + " You will get an email with the decision.",
+            )
+        ]
+    )
 
 
 # Not decorators: Flask is not a dependency of the main project (it runs only in this
@@ -212,3 +365,5 @@ app.add_url_rule("/login", view_func=login)
 app.add_url_rule("/callback", view_func=callback)
 app.add_url_rule("/logout", view_func=logout)
 app.add_url_rule("/upload", view_func=upload, methods=["POST"])
+app.add_url_rule("/template.xlsx", view_func=template)
+app.add_url_rule("/upload-excel", view_func=upload_excel, methods=["POST"])

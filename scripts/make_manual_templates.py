@@ -15,21 +15,13 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
-from openpyxl import Workbook
-from openpyxl.styles import Font
-from openpyxl.worksheet.datavalidation import DataValidation
-from openpyxl.worksheet.worksheet import Worksheet
-
-from ingestion.manual_excel import INVESTMENT_COLUMNS, SAVINGS_COLUMNS
+from ingestion.manual_layout import build_workbook
 
 DEFAULT_OUT_DIR = Path.home() / "finance-data" / "manual"
 TEMPLATE_NAME = "plantilla-finanzas-manual.xlsx"
 
 
 _PLACES = ("Tyba fondo 1", "Tyba fondo 2", "Tyba fondo 3", "Flip")
-_TYPES = ("aporte", "retiro", "valorizacion")
-_CURRENCIES = ("PEN", "USD")
-
 _SAVINGS_EXAMPLES = (
     (
         "EJEMPLO Ripley ahorros",
@@ -90,56 +82,13 @@ _INSTRUCTIONS = (
 )
 
 
-def _fill(
-    sheet: Worksheet, columns: Sequence[str], rows: Sequence[tuple[object, ...]]
-) -> None:
-    sheet.append(list(columns))
-    for cell in sheet[1]:
-        cell.font = Font(bold=True)
-    for row in rows:
-        sheet.append(list(row))
-    for letter in "ABCDEFG"[: len(columns)]:
-        sheet.column_dimensions[letter].width = 22
-    for row in sheet.iter_rows(min_row=2):
-        for cell in row:
-            if isinstance(cell.value, date):
-                cell.number_format = "yyyy-mm-dd"
-            elif isinstance(cell.value, (int, float)):
-                cell.number_format = "#,##0.00"
-    sheet.freeze_panes = "A2"
-
-
-def _dropdown(sheet: Worksheet, column: str, values: Sequence[str]) -> None:
-    validation = DataValidation(
-        type="list", formula1=f'"{",".join(values)}"', allow_blank=True
-    )
-    validation.error = "Usa uno de los valores de la lista."
-    sheet.add_data_validation(validation)
-    validation.add(f"{column}2:{column}2000")
-
-
 def write_template(path: Path) -> None:
-    workbook = Workbook()
-    savings = workbook.active
-    assert savings is not None
-    savings.title = "Ahorros"
-    _fill(savings, SAVINGS_COLUMNS, _SAVINGS_EXAMPLES)
-    _dropdown(savings, "E", _CURRENCIES)
-
-    investments = workbook.create_sheet("Inversiones")
-    _fill(investments, INVESTMENT_COLUMNS, _INVESTMENT_EXAMPLES)
-    _dropdown(investments, "A", _PLACES)
-    _dropdown(investments, "C", _TYPES)
-    _dropdown(investments, "E", _CURRENCIES)
-
-    instructions = workbook.create_sheet("Instrucciones")
-    instructions.column_dimensions["A"].width = 120
-    for line in _INSTRUCTIONS:
-        instructions.append([line])
-    for row in instructions.iter_rows():
-        if row[0].value and row[0].value.startswith("HOJA"):
-            row[0].font = Font(bold=True)
-    workbook.save(path)
+    build_workbook(
+        savings_examples=_SAVINGS_EXAMPLES,
+        investment_examples=_INVESTMENT_EXAMPLES,
+        instructions=_INSTRUCTIONS,
+        places=_PLACES,
+    ).save(path)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

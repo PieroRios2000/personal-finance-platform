@@ -141,8 +141,105 @@ def test_the_image_takes_only_the_two_shared_files_it_needs() -> None:
     assert not (_ROOT / "upload" / "api_pb2.py").exists()
 
 
-def test_processing_what_was_uploaded_is_one_command_over_every_inbox_folder() -> None:
+def test_supported_pairs_go_to_the_pipeline_and_the_rest_to_review() -> None:
+    route = portal.Route
+    assert portal.route("BCP", "account", "", "PEN", "") == route(True, "BCP", "PEN")
+    assert portal.route("Scotiabank", "card", "", "BOTH", "") == route(
+        True, "Scotiabank", "BOTH"
+    )
+    assert portal.route("Scotiabank", "account", "", "USD", "") == route(
+        True, "Scotiabank", "USD"
+    )
+    # No BCP card parser yet, and another bank has none at all.
+    assert portal.route("BCP", "card", "", "PEN", "") == route(False, "BCP", "PEN")
+    assert portal.route(portal.OTHER_BANK, "card", "Interbank", "PEN", "") == route(
+        False, "Interbank", "PEN"
+    )
+
+
+def test_another_currency_is_its_own_request_even_for_a_supported_bank() -> None:
+    result = portal.route("BCP", "account", "", portal.OTHER_CURRENCY, "euros")
+
+    assert result == portal.Route(False, "BCP", "EUROS")
+
+
+def test_a_form_that_is_not_one_of_the_options_is_refused() -> None:
+    assert portal.route("BCP", "loan", "", "PEN", "") is None
+    assert portal.route("Evil Bank", "account", "", "PEN", "") is None
+    assert portal.route("BCP", "account", "", "GOLD", "") is None
+    assert portal.route(portal.OTHER_BANK, "account", "   ", "PEN", "") is None
+    assert portal.route(portal.OTHER_BANK, "account", "<>", "PEN", "") is None
+    assert portal.route("BCP", "account", "", portal.OTHER_CURRENCY, " ") is None
+
+
+def test_the_currencies_offered_include_the_two_the_pipeline_reads() -> None:
+    assert {"PEN", "USD", "BOTH", portal.OTHER_CURRENCY} == set(portal.CURRENCIES)
+
+
+def test_a_bank_name_is_reduced_before_it_reaches_a_file_or_its_metadata() -> None:
+    assert (
+        portal.clean_bank_name("  Banco <b>Falabella</b>\n  Peru ")
+        == "Banco bFalabellab Peru"
+    )
+    assert portal.clean_bank_name("../../etc/passwd") == "....etcpasswd"
+    assert len(portal.clean_bank_name("x" * 200)) == 40
+
+
+def test_the_pipeline_never_looks_in_the_review_folder() -> None:
+    """`organize()` globs `*.pdf` in the person's inbox folder, not beneath it."""
+    organizer = (_ROOT / "ingestion" / "organizer.py").read_text()
+
+    assert 'inbox.glob("*.pdf")' in organizer and "rglob" not in organizer
+
+
+def test_the_alert_to_the_owner_has_names_and_counts_only() -> None:
+    subject, body = portal.review_alert(
+        {("Banco de Prueba", "card", "PEN"): 2, ("BCP", "account", "EUROS"): 1}
+    )
+
+    assert "3 file(s)" in subject
+    assert "- Banco de Prueba / card / PEN: 2" in body
+    assert "- BCP / account / EUROS: 1" in body
+    assert "make review-uploads" in body
+    assert "@" not in subject + body and ".pdf" not in subject + body
+
+
+def test_the_alerts_are_limited_so_uploads_cannot_flood_the_owners_inbox() -> None:
+    limit = portal.AlertLimit()
+
+    assert all(limit.allow(now=t) for t in range(portal.MAX_ALERTS_PER_HOUR))
+    assert not limit.allow(now=100)
+    assert limit.allow(now=portal.WINDOW_SECONDS + 100)
+
+
+def test_the_sender_and_the_owner_are_told_off_the_request_thread() -> None:
+    dockerfile = (_ROOT / "upload" / "Dockerfile").read_text()
+    environment = _compose()["upload"]["environment"]
+
+    assert "from alerting.channels import EmailChannel" in _SERVER
+    assert "_EMAIL = EmailChannel.from_env(os.environ)" in _SERVER
+    assert "target=_announce" in _SERVER
+    assert "_EMAIL.to(manifest.email).send(*submissions.received_mail(manifest))" in (
+        _SERVER
+    )
+    assert "COPY alerting/__init__.py alerting/channels.py" in dockerfile
+    assert "ingestion/submissions.py" in dockerfile
+    for name in ("ALERT_SMTP_HOST", "ALERT_SMTP_PASSWORD", "ALERT_EMAIL_TO"):
+        assert environment[name].startswith("${"), name
+    # A failure writes what the channel returns (a type name), never a secret.
+    assert 'sys.stderr.write(f"receipt not sent: {error}' in _SERVER
+
+
+def test_at_most_ten_files_go_in_one_request_and_one_bad_file_sinks_all() -> None:
+    assert portal.MAX_FILES_PER_UPLOAD == 10
+    assert "Nothing was saved" in _SERVER
+    # The submission is written only after every file passed.
+    assert _SERVER.index("Nothing was saved") < _SERVER.index("submissions.create(")
+
+
+def test_processing_uploads_is_one_command_that_reads_each_request_whole() -> None:
     makefile = (_ROOT / "Makefile").read_text()
 
     assert "ingest-uploads:" in makefile
-    assert 'uv run pfp ingest --user "$$(basename "$$dir")"' in makefile
+    assert "scripts.process_submissions" in makefile and " run" in makefile
+    assert "decide-submission:" in makefile

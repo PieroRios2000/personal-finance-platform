@@ -37,6 +37,36 @@ uploader. Four things were open (backlog, 2026-09-26) and the owner decided them
 - **v1 is the bank-statement section.** Sections by file type (card balance, the manual
   Excel for savings and investments) follow; the Excel needs its per-user layout decided.
 
+## Amendment (2026-09-27): what kind of file, and other banks
+
+The form asks two more things, at the owner's request: **what the file is** (a bank account
+statement or a credit card statement) and **the bank**, with an "Other bank" option and a name
+field. Only the pairs a parser reads today go to the pipeline: BCP account statements, and
+Scotiabank's card and account statements (one parser). **Anything else, another bank or BCP's
+credit card, is not fed to the pipeline**: it is unlocked like the rest and kept in
+`inbox/<user_id>/_new_bank/`, which `pfp organize` never looks in, tagged with the bank and kind
+the person said (`/PFPBank`, `/PFPKind`). The person is told plainly that it is not read yet.
+`make review-uploads` lists what waits, by bank and kind with counts of files and people, never
+a file name or a page. Each new bank or kind is then **its own isolated request**: the owner
+looks at a masked sample of the layout (ADR 0004, the layout inspector) and decides how to write
+the extraction, as was done for BCP and Scotiabank.
+
+The form also asks **the currency**: soles, dollars, **both** (a card statement usually carries both
+at once, as Scotiabank's does) or **another currency**, named. Soles, dollars and both are what the
+pipeline reads; another currency is its own request, so a file in one goes to `_new_bank/` even for
+a supported bank and kind. It is written into the file as `/PFPCurrency`, and `make review-uploads`
+groups by bank, kind and currency. As with the bank, it is a hint: the parsers read the currency
+from the content.
+
+**The owner is told when a file is kept for review**: an email over the alerting's channel (Phase 7,
+the same `ALERT_SMTP_*` and `ALERT_EMAIL_TO`; nothing is sent while `ALERT_EMAIL_TO` is unset). It is
+immediate, not the weekly digest of ADR 0026, because a person is waiting on an answer, and it says
+only bank, kind, currency and how many (never a file name, a person or a page, ADR 0004). It is sent
+from a thread, at most 6 an hour whatever people upload; the rest stay listed by `make review-uploads`.
+
+**Amended by [ADR 0041](0041-uploads-are-requests-accepted-or-rejected-whole.md)**: an upload is a request of up to
+10 files, accepted or rejected whole, kept in `_submissions/`, and the sender is emailed at each step.
+
 ## Alternatives considered
 
 - **Store passwords (encrypted)**: convenient, but holds other people's bank secrets.

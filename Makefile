@@ -27,7 +27,7 @@ PFP = docker compose -p $(PFP_PROJECT)
 # Each environment's OpenMetadata artifacts (they hold a token and the Postgres password).
 export PFP_OM_ARTIFACTS = ./artifacts/$(PFP_ENV)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -138,11 +138,23 @@ ingest:
 	@$(MAKE) --no-print-directory guard-user TARGET=ingest
 	$(LOAD_ENV) && uv run pfp ingest --user "$$PFP_USER"
 
-# Everyone's inbox, the owner's and what the upload portal saved (T44, ADR 0040): one
-# `pfp ingest` per folder, named by its user_id. Idempotent. Then `make build`.
+# What people sent through the upload portal (T48, ADR 0041): each request is read whole, accepted
+# (its files go through `pfp ingest`) or rejected, and the person is emailed either way. Then
+# `make build`. `make submissions` lists them; `make decide-submission ID=... DECISION=reject|release`
+# answers one that waits for review (another bank, kind or currency).
 ingest-uploads:
-	$(LOAD_ENV) && for dir in "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}"/*/; do \
-		uv run pfp ingest --user "$$(basename "$$dir")" || exit $$?; done
+	$(LOAD_ENV) && uv run python -m scripts.process_submissions --inbox-root "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}" run
+
+submissions:
+	$(LOAD_ENV) && uv run python -m scripts.process_submissions --inbox-root "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}" list
+
+decide-submission:
+	@test -n "$(ID)" -a -n "$(DECISION)" || { echo "usage: make decide-submission ID=<id> DECISION=reject|release" >&2; exit 2; }
+	$(LOAD_ENV) && uv run python -m scripts.process_submissions --inbox-root "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}" decide "$(ID)" "$(DECISION)"
+
+# Files people uploaded for a bank or kind no parser reads yet (T46): counts by bank and kind.
+review-uploads:
+	$(LOAD_ENV) && uv run python -m scripts.review_uploads --inbox-root "$${PFP_INBOX_DIR:-$$HOME/finance-data/inbox}"
 
 build:
 	$(LOAD_ENV) && uv run dbt deps --project-dir dbt --profiles-dir dbt && \

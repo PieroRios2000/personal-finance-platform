@@ -16,6 +16,10 @@ This writes `~/finance-data/manual/plantilla-finanzas-manual.xlsx` (from Windows
 `finanzas-manual.xlsx` in the same folder and fill in the copy.** The script never writes that
 name, so it cannot overwrite your data. Every example row says `EJEMPLO`: delete them.
 
+## For other people: the portal
+
+Someone else does not need your machine: the upload portal has a **Savings and investments (Excel)** section with a generic template (funds and accounts in free text) they download, fill in and send back; you read it with `make ingest-uploads` (SETUP.md, section 12). At least one sheet must have data; the other can keep only its headers.
+
 ## The sheets
 
 Numbers and dates must be Excel numbers and dates, not text. One movement per row. Do not type
