@@ -28,6 +28,7 @@ from werkzeug.wrappers import Response
 
 from alerting.channels import EmailChannel
 from ingestion import submissions
+from ingestion.manual_layout import MAX_BYTES, check_workbook, generic_template
 from ingestion.unlock import TooManyPagesError, unlock
 
 _INBOX_ROOT = Path(os.environ.get("PFP_INBOX_ROOT", "/inbox"))
@@ -107,6 +108,18 @@ type is used once to unlock the file and is never saved.</p>
     required></label>
   <button type="submit">Upload</button>
 </form>
+<h2>Savings and investments (Excel)</h2>
+<p>For accounts and funds that give you no statement. Download the template, fill in
+at least one sheet (the other may stay empty) and send it back. It is read as a whole:
+if anything is wrong, nothing is loaded and you are told what.</p>
+<p><a href="{{ url_for('template') }}">Download the template (.xlsx)</a></p>
+<form method="post" action="{{ url_for('upload_excel') }}"
+  enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Your workbook <input type="file" name="workbook" required
+    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+  <button type="submit">Upload the workbook</button>
+</form>
 </body></html>
 """
 
@@ -185,6 +198,64 @@ def callback() -> Response:
     token = oauth.dex.authorize_access_token()
     session["email"] = str(token["userinfo"]["email"]).lower()
     return redirect(url_for("index"))
+
+
+def template() -> Response:
+    if "email" not in session:
+        return redirect(url_for("login"))
+    return Response(
+        generic_template(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=finanzas-manual.xlsx"},
+    )
+
+
+def upload_excel() -> Response | str:
+    """A workbook of savings and investments: one file, all or nothing. Only its
+    structure is checked here; the owner's import reads every row (this container
+    has no account key)."""
+    if "email" not in session:
+        return redirect(url_for("login"))
+    if not hmac.compare_digest(request.form.get("csrf", ""), session.get("csrf", "-")):
+        return _render(message="The form expired. Try again.")
+    file = request.files.get("workbook")
+    if file is None or not file.filename:
+        return _render(message="Choose a workbook.")
+    if not _LIMIT.allow(session["email"], 1):
+        return _render(message="Too many uploads this hour. Try later.")
+    try:
+        user_id = _user_id(session["email"])
+    except grpc.RpcError:
+        return _render(message="Try again in a moment.")
+    if user_id is None:
+        return _render(message="This account cannot upload files. Ask the owner.")
+    content = file.read(MAX_BYTES + 1)
+    problems = check_workbook(content)
+    if problems:
+        return _render(
+            results=[(False, f"{problem}.") for problem in problems]
+            + [(False, "Nothing was saved: fix these and send the workbook again.")]
+        )
+    manifest = submissions.create(
+        _INBOX_ROOT / user_id,
+        email=session["email"],
+        kind=submissions.EXCEL,
+        bank="Excel",
+        currency="-",
+        contents=[content],
+        review=False,
+        suffix=".xlsx",
+    )
+    threading.Thread(target=_announce, args=(manifest,), daemon=True).start()
+    return _render(
+        results=[
+            (
+                True,
+                f"Request {manifest.id} received: your workbook. The owner will "
+                "read it; you will get an email with the decision.",
+            )
+        ]
+    )
 
 
 def logout() -> Response:
@@ -294,3 +365,5 @@ app.add_url_rule("/login", view_func=login)
 app.add_url_rule("/callback", view_func=callback)
 app.add_url_rule("/logout", view_func=logout)
 app.add_url_rule("/upload", view_func=upload, methods=["POST"])
+app.add_url_rule("/template.xlsx", view_func=template)
+app.add_url_rule("/upload-excel", view_func=upload_excel, methods=["POST"])

@@ -237,3 +237,45 @@ def test_an_unreadable_workbook_is_reported_once(
 
     assert code == 1
     assert capsys.readouterr().err.count("not a readable .xlsx workbook") == 1
+
+
+def test_someone_who_only_tracks_investments_can_leave_the_savings_sheet_empty(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The portal's template has both sheets; a person may fill just one (T49)."""
+    from ingestion.manual_layout import INVESTMENT_COLUMNS
+
+    workbook = Workbook()
+    savings = workbook.active
+    assert savings is not None
+    savings.title = "Ahorros"
+    savings.append(list(SAVINGS_COLUMNS))  # headers only
+    funds = workbook.create_sheet("Inversiones")
+    funds.append(list(INVESTMENT_COLUMNS))
+    funds.append(("Fondo A", date(2026, 7, 5), "aporte", 100, "PEN", 100, None))
+    funds.append(("Fondo A", date(2026, 7, 31), "valorizacion", 0, "PEN", 102, None))
+    path = tmp_path / "only-investments.xlsx"
+    workbook.save(path)
+
+    code = cli.main(["import-manual", str(path)])
+
+    assert code == 0
+    assert "Inversiones: 1 month(s) written" in capsys.readouterr().out
+
+
+def test_a_workbook_with_both_sheets_empty_is_still_a_problem(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from ingestion.manual_layout import INVESTMENT_COLUMNS
+
+    workbook = Workbook()
+    savings = workbook.active
+    assert savings is not None
+    savings.title = "Ahorros"
+    savings.append(list(SAVINGS_COLUMNS))
+    workbook.create_sheet("Inversiones").append(list(INVESTMENT_COLUMNS))
+    path = tmp_path / "empty.xlsx"
+    workbook.save(path)
+
+    assert cli.main(["import-manual", str(path)]) == 1
+    assert "the sheet has no rows" in capsys.readouterr().err

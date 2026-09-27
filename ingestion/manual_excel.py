@@ -37,6 +37,11 @@ from typing import Any
 
 from openpyxl import load_workbook
 
+from ingestion.manual_layout import EXAMPLE_PREFIX as _EXAMPLE_PREFIX
+from ingestion.manual_layout import INVESTMENT_COLUMNS as INVESTMENT_COLUMNS
+from ingestion.manual_layout import INVESTMENT_SHEET as INVESTMENT_SHEET
+from ingestion.manual_layout import SAVINGS_COLUMNS as SAVINGS_COLUMNS
+from ingestion.manual_layout import SHEET as SHEET
 from ingestion.reconciliation import reconcile
 from ingestion.schema import (
     Currency,
@@ -49,19 +54,6 @@ from ingestion.schema import (
     normalize_description,
 )
 
-SAVINGS_COLUMNS = ("cuenta", "fecha", "descripcion", "monto", "moneda", "saldo_final")
-INVESTMENT_COLUMNS = (
-    "lugar",
-    "fecha",
-    "tipo",
-    "monto",
-    "moneda",
-    "saldo_final",
-    "nota",
-)
-SHEET = "Ahorros"
-INVESTMENT_SHEET = "Inversiones"
-_EXAMPLE_PREFIX = "EJEMPLO"
 _MONTH_END = "cierre de mes"
 
 

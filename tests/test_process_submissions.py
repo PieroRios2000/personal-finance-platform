@@ -273,3 +273,102 @@ def test_pfp_ingests_output_is_read_for_the_counts(
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: Done())
 
     assert ps.ingest_with_pfp("ana-1111") == (2, 1, 0, 2)
+
+
+# ---- the Excel workbook of savings and investments (T49)
+def _excel_submission(
+    root: Path, content: bytes = b"PK-not-read-here"
+) -> submissions.Manifest:
+    return submissions.create(
+        root / USER,
+        email="ana@example.com",
+        kind=submissions.EXCEL,
+        bank="Excel",
+        currency="-",
+        contents=[content],
+        review=False,
+        suffix=".xlsx",
+    )
+
+
+def test_a_workbook_that_reads_is_imported_and_the_person_is_told(
+    tmp_path: Path,
+) -> None:
+    manifest = _excel_submission(tmp_path)
+    outbox = Outbox()
+
+    lines = ps.run(
+        tmp_path,
+        notify=outbox,
+        check_excel=lambda path, user: [],
+        import_excel=lambda path, user: 7,
+    )
+
+    assert lines == [f"{manifest.id} accepted: 7 loaded (emailed)"]
+    assert _status(tmp_path, manifest).loaded == 7
+    assert "a workbook of savings and investments" in outbox.sent[0][2]
+
+
+def test_one_problem_rejects_the_whole_workbook_with_row_numbers_only(
+    tmp_path: Path,
+) -> None:
+    manifest = _excel_submission(tmp_path)
+    outbox = Outbox()
+    imported: list[str] = []
+
+    def never(path: Path, user: str) -> int:
+        imported.append(user)
+        return 1
+
+    ps.run(
+        tmp_path,
+        notify=outbox,
+        check_excel=lambda path, user: [
+            "Ahorros row 4: saldo_final does not follow from the previous row",
+            "Inversiones row 2: tipo is not aporte, retiro or valorizacion",
+        ],
+        import_excel=never,
+    )
+
+    assert imported == []  # nothing loaded
+    saved = _status(tmp_path, manifest)
+    assert saved.status == submissions.REJECTED
+    assert (
+        "Ahorros row 4" in outbox.sent[0][2]
+        and "Inversiones row 2" in outbox.sent[0][2]
+    )
+
+
+def test_a_failed_import_of_a_good_workbook_is_reported_not_emailed(
+    tmp_path: Path,
+) -> None:
+    _excel_submission(tmp_path)
+    outbox = Outbox()
+
+    lines = ps.run(
+        tmp_path,
+        notify=outbox,
+        check_excel=lambda path, user: [],
+        import_excel=lambda path, user: None,
+    )
+
+    assert "import FAILED" in lines[0] and not outbox.sent
+
+
+def test_only_the_savings_sheet_being_empty_is_not_a_problem_when_funds_load() -> None:
+    assert ps._NO_SAVINGS_ROWS == "Ahorros: the sheet has no rows"
+
+
+def test_pfp_import_manuals_output_is_read_for_the_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Done:
+        returncode = 0
+        stdout = (
+            "Ahorros: 2 statement(s) written (a month already loaded is replaced)\n"
+            "Inversiones: 3 month(s) written\n"
+        )
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: Done())
+
+    assert ps.import_with_pfp(Path("x.xlsx"), "ana-1111") == 5

@@ -29,6 +29,7 @@ REJECTED = "rejected"  # a file failed: nothing was loaded
 STATUSES = (RECEIVED, REVIEW, ACCEPTED, REJECTED)
 
 MAX_FILES = 10
+EXCEL = "excel"  # the kind of a workbook of savings and investments (T49)
 
 
 @dataclass
@@ -59,6 +60,7 @@ def create(
     currency: str,
     contents: list[bytes],
     review: bool,
+    suffix: str = ".pdf",
 ) -> Manifest:
     """Write a submission's folder: its files (unlocked) and its manifest."""
     manifest = Manifest(
@@ -74,7 +76,7 @@ def create(
     folder = inbox_user_dir / FOLDER / manifest.id
     folder.mkdir(mode=0o700, parents=True)
     for number, content in enumerate(contents, start=1):
-        _write_private(folder / f"{number:02d}.pdf", content)
+        _write_private(folder / f"{number:02d}{suffix}", content)
     write(folder, manifest)
     return manifest
 
@@ -109,6 +111,8 @@ def _write_private(path: Path, content: bytes, *, replace: bool = False) -> None
 
 # What the person is told. English, like the portal; no file name, no amount.
 def _what(manifest: Manifest) -> str:
+    if manifest.kind == EXCEL:
+        return "a workbook of savings and investments"
     return (
         f"{manifest.files} file(s): {manifest.bank}, {manifest.kind}, "
         f"{manifest.currency}"
@@ -136,7 +140,9 @@ def received_mail(manifest: Manifest) -> tuple[str, str]:
 def accepted_mail(manifest: Manifest) -> tuple[str, str]:
     body = (
         f"Your request {manifest.id} ({_what(manifest)}) was accepted and "
-        f"processed: {manifest.loaded} statement(s) are now in your dashboard."
+        f"processed: {manifest.loaded} "
+        f"{'month(s) or statement(s)' if manifest.kind == EXCEL else 'statement(s)'}"
+        " are now in your dashboard."
     )
     if manifest.duplicates:
         body += f"\n{manifest.duplicates} file(s) were already loaded and were ignored."
