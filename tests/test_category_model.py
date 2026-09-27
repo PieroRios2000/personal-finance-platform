@@ -3,6 +3,9 @@ beat (T52, ADR 0044). Every description here is invented -- general, synthetic
 merchant-style text, never the owner's real one, per his own instruction to prove the
 structure first."""
 
+from pathlib import Path
+
+import joblib
 import pytest
 
 from categorization import model, rules
@@ -86,6 +89,23 @@ def test_metrics_never_carry_a_description() -> None:
     rendered = repr(metrics)
     for description in _DESCRIPTIONS:
         assert description not in rendered
+
+
+def test_load_returns_none_when_no_model_has_been_saved_yet(tmp_path: Path) -> None:
+    assert model.load(tmp_path / "does-not-exist.joblib") is None
+
+
+def test_load_returns_a_usable_pipeline(tmp_path: Path) -> None:
+    pipeline, _metrics = model.train(_DESCRIPTIONS, _CATEGORIES)
+    path = tmp_path / "model.joblib"
+    joblib.dump(pipeline, path)
+
+    loaded = model.load(path)
+
+    assert loaded is not None
+    category, confidence = model.predict(loaded, "TAXI HELP.UBER.COM")
+    assert category == "Transporte"
+    assert 0.0 < confidence <= 1.0
 
 
 def test_score_rules_reports_the_same_shape_of_metrics_for_the_baseline() -> None:

@@ -724,6 +724,18 @@ ones keep their category as the prefilled value); re-importing replaces your who
 as the manual Excel's investment months. Nothing here ever leaves your machine: the file is written
 and read locally, never seen by Claude (ADR 0004 applies to it exactly as it does to a real PDF).
 
+Once you have enough labels (T52, ADR 0044), train a classifier and compare it to the rules above:
+
+```bash
+make train-category-model PFP_USER=piero
+# reports macro-F1 and precision per category for both the trained model and the rules-based
+# guesser, side by side, and saves the model under ~/finance-data/models/ (never the repo).
+```
+
+The next `make export-category-labels` picks up the saved model automatically -- its prediction
+becomes the prefilled guess instead of the rules-based one, still just a suggestion (T53). Delete
+the saved model (or point `PFP_CATEGORY_MODEL_PATH` elsewhere) to go back to the rules-based guess.
+
 ## Reproducing CI locally (`make ci-local`)
 
 A PR can fail in CI for a reason that never shows on your machine: a variable CI does not set, a

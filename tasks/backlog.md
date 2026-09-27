@@ -112,9 +112,11 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       scored (macro-F1, precision per category) against the rules-based baseline on every run
       (`make train-category-model`). Built and verified against synthetic, general categories; the
       owner's own real labels are still to come.
-- [ ] **Wire the trained model into the labeling file's suggestion** (T53): once enough real
-      labels exist, `export_category_labels.py` proposes from the trained model instead of the
-      rules-based guesser -- still reviewed, never assigned outright.
+- [x] **Wire the trained model into the labeling file's suggestion** (T53): `export_category_labels.py`
+      proposes from the trained model once one has been saved
+      (`make train-category-model`), the rules-based guesser until then -- still reviewed, never
+      assigned outright. The owner still needs to label enough of his own real descriptions and
+      train on them before this actually changes what he sees.
 - [ ] **Categorize new movements as a batch step** (T54; reviewer feedback, 2026-09-27): a
       statement is categorized once, at ingest -- the natural integration is a step of
       `pfp ingest`/`make ingest-uploads` or the Dagster pipeline that writes the prediction into
