@@ -57,12 +57,12 @@ def environment(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_fetch_groups_queries_gold_scoped_to_the_user_excluding_transfers(
     environment: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fake = _FakeConnection([("BCP", "PLAZA VEA SAN MIGUEL", 3)])
+    fake = _FakeConnection([("BCP", "NETFLIX.COM", 3)])
     monkeypatch.setattr(psycopg, "connect", lambda conninfo: fake)
 
     groups = ecl.fetch_groups("piero")
 
-    assert groups == [("BCP", "PLAZA VEA SAN MIGUEL", 3)]
+    assert groups == [("BCP", "NETFLIX.COM", 3)]
     assert fake._cursor.seen_params == {"user": "piero"}
 
 
@@ -72,15 +72,15 @@ def test_main_writes_the_template_with_a_guess_already_filled_in(
     monkeypatch.setattr(
         ecl,
         "fetch_groups",
-        lambda user_id: [("BCP", "PLAZA VEA SAN MIGUEL", 3), ("BCP", "XYZ CORP", 1)],
+        lambda user_id: [("BCP", "NETFLIX.COM", 3), ("BCP", "XYZ CORP", 1)],
     )
     out = tmp_path / "labels.xlsx"
 
     assert ecl.main(["--user", "piero", "--out", str(out)]) == 0
 
     rows = list(load_workbook(out)["Categorias"].iter_rows(min_row=2, values_only=True))
-    assert rows[0] == ("BCP", "PLAZA VEA SAN MIGUEL", 3, "Alimentacion", "Alimentacion")
-    assert rows[1] == ("BCP", "XYZ CORP", 1, "Sin categorizar", "Otros")
+    assert rows[0] == ("BCP", "NETFLIX.COM", 3, "Servicios", "Servicios")
+    assert rows[1] == ("BCP", "XYZ CORP", 1, "Sin categorizar", "Gastos varios")
 
 
 def test_main_requires_a_user(monkeypatch: pytest.MonkeyPatch) -> None:

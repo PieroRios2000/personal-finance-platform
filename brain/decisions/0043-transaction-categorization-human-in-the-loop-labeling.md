@@ -61,6 +61,24 @@ sent anywhere (ADR 0004 applies to this exactly as it does to a real PDF).
 - `categorization/` is a new root package (import-linter), standalone like `alerting`: it knows the
   label file's shape and the cold-start rules, nothing about how a statement is parsed or stored.
 
+## Amendment: the final six categories (2026-09-27)
+
+The category list this ADR launched with (14 items, an English-descriptions placeholder) is
+replaced by the owner's own short list: `Servicios`, `Restaurantes`, `Viajes`, `Transporte`,
+`Deporte`, `Gastos varios` (`categorization/labels.py`'s `CATEGORIES`, `dbt/seeds/category.csv`).
+His own reasoning: each category earns its own line in a dashboard chart, and narrowing further
+only makes sense once these stop being enough ("por el momento con estas categorias podemos
+empezar, despues podemos desglosarlo").
+
+This list is spending-only. `Servicios` absorbs what were separate categories for utilities,
+streaming, health, education and bank fees -- all recurring, non-discretionary charges the owner
+is fine seeing as one line. `Viajes` (airfare, lodging, travel agencies) and `Deporte` (gyms,
+sports clubs) are new. **Groceries, income, transfers between the owner's own accounts and card
+payments have no dedicated category under this list** -- `categorization/rules.py` leaves them
+unmatched on purpose, and they land in `Gastos varios` like anything else the guesser doesn't
+recognize. Flagged to the owner when this landed; his call to accept the gap for now rather than
+grow the list back.
+
 ## Related
 
 [ADR 0004](0004-real-pdfs-never-leave-your-machine.md),

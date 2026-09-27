@@ -22,24 +22,18 @@ COLUMNS = (
     "suggested_category",
     "category",
 )
-# The owner's own call, kept short on purpose: each one earns its own line in a chart,
-# and "Otros" is always available for anything that doesn't fit. Add here, never a
-# random new string in the file -- import_category_labels.py rejects anything else.
+# The owner's own call, kept short on purpose (2026-09-27): each one earns its own line
+# in a chart, and "Gastos varios" is always available for anything that doesn't fit --
+# narrow the list further only once these stop being enough ("después podemos
+# desglosarlo"). Add here, never a random new string in the file --
+# import_category_labels.py rejects anything else.
 CATEGORIES = (
-    "Alimentacion",
-    "Restaurantes",
-    "Transporte",
-    "Entretenimiento",
-    "Salud",
     "Servicios",
-    "Educacion",
-    "Vivienda",
-    "Ropa",
-    "Comisiones bancarias",
-    "Ingreso",
-    "Pago de tarjeta",
-    "Transferencias",
-    "Otros",
+    "Restaurantes",
+    "Viajes",
+    "Transporte",
+    "Deporte",
+    "Gastos varios",
 )
 
 
@@ -47,7 +41,7 @@ def write_template(path: Path, rows: list[tuple[str, str, int, str]]) -> None:
     """One row per (bank, description): `movements` is how many times it appears,
     `suggested_category` the cold-start guess, which may be "Sin categorizar" (no
     rule matched) -- not one of `CATEGORIES`, so never a valid final answer.
-    `category` starts equal to the suggestion when it's a real one, "Otros"
+    `category` starts equal to the suggestion when it's a real one, "Gastos varios"
     otherwise: always something `read_completed` will accept unedited."""
     workbook = Workbook()
     sheet = workbook.active
@@ -57,7 +51,7 @@ def write_template(path: Path, rows: list[tuple[str, str, int, str]]) -> None:
     for cell in sheet[1]:
         cell.font = Font(bold=True)
     for bank, description, movements, suggested in rows:
-        default = suggested if suggested in CATEGORIES else "Otros"
+        default = suggested if suggested in CATEGORIES else "Gastos varios"
         sheet.append([bank, description, movements, suggested, default])
     sheet.column_dimensions["B"].width = 60
     for letter in ("A", "C", "D", "E"):

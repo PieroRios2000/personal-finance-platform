@@ -14,28 +14,31 @@ UNKNOWN = "Sin categorizar"
 
 # Ordered: the first pattern that matches wins, so a more specific rule (a named
 # streaming service) goes before a more general one (any recurring "SERVICIO" charge).
+#
+# The owner's six categories (2026-09-27, see categorization/labels.py) are
+# spending-only, so groceries, income, transfers and card payments have no
+# dedicated rule here on purpose -- they fall through to UNKNOWN, and the
+# labeling template then defaults them to "Gastos varios" (labels.py).
 _RULES: tuple[tuple[str, str], ...] = (
-    (r"NETFLIX|SPOTIFY|DISNEY|HBO|YOUTUBE\s*PREMIUM|PRIME\s*VIDEO", "Entretenimiento"),
     (r"UBER|CABIFY|DIDI|TAXI|PEAJE|GRIFO|PETROPERU|PRIMAX|REPSOL", "Transporte"),
-    (
-        r"PLAZA\s*VEA|WONG|METRO|TOTTUS|VIVANDA|MERCADO|MINIMARKET|SUPERMERCADO",
-        "Alimentacion",
-    ),
     (r"RESTAURANT|RAPPI|PEDIDOSYA|DELIVERY|CHIFA|POLLERIA", "Restaurantes"),
-    (r"FARMACIA|BOTICA|CLINICA|HOSPITAL|SEGURO\s*SALUD|EPS", "Salud"),
     (
-        r"LUZ\s*DEL\s*SUR|SEDAPAL|CALIDDA|CLARO|MOVISTAR|ENTEL|BITEL|INTERNET",
+        r"AEROLINEA|LATAM|SKY\s*AIRLINE|AVIANCA|JETSMART|HOTEL|HOSTAL|BOOKING|AIRBNB"
+        r"|DESPEGAR|AGENCIA\s*DE\s*VIAJES",
+        "Viajes",
+    ),
+    (
+        r"GIMNASIO|GYM|SMARTFIT|BODYTECH|CLUB\s*DEPORTIVO|ACADEMIA\s*DE|PADEL|CROSSFIT",
+        "Deporte",
+    ),
+    (
+        r"NETFLIX|SPOTIFY|DISNEY|HBO|YOUTUBE\s*PREMIUM|PRIME\s*VIDEO"
+        r"|LUZ\s*DEL\s*SUR|SEDAPAL|CALIDDA|CLARO|MOVISTAR|ENTEL|BITEL|INTERNET"
+        r"|FARMACIA|BOTICA|CLINICA|HOSPITAL|SEGURO\s*SALUD|EPS"
+        r"|UNIVERSIDAD|INSTITUTO|COLEGIO|PENSION\s*ESCOLAR|PLATZI|UDEMY|COURSERA"
+        r"|COMISION|ITF|MANTENIMIENTO\s*DE\s*CUENTA|PORTES",
         "Servicios",
     ),
-    (
-        r"UNIVERSIDAD|INSTITUTO|COLEGIO|PENSION\s*ESCOLAR|PLATZI|UDEMY|COURSERA",
-        "Educacion",
-    ),
-    (r"ALQUILER|ARRIENDO|INMOBILIARIA", "Vivienda"),
-    (r"COMISION|ITF|MANTENIMIENTO\s*DE\s*CUENTA|PORTES", "Comisiones bancarias"),
-    (r"SUELDO|PLANILLA|HONORARIOS|ABONO\s*DE\s*REMUNERACION", "Ingreso"),
-    (r"PAGO\s*TARJETA|PAGO\s*DE\s*TC", "Pago de tarjeta"),
-    (r"TRANSFERENCIA|INTERBANK\s*A|TRANSF\.?\s*A\s*TERCEROS", "Transferencias"),
 )
 _COMPILED = tuple((re.compile(pattern), category) for pattern, category in _RULES)
 

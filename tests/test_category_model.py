@@ -11,52 +11,52 @@ from categorization import model, rules
 # enough variety (and some noise) that a bag of character n-grams has something real
 # to learn from, not just one repeated string per class.
 _DESCRIPTIONS = [
-    "PLAZA VEA SAN MIGUEL",
-    "SUPERMERCADO WONG BENAVIDES",
-    "TOTTUS EL POLVORIN",
-    "MINIMARKET LA ESQUINA",
-    "UBER *TRIP HELP.UBER.COM",
     "GRIFO PRIMAX AV BRASIL",
     "TAXI SATELITAL LIMA",
     "PEAJE PUENTE PIEDRA",
+    "UBER *TRIP HELP.UBER.COM",
+    "RESTAURANT CHIFA WA LOK",
+    "RAPPI PEDIDOS DELIVERY",
+    "POLLERIA EL RANCHO",
+    "PEDIDOSYA LIMA",
     "NETFLIX.COM 099999999",
     "SPOTIFY AB STOCKHOLM",
-    "SUELDO PLANILLA SEP",
-    "ABONO DE REMUNERACION",
-    "COMISION MANTENIMIENTO DE CUENTA",
-    "ITF RETENCION",
+    "GIMNASIO SMARTFIT MIRAFLORES",
+    "CLUB DEPORTIVO REGATAS",
+    "HOTEL COSTA DEL SOL",
+    "LATAM AIRLINES PERU",
 ]
 _CATEGORIES = [
-    "Alimentacion",
-    "Alimentacion",
-    "Alimentacion",
-    "Alimentacion",
     "Transporte",
     "Transporte",
     "Transporte",
     "Transporte",
-    "Entretenimiento",
-    "Entretenimiento",
-    "Ingreso",
-    "Ingreso",
-    "Comisiones bancarias",
-    "Comisiones bancarias",
+    "Restaurantes",
+    "Restaurantes",
+    "Restaurantes",
+    "Restaurantes",
+    "Servicios",
+    "Servicios",
+    "Deporte",
+    "Deporte",
+    "Viajes",
+    "Viajes",
 ]
 
 
 def test_too_few_examples_is_refused() -> None:
     with pytest.raises(model.NotEnoughDataError):
-        model.train(["A", "B"], ["Otros", "Otros"])
+        model.train(["A", "B"], ["Gastos varios", "Gastos varios"])
 
 
 def test_a_single_category_is_refused_even_with_enough_rows() -> None:
     with pytest.raises(model.NotEnoughDataError):
-        model.train(["A"] * 10, ["Otros"] * 10)
+        model.train(["A"] * 10, ["Gastos varios"] * 10)
 
 
 def test_a_category_with_too_few_examples_is_refused() -> None:
     descriptions = _DESCRIPTIONS + ["ONE OFF THING"]
-    categories = _CATEGORIES + ["Otros"]  # "Otros" appears exactly once
+    categories = _CATEGORIES + ["Gastos varios"]  # appears exactly once
 
     with pytest.raises(model.NotEnoughDataError, match="only 1 example"):
         model.train(descriptions, categories)
@@ -64,15 +64,15 @@ def test_a_category_with_too_few_examples_is_refused() -> None:
 
 def test_mismatched_lengths_are_rejected() -> None:
     with pytest.raises(ValueError, match="same length"):
-        model.train(["A", "B"], ["Otros"])
+        model.train(["A", "B"], ["Gastos varios"])
 
 
 def test_a_trained_model_predicts_a_known_category_for_similar_text() -> None:
     pipeline, metrics = model.train(_DESCRIPTIONS, _CATEGORIES)
 
-    category, confidence = model.predict(pipeline, "PLAZA VEA JOCKEY PLAZA")
+    category, confidence = model.predict(pipeline, "TAXI HELP.UBER.COM")
 
-    assert category == "Alimentacion"
+    assert category == "Transporte"
     assert 0.0 < confidence <= 1.0
     assert metrics.examples == len(_DESCRIPTIONS)
     assert metrics.categories == len(set(_CATEGORIES))
