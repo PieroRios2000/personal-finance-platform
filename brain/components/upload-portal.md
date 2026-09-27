@@ -24,7 +24,7 @@ of the inbox for the owner to process. Design in
 | [`scripts/process_submissions.py`](../../scripts/process_submissions.py) | `make ingest-uploads`: reads every file of a waiting request, accepts or rejects it whole, runs `pfp ingest` and emails the sender; `make submissions`, `make decide-submission` |
 | [`scripts/review_uploads.py`](../../scripts/review_uploads.py) | `make review-uploads`: requests waiting in `review` (another bank, kind or currency), by id, bank, kind, currency, files |
 | [`alerting/channels.py`](../../alerting/channels.py) (reused) | The email to the owner when a file is kept for review: bank, kind, currency, counts |
-| `make ingest-uploads` | One `pfp ingest` per inbox folder, then `make build` |
+| `make ingest-uploads` / `submissions` / `decide-submission` | Also pass `--archive-root` (from `PFP_ARCHIVE_DIR`), the counterpart of `PFP_INBOX_DIR`: an environment with its own inbox needs its own archive too, or accepted files would be archived into the real one | One `pfp ingest` per inbox folder, then `make build` |
 
 ## Tests
 
