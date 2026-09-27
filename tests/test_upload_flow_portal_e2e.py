@@ -137,7 +137,9 @@ class _Outbox:
         self.sent.append((email, message))
 
 
-def _ingest(user_id: str) -> tuple[int, int, int, int]:
+def _ingest(
+    user_id: str, inbox_root: Path, archive_root: Path
+) -> tuple[int, int, int, int]:
     return (2, 0, 0, 2)
 
 

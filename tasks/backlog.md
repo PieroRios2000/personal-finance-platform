@@ -76,19 +76,17 @@ order agreed:
       `UpdatePassword`. It must answer the same whether the email exists or not, and rate-limit.
       Depends on T42 (the link must open from outside) and on SMTP. Static accounts, which cannot be reset,
       are gone: every account is dynamic (ADR 0039).
-- [ ] **The upload portal** ([Phase 5](../PROJECT.md); ADR 0040: **bank-statement section built (T44)**, decisions taken; left: the card-balance and manual-Excel sections): upload -> `inbox/<user_id>/` -> pipeline.
-      Sections by **file type** (statement PDFs, card balance, manual Excel: savings and
-      investments), not by bank: bank and account are detected from the content
-      ([ADR 0009](../brain/decisions/0009-multi-user-multi-account-content-over-filename.md)) and
-      archived under `raw/<user>/<bank>/<account>/`; what the user picks is only a hint, and a
-      mismatch goes to `_needs_review`. Decide first (each needs an ADR):
-      - the destination `user_id` comes from the signed-in session, never a form field;
-      - how a new account gets a safe `user_id` and is bound to it (today it sees no data until
-        the operator runs `make dex-scope`);
-      - PDF passwords: one per bank in `.env` today; several people need one each, and storing
-        other people's passwords is a security decision;
-      - privacy: [ADR 0004](../brain/decisions/0004-real-pdfs-never-leave-your-machine.md) covers
-        the owner's own statements, not receiving other people's.
+- [x] **The upload portal** ([Phase 5](../PROJECT.md), ADR 0040/0041): upload -> `inbox/<user_id>/`
+      -> pipeline, built end to end: bank statements by kind, bank and currency (T44, T46), the
+      Excel section for savings and investments (T49), requests of up to 10 files accepted or
+      rejected whole (T48), a review-alert email to the owner (T47), the dashboard link (T45). The
+      four decisions raised here are resolved: the destination `user_id` comes from the signed-in
+      session, never a form field; a new account gets a safe `user_id` automatically
+      (`portal.new_user_id`), no operator step; the PDF password is typed per upload and never
+      stored; privacy is covered by keeping the public URL on fictional data only (ADR 0042) --
+      real statements, the owner's or anyone else's, stay off the internet-facing instance. Left:
+      a distinct "card balance" file type was never built (folded into the bullet below, since it
+      is the same "not read yet, its own request" path as any other unsupported bank or kind).
 - [x] **Requests up to 10 files, accepted or rejected whole, sender emailed** (T48, ADR 0041).
 - [x] **The portal's Excel section for savings and investments** (T49, ADR 0041 amendment): generic template, structure checked at upload, every row read by the owner's import with the account key, whole workbook accepted or rejected, sender emailed.
 - [ ] **Extraction for new banks, kinds and currencies** (T46 keeps the files apart; each one is its own request):
@@ -101,6 +99,26 @@ order agreed:
       Handlebars chart counts the movements the account may see (row-level security): 0 shows a
       "No data yet" message and a button to the portal, otherwise a slim "Have more statements?"
       link. (A chart cannot be empty in Superset, hence the count and the constant `upload_url()`.)
+
+## Phase 3 — ML in production (started 2026-09-27)
+
+The identity/portal line (T39-T50) is frozen: built, documented, verified; no more effort there
+unless something breaks. Phase 3 starts with categorization, per the owner's decision.
+
+- [x] **Category labeling infrastructure** (T51, ADR 0043): the cold-start guesser, the labeling
+      file (export/import), `gold.dim_category`, `gold.rpt_movements.category`. Verified end to
+      end with synthetic demo data; the owner's own labels are still to come.
+- [ ] **A trained classifier** (T52): once there are real, owner-confirmed labels, train on them
+      (not a pretrained/off-the-shelf model -- the owner wants one built for this project's own
+      data), replacing the rules-based guesser as what the labeling file proposes. Track with
+      MLflow.
+- [ ] **Serve categorization for new movements** (T53): a FastAPI endpoint, called after ingest so
+      new transactions get a proposed category automatically (still reviewed via the labeling
+      file, never written to gold unconfirmed).
+- [ ] **Drift monitoring** (T54): Evidently over the classifier's input/prediction distribution.
+- [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
+      model -- accuracy, latency, cost per transaction, cost per month at this project's real
+      volume. A concrete MLOps tradeoff narrative, not built until T52 exists to compare against.
 
 ## Later, if a real business (out of scope for the portfolio, ADR 0042)
 

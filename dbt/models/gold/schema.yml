@@ -103,6 +103,33 @@ models:
           - not_null
           - unique
 
+  - name: dim_category
+    description: >
+      Spending/income categories (T51, ADR 0043): a fixed, short list the owner chose,
+      seeded from dbt/seeds/category.csv, not derived from the movements. The natural
+      key is `category` itself.
+    columns:
+      - name: category
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              values:
+                - Alimentacion
+                - Restaurantes
+                - Transporte
+                - Entretenimiento
+                - Salud
+                - Servicios
+                - Educacion
+                - Vivienda
+                - Ropa
+                - Comisiones bancarias
+                - Ingreso
+                - Pago de tarjeta
+                - Transferencias
+                - Otros
+
   - name: fact_transactions
     description: >
       Gold (T23): one row per silver.transactions business key (T20) --
@@ -281,9 +308,14 @@ models:
     description: >
       Reporting table (T34): `fact_transactions` with the shared calendar's
       `calendar_year`, `calendar_quarter`, `calendar_month`, `calendar_month_name`
-      and `calendar_day_name`. What the BI dashboard's movement charts read.
+      and `calendar_day_name`, plus `category` (T51, ADR 0043) -- the owner's own
+      label for the movement's `(bank, description)`, or 'Sin categorizar' when none
+      has been assigned yet. What the BI dashboard's movement charts read.
     columns:
       - name: calendar_month
+        data_tests:
+          - not_null
+      - name: category
         data_tests:
           - not_null
 

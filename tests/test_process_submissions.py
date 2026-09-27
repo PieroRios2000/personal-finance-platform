@@ -65,7 +65,9 @@ class Outbox:
         return self.error
 
 
-def _ingest_ok(user_id: str) -> tuple[int, int, int, int]:
+def _ingest_ok(
+    user_id: str, inbox_root: Path, archive_root: Path
+) -> tuple[int, int, int, int]:
     return (3, 0, 0, 3)
 
 
@@ -197,7 +199,9 @@ def test_the_same_file_twice_is_not_a_rejection_the_pipeline_ignores_it(
 ) -> None:
     manifest = _submit(tmp_path, [_bcp(), _bcp()])
 
-    def ingest(user_id: str) -> tuple[int, int, int, int]:
+    def ingest(
+        user_id: str, inbox_root: Path, archive_root: Path
+    ) -> tuple[int, int, int, int]:
         return (1, 1, 0, 1)  # one archived, one duplicate ignored
 
     outbox = Outbox()
@@ -214,7 +218,7 @@ def test_a_failed_ingest_keeps_the_request_and_does_not_email_the_person(
     manifest = _submit(tmp_path, [_bcp()])
     outbox = Outbox()
 
-    lines = ps.run(tmp_path, ingest=lambda user_id: None, notify=outbox)
+    lines = ps.run(tmp_path, ingest=lambda user_id, inbox, archive: None, notify=outbox)
 
     assert "ingest FAILED" in lines[0] and not outbox.sent
     assert "run `pfp ingest`" in _status(tmp_path, manifest).reason
@@ -272,7 +276,7 @@ def test_pfp_ingests_output_is_read_for_the_counts(
 
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: Done())
 
-    assert ps.ingest_with_pfp("ana-1111") == (2, 1, 0, 2)
+    assert ps.ingest_with_pfp("ana-1111", Path("in"), Path("arch")) == (2, 1, 0, 2)
 
 
 # ---- the Excel workbook of savings and investments (T49)
@@ -372,3 +376,54 @@ def test_pfp_import_manuals_output_is_read_for_the_counts(
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: Done())
 
     assert ps.import_with_pfp(Path("x.xlsx"), "ana-1111") == 5
+
+
+def test_the_default_ingest_passes_this_environments_inbox_and_archive_roots(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Regression: `ingest_with_pfp` used to call `pfp ingest --user <id>` with no
+    `--inbox-root`/`--archive-root`, so an environment whose inbox differs from the
+    default (a demo, ADR 0042) silently ingested nothing -- caught live on
+    `pfp-prod`."""
+    captured: list[list[str]] = []
+
+    class Done:
+        returncode = 0
+        stdout = (
+            "Archived: 1  Duplicates: 0  Needs review: 0\n\n"
+            "Bronze: 1 statement(s) written\n"
+        )
+
+    def fake_run(cmd: list[str], **kwargs: object) -> Done:
+        captured.append(cmd)
+        return Done()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    inbox, archive = tmp_path / "inbox", tmp_path / "archive"
+
+    assert ps.ingest_with_pfp("ana-1111", inbox, archive) == (1, 0, 0, 1)
+    (cmd,) = captured
+    assert cmd[cmd.index("--inbox-root") + 1] == str(inbox)
+    assert cmd[cmd.index("--archive-root") + 1] == str(archive)
+
+
+def test_main_passes_the_archive_root_through_to_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    captured: dict[str, Path] = {}
+
+    def fake_run(
+        inbox_root: Path, *, archive_root: Path, **kwargs: object
+    ) -> list[str]:
+        captured["inbox_root"], captured["archive_root"] = inbox_root, archive_root
+        return ["some-id accepted"]
+
+    monkeypatch.setattr(ps, "run", fake_run)
+    inbox, archive = tmp_path / "inbox", tmp_path / "archive"
+
+    assert (
+        ps.main(["--inbox-root", str(inbox), "--archive-root", str(archive), "run"])
+        == 0
+    )
+    assert captured == {"inbox_root": inbox, "archive_root": archive}
+    assert "some-id accepted" in capsys.readouterr().out

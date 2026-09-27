@@ -33,3 +33,9 @@ sources:
           platform, in one currency. Only exists once a workbook with that sheet
           has been loaded (`pfp import-manual`); models on it use
           `bronze_table_exists` so a lake without it still builds.
+      - name: category_labels
+        description: >
+          The owner's confirmed or corrected transaction categories (T51, ADR 0043):
+          one row per (bank, description) the labeling file covers. Only exists once
+          `make import-category-labels` has run; models on it use
+          `bronze_table_exists` too.

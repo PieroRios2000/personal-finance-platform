@@ -261,3 +261,19 @@ models:
       - name: balance
         data_tests:
           - not_null
+
+  - name: category_labels
+    description: >
+      Silver (T51, ADR 0043): the owner's confirmed or corrected category per
+      `(bank, description)`. Empty (same columns) until a labeling file has been
+      imported (`make import-category-labels`).
+    columns:
+      - name: bank
+        data_tests:
+          - not_null
+      - name: description
+        data_tests:
+          - not_null
+      - name: category
+        data_tests:
+          - not_null
