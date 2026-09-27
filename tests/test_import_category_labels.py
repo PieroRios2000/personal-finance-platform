@@ -22,7 +22,7 @@ def test_a_completed_file_replaces_the_users_labels(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     path = tmp_path / "labels.xlsx"
-    write_template(path, [("BCP", "PLAZA VEA SAN MIGUEL", 3, "Alimentacion")])
+    write_template(path, [("BCP", "NETFLIX.COM", 3, "Servicios")])
     calls: list[Any] = []
     monkeypatch.setattr(
         bronze,
@@ -32,14 +32,14 @@ def test_a_completed_file_replaces_the_users_labels(
 
     assert icl.main([str(path), "--user", "piero"]) == 0
 
-    assert calls == [("piero", [("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion")])]
+    assert calls == [("piero", [("BCP", "NETFLIX.COM", "Servicios")])]
 
 
 def test_a_problem_writes_nothing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     path = tmp_path / "labels.xlsx"
-    write_template(path, [("BCP", "PLAZA VEA SAN MIGUEL", 3, "Alimentacion")])
+    write_template(path, [("BCP", "NETFLIX.COM", 3, "Servicios")])
     from openpyxl import load_workbook
 
     workbook = load_workbook(path)
@@ -64,6 +64,6 @@ def test_requires_the_lakehouse_uri(
 ) -> None:
     monkeypatch.delenv("LAKEHOUSE_URI", raising=False)
     path = tmp_path / "labels.xlsx"
-    write_template(path, [("BCP", "PLAZA VEA", 1, "Alimentacion")])
+    write_template(path, [("BCP", "NETFLIX.COM", 1, "Servicios")])
 
     assert icl.main([str(path), "--user", "piero"]) == 1
