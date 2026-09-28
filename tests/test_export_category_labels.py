@@ -132,11 +132,12 @@ def test_main_finds_the_model_even_when_model_path_is_given_without_joblib(
     )
     (tmp_path / "model.joblib").write_bytes(b"stand-in")
     seen_paths: list[Path] = []
-    monkeypatch.setattr(
-        ecl,
-        "load_model",
-        lambda path: seen_paths.append(path) or object(),  # type: ignore[func-returns-value]
-    )
+
+    def _fake_load_model(path: Path) -> object:
+        seen_paths.append(path)
+        return object()
+
+    monkeypatch.setattr(ecl, "load_model", _fake_load_model)
     monkeypatch.setattr(
         ecl, "suggest_from_model", lambda bundle, description, guess: "Deporte"
     )
