@@ -304,13 +304,20 @@ models:
       Reporting table (T34): `fact_transactions` with the shared calendar's
       `calendar_year`, `calendar_quarter`, `calendar_month`, `calendar_month_name`
       and `calendar_day_name`, plus `category` (T51, ADR 0043) -- the owner's own
-      label for the movement's `(bank, description)`, or 'Sin categorizar' when none
-      has been assigned yet. What the BI dashboard's movement charts read.
+      label for the movement's `(bank, description)`, the trained model's own batch
+      prediction for it (T54, ADR 0045) when there is no label yet, or
+      'Sin categorizar' when neither exists -- and `category_confirmed`, true only
+      for the owner's own label, so a chart or a query can tell a confirmed
+      category apart from a proposed one. What the BI dashboard's movement charts
+      read.
     columns:
       - name: calendar_month
         data_tests:
           - not_null
       - name: category
+        data_tests:
+          - not_null
+      - name: category_confirmed
         data_tests:
           - not_null
 

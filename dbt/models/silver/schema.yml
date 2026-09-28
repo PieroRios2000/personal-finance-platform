@@ -280,3 +280,20 @@ models:
       - name: is_trusted
         data_tests:
           - not_null
+
+  - name: category_predictions
+    description: >
+      Silver (T54, ADR 0045): the trained model's own guess per `(bank,
+      description)`, batch-computed at ingest -- never the owner's confirmed
+      answer. Empty (same columns) until a model has been trained and at least one
+      ingest has run since.
+    columns:
+      - name: bank
+        data_tests:
+          - not_null
+      - name: description
+        data_tests:
+          - not_null
+      - name: category
+        data_tests:
+          - not_null

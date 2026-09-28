@@ -42,3 +42,11 @@ sources:
           can avoid measuring the rules baseline against labels it produced itself.
           Only exists once `make import-category-labels` has run; models on it use
           `bronze_table_exists` too.
+      - name: category_predictions
+        description: >
+          The trained model's own guess for a movement's (bank, description),
+          batch-computed at ingest (T54, ADR 0045) -- never the owner's confirmed
+          answer, that's `category_labels` above. Whole set replaced on every ingest
+          (`scripts.categorize_new_movements`), so it always reflects the latest
+          trained model. Only exists once a model has been trained and at least one
+          ingest has run since; models on it use `bronze_table_exists` too.
