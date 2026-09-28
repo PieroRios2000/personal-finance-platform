@@ -14,6 +14,8 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
 from openpyxl.worksheet.worksheet import Worksheet
 
+from categorization.rules import UNKNOWN
+
 SHEET = "Categorias"
 COLUMNS = (
     "bank",
@@ -83,9 +85,20 @@ def write_template(path: Path, rows: list[tuple[str, str, int, str]]) -> None:
     workbook.save(path)
 
 
-def read_completed(path: Path) -> tuple[list[tuple[str, str, str]], list[str]]:
-    """`([(bank, description, category), ...], problems)`. A problem names a row
-    number and what's wrong, never a value; on any problem the rows list is empty."""
+def read_completed(
+    path: Path,
+) -> tuple[list[tuple[str, str, str, bool]], list[str]]:
+    """`([(bank, description, category, is_trusted), ...], problems)`. A problem
+    names a row number and what's wrong, never a value; on any problem the rows list
+    is empty.
+
+    `is_trusted` is false exactly when `category` still equals `suggested_category`
+    and that suggestion wasn't `UNKNOWN` -- the owner accepted the rules-based
+    guesser's opinion unreviewed. Measuring the rules baseline against a label the
+    rules themselves proposed is circular (reviewer feedback, 2026-09-27): a
+    corrected row, or a row the rules had no opinion on to begin with (`UNKNOWN`),
+    carries the owner's own judgment and is trusted; an accepted non-`UNKNOWN`
+    suggestion might just be the owner not looking closely."""
     try:
         workbook = load_workbook(path, data_only=True)
     except Exception:  # not a readable .xlsx workbook, any reason
@@ -97,17 +110,18 @@ def read_completed(path: Path) -> tuple[list[tuple[str, str, str]], list[str]]:
     if header[: len(COLUMNS)] != COLUMNS:
         return [], [f"{SHEET}: the columns are not the template's"]
 
-    rows: list[tuple[str, str, str]] = []
+    rows: list[tuple[str, str, str, bool]] = []
     problems: list[str] = []
     for row_number, cells in enumerate(sheet.iter_rows(min_row=2, values_only=True), 2):
         if not any(cells):
             continue
-        bank, description, _movements, _suggested, category = cells[: len(COLUMNS)]
+        bank, description, _movements, suggested, category = cells[: len(COLUMNS)]
         if not bank or not description:
             problems.append(f"row {row_number}: bank or description is empty")
             continue
         if category not in CATEGORIES:
             problems.append(f"row {row_number}: category is not one of the list")
             continue
-        rows.append((str(bank), str(description), str(category)))
+        is_trusted = category != suggested or suggested == UNKNOWN
+        rows.append((str(bank), str(description), str(category), is_trusted))
     return ([], problems) if problems else (rows, [])

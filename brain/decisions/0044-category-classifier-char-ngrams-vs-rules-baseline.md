@@ -79,6 +79,39 @@ shaped the design directly:
   guard triggered correctly, then training succeeded once every category had at least two
   examples, with metrics and a saved model, MLflow run included.
 
+## Amendment: calibration and label bias (reviewer feedback, 2026-09-27)
+
+A second review, after #158-#162 landed on `main`, raised four points against the design above.
+All four are now implemented, not just noted:
+
+- **The rules baseline can be measured against labels it proposed itself.** The labeling
+  file prefills `category` with the rules-based guess; if the owner accepts it unreviewed, scoring
+  the rules against that same label is circular and can make the baseline look better than it is.
+  Fixed with `trusted` (`categorization.labels.read_completed`, `lakehouse.bronze`'s
+  `category_labels` schema, `silver.category_labels`): false exactly when the owner left a real
+  (non-`UNKNOWN`) suggestion untouched. `scripts/import_category_labels.py` reports how many
+  labels were reviewed vs. accepted as-is; `scripts/train_category_model.py` reports the
+  model-vs-rules comparison twice, on **all** labels and on **trusted-only** ones, and calls the
+  second one the honest comparison out loud.
+- **Cross-validation can leak through near-duplicate merchants.** "UBER TRIP 4821" and "UBER TRIP
+  5530" are the same merchant with a different transaction id; splitting them into different folds
+  lets a character n-gram model partly grade itself on a row it has already half-seen. Fixed with
+  `GroupKFold` grouped by `_merchant_group` (digits collapsed to one placeholder), in both
+  `train()`'s own cross-validated metrics and `choose_confidence_threshold` below.
+- **An eyeballed confidence threshold, on this few examples, is not trustworthy** -- logistic
+  regression's probabilities are not well calibrated with so little data. Fixed with
+  `choose_confidence_threshold`: refits a pipeline per cross-validation fold, records each
+  held-out row's own confidence and the rules-based guesser's answer for the same row, and picks
+  the cutoff that maximizes macro-F1 on the combined (model above the cutoff, rules below it)
+  predictions -- chosen from the data, never a hardcoded number. `Metrics.folds` and the threshold
+  search's own fold count are both reported next to every macro-F1, since a 2-fold score (the
+  realistic minimum at this data scale) deserves less confidence than a 5-fold one.
+- **The saved artifact is now a `Bundle`** (`pipeline` + `confidence_threshold`), not a bare
+  `Pipeline`: `scripts/export_category_labels.py`'s suggestion (`categorization.model.suggest`)
+  uses the model's prediction only when its confidence clears the calibrated threshold, falling
+  back to the rules-based guesser otherwise -- T53's original wiring always trusted the model's
+  own top class regardless of confidence, which this replaces.
+
 ## Related
 
 [ADR 0043](0043-transaction-categorization-human-in-the-loop-labeling.md),

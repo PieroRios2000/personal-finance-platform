@@ -10,6 +10,10 @@ built and verified against the owner's own real data.** 90 seconds in: skip to
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![status](https://img.shields.io/badge/phase%203-in%20progress%3A%20ML%20categorization-blue)
 
+![The Superset dashboard: cash flow summary, capital and net position, monthly balances](docs/images/dashboard.png)
+*Fictional demo data ([`make demo`](#quickstart-artificial-data-to-a-running-dashboard)) — the owner's own real
+dashboard looks identical, never shown here (ADR 0004).*
+
 ## What this is
 
 Bank statements (BCP, Scotiabank; Banco Ripley is planned) come in as password-protected PDFs — some digital, some

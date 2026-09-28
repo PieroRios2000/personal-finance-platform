@@ -425,8 +425,8 @@ def test_replace_category_labels_writes_one_row_per_label(lakehouse: Path) -> No
     bronze.replace_category_labels(
         "piero",
         [
-            ("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion"),
-            ("BCP", "UBER TRIP", "Transporte"),
+            ("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion", True),
+            ("BCP", "UBER TRIP", "Transporte", True),
         ],
     )
 
@@ -444,9 +444,11 @@ def test_replace_category_labels_replaces_the_whole_set_not_appends(
     from deltalake import DeltaTable
 
     bronze.replace_category_labels(
-        "piero", [("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion")]
+        "piero", [("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion", True)]
     )
-    bronze.replace_category_labels("piero", [("BCP", "PLAZA VEA SAN MIGUEL", "Otros")])
+    bronze.replace_category_labels(
+        "piero", [("BCP", "PLAZA VEA SAN MIGUEL", "Otros", True)]
+    )
 
     table = DeltaTable(str(lakehouse / "bronze" / "category_labels")).to_pyarrow_table()
     assert table.column("category").to_pylist() == ["Otros"]
@@ -455,9 +457,9 @@ def test_replace_category_labels_replaces_the_whole_set_not_appends(
 def test_replace_category_labels_is_scoped_to_the_user(lakehouse: Path) -> None:
     from deltalake import DeltaTable
 
-    bronze.replace_category_labels("ana", [("BCP", "X", "Otros")])
-    bronze.replace_category_labels("bea", [("BCP", "Y", "Alimentacion")])
-    bronze.replace_category_labels("ana", [("BCP", "X", "Transporte")])
+    bronze.replace_category_labels("ana", [("BCP", "X", "Otros", True)])
+    bronze.replace_category_labels("bea", [("BCP", "Y", "Alimentacion", True)])
+    bronze.replace_category_labels("ana", [("BCP", "X", "Transporte", True)])
 
     table = DeltaTable(str(lakehouse / "bronze" / "category_labels")).to_pyarrow_table()
     rows = sorted(
@@ -475,7 +477,7 @@ def test_replace_category_labels_with_an_empty_set_deletes_and_writes_nothing(
 ) -> None:
     from deltalake import DeltaTable
 
-    bronze.replace_category_labels("piero", [("BCP", "X", "Otros")])
+    bronze.replace_category_labels("piero", [("BCP", "X", "Otros", True)])
 
     bronze.replace_category_labels("piero", [])
 
@@ -487,7 +489,7 @@ def test_replace_category_labels_on_a_fresh_lake_deletes_nothing_first(
     lakehouse: Path,
 ) -> None:
     """No table exists yet: the delete-before-write guard must not error."""
-    bronze.replace_category_labels("piero", [("BCP", "X", "Otros")])
+    bronze.replace_category_labels("piero", [("BCP", "X", "Otros", True)])
 
     from deltalake import DeltaTable
 
