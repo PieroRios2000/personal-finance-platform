@@ -13,8 +13,12 @@ on:
     branches: [main, develop]
   # The impact map's safety net (ADR 0008): a push to develop and the weekly
   # schedule run everything, so a relationship the map misses still gets caught.
+  # `main` is also here (2026-09-28) so the README's CI badge has something to point
+  # to: a pull_request run's own head branch is the PR's source branch, never the
+  # base, so a badge for `branch=main` had no run to ever show without this --
+  # merging a PR is a real push event to the base branch, this just also runs CI on it.
   push:
-    branches: [develop]
+    branches: [develop, main]
   schedule:
     - cron: "0 6 * * 1" # Mondays, 06:00 UTC
 

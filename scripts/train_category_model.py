@@ -20,7 +20,11 @@ Also reports the number of cross-validation folds each score is averaged over (f
 labels means as few as 2, worth less trust than 5) and the confidence threshold chosen
 for the saved model (`categorization.model.choose_confidence_threshold`), below which
 `scripts/export_category_labels.py` falls back to the rules-based guesser instead of
-trusting an uncalibrated probability.
+trusting an uncalibrated probability. The threshold itself is reported; the macro-F1
+used internally to choose it is not, on purpose (that number is optimistic by
+construction -- see `choose_confidence_threshold`'s own docstring). The four macro-F1s
+this script does report (model/rules x all/trusted) are the only ones honest enough to
+quote anywhere, including a CV or an interview.
 
 Logs everything to a local MLflow (params, metrics; the fitted bundle itself) so a run
 can be compared to an earlier one once there is more than one. The model file and the
