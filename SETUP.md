@@ -729,12 +729,18 @@ Once you have enough labels (T52, ADR 0044), train a classifier and compare it t
 ```bash
 make train-category-model PFP_USER=piero
 # reports macro-F1 and precision per category for both the trained model and the rules-based
-# guesser, side by side, and saves the model under ~/finance-data/models/ (never the repo).
+# guesser, side by side -- once on every label, once on "trusted" labels only (rows you actually
+# reviewed: corrected, or the guesser had no opinion to begin with). The trusted-only comparison
+# is the honest one: the all-labels figure can look better than it is if you mostly accepted the
+# guesser's own suggestions unreviewed. Also reports how many cross-validation folds each score is
+# averaged over (as few as 2 with this project's realistic label counts) and the confidence
+# threshold chosen for the saved model, then saves it under ~/finance-data/models/ (never the repo).
 ```
 
 The next `make export-category-labels` picks up the saved model automatically -- its prediction
-becomes the prefilled guess instead of the rules-based one, still just a suggestion (T53). Delete
-the saved model (or point `PFP_CATEGORY_MODEL_PATH` elsewhere) to go back to the rules-based guess.
+becomes the prefilled guess instead of the rules-based one whenever its confidence clears that
+threshold, the rules-based guess otherwise, still just a suggestion (T53). Delete the saved model
+(or point `PFP_CATEGORY_MODEL_PATH` elsewhere) to go back to the rules-based guess always.
 
 ## Reproducing CI locally (`make ci-local`)
 
