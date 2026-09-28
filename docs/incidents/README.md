@@ -13,6 +13,7 @@ data in them: counts and names only ([ADR 0004](../../brain/decisions/0004-real-
 | 2026-09-21 | [`make poc-down` wiped the real stack while testing on a throwaway one](2026-09-21-poc-down-wiped-the-real-stack.md) | Lake, tables and Superset metadata deleted; rebuilt from the archive, counts identical |
 | 2026-09-25 | [dex-register crashed on the owner's first real sign-up attempt](2026-09-25-dex-register-crashed-on-first-real-signup.md) | No data lost or wrong; the page crashed instead of showing an error, fixed |
 | 2026-09-26 | [the owner's re-scoped account could not log in to Superset](2026-09-26-rescoped-account-could-not-log-in.md) | One login unusable until fixed; no data lost or exposed |
+| 2026-09-27 | [a leftover synthetic test user blocked `dbt build` on `pfp-prod`](2026-09-27-prodfixtest-leftover-blocked-prod-dbt-build.md) | `dbt build` failed until cleaned up; the demo account's own data was correct throughout, no real owner data involved |
 
 Operations run on the owner's real environment (pulls, builds, backfills, restarts) are recorded, one
 line each, in [`../operations-log.md`](../operations-log.md).
