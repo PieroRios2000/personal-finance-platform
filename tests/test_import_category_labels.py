@@ -32,7 +32,33 @@ def test_a_completed_file_replaces_the_users_labels(
 
     assert icl.main([str(path), "--user", "piero"]) == 0
 
-    assert calls == [("piero", [("BCP", "NETFLIX.COM", "Servicios")])]
+    # An accepted, non-"Sin categorizar" suggestion left untouched: not trusted.
+    assert calls == [("piero", [("BCP", "NETFLIX.COM", "Servicios", False)])]
+
+
+def test_a_correction_is_trusted_and_reported_separately(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from openpyxl import load_workbook
+
+    path = tmp_path / "labels.xlsx"
+    write_template(
+        path,
+        [
+            ("BCP", "NETFLIX.COM", 3, "Servicios"),  # accepted as is
+            ("BCP", "XYZ CORP", 1, "Sin categorizar"),  # no rule matched
+        ],
+    )
+    workbook = load_workbook(path)
+    workbook["Categorias"].cell(row=3, column=5, value="Restaurantes")  # corrected
+    workbook.save(path)
+    monkeypatch.setattr(bronze, "replace_category_labels", lambda user_id, labels: None)
+
+    assert icl.main([str(path), "--user", "piero"]) == 0
+
+    out = capsys.readouterr().out
+    assert "1 reviewed" in out
+    assert "1 accepted the guesser's suggestion as is" in out
 
 
 def test_a_problem_writes_nothing(

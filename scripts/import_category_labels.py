@@ -39,8 +39,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("nothing was written", file=sys.stderr)
         return 1
 
-    bronze.replace_category_labels(args.user, [(b, d, c) for b, d, c in rows])
+    bronze.replace_category_labels(args.user, rows)
+    trusted = sum(1 for *_rest, is_trusted in rows if is_trusted)
     print(f"Categorias: {len(rows)} label(s) written (replaces the previous set).")
+    print(
+        f"{trusted} reviewed (corrected, or the guesser had no opinion), "
+        f"{len(rows) - trusted} accepted the guesser's suggestion as is."
+    )
     return 0
 
 
