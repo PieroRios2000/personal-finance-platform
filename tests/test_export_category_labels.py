@@ -120,6 +120,45 @@ def test_main_uses_the_trained_model_when_one_has_been_saved(
     assert rows[0] == ("BCP", "SOME NEW MERCHANT", 2, "Deporte", "Deporte")
 
 
+def test_main_finds_the_model_even_when_model_path_is_given_without_joblib(
+    environment: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """train_category_model.py's own --model-path/PFP_CATEGORY_MODEL_PATH convention
+    accepts a path with no suffix and appends ".joblib" itself when saving; this
+    script has to resolve the exact same way, or pointing both scripts at the same
+    env var silently never finds the model that was just trained."""
+    monkeypatch.setattr(
+        ecl, "fetch_groups", lambda user_id: [("BCP", "SOME NEW MERCHANT", 2)]
+    )
+    (tmp_path / "model.joblib").write_bytes(b"stand-in")
+    seen_paths: list[Path] = []
+    monkeypatch.setattr(
+        ecl,
+        "load_model",
+        lambda path: seen_paths.append(path) or object(),  # type: ignore[func-returns-value]
+    )
+    monkeypatch.setattr(
+        ecl, "suggest_from_model", lambda bundle, description, guess: "Deporte"
+    )
+    out = tmp_path / "labels.xlsx"
+
+    assert (
+        ecl.main(
+            [
+                "--user",
+                "piero",
+                "--out",
+                str(out),
+                "--model-path",
+                str(tmp_path / "model"),  # no ".joblib"
+            ]
+        )
+        == 0
+    )
+
+    assert seen_paths == [tmp_path / "model.joblib"]
+
+
 def test_main_falls_back_to_rules_when_no_model_has_been_saved(
     environment: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

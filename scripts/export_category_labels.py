@@ -88,7 +88,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not groups:
         print("error: no movements found for that user in gold", file=sys.stderr)
         return 1
-    bundle = load_model(args.model_path)
+    # Normalized the same way train_category_model.py normalizes its own
+    # --model-path/PFP_CATEGORY_MODEL_PATH before saving: whichever one is given
+    # (with or without ".joblib"), both scripts must resolve to the same file, or a
+    # trained model silently never gets picked up here.
+    bundle = load_model(args.model_path.with_suffix(".joblib"))
     rows = [
         (bank, description, movements, _suggest(description, bundle))
         for bank, description, movements in groups
