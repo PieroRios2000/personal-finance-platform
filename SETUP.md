@@ -742,6 +742,13 @@ becomes the prefilled guess instead of the rules-based one whenever its confiden
 threshold, the rules-based guess otherwise, still just a suggestion (T53). Delete the saved model
 (or point `PFP_CATEGORY_MODEL_PATH` elsewhere) to go back to the rules-based guess always.
 
+Once a model exists, every `make ingest` (and the Dagster `bronze` asset) also batch-predicts a
+category for every new, unconfirmed movement automatically (T54, ADR 0045) -- no separate command
+needed, and no owner action required to see it: `gold.rpt_movements.category` shows the prediction
+right after the next `make build`, with `category_confirmed = false` so it's never mistaken for
+the owner's own label. `make categorize-new-movements PFP_USER=piero` re-runs just this step by
+hand (e.g. right after training a new model, without a full re-ingest).
+
 ## Reproducing CI locally (`make ci-local`)
 
 A PR can fail in CI for a reason that never shows on your machine: a variable CI does not set, a
