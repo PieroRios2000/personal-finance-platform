@@ -3,7 +3,7 @@ against the rules-based baseline (T52, ADR 0044).
 
     uv run python -m scripts.train_category_model --user piero
 
-Reads every labeled `(bank, description, category, trusted)` from
+Reads every labeled `(bank, description, category, is_trusted)` from
 `silver.category_labels` (the same `PFP_PG_*` variables dbt uses), trains
 `categorization.model` on the whole set (more data makes a better saved model), and
 reports two comparisons side by side, never a description:
@@ -48,7 +48,7 @@ from categorization.model import DEFAULT_MODEL_PATH
 DEFAULT_TRACKING_URI = f"sqlite:///{Path.home() / 'finance-data' / 'mlflow.db'}"
 
 _QUERY = """
-    select bank, description, category, trusted from silver.category_labels
+    select bank, description, category, is_trusted from silver.category_labels
     where user_id = %(user)s
 """
 

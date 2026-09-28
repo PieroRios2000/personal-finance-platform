@@ -88,17 +88,17 @@ def write_template(path: Path, rows: list[tuple[str, str, int, str]]) -> None:
 def read_completed(
     path: Path,
 ) -> tuple[list[tuple[str, str, str, bool]], list[str]]:
-    """`([(bank, description, category, trusted), ...], problems)`. A problem names a
-    row number and what's wrong, never a value; on any problem the rows list is
-    empty.
+    """`([(bank, description, category, is_trusted), ...], problems)`. A problem
+    names a row number and what's wrong, never a value; on any problem the rows list
+    is empty.
 
-    `trusted` is false exactly when `category` still equals `suggested_category` and
-    that suggestion wasn't `UNKNOWN` -- the owner accepted the rules-based guesser's
-    opinion unreviewed. Measuring the rules baseline against a label the rules
-    themselves proposed is circular (reviewer feedback, 2026-09-27): a corrected row,
-    or a row the rules had no opinion on to begin with (`UNKNOWN`), carries the
-    owner's own judgment and is trusted; an accepted non-`UNKNOWN` suggestion might
-    just be the owner not looking closely."""
+    `is_trusted` is false exactly when `category` still equals `suggested_category`
+    and that suggestion wasn't `UNKNOWN` -- the owner accepted the rules-based
+    guesser's opinion unreviewed. Measuring the rules baseline against a label the
+    rules themselves proposed is circular (reviewer feedback, 2026-09-27): a
+    corrected row, or a row the rules had no opinion on to begin with (`UNKNOWN`),
+    carries the owner's own judgment and is trusted; an accepted non-`UNKNOWN`
+    suggestion might just be the owner not looking closely."""
     try:
         workbook = load_workbook(path, data_only=True)
     except Exception:  # not a readable .xlsx workbook, any reason
@@ -122,6 +122,6 @@ def read_completed(
         if category not in CATEGORIES:
             problems.append(f"row {row_number}: category is not one of the list")
             continue
-        trusted = category != suggested or suggested == UNKNOWN
-        rows.append((str(bank), str(description), str(category), trusted))
+        is_trusted = category != suggested or suggested == UNKNOWN
+        rows.append((str(bank), str(description), str(category), is_trusted))
     return ([], problems) if problems else (rows, [])
