@@ -104,6 +104,25 @@ _CATEGORY_LABELS_SCHEMA = pa.schema(
     ]
 )
 
+# T54 (ADR 0045): the trained model's own guess for a movement's (bank, description),
+# batch-computed at ingest -- never the owner's confirmed answer, that's
+# _CATEGORY_LABELS_SCHEMA above. `category` is already `categorization.model.suggest`'s
+# own output (the model's prediction above its calibrated confidence threshold, the
+# rules-based guesser's below it) -- the same choice `export_category_labels.py`
+# already makes, just automatic here, so no separate confidence column: the
+# threshold decision is already baked into which answer got written. Whole set
+# replaced on every ingest (scripts.categorize_new_movements), always reflecting
+# the latest trained model.
+_CATEGORY_PREDICTIONS_SCHEMA = pa.schema(
+    [
+        ("user_id", pa.string()),
+        ("bank", pa.string()),
+        ("description", pa.string()),
+        ("category", pa.string()),
+        ("predicted_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
+
 
 def _append(name: str, schema: pa.Schema, rows: list[dict[str, Any]]) -> None:
     write_deltalake(
@@ -190,6 +209,60 @@ def replace_category_labels(
         for bank, description, category, is_trusted in labels
     ]
     _append("category_labels", _CATEGORY_LABELS_SCHEMA, rows)
+
+
+def replace_category_predictions(
+    user_id: str, predictions: list[tuple[str, str, str]]
+) -> None:
+    """Replace `user_id`'s whole batch of model-predicted categories with
+    `predictions` (`[(bank, description, category), ...]`) -- recomputed and
+    replaced wholesale by `scripts.categorize_new_movements` on every ingest, same
+    whole-set-replace shape as `replace_category_labels`. Never a substitute for the
+    owner's own confirmed label: `gold.rpt_movements` keeps the two distinguishable
+    (`category_confirmed`, T54, ADR 0045)."""
+    _delete_user_rows("category_predictions", user_id)
+    if not predictions:
+        return
+    predicted_at = datetime.now(UTC)
+    rows = [
+        {
+            "user_id": user_id,
+            "bank": bank,
+            "description": description,
+            "category": category,
+            "predicted_at": predicted_at,
+        }
+        for bank, description, category in predictions
+    ]
+    _append("category_predictions", _CATEGORY_PREDICTIONS_SCHEMA, rows)
+
+
+def distinct_bank_descriptions(user_id: str) -> list[tuple[str, str]]:
+    """Every distinct `(bank, description)` `user_id` has at least one transaction
+    for, sorted. What `scripts.categorize_new_movements` needs a prediction for,
+    minus whatever `labeled_bank_descriptions()` already covers."""
+    uri = table_uri("transactions")
+    options = storage_options()
+    if not DeltaTable.is_deltatable(uri, storage_options=options):
+        return []
+    table = DeltaTable(uri, storage_options=options).to_pyarrow_table(
+        partitions=[("user_id", "=", user_id)], columns=["bank", "description"]
+    )
+    pairs = {(str(row["bank"]), str(row["description"])) for row in table.to_pylist()}
+    return sorted(pairs)
+
+
+def labeled_bank_descriptions(user_id: str) -> set[tuple[str, str]]:
+    """Every `(bank, description)` `user_id` has already confirmed a category for --
+    `scripts.categorize_new_movements` skips predicting these."""
+    uri = table_uri("category_labels")
+    options = storage_options()
+    if not DeltaTable.is_deltatable(uri, storage_options=options):
+        return set()
+    table = DeltaTable(uri, storage_options=options).to_pyarrow_table(
+        partitions=[("user_id", "=", user_id)], columns=["bank", "description"]
+    )
+    return {(str(row["bank"]), str(row["description"])) for row in table.to_pylist()}
 
 
 def is_ingested(user_id: str, file_sha256: str) -> bool:
