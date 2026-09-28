@@ -36,6 +36,9 @@ sources:
       - name: category_labels
         description: >
           The owner's confirmed or corrected transaction categories (T51, ADR 0043):
-          one row per (bank, description) the labeling file covers. Only exists once
-          `make import-category-labels` has run; models on it use
+          one row per (bank, description) the labeling file covers, plus `trusted`
+          (reviewer feedback, 2026-09-27) -- false exactly when the owner accepted
+          the rules-based guesser's own suggestion unreviewed, so training/evaluation
+          can avoid measuring the rules baseline against labels it produced itself.
+          Only exists once `make import-category-labels` has run; models on it use
           `bronze_table_exists` too.

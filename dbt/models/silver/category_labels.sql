@@ -12,7 +12,7 @@ with source_rows as (
 
     {% if bronze_table_exists('category_labels') %}
 
-        select user_id, bank, description, category, ingested_at
+        select user_id, bank, description, category, trusted, ingested_at
         from {{ source('bronze', 'category_labels') }}
 
     {% else %}
@@ -22,6 +22,7 @@ with source_rows as (
             null::varchar as bank,
             null::varchar as description,
             null::varchar as category,
+            null::boolean as trusted,
             null::timestamp with time zone as ingested_at
         where false
 

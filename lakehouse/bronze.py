@@ -99,6 +99,7 @@ _CATEGORY_LABELS_SCHEMA = pa.schema(
         ("bank", pa.string()),
         ("description", pa.string()),
         ("category", pa.string()),
+        ("trusted", pa.bool_()),
         ("ingested_at", pa.timestamp("us", tz="UTC")),
     ]
 )
@@ -159,10 +160,18 @@ def _delete_user_rows(name: str, user_id: str) -> None:
     )
 
 
-def replace_category_labels(user_id: str, labels: list[tuple[str, str, str]]) -> None:
+def replace_category_labels(
+    user_id: str, labels: list[tuple[str, str, str, bool]]
+) -> None:
     """Replace `user_id`'s whole category-labels set with `labels`
-    (`[(bank, description, category), ...]`): re-running the import after fixing a
-    row in the file changes only what changed, same as `replace_investment_month`."""
+    (`[(bank, description, category, trusted), ...]`): re-running the import after
+    fixing a row in the file changes only what changed, same as
+    `replace_investment_month`.
+
+    `trusted` is false exactly when the owner accepted the rules-based guesser's
+    suggestion unreviewed and it wasn't "Sin categorizar" -- the case where
+    measuring the rules baseline against this same label would be circular
+    (`categorization.labels.read_completed`, reviewer feedback 2026-09-27)."""
     _delete_user_rows("category_labels", user_id)
     if not labels:
         return
@@ -173,9 +182,10 @@ def replace_category_labels(user_id: str, labels: list[tuple[str, str, str]]) ->
             "bank": bank,
             "description": description,
             "category": category,
+            "trusted": trusted,
             "ingested_at": ingested_at,
         }
-        for bank, description, category in labels
+        for bank, description, category, trusted in labels
     ]
     _append("category_labels", _CATEGORY_LABELS_SCHEMA, rows)
 

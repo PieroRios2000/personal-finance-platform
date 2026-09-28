@@ -46,7 +46,20 @@ def test_a_filled_in_file_reads_back_bank_description_and_the_chosen_category(
     rows, problems = read_completed(path)
 
     assert problems == []
-    assert rows == [("BCP", "NETFLIX.COM", "Servicios")]
+    assert rows == [("BCP", "NETFLIX.COM", "Servicios", True)]
+
+
+def test_accepting_a_real_suggestion_unreviewed_is_not_trusted(tmp_path: Path) -> None:
+    """The owner left a real (non-"Sin categorizar") suggestion exactly as it was --
+    that's not the same as him actually confirming it, so it isn't trusted for
+    measuring the rules baseline against (reviewer feedback, 2026-09-27)."""
+    path = tmp_path / "f.xlsx"
+    write_template(path, [("BCP", "NETFLIX.COM", 3, "Servicios")])
+
+    rows, problems = read_completed(path)
+
+    assert problems == []
+    assert rows == [("BCP", "NETFLIX.COM", "Servicios", False)]
 
 
 def test_a_category_not_on_the_list_is_a_problem_naming_the_row_not_the_value(
@@ -142,4 +155,4 @@ def test_an_unmatched_guess_defaults_the_editable_column_to_gastos_varios_not_it
     rows, problems = read_completed(path)
 
     assert problems == []
-    assert rows == [("BCP", "UNKNOWN MERCHANT", "Gastos varios")]
+    assert rows == [("BCP", "UNKNOWN MERCHANT", "Gastos varios", True)]

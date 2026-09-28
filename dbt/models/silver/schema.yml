@@ -277,3 +277,6 @@ models:
       - name: category
         data_tests:
           - not_null
+      - name: trusted
+        data_tests:
+          - not_null
