@@ -128,8 +128,8 @@ def test_replace_category_labels_round_trips_and_replaces_the_whole_set(
     bronze.replace_category_labels(
         user_id,
         [
-            ("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion"),
-            ("BCP", "UBER TRIP", "Transporte"),
+            ("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion", True),
+            ("BCP", "UBER TRIP", "Transporte", True),
         ],
     )
 
@@ -144,7 +144,7 @@ def test_replace_category_labels_round_trips_and_replaces_the_whole_set(
 
         # Re-running with a corrected set replaces it, not appends to it.
         bronze.replace_category_labels(
-            user_id, [("BCP", "PLAZA VEA SAN MIGUEL", "Otros")]
+            user_id, [("BCP", "PLAZA VEA SAN MIGUEL", "Otros", True)]
         )
         assert categories() == ["Otros"]
     finally:
