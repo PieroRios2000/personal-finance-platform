@@ -105,7 +105,7 @@ def test_main_uses_the_trained_model_when_one_has_been_saved(
     model_path.write_bytes(b"stand-in; ecl.load_model is monkeypatched below")
     monkeypatch.setattr(ecl, "load_model", lambda path: object())
     monkeypatch.setattr(
-        ecl, "predict_category", lambda pipeline, description: ("Deporte", 0.91)
+        ecl, "suggest_from_model", lambda bundle, description, guess: "Deporte"
     )
     out = tmp_path / "labels.xlsx"
 
