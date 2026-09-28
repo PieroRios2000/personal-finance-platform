@@ -495,3 +495,218 @@ def test_replace_category_labels_on_a_fresh_lake_deletes_nothing_first(
 
     table = DeltaTable(str(lakehouse / "bronze" / "category_labels")).to_pyarrow_table()
     assert table.num_rows == 1
+
+
+def test_replace_category_predictions_writes_one_row_per_prediction(
+    lakehouse: Path,
+) -> None:
+    from deltalake import DeltaTable
+
+    bronze.replace_category_predictions(
+        "piero",
+        [
+            ("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion"),
+            ("BCP", "UBER TRIP", "Transporte"),
+        ],
+    )
+
+    table = DeltaTable(
+        str(lakehouse / "bronze" / "category_predictions")
+    ).to_pyarrow_table()
+    assert sorted(table.column("category").to_pylist()) == [
+        "Alimentacion",
+        "Transporte",
+    ]
+    assert set(table.column("user_id").to_pylist()) == {"piero"}
+
+
+def test_replace_category_predictions_replaces_the_whole_set_not_appends(
+    lakehouse: Path,
+) -> None:
+    from deltalake import DeltaTable
+
+    bronze.replace_category_predictions(
+        "piero", [("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion")]
+    )
+    bronze.replace_category_predictions(
+        "piero", [("BCP", "PLAZA VEA SAN MIGUEL", "Otros")]
+    )
+
+    table = DeltaTable(
+        str(lakehouse / "bronze" / "category_predictions")
+    ).to_pyarrow_table()
+    assert table.column("category").to_pylist() == ["Otros"]
+
+
+def test_replace_category_predictions_is_scoped_to_the_user(lakehouse: Path) -> None:
+    from deltalake import DeltaTable
+
+    bronze.replace_category_predictions("ana", [("BCP", "X", "Otros")])
+    bronze.replace_category_predictions("bea", [("BCP", "Y", "Alimentacion")])
+
+    table = DeltaTable(
+        str(lakehouse / "bronze" / "category_predictions")
+    ).to_pyarrow_table()
+    rows = sorted(
+        zip(
+            table.column("user_id").to_pylist(),
+            table.column("category").to_pylist(),
+            strict=True,
+        )
+    )
+    assert rows == [("ana", "Otros"), ("bea", "Alimentacion")]
+
+
+def test_replace_category_predictions_with_an_empty_set_writes_nothing(
+    lakehouse: Path,
+) -> None:
+    from deltalake import DeltaTable
+
+    bronze.replace_category_predictions("piero", [("BCP", "X", "Otros")])
+
+    bronze.replace_category_predictions("piero", [])
+
+    table = DeltaTable(
+        str(lakehouse / "bronze" / "category_predictions")
+    ).to_pyarrow_table()
+    assert table.num_rows == 0
+
+
+def test_replace_category_predictions_on_a_fresh_lake_deletes_nothing_first(
+    lakehouse: Path,
+) -> None:
+    bronze.replace_category_predictions("piero", [("BCP", "X", "Otros")])
+
+    from deltalake import DeltaTable
+
+    table = DeltaTable(
+        str(lakehouse / "bronze" / "category_predictions")
+    ).to_pyarrow_table()
+    assert table.num_rows == 1
+
+
+def test_distinct_bank_descriptions_is_empty_on_a_fresh_lake() -> None:
+    assert bronze.distinct_bank_descriptions("piero") == []
+
+
+def test_distinct_bank_descriptions_returns_sorted_unique_pairs_for_the_user(
+    lakehouse: Path,
+) -> None:
+    # Two separate statements: a Statement's own transactions must all share its
+    # bank (ADR 0012), so a multi-bank scenario needs one statement per bank.
+    bcp_statement = _statement(
+        user_id="piero",
+        bank="BCP",
+        transactions=[
+            Transaction(
+                user_id="piero",
+                bank="BCP",
+                account_id=VALID_ACCOUNT_ID,
+                account_last4="1234",
+                date=date(2026, 1, 10),
+                description="UBER TRIP",
+                amount=Decimal("-10.00"),
+                currency="PEN",
+                source_file_sha256=VALID_SHA256,
+            ),
+            Transaction(
+                user_id="piero",
+                bank="BCP",
+                account_id=VALID_ACCOUNT_ID,
+                account_last4="1234",
+                date=date(2026, 1, 20),
+                description="UBER TRIP",  # a repeat, must collapse to one pair
+                amount=Decimal("-12.00"),
+                currency="PEN",
+                source_file_sha256=VALID_SHA256,
+            ),
+        ],
+    )
+    other_sha256 = hashlib.sha256(b"a second synthetic statement").hexdigest()
+    scotiabank_statement = _statement(
+        user_id="piero",
+        bank="Scotiabank",
+        transactions=[
+            Transaction(
+                user_id="piero",
+                bank="Scotiabank",
+                account_id=VALID_ACCOUNT_ID,
+                account_last4="1234",
+                date=date(2026, 1, 15),
+                description="NETFLIX.COM",
+                amount=Decimal("-30.00"),
+                currency="PEN",
+                source_file_sha256=other_sha256,
+            ),
+        ],
+    )
+    bronze.write_statement(bcp_statement, VALID_SHA256)
+    bronze.write_statement(scotiabank_statement, other_sha256)
+
+    assert bronze.distinct_bank_descriptions("piero") == [
+        ("BCP", "UBER TRIP"),
+        ("Scotiabank", "NETFLIX.COM"),
+    ]
+
+
+def test_distinct_bank_descriptions_is_scoped_to_the_user(lakehouse: Path) -> None:
+    bronze.write_statement(_statement(user_id="piero"), VALID_SHA256)
+
+    assert bronze.distinct_bank_descriptions("someone-else") == []
+
+
+def test_labeled_bank_descriptions_is_empty_on_a_fresh_lake() -> None:
+    assert bronze.labeled_bank_descriptions("piero") == set()
+
+
+def test_labeled_bank_descriptions_returns_the_users_confirmed_pairs(
+    lakehouse: Path,
+) -> None:
+    bronze.replace_category_labels(
+        "piero",
+        [
+            ("BCP", "PLAZA VEA SAN MIGUEL", "Alimentacion", True),
+            ("BCP", "UBER TRIP", "Transporte", True),
+        ],
+    )
+
+    assert bronze.labeled_bank_descriptions("piero") == {
+        ("BCP", "PLAZA VEA SAN MIGUEL"),
+        ("BCP", "UBER TRIP"),
+    }
+
+
+def test_labeled_bank_descriptions_is_scoped_to_the_user(lakehouse: Path) -> None:
+    bronze.replace_category_labels("ana", [("BCP", "X", "Otros", True)])
+
+    assert bronze.labeled_bank_descriptions("bea") == set()
+
+
+def test_distinct_bank_descriptions_normalizes_padding_and_case(
+    lakehouse: Path,
+) -> None:
+    """Real bug found live verifying scripts.categorize_new_movements end to end:
+    bronze's own description is raw, but category_labels/category_predictions (and
+    gold.rpt_movements's own join against them) always key by the normalized form
+    (dbt/macros/normalize_description.sql), the same rules
+    ingestion.schema.normalize_description implements here."""
+    statement = _statement(
+        transactions=[
+            Transaction(
+                user_id="piero",
+                bank="BCP",
+                account_id=VALID_ACCOUNT_ID,
+                account_last4="1234",
+                date=date(2026, 1, 15),
+                description="uber..trip   help.uber.com",
+                amount=Decimal("-25.50"),
+                currency="PEN",
+                source_file_sha256=VALID_SHA256,
+            )
+        ]
+    )
+    bronze.write_statement(statement, VALID_SHA256)
+
+    assert bronze.distinct_bank_descriptions("piero") == [
+        ("BCP", "UBER TRIP HELP.UBER.COM")
+    ]

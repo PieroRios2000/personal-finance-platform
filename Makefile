@@ -27,7 +27,7 @@ PFP = docker compose -p $(PFP_PROJECT)
 # Each environment's OpenMetadata artifacts (they hold a token and the Postgres password).
 export PFP_OM_ARTIFACTS = ./artifacts/$(PFP_ENV)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels train-category-model build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels train-category-model categorize-new-movements build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -175,6 +175,13 @@ import-category-labels:
 # ~/finance-data -- never the repo (a fitted model's vocabulary is real transaction text).
 train-category-model:
 	$(LOAD_ENV) && uv run python -m scripts.train_category_model --user "$$PFP_USER"
+
+# T54 (ADR 0045): `pfp ingest`/the Dagster `bronze` asset already run this
+# automatically as their last step; this target is for re-running it by hand right
+# after `make train-category-model`, without a full re-ingest, so a freshly trained
+# model's predictions reach bronze (then `make build`) before the next real ingest.
+categorize-new-movements:
+	$(LOAD_ENV) && uv run python -m scripts.categorize_new_movements --user "$$PFP_USER"
 
 build:
 	$(LOAD_ENV) && uv run dbt deps --project-dir dbt --profiles-dir dbt && \
