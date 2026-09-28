@@ -2,15 +2,16 @@
 type: component
 phase: 3
 status: in-progress
-task: T51, T52, T53
+task: T51, T52, T53, T54
 ---
 
 # Categorization
 
 Automatic transaction categorization (Phase 3's first piece): a proposed category the owner
 confirms or overrides, never assigned silently. Design in
-[ADR 0043](../decisions/0043-transaction-categorization-human-in-the-loop-labeling.md) (the labeling flow) and
-[ADR 0044](../decisions/0044-category-classifier-char-ngrams-vs-rules-baseline.md) (the model).
+[ADR 0043](../decisions/0043-transaction-categorization-human-in-the-loop-labeling.md) (the labeling flow),
+[ADR 0044](../decisions/0044-category-classifier-char-ngrams-vs-rules-baseline.md) (the model) and
+[ADR 0045](../decisions/0045-batch-categorization-at-ingest.md) (the automatic batch step).
 
 ## Pieces
 
@@ -34,10 +35,18 @@ either way, never a silent switch the owner has to know about. `train()`'s own c
 groups by merchant (digits stripped), not by row, so two near-duplicate descriptions of the same
 merchant never land in different folds and let the model partly grade itself.
 
+| [`scripts/categorize_new_movements.py`](../../scripts/categorize_new_movements.py) | `run()`: batch-predicts a category for every new, unconfirmed `(bank, description)` -- called automatically by `ingestion.cli._run_ingest()` and `orchestration.assets.bronze.bronze()` (T54, ADR 0045), also `make categorize-new-movements` by hand |
+| [`lakehouse/bronze.py`](../../lakehouse/bronze.py)`.replace_category_predictions`, `distinct_bank_descriptions`, `labeled_bank_descriptions` | The predictions table (whole-set replace per run) and the two reads `categorize_new_movements.run()` needs |
+| [`dbt/models/silver/category_predictions.sql`](../../dbt/models/silver/category_predictions.sql) | Same `bronze_table_exists` empty-until-populated pattern as `category_labels.sql` |
+
+`gold.rpt_movements.category` now coalesces three ways: the owner's own label, then a batch
+prediction, then `'Sin categorizar'`. `category_confirmed` is true only for the owner's own
+label, so a prediction is never mistaken for a confirmed answer.
+
 ## What's next
 
-Integrate categorization as a batch step of ingest/Dagster rather than a live service (T54), and
-drift monitoring (Evidently, T55). FastAPI serving stays optional, only if a real caller shows up.
+Drift monitoring (Evidently, T55). FastAPI serving stays optional, only if a real caller shows
+up for live (not batch) inference.
 
 ## Related
 

@@ -112,6 +112,19 @@ All four are now implemented, not just noted:
   back to the rules-based guesser otherwise -- T53's original wiring always trusted the model's
   own top class regardless of confidence, which this replaces.
 
+## Amendment: the threshold-selection macro-F1 is not a reportable metric (2026-09-28)
+
+A follow-up review flagged that `choose_confidence_threshold` picks the threshold by maximizing
+macro-F1 over the exact same held-out cross-validated predictions that score is computed from --
+the same look-ahead any hyperparameter search has when the search and the report share one split.
+That number is real for *choosing* a threshold (there is no spare data at this project's scale to
+hold out a third split just for that), but it is optimistic by construction and must never be
+presented as a clean metric. `choose_confidence_threshold` already never returned it and never
+logged it; its docstring now says so explicitly, so it can't quietly get added back in without a
+second thought. The two numbers this project actually reports and that are honest -- `train()`'s
+and `score_rules()`'s own macro-F1s, neither one involving the threshold at all -- are unaffected
+and remain what `scripts/train_category_model.py` prints and logs to MLflow.
+
 ## Related
 
 [ADR 0043](0043-transaction-categorization-human-in-the-loop-labeling.md),

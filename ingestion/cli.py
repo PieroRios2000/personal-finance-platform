@@ -16,7 +16,9 @@ duplicates, unreadable files and regenerated statements.
 
 `ingest` does what `organize` does, then writes every newly archived statement to
 the bronze lakehouse (T14), skipping any file whose sha256 is already recorded in
-`bronze/ingested_files` for that user.
+`bronze/ingested_files` for that user, then batch-predicts a category for every
+new, unconfirmed movement if a trained model exists (T54, ADR 0045) -- a proposal
+only, `gold.rpt_movements.category_confirmed` stays false for it.
 
 `backfill` (T14c) goes the other way: it re-parses statements that are *already*
 archived and already in bronze, replacing their rows with what today's parser
@@ -34,12 +36,14 @@ from pathlib import Path
 
 import pikepdf
 
+from categorization.model import DEFAULT_MODEL_PATH
 from ingestion import dispatcher, manual_excel, organizer
 from ingestion.dedup import file_sha256
 from ingestion.reconciliation import ReconciliationError
 from ingestion.schema import MissingAccountKeyError
 from lakehouse import bronze
 from lakehouse.storage import MissingLakehouseURIError, lakehouse_uri
+from scripts.categorize_new_movements import run as categorize_new_movements
 
 
 def _run_parse(args: argparse.Namespace) -> int:
@@ -212,6 +216,22 @@ def _run_ingest(args: argparse.Namespace) -> int:
 
     print()
     print(f"Bronze: {written} statement(s) written, {skipped} already ingested")
+
+    # T54, ADR 0045: a batch prediction for every new, unconfirmed description --
+    # a proposal only (gold.rpt_movements' own category_confirmed flag), never
+    # assigned silently. Runs every time, even when nothing new was written above:
+    # a model trained since the last ingest should still get a chance to predict
+    # what an earlier, model-less ingest could not.
+    categorization_report = categorize_new_movements(
+        user_id,
+        model_path=Path(os.environ.get("PFP_CATEGORY_MODEL_PATH", DEFAULT_MODEL_PATH)),
+    )
+    if categorization_report.has_model:
+        print(
+            f"Categorias: {categorization_report.predicted} new description(s) "
+            "predicted"
+        )
+
     return 0
 
 

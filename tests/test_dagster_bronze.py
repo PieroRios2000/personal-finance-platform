@@ -158,3 +158,55 @@ def test_bronze_asset_second_materialization_writes_nothing_new(
     assert metadata["archived"].value == 0
     assert metadata["duplicates"].value == 1
     assert metadata["statements_written"].value == 0
+
+
+def test_bronze_asset_predicts_categories_when_a_model_exists(
+    tmp_path: Path, lakehouse: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T54, ADR 0045: the same batch step `ingestion.cli._run_ingest()` runs,
+    exercised through the Dagster asset instead."""
+    import joblib
+
+    from categorization import model
+
+    inbox_root = tmp_path / "inbox"
+    archive_root = tmp_path / "raw"
+    inbox = inbox_root / "piero"
+    inbox.mkdir(parents=True)
+    (inbox / "statement.pdf").write_bytes(_bcp_pdf())
+
+    descriptions = [
+        "COMPRA TIENDA FICTICIA",
+        "COMPRA TIENDA UNO",
+        "PAGO SERVICIO FICTICIO",
+        "PAGO SERVICIO DOS",
+        "DEPOSITO SUELDO FICTICIO",
+        "DEPOSITO SUELDO TRES",
+        "TRANSFERENCIA RECIBIDA FICTICIA",
+        "TRANSFERENCIA RECIBIDA CUATRO",
+        "COMPRA TIENDA CINCO",
+        "PAGO SERVICIO SEIS",
+    ]
+    categories = ["Gastos varios"] * 4 + ["Ingresos"] * 4 + ["Servicios"] * 2
+    pipeline, _metrics = model.train(descriptions, categories)
+    bundle = model.Bundle(pipeline=pipeline, confidence_threshold=0.0)
+    model_path = tmp_path / "model.joblib"
+    joblib.dump(bundle, model_path)
+    monkeypatch.setenv("PFP_CATEGORY_MODEL_PATH", str(model_path))
+
+    result = dg.materialize(
+        [bronze],
+        run_config=dg.RunConfig(
+            ops={
+                "bronze": BronzeIngestConfig(
+                    user_id="piero",
+                    inbox_root=str(inbox_root),
+                    archive_root=str(archive_root),
+                )
+            }
+        ),
+    )
+
+    assert result.success
+    metadata = result.asset_materializations_for_node("bronze")[0].metadata
+    assert metadata["categories_predicted"].value == 4

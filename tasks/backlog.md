@@ -117,12 +117,17 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       (`make train-category-model`), the rules-based guesser until then -- still reviewed, never
       assigned outright. The owner still needs to label enough of his own real descriptions and
       train on them before this actually changes what he sees.
-- [ ] **Categorize new movements as a batch step** (T54; reviewer feedback, 2026-09-27): a
-      statement is categorized once, at ingest -- the natural integration is a step of
-      `pfp ingest`/`make ingest-uploads` or the Dagster pipeline that writes the prediction into
-      gold, not a live request. **A FastAPI endpoint is optional**, only if a real caller ever
-      needs one (e.g. the upload portal previewing a category before the owner processes a
-      request) -- not built speculatively ahead of that.
+- [x] **Categorize new movements as a batch step** (T54, ADR 0045; reviewer feedback,
+      2026-09-27): `pfp ingest`/`make ingest` and the Dagster `bronze` asset now both
+      batch-predict a category for every new, unconfirmed movement automatically
+      (`scripts.categorize_new_movements`), writing a proposal into
+      `gold.rpt_movements` (`category_confirmed = false`), never a live request.
+      `make ingest-uploads` (the upload-portal path, `process_submissions.py`) does not call
+      this yet -- left out of this task's scope, its own submission-per-user loop is a
+      different shape than the single-user `pfp ingest`/Dagster path this wires into; a
+      follow-up if that path turns out to need it too. **A FastAPI endpoint is optional**,
+      only if a real caller ever needs one (e.g. the upload portal previewing a category
+      before the owner processes a request) -- not built speculatively ahead of that.
 - [ ] **Drift monitoring** (T55): Evidently over the classifier's input/prediction distribution.
 - [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
       model -- macro-F1 and per-category precision (not just accuracy), latency, cost per
