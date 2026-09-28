@@ -216,7 +216,19 @@ def choose_confidence_threshold(
     requires every class to appear in every fold's training split to aggregate
     `predict_proba` safely): each held-out row only ever needs its own probability
     vector, never one comparable across folds, so a fold missing a rare class is
-    fine here."""
+    fine here.
+
+    The macro-F1 used internally to pick the best threshold is optimistic, on
+    purpose left out of the return value and never logged or printed anywhere
+    (reviewer feedback, 2026-09-28): it is selected as the *best* score over the
+    exact same held-out predictions it is computed from, so it is biased high by
+    construction (a form of the same look-ahead a hyperparameter search always has
+    when the search and the report share one split). The only honest numbers this
+    project reports are the model-alone and rules-alone macro-F1s `train()` and
+    `score_rules()` return, computed with no threshold involved -- never present a
+    combined (model-above-threshold, rules-below-it) score as if it were a clean
+    metric; it isn't one, and with this few labeled examples there is no spare data
+    to hold out a third time just to make it one."""
     cv, groups, _counts, folds = _cv_split(descriptions, categories)
     confidences = [0.0] * len(descriptions)
     model_predicted = [""] * len(descriptions)
@@ -244,6 +256,8 @@ def choose_confidence_threshold(
         )
         if score > best_f1:
             best_f1, best_threshold = score, threshold
+    # best_f1 itself is discarded on purpose -- see this function's own docstring
+    # for why it must never be reported as a clean metric.
     return best_threshold, folds
 
 
