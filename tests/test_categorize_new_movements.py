@@ -155,6 +155,28 @@ def test_run_finds_a_model_saved_without_the_joblib_suffix(tmp_path: Path) -> No
     assert report.predicted == 1
 
 
+def test_run_matches_a_raw_bronze_description_against_a_normalized_label(
+    tmp_path: Path,
+) -> None:
+    """Real bug found live verifying this end to end: bronze's own description is
+    raw (padding characters, mixed case), but category_labels (built from gold,
+    already silver-normalized) and the labeling file always key by the normalized
+    form. Comparing them without normalizing bronze's side first silently never
+    matched anything already labeled, predicting for it all over again."""
+    _write_transaction(bank="BCP", description="uber..trip  help.uber.com", sha256="a")
+    bronze.replace_category_labels(
+        "piero", [("BCP", "UBER TRIP HELP.UBER.COM", "Transporte", True)]
+    )
+    model_path = tmp_path / "model"
+    _saved_bundle(model_path.with_suffix(".joblib"))
+
+    report = cnm.run("piero", model_path=model_path)
+
+    assert report.total_descriptions == 1
+    assert report.already_labeled == 1
+    assert report.predicted == 0
+
+
 def test_main_requires_a_user(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PFP_USER", raising=False)
 

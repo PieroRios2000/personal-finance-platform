@@ -680,3 +680,33 @@ def test_labeled_bank_descriptions_is_scoped_to_the_user(lakehouse: Path) -> Non
     bronze.replace_category_labels("ana", [("BCP", "X", "Otros", True)])
 
     assert bronze.labeled_bank_descriptions("bea") == set()
+
+
+def test_distinct_bank_descriptions_normalizes_padding_and_case(
+    lakehouse: Path,
+) -> None:
+    """Real bug found live verifying scripts.categorize_new_movements end to end:
+    bronze's own description is raw, but category_labels/category_predictions (and
+    gold.rpt_movements's own join against them) always key by the normalized form
+    (dbt/macros/normalize_description.sql), the same rules
+    ingestion.schema.normalize_description implements here."""
+    statement = _statement(
+        transactions=[
+            Transaction(
+                user_id="piero",
+                bank="BCP",
+                account_id=VALID_ACCOUNT_ID,
+                account_last4="1234",
+                date=date(2026, 1, 15),
+                description="uber..trip   help.uber.com",
+                amount=Decimal("-25.50"),
+                currency="PEN",
+                source_file_sha256=VALID_SHA256,
+            )
+        ]
+    )
+    bronze.write_statement(statement, VALID_SHA256)
+
+    assert bronze.distinct_bank_descriptions("piero") == [
+        ("BCP", "UBER TRIP HELP.UBER.COM")
+    ]

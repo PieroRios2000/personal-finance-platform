@@ -22,7 +22,7 @@ from typing import Any
 import pyarrow as pa
 from deltalake import DeltaTable, write_deltalake
 
-from ingestion.schema import InvestmentMonth, Statement
+from ingestion.schema import InvestmentMonth, Statement, normalize_description
 from lakehouse.storage import storage_options, table_uri
 
 _MONEY = pa.decimal128(18, 2)
@@ -239,8 +239,15 @@ def replace_category_predictions(
 
 def distinct_bank_descriptions(user_id: str) -> list[tuple[str, str]]:
     """Every distinct `(bank, description)` `user_id` has at least one transaction
-    for, sorted. What `scripts.categorize_new_movements` needs a prediction for,
-    minus whatever `labeled_bank_descriptions()` already covers."""
+    for, sorted, `description` normalized (`ingestion.schema.normalize_description`,
+    the same rules `dbt/macros/normalize_description.sql` applies in silver) --
+    bronze's own description is raw, but `category_labels`/`category_predictions`
+    (and the join `gold.rpt_movements` does against them) always key by the
+    normalized form, since that's what the labeling file was built from (gold, which
+    is already silver-normalized). Comparing raw bronze text against a normalized
+    key would silently never match, found live verifying this end to end. What
+    `scripts.categorize_new_movements` needs a prediction for, minus whatever
+    `labeled_bank_descriptions()` already covers."""
     uri = table_uri("transactions")
     options = storage_options()
     if not DeltaTable.is_deltatable(uri, storage_options=options):
@@ -248,7 +255,10 @@ def distinct_bank_descriptions(user_id: str) -> list[tuple[str, str]]:
     table = DeltaTable(uri, storage_options=options).to_pyarrow_table(
         partitions=[("user_id", "=", user_id)], columns=["bank", "description"]
     )
-    pairs = {(str(row["bank"]), str(row["description"])) for row in table.to_pylist()}
+    pairs = {
+        (str(row["bank"]), normalize_description(str(row["description"])))
+        for row in table.to_pylist()
+    }
     return sorted(pairs)
 
 
