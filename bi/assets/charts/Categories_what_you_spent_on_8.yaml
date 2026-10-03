@@ -18,7 +18,7 @@ params:
     comparator: No filter
     clause: WHERE
   - expressionType: SQL
-    sqlExpression: NOT is_internal_transfer
+    sqlExpression: flow_type = 'egreso' AND NOT is_internal_transfer
     clause: WHERE
   x_axis_sort: Spent
   x_axis_sort_asc: false

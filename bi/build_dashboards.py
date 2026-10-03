@@ -85,7 +85,10 @@ _UPLOAD_STYLE = (_TEMPLATES / "upload_prompt.css").read_text()
 # the other), so a fee or an exchange difference between banks shows up.
 _MONEY_IN = "COALESCE(SUM(signed_amount) FILTER (WHERE signed_amount > 0), 0)"
 _MONEY_OUT = "COALESCE(-SUM(signed_amount) FILTER (WHERE signed_amount < 0), 0)"
-_NOT_TRANSFER = "NOT is_internal_transfer"
+# Spending, for the Categories section: money out of an account or a charge on a card
+# (`egreso`, ADR 0020; never income or a card credit), and not a move between your own
+# accounts (ADR 0017).
+_SPENDING = "flow_type = 'egreso' AND NOT is_internal_transfer"
 _MONEY = "'FM999,999,999,990.00'"
 _NET = "COALESCE(SUM(signed_amount), 0)"
 # The income the savings rate is measured against: money that came into an asset
@@ -304,11 +307,11 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         "echarts_timeseries_bar",
         {
             "x_axis": "category",
-            # Money out per category, biggest first. Movements between your own accounts
-            # are no spending (ADR 0017), so they are left out of this whole section.
+            # Money out per category, biggest first. The whole section is spending only:
+            # no income, no card credits, no moves between your own accounts.
             "metrics": [_sql_metric(_MONEY_OUT, "Spent")],
             "groupby": [],
-            "adhoc_filters": [_time_range("date"), _where(_NOT_TRANSFER)],
+            "adhoc_filters": [_time_range("date"), _where(_SPENDING)],
             "x_axis_sort": "Spent",
             "x_axis_sort_asc": False,
             "y_axis_format": ",.0f",
@@ -331,10 +334,11 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
                     "source",
                 )
             ],
-            # Counted in movements, not money: it says how much of the history the model
-            # decided and how much you confirmed (ADR 0043: a guess is never a label).
+            # Counted in movements, not money: it says how much of the spending the
+            # model decided and how much you confirmed (ADR 0043: a guess is never a
+            # label).
             "metric": _sql_metric("COUNT(*)", "Movements"),
-            "adhoc_filters": [_time_range("date"), _where(_NOT_TRANSFER)],
+            "adhoc_filters": [_time_range("date"), _where(_SPENDING)],
             "color_scheme": "supersetColors",
             "label_colors": {
                 "you labelled it": _GREEN,
@@ -359,7 +363,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "time_grain_sqla": "P1M",
             "metrics": [_sql_metric(_MONEY_OUT, "Spent")],
             "groupby": ["category"],
-            "adhoc_filters": [_time_range("date"), _where(_NOT_TRANSFER)],
+            "adhoc_filters": [_time_range("date"), _where(_SPENDING)],
             "stack": "Stack",
             "x_axis_time_format": _DATE_FORMAT,
             "y_axis_format": ",.0f",
@@ -379,7 +383,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             # first. Fix the category in the labelling workbook, not here (ADR 0043).
             "adhoc_filters": [
                 _time_range("date"),
-                _where(f"{_NOT_TRANSFER} AND NOT category_confirmed"),
+                _where(f"{_SPENDING} AND NOT category_confirmed"),
             ],
             "all_columns": [
                 "date",

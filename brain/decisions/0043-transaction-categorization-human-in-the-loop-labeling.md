@@ -123,6 +123,17 @@ a guess, in its own colour and its own table, and the fix is made in the labelli
 not in the dashboard. The demo environment has no labels, so there the section shows
 everything as "no category yet".
 
+## Amendment: the section covers spending only (2026-10-03)
+
+The first version of the section only left out moves between your own accounts, so the
+"where each one came from" chart and the review table also counted income and card credits.
+The owner wants categories to answer "where did the money go": every chart and the table of
+the section now filter on `flow_type = 'egreso' AND NOT is_internal_transfer` (ADR 0020: money
+out of an account, or a charge on a card, both banks; never `ingreso` or a card `pago`).
+Labels still attach by `(user_id, bank, description)` whatever the direction, so a description
+used both ways keeps one category: on the owner's data 5 outflows (S/ 7,501) carry `Ingresos`.
+Whether to split labels by direction is left open.
+
 ## Related
 
 [ADR 0004](0004-real-pdfs-never-leave-your-machine.md),

@@ -20,7 +20,7 @@ params:
     comparator: No filter
     clause: WHERE
   - expressionType: SQL
-    sqlExpression: NOT is_internal_transfer
+    sqlExpression: flow_type = 'egreso' AND NOT is_internal_transfer
     clause: WHERE
   stack: Stack
   x_axis_time_format: '%d %b %Y'

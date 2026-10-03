@@ -12,7 +12,7 @@ params:
     comparator: No filter
     clause: WHERE
   - expressionType: SQL
-    sqlExpression: NOT is_internal_transfer AND NOT category_confirmed
+    sqlExpression: flow_type = 'egreso' AND NOT is_internal_transfer AND NOT category_confirmed
     clause: WHERE
   all_columns:
   - date
