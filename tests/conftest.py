@@ -18,3 +18,14 @@ def bcp_pdf(tmp_path: Path) -> Path:
     path = tmp_path / "bcp-statement.pdf"
     path.write_bytes(bcp_statement_pdf())
     return path
+
+
+@pytest.fixture(autouse=True)
+def no_real_category_model(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Point the classifier path at an empty temp location, so no test ever loads the
+    model trained on the owner's real labels under ~/finance-data (which exists on his
+    machine and not in CI). A test that needs a model sets the variable itself."""
+    empty = tmp_path_factory.mktemp("no-model") / "category_classifier"
+    monkeypatch.setenv("PFP_CATEGORY_MODEL_PATH", str(empty))
