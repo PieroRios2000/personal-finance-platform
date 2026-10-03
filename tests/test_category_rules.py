@@ -15,6 +15,13 @@ def test_a_known_merchant_matches_its_category() -> None:
     assert rules.guess("TRANSFERENCIA A TERCEROS") == "Transferencias"
 
 
+def test_health_and_education_have_their_own_categories() -> None:
+    assert rules.guess("FARMACIA INKAFARMA SAN ISIDRO") == "Salud"
+    assert rules.guess("CLINICA INTERNACIONAL") == "Salud"
+    assert rules.guess("UNIVERSIDAD DEL PACIFICO") == "Educacion"
+    assert rules.guess("UDEMY.COM") == "Educacion"
+
+
 def test_something_with_no_match_is_unknown() -> None:
     assert rules.guess("XYZ CORP SAC 00123") == rules.UNKNOWN
 

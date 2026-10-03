@@ -36,6 +36,12 @@ COLUMNS = (
 # other account (including paying off his own credit card) never reaches this list at
 # all -- `export_category_labels.py` excludes every `is_internal_transfer` movement
 # before this file is even written (ADR 0017), so it needs no category of its own.
+#
+# "Entretenimiento", "Salud", "Ahorros", "Cuidado Personal", "Ropa" and "Educacion"
+# (2026-10-03, ADR 0043's second amendment) are the owner's own additions, made while
+# labeling his real descriptions: he found these were distinct enough to deserve their
+# own line. Several have only a handful of examples, so a trained model may not predict
+# them reliably until more are labeled (see ADR 0044).
 CATEGORIES = (
     "Servicios",
     "Restaurantes",
@@ -45,6 +51,12 @@ CATEGORIES = (
     "Deporte",
     "Ingresos",
     "Transferencias",
+    "Entretenimiento",
+    "Salud",
+    "Ahorros",
+    "Cuidado Personal",
+    "Ropa",
+    "Educacion",
     "Gastos varios",
 )
 
