@@ -129,7 +129,10 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | mypy | 2.3.1 | dev | Types (strict mode) |
 | diff-cover | 10.5.1 | dev | Coverage of changed lines against the base branch |
 | import-linter | 2.15 | dev | Architecture contracts (who can import whom) |
-| pip-audit | 2.10.1 | dev | Known vulnerabilities in dependencies |
+| pip-audit | 2.10.1 | dev | Known vulnerabilities in dependencies (`--ignore-vuln PYSEC-2026-3740` for nltk, see CONSTRAINTS.md) |
+| evidently | 0.7.23 | runtime | Classifier drift report (`scripts/monitor_category_drift.py`, T55, ADR 0046) |
+| pandas | 3.0.6 | runtime | The windows Evidently compares (already a transitive dependency) |
+| pandas-stubs | 3.0.5 | dev | Type stubs for pandas (mypy strict) |
 | bandit | 1.9.4 | dev | Security issues in the code |
 
 Don't use `pip install` or a `requirements.txt`: they drift out of sync with the lock. To add a
@@ -748,6 +751,18 @@ needed, and no owner action required to see it: `gold.rpt_movements.category` sh
 right after the next `make build`, with `category_confirmed = false` so it's never mistaken for
 the owner's own label. `make categorize-new-movements PFP_USER=piero` re-runs just this step by
 hand (e.g. right after training a new model, without a full re-ingest).
+
+Check whether the data the classifier sees has changed shape (T55, ADR 0046), for example after a few
+new statements:
+
+```bash
+make monitor-category-drift PFP_USER=piero
+# compares the last 90 days of movements against the older ones (--current-days, --min-rows via
+# `uv run python -m scripts.monitor_category_drift --help`) on bank, currency, flow type,
+# description length/digit share, amount and assigned category -- never the description text.
+# Prints drifted yes/no per column and saves an HTML report under ~/finance-data/reports/.
+# Read it as a prompt, not a verdict: windows are a few hundred movements, and drift is not error.
+```
 
 ## Reproducing CI locally (`make ci-local`)
 
