@@ -49,6 +49,7 @@ dev = [
     "fpdf2>=2.8.8",
     "import-linter>=2.15",
     "mypy>=2.3.1",
+    "pandas-stubs>=3.0.5.260914",
     "pip-audit>=2.10.1",
     "psycopg[binary]>=3.3.6",
     "pytest>=9.1.1",
@@ -139,6 +140,13 @@ ignore_missing_imports = true
 # types-scikit-learn package exists on PyPI).
 [[tool.mypy.overrides]]
 module = ["sklearn.*", "joblib", "mlflow", "mlflow.*"]
+ignore_missing_imports = true
+
+# scripts/monitor_category_drift.py (T55, ADR 0046) uses Evidently, which ships no type
+# stubs or py.typed marker either (pandas is typed through pandas-stubs, so it needs no
+# override).
+[[tool.mypy.overrides]]
+module = ["evidently", "evidently.*"]
 ignore_missing_imports = true
 
 # upload/server.py (T44, ADR 0040) likewise runs in its own container, with Flask and

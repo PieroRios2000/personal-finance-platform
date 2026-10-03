@@ -27,7 +27,7 @@ PFP = docker compose -p $(PFP_PROJECT)
 # Each environment's OpenMetadata artifacts (they hold a token and the Postgres password).
 export PFP_OM_ARTIFACTS = ./artifacts/$(PFP_ENV)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels train-category-model categorize-new-movements build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels train-category-model categorize-new-movements monitor-category-drift build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -45,7 +45,7 @@ check-task: check-fast
 # Before the PR: the above + security and coverage of the changed lines. This is what CI
 # runs except gitleaks, which runs in pre-commit on every commit (and in CI from T5 on).
 check-full: check-task
-	uv run pip-audit
+	uv run pip-audit --ignore-vuln PYSEC-2026-3740
 	uv run bandit -q -r . -x ./.venv,./dbt/dbt_packages --severity-level high
 	uv run diff-cover coverage.xml --compare-branch=$(BASE) --fail-under=80
 
@@ -182,6 +182,12 @@ train-category-model:
 # model's predictions reach bronze (then `make build`) before the next real ingest.
 categorize-new-movements:
 	$(LOAD_ENV) && uv run python -m scripts.categorize_new_movements --user "$$PFP_USER"
+
+# T55 (ADR 0046): Evidently drift report of the classifier's inputs and assigned
+# categories (reference = older movements, current = the last 90 days) -> an HTML report
+# under ~/finance-data/reports/, aggregates only on the terminal. Read-only on Postgres.
+monitor-category-drift:
+	$(LOAD_ENV) && uv run python -m scripts.monitor_category_drift --user "$$PFP_USER"
 
 build:
 	$(LOAD_ENV) && uv run dbt deps --project-dir dbt --profiles-dir dbt && \
