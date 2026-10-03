@@ -123,6 +123,12 @@ models:
                 - Deporte
                 - Ingresos
                 - Transferencias
+                - Entretenimiento
+                - Salud
+                - Ahorros
+                - Cuidado Personal
+                - Ropa
+                - Educacion
                 - Gastos varios
 
   - name: fact_transactions

@@ -96,6 +96,21 @@ imprecise; corrected here.
 of transfer that ever reaches this guesser, since `is_internal_transfer` (the owner's own accounts)
 is filtered out upstream.
 
+## Amendment: six more categories, added by the owner while labeling (2026-10-03)
+
+Labeling his real descriptions, the owner added `Entretenimiento`, `Salud`, `Ahorros`,
+`Cuidado Personal`, `Ropa` and `Educacion` (32 of 589 descriptions), because he judged they
+deserved their own line. `import_category_labels.py` correctly rejected the workbook until the
+list was extended, so the list stays closed and the owner's call is applied in code
+(`CATEGORIES`, the `category.csv` seed, the dbt `accepted_values`). The cold-start rules no
+longer file pharmacies, clinics and schools/courses under `Servicios`; streaming stays there
+because it is not known whether his `Entretenimiento` is streaming. The list is now 15.
+
+Consequence: four of the new categories have 1-4 labeled descriptions, so the trainer's
+"at least 2 per category" guard refuses to train (`Educacion` has 1) and the fold count would be
+capped at 2 by `Ropa`. More labels, or merging the rarest into a neighbour, is needed before any
+metric is worth publishing (ADR 0044).
+
 ## Related
 
 [ADR 0004](0004-real-pdfs-never-leave-your-machine.md),
