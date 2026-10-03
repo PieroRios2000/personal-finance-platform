@@ -1,4 +1,4 @@
-slice_name: Movements (check against your statements)
+slice_name: 'Categories: movements to review (the model''s guesses)'
 description: null
 certified_by: null
 certification_details: null
@@ -11,15 +11,15 @@ params:
     operator: TEMPORAL_RANGE
     comparator: No filter
     clause: WHERE
+  - expressionType: SQL
+    sqlExpression: NOT is_internal_transfer AND NOT category_confirmed
+    clause: WHERE
   all_columns:
   - date
   - bank
-  - account_last4
   - currency
-  - flow_type
   - amount
-  - signed_amount
-  - is_internal_transfer
+  - category
   - description
   order_by_cols:
   - '["date", false]'
@@ -27,26 +27,12 @@ params:
     amount:
       d3NumberFormat: ',.2f'
       horizontalAlign: right
-      customColumnName: amount (as in the PDF)
-    signed_amount:
-      d3NumberFormat: ',.2f'
-      horizontalAlign: right
-      customColumnName: effect on you
-  conditional_formatting:
-  - colorScheme: '#c6f0dc'
-    column: signed_amount
-    operator: '>'
-    targetValue: 0
-  - colorScheme: '#fbd0d2'
-    column: signed_amount
-    operator: <
-    targetValue: 0
   row_limit: 1000
   include_search: true
-  datasource: 11__table
+  datasource: 1__table
   viz_type: table
 query_context: null
 cache_timeout: null
-uuid: 8e81aaab-2fd3-59b0-b902-2d95666db6b9
+uuid: e9f0c2e0-9b64-5391-a65a-4af26de5ff62
 version: 1.0.0
 dataset_uuid: 421b5769-3581-5c67-928a-84023a5f132f
