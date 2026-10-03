@@ -12,14 +12,18 @@ params:
     comparator: No filter
     clause: WHERE
   - expressionType: SQL
-    sqlExpression: flow_type = 'egreso' AND NOT is_internal_transfer AND NOT category_confirmed
+    sqlExpression: flow_type = 'egreso' AND NOT is_internal_transfer AND NOT (category_confirmed
+      AND category <> 'Ingresos')
     clause: WHERE
   all_columns:
   - date
   - bank
   - currency
   - amount
-  - category
+  - expressionType: SQL
+    sqlExpression: CASE WHEN category = 'Ingresos' THEN 'Sin categorizar' ELSE category
+      END
+    label: category
   - description
   order_by_cols:
   - '["date", false]'

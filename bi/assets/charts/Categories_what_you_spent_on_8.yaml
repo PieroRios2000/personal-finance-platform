@@ -4,7 +4,11 @@ certified_by: null
 certification_details: null
 viz_type: echarts_timeseries_bar
 params:
-  x_axis: category
+  x_axis:
+    expressionType: SQL
+    sqlExpression: CASE WHEN category = 'Ingresos' THEN 'Sin categorizar' ELSE category
+      END
+    label: category
   metrics:
   - expressionType: SQL
     sqlExpression: COALESCE(-SUM(signed_amount) FILTER (WHERE signed_amount < 0),
