@@ -268,12 +268,16 @@ def test_categories_are_their_own_section_of_the_dashboard() -> None:
     assert f"HEADER-{title}" in layout["GRID_ID"]["children"]
 
 
-def test_the_category_charts_leave_out_transfers_between_own_accounts() -> None:
-    """Moving money between your own accounts is no spending (ADR 0017)."""
+def test_the_category_charts_cover_spending_only() -> None:
+    """Categories answer "where did the money go": only expenses (`egreso`: money out
+    of an account, a charge on a card, ADR 0020), never income or card credits, and
+    never a move between your own accounts (ADR 0017)."""
     charts = [c for c in _builder().CHARTS if c[1].startswith("Categories:")]
 
     for _, name, _, params in charts:
-        assert "NOT is_internal_transfer" in json.dumps(params["adhoc_filters"]), name
+        filters = json.dumps(params["adhoc_filters"])
+        assert "flow_type = 'egreso'" in filters, name
+        assert "NOT is_internal_transfer" in filters, name
 
 
 def test_the_review_table_lists_only_what_nobody_confirmed() -> None:
