@@ -125,6 +125,23 @@ second thought. The two numbers this project actually reports and that are hones
 and `score_rules()`'s own macro-F1s, neither one involving the threshold at all -- are unaffected
 and remain what `scripts/train_category_model.py` prints and logs to MLflow.
 
+## Amendment: first real-label results, and why the model stays text-only (2026-10-03)
+
+First training on the owner's real labels: 589 descriptions, 10 categories in use. Reviewed
+labels only (543, 3 folds): model macro-F1 0.49. Rules baseline on all labels: 0.23. Always
+guessing the biggest category: 0.07. These, with their N and fold count, are the only numbers
+quoted in the README.
+
+An offline experiment (one row per movement, 1,529 rows, merchant-grouped 5-fold cross-validation
+repeated over 5 shuffles) tested adding bank, currency, flow type, log amount and month to the
+description text. Macro-F1 on reviewed labels: text only 0.465, plus amount 0.480, plus bank,
+currency and flow 0.468, all of those 0.442, plus month 0.453, with run-to-run spread of 0.01 to
+0.04. No variant beat text-only outside the noise, and several were worse, so the model stays
+text-only and `bronze.category_predictions` keeps its per-description grain (ADR 0045). Only
+logistic regression was tried; a tree-based model could use the amount better and is untested.
+The binding constraint is the number of labeled merchants in the weak categories (services,
+restaurants, transport), not the feature set.
+
 ## Related
 
 [ADR 0043](0043-transaction-categorization-human-in-the-loop-labeling.md),
