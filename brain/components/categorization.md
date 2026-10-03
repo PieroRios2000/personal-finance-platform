@@ -11,7 +11,8 @@ Automatic transaction categorization (Phase 3's first piece): a proposed categor
 confirms or overrides, never assigned silently. Design in
 [ADR 0043](../decisions/0043-transaction-categorization-human-in-the-loop-labeling.md) (the labeling flow),
 [ADR 0044](../decisions/0044-category-classifier-char-ngrams-vs-rules-baseline.md) (the model) and
-[ADR 0045](../decisions/0045-batch-categorization-at-ingest.md) (the automatic batch step).
+[ADR 0045](../decisions/0045-batch-categorization-at-ingest.md) (the automatic batch step) and
+[ADR 0046](../decisions/0046-classifier-drift-monitoring-with-evidently.md) (drift monitoring).
 
 ## Pieces
 
@@ -43,10 +44,18 @@ merchant never land in different folds and let the model partly grade itself.
 prediction, then `'Sin categorizar'`. `category_confirmed` is true only for the owner's own
 label, so a prediction is never mistaken for a confirmed answer.
 
+## Drift monitoring (T55, ADR 0046)
+
+| [`scripts/monitor_category_drift.py`](../../scripts/monitor_category_drift.py) | `build_features()` (drops the description, keeps bank/currency/flow/length/digit share/amount/category/label source), `split_windows()` (reference vs the last N days, refuses a window under 30 rows), `write_report()` (Evidently `DataDriftPreset`, HTML 0600 under `~/finance-data/reports/`); `make monitor-category-drift` |
+
+Read-only on `gold.rpt_movements`. Prints counts and a yes/no per column only. Drift is not error and
+the windows are small: a flag means "look at the report" (ADR 0046).
+
 ## What's next
 
-Drift monitoring (Evidently, T55). FastAPI serving stays optional, only if a real caller shows
-up for live (not batch) inference.
+FastAPI serving stays optional, only if a real caller shows up for live (not batch) inference.
+A scheduled run of the drift monitor (below) if a monthly manual check ever proves too easy to
+forget.
 
 ## Related
 

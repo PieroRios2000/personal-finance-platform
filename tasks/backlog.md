@@ -128,7 +128,11 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       follow-up if that path turns out to need it too. **A FastAPI endpoint is optional**,
       only if a real caller ever needs one (e.g. the upload portal previewing a category
       before the owner processes a request) -- not built speculatively ahead of that.
-- [ ] **Drift monitoring** (T55): Evidently over the classifier's input/prediction distribution.
+- [x] **Drift monitoring** (T55, ADR 0046): `make monitor-category-drift` runs Evidently's data drift
+      preset on derived features (never the description) of the last 90 days against the older
+      movements and writes an HTML report under `~/finance-data/reports/`. Manual, not scheduled;
+      no model-confidence column exists to monitor (ADR 0045). A flag at these window sizes is a
+      prompt, not a verdict.
 - [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
       model -- macro-F1 and per-category precision (not just accuracy), latency, cost per
       transaction, cost per month at this project's real volume, against the same held-out labels.
