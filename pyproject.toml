@@ -163,6 +163,11 @@ disallow_subclassing_any = false
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-m 'not real_pdf and not integration and not benchmark and not portal'"
+# Evidently 0.7.23 touches `numpy.core` once when imported (T55). The warning summary would
+# print one of its source lines containing a mypy suppression comment, which floor-guard's
+# suppression rule then flags in `make ci-local` (it scans the whole clean clone, pytest.log
+# included).
+filterwarnings = ["ignore:numpy.core is deprecated:DeprecationWarning:evidently"]
 markers = [
     "real_pdf: runs against the owner's real PDFs; deselected by default (ADR 0004). Run with `pytest -m real_pdf`.",
     "integration: needs local S3 (SeaweedFS, T13) running via `docker compose up`; deselected by default. Run with `pytest -m integration`.",
