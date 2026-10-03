@@ -289,6 +289,26 @@ def test_the_review_table_lists_only_what_nobody_confirmed() -> None:
     assert "category" in table["all_columns"]
 
 
+def test_an_outflow_labelled_as_income_is_shown_as_not_categorized() -> None:
+    """Labels attach by (bank, description), whatever the direction, so an outflow can
+    carry `Ingresos`. In a spending section that reads as income: it is shown as "Sin
+    categorizar", counted as not categorized and listed for review, while the label
+    itself stays untouched (ADR 0043)."""
+    charts = {c[1]: c[3] for c in _builder().CHARTS if c[1].startswith("Categories:")}
+    bar = charts["Categories: what you spent on"]
+    monthly = charts["Categories: spending per month"]
+    donut = charts["Categories: where each one came from"]
+    table = next(p for n, p in charts.items() if "movements to review" in n)
+
+    shown = [bar["x_axis"], monthly["groupby"][0], table["all_columns"][4]]
+    for column in shown:
+        assert column["label"] == "category"
+        assert "'Ingresos'" in column["sqlExpression"]
+        assert "'Sin categorizar'" in column["sqlExpression"]
+    assert "'Ingresos'" in donut["groupby"][0]["sqlExpression"]
+    assert "'Ingresos'" in json.dumps(table["adhoc_filters"])
+
+
 def test_every_chart_in_the_layout_is_tied_to_its_chart_by_uuid() -> None:
     """Without the uuid, the import cannot map a layout cell to its imported chart and
     Superset appends every chart again in an extra row at the bottom."""
