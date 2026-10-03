@@ -133,11 +133,28 @@ confirms or overrides it — never assigned silently
 | Label collection | ✅ A cold-start, keyword-based guesser proposes a category for every distinct description; the owner edits a local Excel file to confirm or correct it, never typing a category from scratch. Nothing about a real description is ever sent anywhere |
 | The category dimension | ✅ `gold.dim_category` (a fixed, short list) and `gold.rpt_movements.category`, left-joined from the owner's confirmed labels, `'Sin categorizar'` until something is labeled |
 | A trained classifier | ✅ TF-IDF over character n-grams + logistic regression, trained on the owner's own confirmed labels (not a pretrained model). Reports macro-F1 and precision *per category* — not plain accuracy, which hides a bad category behind a good average when classes are uneven — for the trained model **and** the rules-based guesser side by side, so "does the model beat the rules" has a printed answer every run ([ADR 0044](brain/decisions/0044-category-classifier-char-ngrams-vs-rules-baseline.md)). MLflow-tracked; the model file never leaves the machine, same discipline as a real PDF |
-| Serving new movements | Planned as a batch step at ingest (categorization happens once, when a statement comes in, not live) — a FastAPI endpoint is optional, only if a real caller ever needs one |
+| Serving new movements | ✅ A batch step at ingest: every new description is categorized once, when a statement comes in, and written to bronze; `gold.rpt_movements.category` shows the owner's label, else the prediction, with `category_confirmed` marking which is which ([ADR 0045](brain/decisions/0045-batch-categorization-at-ingest.md)). A FastAPI endpoint is optional, only if a real caller ever needs one |
 | Drift monitoring | Planned: Evidently over the classifier's input/prediction distribution |
 
-Verified end to end against synthetic, general categories first — the owner's own real labels
-come next. Details: [`tasks/backlog.md`](tasks/backlog.md#phase-3--ml-in-production-started-2026-09-27).
+**Results on the owner's real labels** (589 distinct descriptions he labeled himself, 10 categories in
+use; grouped cross-validation by merchant so near-duplicate descriptions never straddle a fold):
+
+| | Macro-F1 | Labels | Folds |
+|---|---|---|---|
+| Trained model, reviewed labels only | **0.49** | 543 | 3 |
+| Keyword-rules baseline, all labels | 0.23 | 589 | n/a (no fitting) |
+| Always guessing the biggest category ("Gastos varios", 52% of labels) | 0.07 | 589 | n/a |
+
+How far to trust these: the label set is small and uneven. The model is solid on the big categories
+(precision about 0.9 for the catch-all, 0.8 for travel and entertainment) and weak on small ones
+(services, restaurants and transport are confused with each other and with the catch-all), so 0.49 is
+the honest figure, not a headline. The rules number is slightly generous (in 46 rows the owner accepted
+a rule's suggestion as is); scoring the rules on reviewed labels only would be unfair in the other
+direction, because those are exactly the rows he corrected. The combined model-plus-rules score used
+to pick the confidence threshold is optimistic by construction and is never reported. Adding the bank,
+currency, flow, amount or month as extra features did not beat description text alone (differences
+within run-to-run noise), so the model stays text-only; more labels in the weak categories is the
+lever that matters. Details: [`tasks/backlog.md`](tasks/backlog.md#phase-3--ml-in-production-started-2026-09-27).
 
 ### Planned
 

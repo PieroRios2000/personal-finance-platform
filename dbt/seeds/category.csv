@@ -1,5 +1,5 @@
 category,description
-Servicios,"Utilities, subscriptions, health, education and bank fees"
+Servicios,"Utilities, subscriptions and bank fees"
 Restaurantes,"Restaurants, delivery and takeout"
 Alimentacion,"Supermarkets and grocery stores"
 Viajes,"Airfare, lodging and travel agencies"
@@ -7,4 +7,10 @@ Transporte,"Ride-hailing, fuel and public transport"
 Deporte,"Gyms and sports clubs"
 Ingresos,"Salary and other income"
 Transferencias,"Transfers to someone else's account"
+Entretenimiento,"Leisure, events and outings"
+Salud,"Pharmacies, clinics and health insurance"
+Ahorros,Money set aside for saving
+Cuidado Personal,"Hairdresser, grooming and personal care"
+Ropa,Clothing and footwear
+Educacion,"Tuition, courses and learning"
 Gastos varios,Anything that does not fit another category
