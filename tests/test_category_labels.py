@@ -141,6 +141,14 @@ def test_not_a_workbook_is_refused(tmp_path: Path) -> None:
 def test_categories_are_a_short_fixed_list_including_a_catch_all() -> None:
     assert 5 <= len(CATEGORIES) <= 20
     assert "Gastos varios" in CATEGORIES
+    assert {
+        "Entretenimiento",
+        "Salud",
+        "Ahorros",
+        "Cuidado Personal",
+        "Ropa",
+        "Educacion",
+    } <= set(CATEGORIES)
     assert len(CATEGORIES) == len(set(CATEGORIES))
 
 
