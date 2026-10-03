@@ -225,12 +225,60 @@ def test_no_sql_expression_uses_a_sub_query_which_superset_refuses() -> None:
 def test_every_chart_has_a_cell_in_the_layout() -> None:
     builder = _builder()
     names = [c[1] for c in builder.CHARTS]
-    prefixes = [p for row in builder.LAYOUT for p, _, _ in row if p != builder.NOTE]
+    prefixes = [
+        p
+        for row in builder.LAYOUT
+        for p, _, _ in row
+        if p != builder.NOTE and not p.startswith(builder.SECTION)
+    ]
 
     for name in names:
         assert sum(name.startswith(p) for p in prefixes) == 1, name
     for prefix in prefixes:
         assert sum(n.startswith(prefix) for n in names) == 1, prefix
+
+
+def test_categories_are_their_own_section_of_the_dashboard() -> None:
+    """The classification (T51-T54) is a section with its own title, after the cash
+    flow and before the investments, made of the four `Categories:` charts."""
+    builder = _builder()
+    rows = [[p for p, _, _ in row] for row in builder.LAYOUT]
+    title = next(
+        i for i, row in enumerate(rows) if row == [f"{builder.SECTION}Categories"]
+    )
+    cells = [p for row in rows[title + 1 : title + 4] for p in row]
+
+    assert len(cells) == 4
+    assert all(p.startswith("Categories:") for p in cells)
+    names = [c[1] for c in builder.CHARTS if c[1].startswith("Categories:")]
+    assert len(names) == 4
+
+    layout = builder._position(
+        list(range(len(builder.CHARTS))),
+        [c[1] for c in builder.CHARTS],
+        ["u"] * len(builder.CHARTS),
+    )
+    header = layout[f"HEADER-{title}"]
+    assert header["meta"]["text"] == "Categories"
+    assert header["parents"] == ["ROOT_ID", "GRID_ID"]
+    assert f"HEADER-{title}" in layout["GRID_ID"]["children"]
+
+
+def test_the_category_charts_leave_out_transfers_between_own_accounts() -> None:
+    """Moving money between your own accounts is no spending (ADR 0017)."""
+    charts = [c for c in _builder().CHARTS if c[1].startswith("Categories:")]
+
+    for _, name, _, params in charts:
+        assert "NOT is_internal_transfer" in json.dumps(params["adhoc_filters"]), name
+
+
+def test_the_review_table_lists_only_what_nobody_confirmed() -> None:
+    """A guess is never a label (ADR 0043): the table to review shows the movements
+    whose category is a model guess or missing, never the owner's own."""
+    table = next(c for c in _builder().CHARTS if "movements to review" in c[1])[3]
+
+    assert "NOT category_confirmed" in json.dumps(table["adhoc_filters"])
+    assert "category" in table["all_columns"]
 
 
 def test_every_chart_in_the_layout_is_tied_to_its_chart_by_uuid() -> None:
