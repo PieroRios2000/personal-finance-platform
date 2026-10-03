@@ -89,6 +89,15 @@ _MONEY_OUT = "COALESCE(-SUM(signed_amount) FILTER (WHERE signed_amount < 0), 0)"
 # (`egreso`, ADR 0020; never income or a card credit), and not a move between your own
 # accounts (ADR 0017).
 _SPENDING = "flow_type = 'egreso' AND NOT is_internal_transfer"
+# A label attaches by (bank, description) whatever the direction, so an outflow can
+# carry `Ingresos` (a payee that also pays the owner). In a spending section that reads
+# as income: it is shown as not categorized and listed for review; the label itself is
+# untouched (ADR 0043). `_LABELLED` is what the owner really decided for a spending
+# movement.
+_SHOWN_CATEGORY = (
+    "CASE WHEN category = 'Ingresos' THEN 'Sin categorizar' ELSE category END"
+)
+_LABELLED = "category_confirmed AND category <> 'Ingresos'"
 _MONEY = "'FM999,999,999,990.00'"
 _NET = "COALESCE(SUM(signed_amount), 0)"
 # The income the savings rate is measured against: money that came into an asset
@@ -306,7 +315,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         "Categories: what you spent on",
         "echarts_timeseries_bar",
         {
-            "x_axis": "category",
+            "x_axis": _sql_column(_SHOWN_CATEGORY, "category"),
             # Money out per category, biggest first. The whole section is spending only:
             # no income, no card credits, no moves between your own accounts.
             "metrics": [_sql_metric(_MONEY_OUT, "Spent")],
@@ -328,9 +337,9 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         {
             "groupby": [
                 _sql_column(
-                    "CASE WHEN category_confirmed THEN 'you labelled it' "
-                    "WHEN category <> 'Sin categorizar' THEN 'the model guessed it' "
-                    "ELSE 'no category yet' END",
+                    f"CASE WHEN {_LABELLED} THEN 'you labelled it' "
+                    f"WHEN {_SHOWN_CATEGORY} <> 'Sin categorizar' "
+                    "THEN 'the model guessed it' ELSE 'no category yet' END",
                     "source",
                 )
             ],
@@ -362,7 +371,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "x_axis": "date",
             "time_grain_sqla": "P1M",
             "metrics": [_sql_metric(_MONEY_OUT, "Spent")],
-            "groupby": ["category"],
+            "groupby": [_sql_column(_SHOWN_CATEGORY, "category")],
             "adhoc_filters": [_time_range("date"), _where(_SPENDING)],
             "stack": "Stack",
             "x_axis_time_format": _DATE_FORMAT,
@@ -379,18 +388,19 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         "table",
         {
             "query_mode": "raw",
-            # What no one has confirmed yet: the model's guess or no category, newest
-            # first. Fix the category in the labelling workbook, not here (ADR 0043).
+            # What no one has confirmed yet: the model's guess, no category, or an
+            # outflow labelled as income, newest first. Fix the category in the
+            # labelling workbook, not here (ADR 0043).
             "adhoc_filters": [
                 _time_range("date"),
-                _where(f"{_SPENDING} AND NOT category_confirmed"),
+                _where(f"{_SPENDING} AND NOT ({_LABELLED})"),
             ],
             "all_columns": [
                 "date",
                 "bank",
                 "currency",
                 "amount",
-                "category",
+                _sql_column(_SHOWN_CATEGORY, "category"),
                 "description",
             ],
             "order_by_cols": ['["date", false]'],

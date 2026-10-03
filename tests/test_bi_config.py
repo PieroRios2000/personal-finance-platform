@@ -285,8 +285,9 @@ def test_the_review_table_lists_only_what_nobody_confirmed() -> None:
     whose category is a model guess or missing, never the owner's own."""
     table = next(c for c in _builder().CHARTS if "movements to review" in c[1])[3]
 
-    assert "NOT category_confirmed" in json.dumps(table["adhoc_filters"])
-    assert "category" in table["all_columns"]
+    assert "NOT (category_confirmed" in json.dumps(table["adhoc_filters"])
+    columns = [c if isinstance(c, str) else c["label"] for c in table["all_columns"]]
+    assert "category" in columns
 
 
 def test_an_outflow_labelled_as_income_is_shown_as_not_categorized() -> None:
