@@ -85,6 +85,7 @@ _UPLOAD_STYLE = (_TEMPLATES / "upload_prompt.css").read_text()
 # the other), so a fee or an exchange difference between banks shows up.
 _MONEY_IN = "COALESCE(SUM(signed_amount) FILTER (WHERE signed_amount > 0), 0)"
 _MONEY_OUT = "COALESCE(-SUM(signed_amount) FILTER (WHERE signed_amount < 0), 0)"
+_NOT_TRANSFER = "NOT is_internal_transfer"
 _MONEY = "'FM999,999,999,990.00'"
 _NET = "COALESCE(SUM(signed_amount), 0)"
 # The income the savings rate is measured against: money that came into an asset
@@ -295,6 +296,105 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "rich_tooltip": True,
             "row_limit": 10000,
             "show_legend": True,
+        },
+    ),
+    (
+        "rpt_movements",
+        "Categories: what you spent on",
+        "echarts_timeseries_bar",
+        {
+            "x_axis": "category",
+            # Money out per category, biggest first. Movements between your own accounts
+            # are no spending (ADR 0017), so they are left out of this whole section.
+            "metrics": [_sql_metric(_MONEY_OUT, "Spent")],
+            "groupby": [],
+            "adhoc_filters": [_time_range("date"), _where(_NOT_TRANSFER)],
+            "x_axis_sort": "Spent",
+            "x_axis_sort_asc": False,
+            "y_axis_format": ",.0f",
+            "rich_tooltip": True,
+            "row_limit": 100,
+            "orientation": "horizontal",
+            "show_legend": False,
+        },
+    ),
+    (
+        "rpt_movements",
+        "Categories: where each one came from",
+        "pie",
+        {
+            "groupby": [
+                _sql_column(
+                    "CASE WHEN category_confirmed THEN 'you labelled it' "
+                    "WHEN category <> 'Sin categorizar' THEN 'the model guessed it' "
+                    "ELSE 'no category yet' END",
+                    "source",
+                )
+            ],
+            # Counted in movements, not money: it says how much of the history the model
+            # decided and how much you confirmed (ADR 0043: a guess is never a label).
+            "metric": _sql_metric("COUNT(*)", "Movements"),
+            "adhoc_filters": [_time_range("date"), _where(_NOT_TRANSFER)],
+            "color_scheme": "supersetColors",
+            "label_colors": {
+                "you labelled it": _GREEN,
+                "the model guessed it": _AMBER,
+                "no category yet": _RED,
+            },
+            "show_labels": True,
+            "label_type": "key_value_percent",
+            "donut": True,
+            "innerRadius": 40,
+            "outerRadius": 70,
+            "row_limit": 10,
+            "show_legend": True,
+        },
+    ),
+    (
+        "rpt_movements",
+        "Categories: spending per month",
+        "echarts_timeseries_bar",
+        {
+            "x_axis": "date",
+            "time_grain_sqla": "P1M",
+            "metrics": [_sql_metric(_MONEY_OUT, "Spent")],
+            "groupby": ["category"],
+            "adhoc_filters": [_time_range("date"), _where(_NOT_TRANSFER)],
+            "stack": "Stack",
+            "x_axis_time_format": _DATE_FORMAT,
+            "y_axis_format": ",.0f",
+            "rich_tooltip": True,
+            "row_limit": 10000,
+            "orientation": "vertical",
+            "show_legend": True,
+        },
+    ),
+    (
+        "rpt_movements",
+        "Categories: movements to review (the model's guesses)",
+        "table",
+        {
+            "query_mode": "raw",
+            # What no one has confirmed yet: the model's guess or no category, newest
+            # first. Fix the category in the labelling workbook, not here (ADR 0043).
+            "adhoc_filters": [
+                _time_range("date"),
+                _where(f"{_NOT_TRANSFER} AND NOT category_confirmed"),
+            ],
+            "all_columns": [
+                "date",
+                "bank",
+                "currency",
+                "amount",
+                "category",
+                "description",
+            ],
+            "order_by_cols": ['["date", false]'],
+            "column_config": {
+                "amount": {"d3NumberFormat": ",.2f", "horizontalAlign": "right"}
+            },
+            "row_limit": 1000,
+            "include_search": True,
         },
     ),
     (
@@ -618,6 +718,8 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
 
 # A text cell in the grid (Markdown), next to the investments chart: how to read it.
 NOTE = "@note"
+# A section title across the grid: "@section:" plus the text, alone in its row.
+SECTION = "@section:"
 NOTE_TEXT = (
     "### How to read the returns\n\n"
     "- **valuation**: the month closed at a real month-end value.\n"
@@ -635,6 +737,10 @@ LAYOUT: list[list[tuple[str, int, int]]] = [
     [("Period analysed", 6, 22), ("Debt at the end", 6, 22)],
     [("Capital summary", 6, 22), ("Net position summary", 6, 22)],
     [("Cash flow: money", 6, 50), ("Balance per month", 6, 50)],
+    [(f"{SECTION}Categories", 12, 6)],
+    [("Categories: what you", 6, 50), ("Categories: where", 6, 50)],
+    [("Categories: spending per", 12, 50)],
+    [("Categories: movements", 12, 60)],
     [("Investments: return and", 12, 32)],
     [("Investments: return per", 8, 50), (NOTE, 4, 50)],
     [("Movements", 12, 60)],
@@ -664,6 +770,21 @@ def _position(
     }
     for row_number, cells in enumerate(LAYOUT):
         row_id = f"ROW-{row_number}"
+        if cells[0][0].startswith(SECTION):
+            title_id = f"HEADER-{row_number}"
+            layout["GRID_ID"]["children"].append(title_id)
+            layout[title_id] = {
+                "type": "HEADER",
+                "id": title_id,
+                "children": [],
+                "parents": ["ROOT_ID", "GRID_ID"],
+                "meta": {
+                    "text": cells[0][0].removeprefix(SECTION),
+                    "headerSize": "LARGE_HEADER",
+                    "background": "BACKGROUND_TRANSPARENT",
+                },
+            }
+            continue
         layout["GRID_ID"]["children"].append(row_id)
         children = []
         for prefix, width, height in cells:

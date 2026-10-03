@@ -142,7 +142,11 @@ def test_every_dated_chart_has_a_time_range_filter_for_the_date_range() -> None:
 
 def test_the_timeseries_axes_show_the_full_date() -> None:
     # `smart_date` prints a January 1st as just the year: it read as a yearly total.
-    series = [c for c in _builder().CHARTS if c[2].startswith("echarts_timeseries")]
+    series = [
+        c
+        for c in _builder().CHARTS
+        if c[2].startswith("echarts_timeseries") and "time_grain_sqla" in c[3]
+    ]
 
     assert series
     assert all(c[3]["x_axis_time_format"] == "%d %b %Y" for c in series)
