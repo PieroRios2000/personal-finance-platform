@@ -1,6 +1,10 @@
 dashboard_title: PFP finance
 description: null
-css: ".dashboard-content { background: #f3f5f9; }\n.dashboard-component-chart-holder {\n  border-radius: 14px; border: 1px solid #e6eaf2 !important;\n  box-shadow: 0 1px 2px rgba(16, 24, 40, .06);\n}\n.dashboard-component-chart-holder .header-title { font-weight: 600; color: #1b2437; }\n.dashboard-header-container { background: #ffffff; }\n"
+css: ".dashboard-content { background: #f3f5f9; }\n.dashboard-component-chart-holder\
+  \ {\n  border-radius: 14px; border: 1px solid #e6eaf2 !important;\n  box-shadow:\
+  \ 0 1px 2px rgba(16, 24, 40, .06);\n}\n.dashboard-component-chart-holder .header-title\
+  \ { font-weight: 600; color: #1b2437; }\n.dashboard-header-container { background:\
+  \ #ffffff; }\n"
 slug: pfp-finance
 certified_by: null
 certification_details: null
@@ -22,11 +26,15 @@ position:
     - ROW-2
     - ROW-3
     - ROW-4
-    - ROW-5
+    - HEADER-5
     - ROW-6
     - ROW-7
     - ROW-8
     - ROW-9
+    - ROW-10
+    - ROW-11
+    - ROW-12
+    - ROW-13
     parents:
     - ROOT_ID
   HEADER_ID:
@@ -34,9 +42,9 @@ position:
     id: HEADER_ID
     meta:
       text: PFP finance
-  CHART-12:
+  CHART-16:
     type: CHART
-    id: CHART-12
+    id: CHART-16
     children: []
     parents:
     - ROOT_ID
@@ -45,14 +53,14 @@ position:
     meta:
       width: 12
       height: 32
-      chartId: 49
+      chartId: 17
       uuid: b68cd88f-cb4f-51d4-95c4-762284ff9368
       sliceName: Upload your files
   ROW-0:
     type: ROW
     id: ROW-0
     children:
-    - CHART-12
+    - CHART-16
     parents:
     - ROOT_ID
     - GRID_ID
@@ -69,7 +77,7 @@ position:
     meta:
       width: 12
       height: 22
-      chartId: 37
+      chartId: 1
       uuid: 0714ed2a-7dbb-519a-98c9-888bf4127391
       sliceName: Cash flow summary
   ROW-1:
@@ -93,7 +101,7 @@ position:
     meta:
       width: 6
       height: 22
-      chartId: 38
+      chartId: 2
       uuid: 5856ebce-5741-580b-95ba-a50f5285380d
       sliceName: Period analysed
   CHART-2:
@@ -107,7 +115,7 @@ position:
     meta:
       width: 6
       height: 22
-      chartId: 39
+      chartId: 3
       uuid: 774586d8-a528-5ef1-afc5-c5555f5ad472
       sliceName: Debt at the end of the period
   ROW-2:
@@ -132,7 +140,7 @@ position:
     meta:
       width: 6
       height: 22
-      chartId: 40
+      chartId: 4
       uuid: 995bb779-2eb3-5d2b-b038-9820d2bd06ec
       sliceName: Capital summary
   CHART-4:
@@ -146,7 +154,7 @@ position:
     meta:
       width: 6
       height: 22
-      chartId: 41
+      chartId: 5
       uuid: ab570cbe-f8aa-51d2-a8db-1329c1b1eb55
       sliceName: Net position summary
   ROW-3:
@@ -171,7 +179,7 @@ position:
     meta:
       width: 6
       height: 50
-      chartId: 42
+      chartId: 6
       uuid: 49f14305-2e47-5c9a-a798-94b91a277406
       sliceName: 'Cash flow: money in and out'
   CHART-6:
@@ -185,7 +193,7 @@ position:
     meta:
       width: 6
       height: 50
-      chartId: 43
+      chartId: 7
       uuid: 36343172-f26c-5149-9619-3a7abdb2a66d
       sliceName: Balance per month (debt is negative)
   ROW-4:
@@ -199,6 +207,17 @@ position:
     - GRID_ID
     meta:
       background: BACKGROUND_TRANSPARENT
+  HEADER-5:
+    type: HEADER
+    id: HEADER-5
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      text: Categories
+      headerSize: LARGE_HEADER
+      background: BACKGROUND_TRANSPARENT
   CHART-7:
     type: CHART
     id: CHART-7
@@ -206,23 +225,13 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-5
+    - ROW-6
     meta:
-      width: 12
-      height: 32
-      chartId: 44
-      uuid: f90318a4-53b4-5473-a1c3-c47cb7c1f3f8
-      sliceName: 'Investments: return and how each month closed'
-  ROW-5:
-    type: ROW
-    id: ROW-5
-    children:
-    - CHART-7
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    meta:
-      background: BACKGROUND_TRANSPARENT
+      width: 6
+      height: 50
+      chartId: 8
+      uuid: 0deee90a-f477-55d4-b0c1-f5611439d0d5
+      sliceName: 'Categories: what you spent on'
   CHART-8:
     type: CHART
     id: CHART-8
@@ -232,40 +241,17 @@ position:
     - GRID_ID
     - ROW-6
     meta:
-      width: 8
+      width: 6
       height: 50
-      chartId: 45
-      uuid: 77bb74fe-4bbd-527b-af20-060bbc44471a
-      sliceName: 'Investments: return per fund over time'
-  MARKDOWN-note:
-    type: MARKDOWN
-    id: MARKDOWN-note
-    children: []
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-6
-    meta:
-      width: 4
-      height: 50
-      code: '### How to read the returns
-
-
-        - **valuation**: the month closed at a real month-end value.
-
-        - **last_movement**: only the balance at the last movement; the return is shown but trust it less.
-
-
-        A return is shown only for a *reliable* month (`is_return_reliable`); the gain and the balances are always there.
-
-
-        One currency at a time: use the **Currency** filter.'
+      chartId: 9
+      uuid: 06331e04-68d0-56d4-b9ab-42e66b4cfea2
+      sliceName: 'Categories: where each one came from'
   ROW-6:
     type: ROW
     id: ROW-6
     children:
+    - CHART-7
     - CHART-8
-    - MARKDOWN-note
     parents:
     - ROOT_ID
     - GRID_ID
@@ -281,10 +267,10 @@ position:
     - ROW-7
     meta:
       width: 12
-      height: 60
-      chartId: 46
-      uuid: 8e81aaab-2fd3-59b0-b902-2d95666db6b9
-      sliceName: Movements (check against your statements)
+      height: 50
+      chartId: 10
+      uuid: e9785fa3-0594-5955-8a57-cc3cd537bc0e
+      sliceName: 'Categories: spending per month'
   ROW-7:
     type: ROW
     id: ROW-7
@@ -306,9 +292,9 @@ position:
     meta:
       width: 12
       height: 60
-      chartId: 47
-      uuid: e0814a73-2359-50f6-aeb8-4d63a6174f02
-      sliceName: Statement balances (check against your statements)
+      chartId: 11
+      uuid: e9f0c2e0-9b64-5391-a65a-4af26de5ff62
+      sliceName: 'Categories: movements to review (the model''s guesses)'
   ROW-8:
     type: ROW
     id: ROW-8
@@ -329,15 +315,138 @@ position:
     - ROW-9
     meta:
       width: 12
-      height: 40
-      chartId: 48
-      uuid: 639b6207-0b0a-5895-8ebf-7b45be98dd81
-      sliceName: 'Reconciliation: opening + movements = balance (difference must be 0)'
+      height: 32
+      chartId: 12
+      uuid: f90318a4-53b4-5473-a1c3-c47cb7c1f3f8
+      sliceName: 'Investments: return and how each month closed'
   ROW-9:
     type: ROW
     id: ROW-9
     children:
     - CHART-11
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-12:
+    type: CHART
+    id: CHART-12
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-10
+    meta:
+      width: 8
+      height: 50
+      chartId: 13
+      uuid: 77bb74fe-4bbd-527b-af20-060bbc44471a
+      sliceName: 'Investments: return per fund over time'
+  MARKDOWN-note:
+    type: MARKDOWN
+    id: MARKDOWN-note
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-10
+    meta:
+      width: 4
+      height: 50
+      code: '### How to read the returns
+
+
+        - **valuation**: the month closed at a real month-end value.
+
+        - **last_movement**: only the balance at the last movement; the return is
+        shown but trust it less.
+
+
+        A return is shown only for a *reliable* month (`is_return_reliable`); the
+        gain and the balances are always there.
+
+
+        One currency at a time: use the **Currency** filter.'
+  ROW-10:
+    type: ROW
+    id: ROW-10
+    children:
+    - CHART-12
+    - MARKDOWN-note
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-13:
+    type: CHART
+    id: CHART-13
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-11
+    meta:
+      width: 12
+      height: 60
+      chartId: 14
+      uuid: 8e81aaab-2fd3-59b0-b902-2d95666db6b9
+      sliceName: Movements (check against your statements)
+  ROW-11:
+    type: ROW
+    id: ROW-11
+    children:
+    - CHART-13
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-14:
+    type: CHART
+    id: CHART-14
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-12
+    meta:
+      width: 12
+      height: 60
+      chartId: 15
+      uuid: e0814a73-2359-50f6-aeb8-4d63a6174f02
+      sliceName: Statement balances (check against your statements)
+  ROW-12:
+    type: ROW
+    id: ROW-12
+    children:
+    - CHART-14
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-15:
+    type: CHART
+    id: CHART-15
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-13
+    meta:
+      width: 12
+      height: 40
+      chartId: 16
+      uuid: 639b6207-0b0a-5895-8ebf-7b45be98dd81
+      sliceName: 'Reconciliation: opening + movements = balance (difference must be
+        0)'
+  ROW-13:
+    type: ROW
+    id: ROW-13
+    children:
+    - CHART-15
     parents:
     - ROOT_ID
     - GRID_ID

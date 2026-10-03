@@ -1,32 +1,39 @@
-slice_name: Period analysed
+slice_name: Debt at the end of the period
 description: null
 certified_by: null
 certification_details: null
 viz_type: handlebars
 params:
   query_mode: aggregate
-  groupby: []
+  groupby:
+  - calendar_month
   metrics:
   - expressionType: SQL
-    sqlExpression: to_char(MIN(date), 'DD Mon YYYY')
-    label: from
+    sqlExpression: MAX(currency)
+    label: currency
   - expressionType: SQL
-    sqlExpression: to_char(MAX(date), 'DD Mon YYYY')
-    label: to
+    sqlExpression: to_char(SUM(debt_balance), 'FM999,999,999,990.00')
+    label: debt
   - expressionType: SQL
-    sqlExpression: COUNT(DISTINCT calendar_month)
-    label: months
+    sqlExpression: MAX(month_start)
+    label: sort_key
+  timeseries_limit_metric:
+    expressionType: SQL
+    sqlExpression: MAX(month_start)
+    label: sort_key
+  order_desc: true
   adhoc_filters:
   - expressionType: SIMPLE
-    subject: date
+    subject: month_start
     operator: TEMPORAL_RANGE
     comparator: No filter
     clause: WHERE
   row_limit: 1
-  handlebarsTemplate: "{{#each data}}\n<div class=\"kpis\">\n  <div class=\"kpi range\"\
-    ><div class=\"label\">Period analysed</div>\n    <div class=\"value small\">{{from}}\
-    \ &rarr; {{to}}</div>\n    <div class=\"note\">{{months}} closed month(s), from\
-    \ the movements you have filtered</div></div>\n</div>\n{{/each}}\n"
+  handlebarsTemplate: "{{#each data}}\n<div class=\"kpis\">\n  <div class=\"kpi debt\"\
+    ><div class=\"label\">Debt at the end of the period</div>\n    <div class=\"value\"\
+    >{{currency}} {{debt}}</div>\n    <div class=\"note\">{{calendar_month}} &middot;\
+    \ credit card balance owed, in the last month of your selection</div></div>\n\
+    </div>\n{{/each}}\n"
   styleTemplate: ".kpis { display: flex; gap: 10px; height: 100%; align-items: stretch;\
     \ font-family: inherit; }\n.kpi { flex: 1; border-radius: 12px; padding: 12px\
     \ 14px; display: flex;\n       flex-direction: column; justify-content: center;\
@@ -43,10 +50,10 @@ params:
     .kpi.debt { border-left-color: #e5484d; }\n.kpi .value.small { font-size: 18px;\
     \ }\n.kpi.rate.pos .value { color: #1f9d6b; } .kpi.rate.neg .value { color: #e5484d;\
     \ }\n.kpi.count { border-left-color: #6366f1; }\n"
-  datasource: 11__table
+  datasource: 2__table
   viz_type: handlebars
 query_context: null
 cache_timeout: null
-uuid: 5856ebce-5741-580b-95ba-a50f5285380d
+uuid: 774586d8-a528-5ef1-afc5-c5555f5ad472
 version: 1.0.0
-dataset_uuid: 421b5769-3581-5c67-928a-84023a5f132f
+dataset_uuid: 80f10cdd-0b29-517f-ab7a-3d0cb2673307

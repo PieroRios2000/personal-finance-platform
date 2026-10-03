@@ -111,6 +111,18 @@ Consequence: four of the new categories have 1-4 labeled descriptions, so the tr
 capped at 2 by `Ropa`. More labels, or merging the rarest into a neighbour, is needed before any
 metric is worth publishing (ADR 0044).
 
+## Amendment: the dashboard shows the classification as its own section (2026-10-03)
+
+`bi/build_dashboards.py` adds a "Categories" section between the cash flow and the
+investments, over `gold.rpt_movements` only (no new table): what you spent on, by category;
+where each category came from (`category_confirmed` = you labelled it, a model guess, or
+none yet, counted in movements); spending per month by category; and a table of the
+movements nobody has confirmed. Movements between the owner's own accounts are left out of
+the whole section (ADR 0017). The section keeps this ADR's rule visible: a guess is shown as
+a guess, in its own colour and its own table, and the fix is made in the labelling workbook,
+not in the dashboard. The demo environment has no labels, so there the section shows
+everything as "no category yet".
+
 ## Related
 
 [ADR 0004](0004-real-pdfs-never-leave-your-machine.md),
