@@ -41,7 +41,7 @@ either way, never a silent switch the owner has to know about. `train()`'s own c
 groups by merchant (digits stripped), not by row, so two near-duplicate descriptions of the same
 merchant never land in different folds and let the model partly grade itself.
 
-| [`scripts/categorize_new_movements.py`](../../scripts/categorize_new_movements.py) | `run()`: batch-predicts a category for every new, unconfirmed `(bank, description)` -- called automatically by `ingestion.cli._run_ingest()` and `orchestration.assets.bronze.bronze()` (T54, ADR 0045), also `make categorize-new-movements` by hand |
+| [`scripts/categorize_new_movements.py`](../../scripts/categorize_new_movements.py) | `run()`: batch-predicts a category for every new, unconfirmed `(bank, description)` -- called automatically by `ingestion.cli._run_ingest()`, `pfp backfill` and `orchestration.assets.bronze.bronze()` (T54, ADR 0045, 0047; `make ingest-uploads` reaches it via `pfp ingest`), only for the user the saved model was trained for (`Bundle.trained_for`), also `make categorize-new-movements` by hand |
 | [`lakehouse/bronze.py`](../../lakehouse/bronze.py)`.replace_category_predictions`, `distinct_bank_descriptions`, `labeled_bank_descriptions` | The predictions table (whole-set replace per run) and the two reads `categorize_new_movements.run()` needs |
 | [`dbt/models/silver/category_predictions.sql`](../../dbt/models/silver/category_predictions.sql) | Same `bronze_table_exists` empty-until-populated pattern as `category_labels.sql` |
 
@@ -66,3 +66,6 @@ forget.
 
 [dbt gold](dbt-gold.md), [Manual Excel importer](manual-excel-importer.md) (the same
 shape/content split), [ADR 0004](../decisions/0004-real-pdfs-never-leave-your-machine.md).
+
+The month as a sequence (ingest, propose, label, retrain, re-propose, drift) is in
+[docs/monthly-routine.md](../../docs/monthly-routine.md), with a test that its `make` targets exist.

@@ -55,9 +55,12 @@ def run(user_id: str, model_path: Path | None = None) -> Report:
     trained model, cheap to recompute at this project's scale (tens to low
     hundreds of distinct descriptions).
 
-    No trained model yet: reports it (`has_model=False`) and clears any stale
+    No model for this user: reports it (`has_model=False`) and clears any stale
     predictions from a model that may have existed before, rather than leaving
-    outdated ones in place."""
+    outdated ones in place. "No model for this user" covers a model trained for
+    someone else (`Bundle.trained_for`) or saved before that field existed: the
+    one installed model is fitted on one person's labels and text, so another
+    person's upload (`make ingest-uploads`) never gets its proposals."""
     path = (model_path or DEFAULT_MODEL_PATH).with_suffix(".joblib")
     bundle = load(path)
 
@@ -65,7 +68,7 @@ def run(user_id: str, model_path: Path | None = None) -> Report:
     labeled = bronze.labeled_bank_descriptions(user_id)
     to_predict = [pair for pair in descriptions if pair not in labeled]
 
-    if bundle is None:
+    if bundle is None or bundle.trained_for != user_id:
         bronze.replace_category_predictions(user_id, [])
         return Report(
             total_descriptions=len(descriptions),
@@ -103,8 +106,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     report = run(args.user, model_path=args.model_path)
     if not report.has_model:
         print(
-            "Categorias: no trained model yet (make train-category-model); "
-            "nothing predicted."
+            "Categorias: no model trained for this user "
+            "(make train-category-model); nothing predicted."
         )
         return 0
     print(

@@ -750,7 +750,11 @@ category for every new, unconfirmed movement automatically (T54, ADR 0045) -- no
 needed, and no owner action required to see it: `gold.rpt_movements.category` shows the prediction
 right after the next `make build`, with `category_confirmed = false` so it's never mistaken for
 the owner's own label. `make categorize-new-movements PFP_USER=piero` re-runs just this step by
-hand (e.g. right after training a new model, without a full re-ingest).
+hand (e.g. right after training a new model, without a full re-ingest). The same step also ends
+`pfp backfill` and, through `pfp ingest`, `make ingest-uploads`. The saved model belongs to the user
+it was trained for (`make train-category-model` records it, ADR 0047): other users' uploads get no
+proposals, and a model saved before October 2026 needs one retrain. The whole month, in order, is in
+[`docs/monthly-routine.md`](docs/monthly-routine.md).
 
 Check whether the data the classifier sees has changed shape (T55, ADR 0046), for example after a few
 new statements:
