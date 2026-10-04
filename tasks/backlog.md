@@ -136,7 +136,7 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       [spec](../docs/specs/category-forecast-and-savings-goal.md),
       [ADR 0048](../brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md);
       closes Phase 3's forecasting item and Phase 6's cash-flow projection). Each its own PR, in order:
-  - [ ] **T56** `forecasting/` skeleton, fixed-expense detection, `make export-plan` (workbook with `Instrucciones`, `Gastos fijos`, `Meta` incl. `usd_to_pen` and the emergency settings; `~/finance-data/plan/`).
+  - [x] **T56** `forecasting/` skeleton, fixed-expense detection, `make export-plan` (workbook with `Instrucciones`, `Gastos fijos`, `Meta` incl. `usd_to_pen` and the emergency settings; `~/finance-data/plan/`).
   - [ ] **T57** `make import-plan` (validates the dollar goal, rate and emergency fields), bronze/silver plan tables, gold `rpt_fixed_expenses`.
   - [ ] **T58** forecast core: series, five candidates + baseline, rolling-origin backtest, intervals.
   - [ ] **T59** `make forecast`: bronze outputs, MLflow, gold forecast, variance and quality tables.
