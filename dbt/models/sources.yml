@@ -42,6 +42,19 @@ sources:
           can avoid measuring the rules baseline against labels it produced itself.
           Only exists once `make import-category-labels` has run; models on it use
           `bronze_table_exists` too.
+      - name: plan_fixed_items
+        description: >
+          The owner's savings plan, fixed-expense part (T57, ADR 0048): one row per
+          (bank, description, currency) of the plan workbook, with the `kind` he chose
+          (fixed / variable / ignore) and his `expected_amount`. Whole plan replaced on
+          every `make import-plan`. Only exists once a plan has been imported; models on
+          it use `bronze_table_exists` too.
+      - name: plan_goal
+        description: >
+          The owner's savings goal in US dollars and the emergency-fund settings (T57,
+          ADR 0048): one row per user, `usd_to_pen` is soles per dollar. Replaced with
+          `plan_fixed_items` in the same import. Only exists once a plan has been
+          imported; models on it use `bronze_table_exists` too.
       - name: category_predictions
         description: >
           The trained model's own guess for a movement's (bank, description),

@@ -29,8 +29,6 @@ from tests.test_dbt_silver_integration import (
 
 pytestmark = pytest.mark.integration
 
-_SELECT = "+rpt_fixed_expenses plan_goal"
-
 lake = _lake
 
 
@@ -146,7 +144,7 @@ def test_fixed_expenses_compare_the_plan_with_the_closed_months(
         _goal(),
     )
 
-    result = _dbt_build(tmp_path, select=_SELECT)
+    result = _dbt_build(tmp_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
     rows = {row["description"]: row for row in _rows("gold.rpt_fixed_expenses")}
@@ -180,7 +178,7 @@ def test_silver_plan_goal_keeps_the_dollar_goal_and_the_rate(
     _seed_spending()
     bronze.replace_plan(_USER_ID, [_item("PLANTED RENT", "fixed", 1000.0)], _goal())
 
-    result = _dbt_build(tmp_path, select=_SELECT)
+    result = _dbt_build(tmp_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
     [goal] = _rows("silver.plan_goal")
@@ -197,7 +195,7 @@ def test_the_models_build_empty_before_any_plan_is_imported(
 ) -> None:
     _seed_spending()
 
-    result = _dbt_build(tmp_path, select=_SELECT)
+    result = _dbt_build(tmp_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert _rows("gold.rpt_fixed_expenses") == []

@@ -371,6 +371,36 @@ models:
         data_tests:
           - not_null
 
+  - name: rpt_fixed_expenses
+    description: >
+      Reporting table (T57, ADR 0048): each expense the owner confirmed as fixed, with
+      his `expected_amount`, the latest of the last six closed months in which it was
+      charged (`last_observed_month`, `last_observed_amount`), `months_seen_last_6`,
+      `deviation_pct` against the expected amount and a `status`: 'deviating' above
+      10 % either way, 'as_expected', or 'not_seen' when it was not charged in the
+      window. One row per `(user_id, bank, description, currency)`. Not monthly: the
+      calendar filters do not apply to it. Carries `user_id` for row-level security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, bank, description, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: expected_amount
+        data_tests:
+          - not_null
+      - name: months_seen_last_6
+        data_tests:
+          - not_null
+      - name: status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [as_expected, deviating, not_seen]
+
   - name: rpt_reconciliation
     description: >
       Reporting table (T36): per account and currency, the opening balance of its first
