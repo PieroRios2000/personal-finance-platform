@@ -261,6 +261,7 @@ PDF are in [SETUP.md](SETUP.md) sections 6 and 9; running on your own PDFs is
 Requirements, versions and the exact steps to run this locally: **[SETUP.md](SETUP.md)**.
 
 Running it on your own real statements, step by step: **[docs/ingesting-your-own-pdfs.md](docs/ingesting-your-own-pdfs.md)**.
+Where to open each stage in a browser (S3, Dagster, DuckDB, dbt docs, Superset, MLflow): **[docs/where-to-look.md](docs/where-to-look.md)**.
 Rebuilding everything from your archive: [docs/runbook-rebuild-from-archive.md](docs/runbook-rebuild-from-archive.md). What went wrong and what changed: [docs/incidents/](docs/incidents/README.md); what was run: [docs/operations-log.md](docs/operations-log.md).
 
 The full project vision and phase roadmap (orchestration, gold, ML, a dashboard): **[PROJECT.md](PROJECT.md)**.
