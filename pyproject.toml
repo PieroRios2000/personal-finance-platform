@@ -44,6 +44,7 @@ module_name = "orchestration.definitions"
 [dependency-groups]
 dev = [
     "bandit>=1.9.4",
+    "dagster-webserver>=1.13.23",
     "diff-cover>=10.5.1",
     "elementary-data>=0.26.0",
     "fpdf2>=2.8.8",
