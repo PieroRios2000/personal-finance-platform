@@ -4,6 +4,9 @@ descriptions are synthetic (T56, ADR 0048)."""
 from pathlib import Path
 
 import pytest
+from openpyxl import load_workbook
+
+from forecasting.fixed_expenses import Candidate
 from forecasting.plan_file import (
     ITEM_COLUMNS,
     META_DEFAULTS,
@@ -13,9 +16,6 @@ from forecasting.plan_file import (
     read_plan,
     write_plan,
 )
-from openpyxl import load_workbook
-
-from forecasting.fixed_expenses import Candidate
 
 
 def _candidate(

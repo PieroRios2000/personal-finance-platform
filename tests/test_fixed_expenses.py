@@ -5,6 +5,7 @@ does (T56, ADR 0048)."""
 from datetime import date
 
 import pytest
+
 from forecasting.fixed_expenses import Candidate, MonthlySpend, detect_candidates
 
 LAST = date(2026, 9, 1)
