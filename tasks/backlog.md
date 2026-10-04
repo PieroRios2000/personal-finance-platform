@@ -132,6 +132,18 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       movements and writes an HTML report under `~/finance-data/reports/`. Manual, not scheduled;
       no model-confidence column exists to monitor (ADR 0045). A flag at these window sizes is a
       prompt, not a verdict.
+- [ ] **Spend forecast per category + savings-goal projection** (specified 2026-10-04,
+      [spec](../docs/specs/category-forecast-and-savings-goal.md),
+      [ADR 0048](../brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md);
+      closes Phase 3's forecasting item and Phase 6's cash-flow projection). Each its own PR, in order:
+  - [ ] **T56** `forecasting/` skeleton, fixed-expense detection, `make export-plan`.
+  - [ ] **T57** `make import-plan`, bronze/silver plan tables, gold `rpt_fixed_expenses`.
+  - [ ] **T58** forecast core: series, five candidates + baseline, rolling-origin backtest, intervals.
+  - [ ] **T59** `make forecast`: bronze outputs, MLflow, gold forecast, variance and quality tables.
+  - [ ] **T60** projection: three scenarios, time to goal, adjust view, gold tables.
+  - [ ] **T61** Superset "Forecast & goal" section with row-level security, demo seed.
+  - [ ] **T62** realized-vs-backtest monitor, monthly routine and where-to-look updates.
+  - [ ] **T63** (follow-up) experiment: recurrence and the fixed/variable mark as classifier features, ADR 0044's protocol and an acceptance margin over the fold spread; a null result is valid (spec section 4.8).
 - [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
       model -- macro-F1 and per-category precision (not just accuracy), latency, cost per
       transaction, cost per month at this project's real volume, against the same held-out labels.
@@ -148,7 +160,7 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
 
 - [x] [Phase 7 — Alerting](../brain/phases/phase-7.md): built. Left: Dagster-triggered alerts.
 - [ ] [Phase 6 — Savings-goal projection](../brain/phases/phase-6.md): the manual-Excel
-      importer: Ripley savings and investment tracking (`Inversiones` sheet, monthly returns) **done**, then the cash-flow projection and its own sol/dólar exchange-rate section (the only
+      importer: Ripley savings and investment tracking (`Inversiones` sheet, monthly returns) **done**, then the cash-flow projection (specified, T56-T62 under Phase 3 above) and its own sol/dólar exchange-rate section (the only
       place currencies are converted). Scope in [ADR 0025](../brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md).
 - [ ] **Phase 2 extension, T26-T33: PostgreSQL as dbt's store, then Superset** (decided 2026-09-19,
       [ADR 0029](../brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). Order and
