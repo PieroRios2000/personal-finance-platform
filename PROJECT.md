@@ -145,9 +145,10 @@ Every parser validates that the sum of the extracted transactions matches the ba
   the labeling file, `gold.dim_category`/`gold.rpt_movements.category`; TF-IDF character n-grams +
   logistic regression, MLflow-tracked, scored against the rules baseline --
   [ADR 0044](brain/decisions/0044-category-classifier-char-ngrams-vs-rules-baseline.md)) and
-  verified against synthetic categories; the owner's own real labels are still to come.
-  Categorizing new movements as a batch step (at ingest) and Evidently drift monitoring are next;
-  a live FastAPI endpoint is optional, only if a real caller ever needs one.
+  scored on the owner's own labels (589 descriptions, 10 categories: macro-F1 0.49 on the 543
+  reviewed ones, merchant-grouped 3-fold CV, against 0.23 for the rules; ADR 0044's 2026-10-04
+  amendment). Batch categorization at ingest (ADR 0045) and Evidently drift monitoring (ADR 0046)
+  are built; a live FastAPI endpoint is optional, only if a real caller ever needs one.
 - Monthly spend forecasting (time series).
 - Anomalous-charge detection.
 
