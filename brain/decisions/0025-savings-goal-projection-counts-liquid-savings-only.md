@@ -38,6 +38,27 @@ model is built: which money counts, and which banks feed it.
   or mixing currencies, and the projection converts on its own, on top of gold, never writing a
   converted amount back into those layers.
 
+## Amendment (2026-10-04): two buckets, a dollar goal, investments as a second line
+
+[ADR 0048](0048-spend-forecast-baselines-and-savings-goal-scenarios.md) and the
+[spec](../../docs/specs/category-forecast-and-savings-goal.md) settle what this ADR left open. What
+stands: bronze, silver and gold never convert; conversion happens only in the projection, with no
+external rate source; investments have no statement and are valued from the manual Excel.
+
+What changes, at the owner's request:
+
+- **The goal is in US dollars.** The owner enters the exchange rate (`usd_to_pen`, soles per
+  dollar) and the projection converts with it; no rate, no projection.
+- **Two buckets.** Ripley savings are the **emergency fund**; all investments (Tyba funds, Flip)
+  are **risk savings**. The other bank accounts are ordinary liquid savings.
+- **Investments are no longer excluded outright.** They enter as a **second line** of the goal
+  (`with_risk`), at their last closed month-end valuation, held flat (no return, no contributions).
+  The first line (`liquid`) is the original rule of this ADR. Both are shown until the owner says
+  which one his goal means. The reason for the earlier exclusion (the answer would depend on the
+  market) is why the lines are separate and not merged.
+- **The goal carries an emergency amount computed from his spending and income**, filled before the
+  goal.
+
 ## Alternatives considered
 
 - **Include the investments with a manual "current value" input**: rejected by the owner; the

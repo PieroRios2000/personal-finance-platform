@@ -17,10 +17,10 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
 | Piece | What it does | Task |
 |---|---|---|
 | `forecasting/` (pure functions) | Fixed-expense detection, series builder, five candidates and a trailing-median baseline, rolling-origin backtest, empirical intervals, projection | T56, T58, T60 |
-| `make export-plan` / `make import-plan` | The owner's workbook: fixed-expense proposals to confirm, the goal, the exchange rate | T56, T57 |
+| `make export-plan` / `make import-plan` | The owner's workbook (`~/finance-data/plan/`): fixed-expense proposals to confirm, the dollar goal, `usd_to_pen`, the emergency settings | T56, T57 |
 | `make forecast` | Reads gold, writes bronze forecast and projection tables, logs ratios and counts to MLflow, builds the new dbt models | T59 |
-| Gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality`, `rpt_fixed_expenses`, `rpt_goal_projection`, `rpt_goal_summary` | What the dashboard reads | T57, T59, T60 |
-| Superset "Forecast & goal" section | Time to goal as a range, categories above expected, the adjust view, how far to trust each series | T61 |
+| Gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality`, `rpt_fixed_expenses`, `rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund` | What the dashboard reads | T57, T59, T60 |
+| Superset "Forecast & goal" section | Emergency target and gap, time to goal as a range for both lines (`liquid`, `with_risk`), categories above expected, the adjust view, how far to trust each series | T61 |
 | Realized-vs-backtest error chart | The monitor; joins the monthly routine | T62 |
 | Recurrence as classifier features | Follow-up experiment, null result allowed | T63 |
 

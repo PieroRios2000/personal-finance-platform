@@ -13,7 +13,10 @@ Two plan items need the same machinery: Phase 3's monthly spend forecasting and 
 "how long until I reach my savings goal". On 2026-10-04 the owner decided three things: the system
 proposes which expenses look fixed and the owner confirms later; the owner enters a savings goal
 and the answer is the time to reach it from what is saved plus what is projected to be saved; and
-the forecast is per category so spending that is above expected can be adjusted.
+the forecast is per category so spending that is above expected can be adjusted. Later the same
+day he added: the goal is in **dollars** (so soles and dollars saved need an exchange rate), Ripley
+savings are the **emergency fund** and all investments are **risk savings**, and the goal must carry
+an **emergency amount calculated from his spending and income**.
 
 The data is small: roughly two years of closed months, two currencies, a dozen-odd categories,
 several of them sparse. Choices that suit thousands of points (ARIMA families, Prophet, neural
@@ -32,11 +35,23 @@ model is worth having. The full design is in
   Intervals are empirical error quantiles. Total spending has its own series and interval.
 - **Hand-rolled numpy/pandas, no `statsmodels`.** `numpy` is declared explicitly (already
   locked through pandas and scikit-learn, so no new package).
+- **The goal is in US dollars.** The owner enters `usd_to_pen` (soles per 1 dollar); soles become
+  dollars by dividing by it. With no rate the projection refuses to run and says why.
+- **Two buckets, shown as two lines.** Ripley savings are the emergency fund; investments are risk
+  savings at their last closed month-end valuation, held flat. The goal is shown as `liquid` (emergency
+  excess, other bank accounts, new savings) and `with_risk` (plus investments), until the owner says
+  which one his goal means. This amends ADR 0025.
+- **The emergency amount is calculated:** `emergency_months` (default 6) x monthly essential outflow
+  (fixed items + the 6-month median of variable spending, `emergency_basis = all`; `fixed_only` is
+  the switch for the floor), cross-checked against income. New savings fill the emergency gap first,
+  then the goal.
 - **The goal is answered with three scenarios** (base, cautious, optimistic) as a range of months,
   "not reached" when it is not. They are explicitly not a confidence
   interval.
 - **Only closed months, the dashboard's spending definition** (`egreso`, not an internal
-  transfer), and **liquid savings only** ([ADR 0025](0025-savings-goal-projection-counts-liquid-savings-only.md)).
+  transfer).
+  [ADR 0025](0025-savings-goal-projection-counts-liquid-savings-only.md) is amended: investments
+  are no longer excluded outright, they are the second line.
 - **Conversion stays confined to the projection**, with one owner-entered rate and no external
   API; bronze, silver and gold remain unconverted.
 - **Python writes bronze, dbt builds silver and gold**, the shape of
@@ -58,6 +73,10 @@ model is worth having. The full design is in
   cannot give; the second assumes an error model nobody has validated on this data.
 - **Summing category quantiles for the total:** assumes every category errs the same way in the
   same month.
+- **A typed emergency amount, or a fixed share of income:** a typed number goes stale as spending
+  changes, and a share of income ignores what the owner actually spends.
+- **One merged balance, or counting the investments with no alternative line:** the first hides that
+  investments move with the market; the second picks an answer the owner has not given.
 - **A public exchange-rate API, or an FX path model now:** a network dependency in a local-only
   platform; neither is needed to answer the goal question. The Phase 6 FX section stays a
   separate item.
@@ -80,6 +99,9 @@ model is worth having. The full design is in
   extra non-text features did not help, the flag can leak or duplicate the text signal, and the
   owner's mark must be point-in-time; the model keeps only proposing. The plan file is keyed by
   `(user_id, bank, normalized description)`, the category labels' key, so it can be reused.
+- Gold gains `rpt_emergency_fund`; the goal tables carry a `line` column.
+- The answer moves with the owner's rate; he changes it in the workbook and re-runs.
+- Open for the owner: whether the goal counts the investments (spec, section 9, point 1).
 - Annual expenses, planned extras and an exchange-rate path are left open (spec, section 9).
 
 ## Related
