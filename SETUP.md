@@ -114,6 +114,7 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | dbt-duckdb | 1.11.0 (dbt-core 1.12.4) | runtime | Builds silver from bronze (T16, ADR 0011). Runtime, not dev: `dbt build` is a step of the platform's own flow, not a check |
 | duckdb | 1.5.5 | runtime | The engine dbt runs on; reads Delta off S3 with `delta_scan()` (T16, ADR 0002) |
 | dagster | 1.13.23 | runtime | Orchestrates bronze + dbt as one DAG (T21). Runtime: `dagster asset materialize` is a way to run the platform's own flow, same as `pfp ingest` + `dbt build` by hand |
+| dagster-webserver | 1.13.23 | dev | The web UI behind `uv run dagster dev` (T21). `dagster` alone does not ship it: without it `dagster dev` stops with "The dagster-webserver Python package must be installed". See [docs/where-to-look.md](docs/where-to-look.md) |
 | dagster-dbt | 0.29.23 | runtime | Wraps the dbt project as Dagster assets, one per dbt node (T21) |
 | elementary-data | 0.26.0 | dev | The `edr` CLI (`edr report`/`edr monitor`), for rendering a local observability report from what `dbt build` already wrote (T22, ADR 0022). Elementary itself is a **dbt package**, not a `uv` dependency — see `dbt/packages.yml` and the "Elementary" subsection under section 6 below |
 | sqlfluff | 4.3.0 | dev | Lints the dbt project's SQL (T16) |
@@ -354,7 +355,7 @@ this env var — confirmed by reading `dagster`'s own CLI source
 `--help` text, which doesn't mention `pyproject.toml` at all.
 
 `dagster dev` (the local web UI, not required for CI or `make poc`) does use the
-`pyproject.toml` block, so it needs no extra flag or env var: `uv run dagster dev`.
+`pyproject.toml` block, so it needs no extra flag or env var: `uv run dagster dev` (it needs the `dagster-webserver` dev dependency; `uv sync --locked` installs it). Where to look at everything else: [docs/where-to-look.md](docs/where-to-look.md).
 
 **What to look at (T31).** Open the *Assets* graph: `bronze` (the lake, Delta on S3) feeds the dbt
 models (silver, then gold). After a materialization, click a dbt model and its latest
