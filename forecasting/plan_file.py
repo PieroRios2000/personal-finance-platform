@@ -193,8 +193,15 @@ def _text(value: object) -> str:
     return "" if value is None else str(value).strip()
 
 
-def _number(value: object) -> float | None:
-    return None if value is None or _text(value) == "" else float(str(value))
+def _expected_amount(value: object, row: int) -> float | None:
+    if _text(value) == "":
+        return None
+    try:
+        return float(str(value))
+    except ValueError:
+        raise ValueError(
+            f"{SHEET_ITEMS}: expected_amount in row {row} is not a number"
+        ) from None
 
 
 def read_plan(path: Path) -> PlanFile:
@@ -205,7 +212,7 @@ def read_plan(path: Path) -> PlanFile:
 
     items: list[PlanItem] = []
     rows = workbook[SHEET_ITEMS].iter_rows(min_row=2, values_only=True)
-    for row in rows:
+    for number, row in enumerate(rows, start=2):
         cells = dict(zip(ITEM_COLUMNS, row, strict=False))
         if not _text(cells["description"]):
             continue
@@ -219,7 +226,7 @@ def read_plan(path: Path) -> PlanFile:
                 typical_amount=float(str(cells["typical_amount"] or 0)),
                 proposed_kind=_text(cells["proposed_kind"]),
                 kind=_text(cells["kind"]),
-                expected_amount=_number(cells["expected_amount"]),
+                expected_amount=_expected_amount(cells["expected_amount"], number),
                 note=_text(cells["note"]),
             )
         )
