@@ -27,7 +27,7 @@ PFP = docker compose -p $(PFP_PROJECT)
 # Each environment's OpenMetadata artifacts (they hold a token and the Postgres password).
 export PFP_OM_ARTIFACTS = ./artifacts/$(PFP_ENV)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels export-plan train-category-model categorize-new-movements monitor-category-drift build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels export-plan import-plan train-category-model categorize-new-movements monitor-category-drift build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -170,6 +170,12 @@ export-category-labels:
 # ~/finance-data/plan/ (0600). Run again and your choices stay. PFP_USER, like ingest.
 export-plan:
 	$(LOAD_ENV) && uv run python -m scripts.export_plan --user "$$PFP_USER"
+
+# T57: validates the filled plan workbook (every problem listed at once, nothing written if
+# there is any) and replaces your whole plan in bronze. Then `make build` for the silver/gold
+# models. WORKBOOK defaults to ~/finance-data/plan/plan-de-ahorro.xlsx; PFP_USER like ingest.
+import-plan:
+	$(LOAD_ENV) && uv run python -m scripts.import_plan --user "$$PFP_USER" $(if $(WORKBOOK),--workbook "$(WORKBOOK)")
 
 import-category-labels:
 	@test -n "$(WORKBOOK)" || { echo "usage: make import-category-labels WORKBOOK=~/finance-data/manual/categorias-transacciones.xlsx" >&2; exit 2; }

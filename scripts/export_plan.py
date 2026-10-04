@@ -96,7 +96,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     if previous is not None:
         print(f"re-export: {kept} existing row(s) read, owner choices kept")
-    print("Fill kind/expected_amount and the Meta sheet, save. Import comes with T57.")
+    print("Fill kind/expected_amount and the Meta sheet, save, then make import-plan.")
     return 0
 
 

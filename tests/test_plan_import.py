@@ -6,9 +6,9 @@ from datetime import date, datetime
 from pathlib import Path
 
 import pytest
-from forecasting.plan_import import Goal, check_plan
 
 from forecasting.plan_file import PlanFile, PlanItem, read_plan, write_plan
+from forecasting.plan_import import Goal, check_plan
 
 TODAY = date(2026, 10, 4)
 ACCOUNTS = {"BCP", "Ripley"}
@@ -46,7 +46,7 @@ def _meta(**overrides: object) -> dict[str, object]:
     return meta
 
 
-def _plan(items: list[PlanItem] | None = None, **meta: object) -> PlanFile:
+def _plan(items: list[PlanItem] | None = None, /, **meta: object) -> PlanFile:
     return PlanFile(tuple(items if items is not None else [_item()]), _meta(**meta))
 
 
