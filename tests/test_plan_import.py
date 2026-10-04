@@ -4,6 +4,7 @@ value (T57, ADR 0048). All data is synthetic."""
 
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -15,7 +16,7 @@ ACCOUNTS = {"BCP", "Ripley"}
 
 
 def _item(row: int = 2, **overrides: object) -> PlanItem:
-    fields: dict[str, object] = {
+    fields: dict[str, Any] = {
         "bank": "BCP",
         "description": f"PLANTED ITEM {row}",
         "currency": "PEN",
@@ -28,7 +29,7 @@ def _item(row: int = 2, **overrides: object) -> PlanItem:
         "row": row,
     }
     fields.update(overrides)
-    return PlanItem(**fields)  # type: ignore[arg-type]
+    return PlanItem(**fields)
 
 
 def _meta(**overrides: object) -> dict[str, object]:

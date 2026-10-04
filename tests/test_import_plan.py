@@ -17,7 +17,7 @@ from scripts import import_plan as ip
 
 
 def _item(row: int, **overrides: object) -> PlanItem:
-    fields: dict[str, object] = {
+    fields: dict[str, Any] = {
         "bank": "BCP",
         "description": f"PLANTED ITEM {row}",
         "currency": "PEN",
@@ -30,7 +30,7 @@ def _item(row: int, **overrides: object) -> PlanItem:
         "row": row,
     }
     fields.update(overrides)
-    return PlanItem(**fields)  # type: ignore[arg-type]
+    return PlanItem(**fields)
 
 
 GOOD_META: dict[str, object] = {
