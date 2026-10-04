@@ -189,7 +189,9 @@ def test_bronze_asset_predicts_categories_when_a_model_exists(
     ]
     categories = ["Gastos varios"] * 4 + ["Ingresos"] * 4 + ["Servicios"] * 2
     pipeline, _metrics = model.train(descriptions, categories)
-    bundle = model.Bundle(pipeline=pipeline, confidence_threshold=0.0)
+    bundle = model.Bundle(
+        pipeline=pipeline, confidence_threshold=0.0, trained_for="piero"
+    )
     model_path = tmp_path / "model.joblib"
     joblib.dump(bundle, model_path)
     monkeypatch.setenv("PFP_CATEGORY_MODEL_PATH", str(model_path))

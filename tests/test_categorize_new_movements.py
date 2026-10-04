@@ -76,9 +76,11 @@ def _write_transaction(
     bronze.write_statement(statement, sha256)
 
 
-def _saved_bundle(path: Path) -> None:
+def _saved_bundle(path: Path, trained_for: str | None = "piero") -> None:
     pipeline, _metrics = model.train(_DESCRIPTIONS, _CATEGORIES)
-    bundle = model.Bundle(pipeline=pipeline, confidence_threshold=0.0)
+    bundle = model.Bundle(
+        pipeline=pipeline, confidence_threshold=0.0, trained_for=trained_for
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(bundle, path)
 
@@ -181,3 +183,63 @@ def test_main_requires_a_user(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PFP_USER", raising=False)
 
     assert cnm.main([]) == 2
+
+
+def test_a_model_trained_for_one_user_is_not_applied_to_another(
+    tmp_path: Path, lakehouse: Path
+) -> None:
+    """The saved model is one file for the whole install, trained on one person's
+    labels. A request from another person ingests through the same code path: it
+    must not get the owner's model's proposals (ADR 0046-style isolation, ADR 0036)."""
+    _write_transaction(
+        bank="BCP", description="UBER TRIP HELP.UBER.COM", sha256="a", user_id="ana"
+    )
+    model_path = tmp_path / "model"
+    _saved_bundle(model_path.with_suffix(".joblib"), trained_for="piero")
+
+    report = cnm.run("ana", model_path=model_path)
+
+    assert report.has_model is False
+    assert report.predicted == 0
+    assert report.total_descriptions == 1
+    assert not (lakehouse / "bronze" / "category_predictions").exists() or (
+        _prediction_count(lakehouse) == 0
+    )
+
+
+def test_a_model_that_does_not_say_who_it_was_trained_for_is_not_applied(
+    tmp_path: Path, lakehouse: Path
+) -> None:
+    _write_transaction(bank="BCP", description="UBER TRIP HELP.UBER.COM", sha256="a")
+    model_path = tmp_path / "model"
+    _saved_bundle(model_path.with_suffix(".joblib"), trained_for=None)
+
+    report = cnm.run("piero", model_path=model_path)
+
+    assert report.has_model is False
+    assert report.predicted == 0
+
+
+def test_a_model_for_another_user_clears_this_users_stale_predictions(
+    tmp_path: Path, lakehouse: Path
+) -> None:
+    _write_transaction(bank="BCP", description="UBER TRIP HELP.UBER.COM", sha256="a")
+    model_path = tmp_path / "model"
+    _saved_bundle(model_path.with_suffix(".joblib"), trained_for="piero")
+    cnm.run("piero", model_path=model_path)
+    assert _prediction_count(lakehouse) == 1
+
+    _saved_bundle(model_path.with_suffix(".joblib"), trained_for="ana")
+    cnm.run("piero", model_path=model_path)
+
+    assert _prediction_count(lakehouse) == 0
+
+
+def _prediction_count(lake: Path) -> int:
+    from deltalake import DeltaTable
+
+    return (
+        DeltaTable(str(lake / "bronze" / "category_predictions"))
+        .to_pyarrow_table()
+        .num_rows
+    )
