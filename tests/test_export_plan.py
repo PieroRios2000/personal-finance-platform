@@ -150,3 +150,26 @@ def test_main_says_so_when_gold_has_no_spending(
     out = tmp_path / "p.xlsx"
     assert ep.main(["--user", "piero", "--out", str(out)]) == 1
     assert not out.exists()
+
+
+def test_the_staging_file_is_private_and_removed_when_writing_fails(
+    environment: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    rows = [MonthlySpend(*r) for r in NETFLIX]
+    monkeypatch.setattr(ep, "fetch_monthly_spend", lambda user_id: rows)
+    seen: dict[str, int] = {}
+    real_write = ep.write_plan
+
+    def failing_write(path: Path, plan: Any) -> None:
+        real_write(path, plan)
+        seen["mode"] = stat.S_IMODE(path.stat().st_mode)
+        raise OSError("disk full")
+
+    monkeypatch.setattr(ep, "write_plan", failing_write)
+    out = tmp_path / "plan.xlsx"
+
+    with pytest.raises(OSError):
+        ep.main(["--user", "piero", "--out", str(out)])
+
+    assert seen["mode"] == 0o600
+    assert list(tmp_path.iterdir()) == []

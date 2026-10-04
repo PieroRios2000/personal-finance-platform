@@ -197,3 +197,36 @@ def test_read_plan_names_the_row_when_expected_amount_is_not_a_number(
 
     with pytest.raises(ValueError, match=r"expected_amount.*row 2"):
         read_plan(path)
+
+
+def test_a_row_the_owner_added_by_hand_is_kept_with_their_own_note() -> None:
+    plan = merge([_candidate("NETFLIX.COM")], None)
+    mine = PlanItem("BCP", "GYM", "PEN", "Deporte", 0, 0.0, "", "fixed", 80.0, "mío")
+
+    again = merge([_candidate("NETFLIX.COM")], PlanFile((*plan.items, mine), plan.meta))
+
+    assert again.items[-1] == mine
+
+
+def test_a_description_that_looks_like_a_formula_survives_the_round_trip(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "plan.xlsx"
+    plan = merge([_candidate("=SUM(A1)")], None)
+    write_plan(path, plan)
+
+    assert [i.description for i in read_plan(path).items] == ["=SUM(A1)"]
+
+
+def test_a_bad_system_cell_is_reported_by_row_without_echoing_its_value(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "plan.xlsx"
+    write_plan(path, merge([_candidate("NETFLIX.COM")], None))
+    workbook = load_workbook(path)
+    workbook["Gastos fijos"]["F2"] = "secret-12,5"
+    workbook.save(path)
+
+    with pytest.raises(ValueError, match=r"row 2") as raised:
+        read_plan(path)
+    assert "secret" not in str(raised.value)
