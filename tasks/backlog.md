@@ -143,6 +143,7 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
   - [ ] **T60** projection: three scenarios, time to goal, adjust view, gold tables.
   - [ ] **T61** Superset "Forecast & goal" section with row-level security, demo seed.
   - [ ] **T62** realized-vs-backtest monitor, monthly routine and where-to-look updates.
+  - [ ] **T63** (follow-up) experiment: recurrence and the fixed/variable mark as classifier features, ADR 0044's protocol and an acceptance margin over the fold spread; a null result is valid (spec section 4.8).
 - [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
       model -- macro-F1 and per-category precision (not just accuracy), latency, cost per
       transaction, cost per month at this project's real volume, against the same held-out labels.

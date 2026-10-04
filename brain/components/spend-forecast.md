@@ -2,7 +2,7 @@
 type: component
 phase: 3
 status: planned
-task: T56, T57, T58, T59, T60, T61, T62
+task: T56, T57, T58, T59, T60, T61, T62, T63
 ---
 
 # Spend forecast and savings goal
@@ -22,6 +22,7 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
 | Gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality`, `rpt_fixed_expenses`, `rpt_goal_projection`, `rpt_goal_summary` | What the dashboard reads | T57, T59, T60 |
 | Superset "Forecast & goal" section | Time to goal as a range, categories above expected, the adjust view, how far to trust each series | T61 |
 | Realized-vs-backtest error chart | The monitor; joins the monthly routine | T62 |
+| Recurrence as classifier features | Follow-up experiment, null result allowed | T63 |
 
 ## How it fits
 

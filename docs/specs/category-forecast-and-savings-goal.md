@@ -3,7 +3,7 @@
 Status: **proposed** (2026-10-04). Nothing here is built. Decision record:
 [ADR 0048](../../brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md).
 Component note (planned): [Spend forecast](../../brain/components/spend-forecast.md).
-Tasks T56-T62 are listed in [`tasks/backlog.md`](../../tasks/backlog.md) and detailed below.
+Tasks T56-T63 are listed in [`tasks/backlog.md`](../../tasks/backlog.md) and detailed below.
 
 It closes two plan items at once: Phase 3's "monthly spend forecasting (time series)" and the
 cash-flow part of [Phase 6](../../brain/phases/phase-6.md) ("how long until I reach my savings
@@ -82,7 +82,7 @@ All outputs carry `user_id` and get the same row-level-security rule as the exis
 | `fct_spend_forecast` | `user_id, run_month, kind, category, currency, target_month` | `kind` is `backtest` (a past one-step forecast, with its actual) or `forecast` (future). Columns: `horizon`, `model`, `p10`, `p50`, `p90`, `actual` (null while the month is open). |
 | `rpt_category_variance` | `user_id, category, currency` | Latest closed month: actual, the forecast made without it, its 80 % interval, `status` (`above` / `within` / `below`), months `above` in the last 6. |
 | `rpt_forecast_series_quality` | `user_id, run_month, category, currency` | Selected model, months of history, backtest origins, MAE relative to the baseline, 80 % interval coverage, flags `low_history` and `baseline_used`. The "how much to trust it" table. |
-| `rpt_fixed_expenses` | `user_id, bank, description, currency` | Confirmed fixed items: expected amount, last observed month, `deviation_pct`, months seen in the last 6. |
+| `rpt_fixed_expenses` | `user_id, bank, description` | Confirmed fixed items: expected amount, last observed month, `deviation_pct`, months seen in the last 6. |
 | `rpt_goal_projection` | `user_id, scenario, month_index` | Month path per scenario: projected savings in the goal currency. |
 | `rpt_goal_summary` | `user_id, scenario` | `months_to_goal` (or null, "not reached in 120 months"), `reached_month`, required monthly saving, projected monthly saving, gap; and the headroom rows for the adjust view (section 4.5). |
 
@@ -95,8 +95,9 @@ reproduces them): `plan_fixed_items`, `plan_goal`, `spend_forecasts`, `spend_for
 
 ### 4.1 Fixed expenses: the system proposes, the owner decides (decision 1)
 
-**Detection** (pure function over closed months, per `(bank, normalized description, currency)`,
-the same key the category labels use):
+**Detection** (pure function over closed months, per `(bank, normalized description)`,
+the same key the category labels use; the currency is read from the movements, and a description
+seen in two currencies is listed once per currency with a note, which the owner resolves):
 
 - *Candidate fixed:* charged in at least 4 of the last 6 closed months, and the monthly total's
   spread is small (median absolute deviation ≤ 10 % of the median).
@@ -130,6 +131,12 @@ plan whole, like the labels. Rejecting a bad file changes nothing.
 - `variable`: stays in its category's series (default for anything unclassified).
 - `ignore`: a known one-off excluded from the variable series. Its excluded total is shown, so the
   choice is visible rather than silently lowering the forecast.
+
+**Reusable data model.** `plan_fixed_items` is keyed by `(user_id, bank, normalized description)`
+(currency is an attribute; the rare description in two currencies is two rows distinguished by currency in the file and resolved by the owner), the same join key as the category labels, and
+keeps the owner's `kind` and the detection features (`months_seen`, amount spread, day-of-month
+regularity) as columns. That makes the file usable as classifier input later (section 4.8) without
+a second table or a different key.
 
 Rejected: *the owner classifies everything up front* (hundreds of descriptions; the owner asked
 to confirm proposals later) and *fully automatic classification with no confirmation* (a wrong
@@ -264,6 +271,43 @@ level comes from their own history, and budgets can be added later without chang
 - The public demo (`pfp-prod`) shows the section for the synthetic `demo` user only; the seed gets
   a small plan so the section is not empty.
 
+### 4.8 Planned follow-up: recurrence as classifier features (after T62)
+
+The recurrence signals computed for fixed-expense detection (months seen out of the last N,
+amount spread, same-day-of-month regularity) and the owner's confirmed fixed/variable mark may help
+the category classifier ("a monthly, same-amount charge is probably Servicios"). Not part of v1;
+a separate experiment task (T63) once the forecast has shipped, because it needs the detection
+features and real confirmed marks to exist.
+
+**Experiment design.** Same protocol as [ADR 0044](../../brain/decisions/0044-category-classifier-char-ngrams-vs-rules-baseline.md):
+merchant-grouped repeated cross-validation, macro-F1 on the trusted (reviewed) labels only,
+compared with the text-only model run through the same folds in the same experiment (reference:
+macro-F1 0.49 on 543 reviewed labels, 3 folds, at the 2026-10-04 amendment). Variants: text +
+derived recurrence features; text + derived features + the owner's mark. **Acceptance:** a variant
+replaces text-only only if its mean macro-F1 exceeds text-only's by more than one standard
+deviation of the fold-to-fold spread (reported with N and folds, as ADR 0044 does), and no
+weak-category precision drops. Otherwise the result is recorded as an amendment and the model
+stays text-only. A null result is a valid outcome.
+
+**Risks, stated up front.**
+
+- ADR 0044 already tested extra non-text features (bank, currency, flow type, log amount, month)
+  and none beat text-only outside the noise (spread 0.01 to 0.04); several were worse. Recurrence
+  is a different kind of signal, but the prior is a null result.
+- A recurrence flag is derived from the same description, so it can duplicate what the character
+  n-grams already know, or leak: a label the owner gave to a description also shaped which rows are
+  "recurring". The cross-validation must compute recurrence features inside each training fold
+  from past months only.
+- The owner's confirmed fixed/variable mark is label-like input. It must be **point-in-time**: it
+  may be used only for movements that were classified after the mark existed, never for earlier
+  rows or for the evaluation fold's own rows, and a new description (no mark yet) must predict
+  from the derived features alone.
+- The model still only **proposes**: `category_confirmed` stays true only for the owner's own
+  label ([ADR 0043](../../brain/decisions/0043-transaction-categorization-human-in-the-loop-labeling.md),
+  [ADR 0047](../../brain/decisions/0047-category-model-is-pinned-to-its-user.md)).
+- The prediction grain is per description ([ADR 0045](../../brain/decisions/0045-batch-categorization-at-ingest.md));
+  features must be per `(bank, description)` too, or that grain changes.
+
 ## 5. Alternatives considered
 
 | Decision | Chosen | Rejected, and why |
@@ -324,6 +368,7 @@ first), `make ci-local` before the PR, brain updated, and the skills named in `t
 | **T60** | Projection (pure) + persistence: start balance, income, three scenarios, time-to-goal, cross-check, adjust view; gold `rpt_goal_projection`, `rpt_goal_summary`. | T59 | Property tests (monotone scenarios, "not reached", currency symmetry); dbt tests; `ci-local-full` |
 | **T61** | Superset section "Forecast & goal" (dashboards as code, row-level security on the new datasets) + demo seed plan. | T60 | `tests/test_bi_config.py` additions; throwaway project (`make bi-up`) check with the demo user; screenshot reviewed by the owner |
 | **T62** | Monitoring chart (realized vs backtest error), `docs/monthly-routine.md` step (`export-plan` → edit → `import-plan` → `forecast`), `docs/where-to-look.md` rows, brain and backlog closed out. | T61 | `tests/test_monthly_routine.py` still passes with the new targets in order; docs-links check |
+| **T63** (follow-up) | Experiment: recurrence and the fixed/variable mark as classifier features (section 4.8). Offline script; an amendment to ADR 0044 with the result either way; the model changes only if the acceptance margin is met. | T62, and real confirmed marks | Same folds as the text-only baseline; features computed inside each training fold; a test that the owner's mark is never read for an evaluation row |
 
 The cost study and the anomaly detector remain separate Phase 3 items and do not depend on this.
 

@@ -68,13 +68,18 @@ model is worth having. The full design is in
 
 ## Consequences
 
-- Seven tasks (T56-T62), each its own PR; nothing changes until the first lands.
+- Seven tasks (T56-T62) plus the follow-up T63, each its own PR; nothing changes until the first lands.
 - A new `forecasting/` package, a new import-linter contract and a new `numpy` line in
   `pyproject.toml`; `docs/monthly-routine.md` gains `export-plan`, `import-plan` and `forecast`.
 - Honest outcomes are possible and acceptable: for many categories the baseline will be the
   model, and the dashboard says so.
 - The scenarios treat every month at the same percentile, so the range is wider than a joint
   probability would be; the dashboard states it.
+- A follow-up experiment (T63) will test recurrence and the fixed/variable mark as classifier
+  features, with ADR 0044's protocol and an acceptance margin over the fold spread. ADR 0044 found
+  extra non-text features did not help, the flag can leak or duplicate the text signal, and the
+  owner's mark must be point-in-time; the model keeps only proposing. The plan file is keyed by
+  `(user_id, bank, normalized description)`, the category labels' key, so it can be reused.
 - Annual expenses, planned extras and an exchange-rate path are left open (spec, section 9).
 
 ## Related
