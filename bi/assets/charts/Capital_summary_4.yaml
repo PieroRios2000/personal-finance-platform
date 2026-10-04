@@ -56,7 +56,7 @@ params:
     .kpi.debt { border-left-color: #e5484d; }\n.kpi .value.small { font-size: 18px;\
     \ }\n.kpi.rate.pos .value { color: #1f9d6b; } .kpi.rate.neg .value { color: #e5484d;\
     \ }\n.kpi.count { border-left-color: #6366f1; }\n"
-  datasource: 12__table
+  datasource: 2__table
   viz_type: handlebars
 query_context: null
 cache_timeout: null

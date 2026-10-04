@@ -85,6 +85,19 @@ _UPLOAD_STYLE = (_TEMPLATES / "upload_prompt.css").read_text()
 # the other), so a fee or an exchange difference between banks shows up.
 _MONEY_IN = "COALESCE(SUM(signed_amount) FILTER (WHERE signed_amount > 0), 0)"
 _MONEY_OUT = "COALESCE(-SUM(signed_amount) FILTER (WHERE signed_amount < 0), 0)"
+# Spending, for the Categories section: money out of an account or a charge on a card
+# (`egreso`, ADR 0020; never income or a card credit), and not a move between your own
+# accounts (ADR 0017).
+_SPENDING = "flow_type = 'egreso' AND NOT is_internal_transfer"
+# A label attaches by (bank, description) whatever the direction, so an outflow can
+# carry `Ingresos` (a payee that also pays the owner). In a spending section that reads
+# as income: it is shown as not categorized and listed for review; the label itself is
+# untouched (ADR 0043). `_LABELLED` is what the owner really decided for a spending
+# movement.
+_SHOWN_CATEGORY = (
+    "CASE WHEN category = 'Ingresos' THEN 'Sin categorizar' ELSE category END"
+)
+_LABELLED = "category_confirmed AND category <> 'Ingresos'"
 _MONEY = "'FM999,999,999,990.00'"
 _NET = "COALESCE(SUM(signed_amount), 0)"
 # The income the savings rate is measured against: money that came into an asset
@@ -295,6 +308,107 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "rich_tooltip": True,
             "row_limit": 10000,
             "show_legend": True,
+        },
+    ),
+    (
+        "rpt_movements",
+        "Categories: what you spent on",
+        "echarts_timeseries_bar",
+        {
+            "x_axis": _sql_column(_SHOWN_CATEGORY, "category"),
+            # Money out per category, biggest first. The whole section is spending only:
+            # no income, no card credits, no moves between your own accounts.
+            "metrics": [_sql_metric(_MONEY_OUT, "Spent")],
+            "groupby": [],
+            "adhoc_filters": [_time_range("date"), _where(_SPENDING)],
+            "x_axis_sort": "Spent",
+            "x_axis_sort_asc": False,
+            "y_axis_format": ",.0f",
+            "rich_tooltip": True,
+            "row_limit": 100,
+            "orientation": "horizontal",
+            "show_legend": False,
+        },
+    ),
+    (
+        "rpt_movements",
+        "Categories: where each one came from",
+        "pie",
+        {
+            "groupby": [
+                _sql_column(
+                    f"CASE WHEN {_LABELLED} THEN 'you labelled it' "
+                    f"WHEN {_SHOWN_CATEGORY} <> 'Sin categorizar' "
+                    "THEN 'the model guessed it' ELSE 'no category yet' END",
+                    "source",
+                )
+            ],
+            # Counted in movements, not money: it says how much of the spending the
+            # model decided and how much you confirmed (ADR 0043: a guess is never a
+            # label).
+            "metric": _sql_metric("COUNT(*)", "Movements"),
+            "adhoc_filters": [_time_range("date"), _where(_SPENDING)],
+            "color_scheme": "supersetColors",
+            "label_colors": {
+                "you labelled it": _GREEN,
+                "the model guessed it": _AMBER,
+                "no category yet": _RED,
+            },
+            "show_labels": True,
+            "label_type": "key_value_percent",
+            "donut": True,
+            "innerRadius": 40,
+            "outerRadius": 70,
+            "row_limit": 10,
+            "show_legend": True,
+        },
+    ),
+    (
+        "rpt_movements",
+        "Categories: spending per month",
+        "echarts_timeseries_bar",
+        {
+            "x_axis": "date",
+            "time_grain_sqla": "P1M",
+            "metrics": [_sql_metric(_MONEY_OUT, "Spent")],
+            "groupby": [_sql_column(_SHOWN_CATEGORY, "category")],
+            "adhoc_filters": [_time_range("date"), _where(_SPENDING)],
+            "stack": "Stack",
+            "x_axis_time_format": _DATE_FORMAT,
+            "y_axis_format": ",.0f",
+            "rich_tooltip": True,
+            "row_limit": 10000,
+            "orientation": "vertical",
+            "show_legend": True,
+        },
+    ),
+    (
+        "rpt_movements",
+        "Categories: movements to review (the model's guesses)",
+        "table",
+        {
+            "query_mode": "raw",
+            # What no one has confirmed yet: the model's guess, no category, or an
+            # outflow labelled as income, newest first. Fix the category in the
+            # labelling workbook, not here (ADR 0043).
+            "adhoc_filters": [
+                _time_range("date"),
+                _where(f"{_SPENDING} AND NOT ({_LABELLED})"),
+            ],
+            "all_columns": [
+                "date",
+                "bank",
+                "currency",
+                "amount",
+                _sql_column(_SHOWN_CATEGORY, "category"),
+                "description",
+            ],
+            "order_by_cols": ['["date", false]'],
+            "column_config": {
+                "amount": {"d3NumberFormat": ",.2f", "horizontalAlign": "right"}
+            },
+            "row_limit": 1000,
+            "include_search": True,
         },
     ),
     (
@@ -618,6 +732,8 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
 
 # A text cell in the grid (Markdown), next to the investments chart: how to read it.
 NOTE = "@note"
+# A section title across the grid: "@section:" plus the text, alone in its row.
+SECTION = "@section:"
 NOTE_TEXT = (
     "### How to read the returns\n\n"
     "- **valuation**: the month closed at a real month-end value.\n"
@@ -635,6 +751,10 @@ LAYOUT: list[list[tuple[str, int, int]]] = [
     [("Period analysed", 6, 22), ("Debt at the end", 6, 22)],
     [("Capital summary", 6, 22), ("Net position summary", 6, 22)],
     [("Cash flow: money", 6, 50), ("Balance per month", 6, 50)],
+    [(f"{SECTION}Categories", 12, 6)],
+    [("Categories: what you", 6, 50), ("Categories: where", 6, 50)],
+    [("Categories: spending per", 12, 50)],
+    [("Categories: movements", 12, 60)],
     [("Investments: return and", 12, 32)],
     [("Investments: return per", 8, 50), (NOTE, 4, 50)],
     [("Movements", 12, 60)],
@@ -664,6 +784,21 @@ def _position(
     }
     for row_number, cells in enumerate(LAYOUT):
         row_id = f"ROW-{row_number}"
+        if cells[0][0].startswith(SECTION):
+            title_id = f"HEADER-{row_number}"
+            layout["GRID_ID"]["children"].append(title_id)
+            layout[title_id] = {
+                "type": "HEADER",
+                "id": title_id,
+                "children": [],
+                "parents": ["ROOT_ID", "GRID_ID"],
+                "meta": {
+                    "text": cells[0][0].removeprefix(SECTION),
+                    "headerSize": "LARGE_HEADER",
+                    "background": "BACKGROUND_TRANSPARENT",
+                },
+            }
+            continue
         layout["GRID_ID"]["children"].append(row_id)
         children = []
         for prefix, width, height in cells:

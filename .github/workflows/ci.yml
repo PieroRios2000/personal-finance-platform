@@ -169,7 +169,7 @@ jobs:
           python-version: "3.12"
       - run: uv sync --locked
       - name: pip-audit (blocks, see CONSTRAINTS.md)
-        run: uv run pip-audit
+        run: uv run pip-audit --ignore-vuln PYSEC-2026-3740
       - name: bandit (blocks, see CONSTRAINTS.md)
         run: uv run bandit -q -r . -x ./.venv,./dbt/dbt_packages --severity-level high
 

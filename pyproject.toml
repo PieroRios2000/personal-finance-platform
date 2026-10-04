@@ -9,9 +9,11 @@ dependencies = [
     "dbt-duckdb>=1.11.0",
     "deltalake>=1.6.3",
     "duckdb>=1.5.5",
+    "evidently>=0.7.23",
     "joblib>=1.6.0",
     "mlflow>=3.16.1",
     "openpyxl>=3.1.5",
+    "pandas>=3.0.6",
     "pdfplumber>=0.11.10",
     "pikepdf>=10.13.0.post1",
     "pyarrow>=25.0.1",
@@ -47,6 +49,7 @@ dev = [
     "fpdf2>=2.8.8",
     "import-linter>=2.15",
     "mypy>=2.3.1",
+    "pandas-stubs>=3.0.5.260914",
     "pip-audit>=2.10.1",
     "psycopg[binary]>=3.3.6",
     "pytest>=9.1.1",
@@ -139,6 +142,13 @@ ignore_missing_imports = true
 module = ["sklearn.*", "joblib", "mlflow", "mlflow.*"]
 ignore_missing_imports = true
 
+# scripts/monitor_category_drift.py (T55, ADR 0046) uses Evidently, which ships no type
+# stubs or py.typed marker either (pandas is typed through pandas-stubs, so it needs no
+# override).
+[[tool.mypy.overrides]]
+module = ["evidently", "evidently.*"]
+ignore_missing_imports = true
+
 # upload/server.py (T44, ADR 0040) likewise runs in its own container, with Flask and
 # Authlib installed there, not here.
 [[tool.mypy.overrides]]
@@ -153,6 +163,11 @@ disallow_subclassing_any = false
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-m 'not real_pdf and not integration and not benchmark and not portal'"
+# Evidently 0.7.23 touches `numpy.core` once when imported (T55). The warning summary would
+# print one of its source lines containing a mypy suppression comment, which floor-guard's
+# suppression rule then flags in `make ci-local` (it scans the whole clean clone, pytest.log
+# included).
+filterwarnings = ["ignore:numpy.core is deprecated:DeprecationWarning:evidently"]
 markers = [
     "real_pdf: runs against the owner's real PDFs; deselected by default (ADR 0004). Run with `pytest -m real_pdf`.",
     "integration: needs local S3 (SeaweedFS, T13) running via `docker compose up`; deselected by default. Run with `pytest -m integration`.",

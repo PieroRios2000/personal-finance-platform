@@ -111,6 +111,36 @@ Consequence: four of the new categories have 1-4 labeled descriptions, so the tr
 capped at 2 by `Ropa`. More labels, or merging the rarest into a neighbour, is needed before any
 metric is worth publishing (ADR 0044).
 
+## Amendment: the dashboard shows the classification as its own section (2026-10-03)
+
+`bi/build_dashboards.py` adds a "Categories" section between the cash flow and the
+investments, over `gold.rpt_movements` only (no new table): what you spent on, by category;
+where each category came from (`category_confirmed` = you labelled it, a model guess, or
+none yet, counted in movements); spending per month by category; and a table of the
+movements nobody has confirmed. Movements between the owner's own accounts are left out of
+the whole section (ADR 0017). The section keeps this ADR's rule visible: a guess is shown as
+a guess, in its own colour and its own table, and the fix is made in the labelling workbook,
+not in the dashboard. The demo environment has no labels, so there the section shows
+everything as "no category yet".
+
+## Amendment: the section covers spending only (2026-10-03)
+
+The first version of the section only left out moves between your own accounts, so the
+"where each one came from" chart and the review table also counted income and card credits.
+The owner wants categories to answer "where did the money go": every chart and the table of
+the section now filter on `flow_type = 'egreso' AND NOT is_internal_transfer` (ADR 0020: money
+out of an account, or a charge on a card, both banks; never `ingreso` or a card `pago`).
+Labels still attach by `(user_id, bank, description)` whatever the direction, so a description
+used both ways keeps one category: on the owner's data 5 outflows (S/ 7,501) carry `Ingresos`.
+Whether to split labels by direction is left open.
+
+A first look at the section showed that bar as a category: an `Ingresos` bar among the spending.
+Without touching the label (it stays in `silver.category_labels` and in `rpt_movements.category`,
+no dbt change), the section now **shows** an outflow whose category is `Ingresos` as `Sin
+categorizar`: in the bar and monthly charts, as `no category yet` in the "where each one came
+from" chart (it is not counted as `you labelled it`), and in the review table, which lists it so
+the owner can relabel it. Splitting labels by direction remains the real fix and is still open.
+
 ## Related
 
 [ADR 0004](0004-real-pdfs-never-leave-your-machine.md),
