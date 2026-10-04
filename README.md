@@ -142,15 +142,23 @@ use; grouped cross-validation by merchant so near-duplicate descriptions never s
 | | Macro-F1 | Labels | Folds |
 |---|---|---|---|
 | Trained model, reviewed labels only | **0.49** | 543 | 3 |
+| Trained model, all labels (46 are rule suggestions he accepted as is) | 0.62 | 589 | 5 |
 | Keyword-rules baseline, all labels | 0.23 | 589 | n/a (no fitting) |
 | Always guessing the biggest category ("Gastos varios", 52% of labels) | 0.07 | 589 | n/a |
 
+Re-run on 2026-10-04 with the same 589 labels (none added since 2026-10-03): the numbers did not
+move. Each row above is one label per distinct description. Weighting by movement instead (1,529
+movements, so a frequent merchant counts as often as it occurs; merchant-grouped 5-fold, repeated
+over 5 shuffles; offline script, not part of the repo) gives 0.593 on all labels and 0.465 on the
+reviewed ones (spread 0.04 and 0.01). The two grains answer different questions, so neither replaces the other.
+
 How far to trust these: the label set is small and uneven. The model is solid on the big categories
 (precision about 0.9 for the catch-all, 0.8 for travel and entertainment) and weak on small ones
-(services, restaurants and transport are confused with each other and with the catch-all), so 0.49 is
-the honest figure, not a headline. The rules number is slightly generous (in 46 rows the owner accepted
-a rule's suggestion as is); scoring the rules on reviewed labels only would be unfair in the other
-direction, because those are exactly the rows he corrected. The combined model-plus-rules score used
+(services, restaurants, food and transport are confused with each other and with the catch-all), so
+0.49 is the honest figure, not a headline. The all-labels 0.62 is flattered by the 46 rows where the
+rules already had the answer. The rules number is slightly generous (the same 46 rows); scoring the
+rules on reviewed labels only (0.05) would be unfair in the other direction, because those are
+exactly the rows he corrected. The combined model-plus-rules score used
 to pick the confidence threshold is optimistic by construction and is never reported. Adding the bank,
 currency, flow, amount or month as extra features did not beat description text alone (differences
 within run-to-run noise), so the model stays text-only; more labels in the weak categories is the

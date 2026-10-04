@@ -106,12 +106,12 @@ The identity/portal line (T39-T50) is frozen: built, documented, verified; no mo
 unless something breaks. Phase 3 starts with categorization, per the owner's decision.
 
 - [x] **Category labeling infrastructure** (T51, ADR 0043): the cold-start guesser, the labeling
-      file (export/import), `gold.dim_category`, `gold.rpt_movements.category`. Verified end to
-      end with synthetic demo data; the owner's own labels are still to come.
+      file (export/import), `gold.dim_category`, `gold.rpt_movements.category`. Run on the owner's
+      real labels since 2026-10-03 (589 descriptions).
 - [x] **A trained classifier** (T52, ADR 0044): TF-IDF character n-grams + logistic regression,
       scored (macro-F1, precision per category) against the rules-based baseline on every run
-      (`make train-category-model`). Built and verified against synthetic, general categories; the
-      owner's own real labels are still to come.
+      (`make train-category-model`). Trained on the owner's real labels (589, 10 categories): macro-F1 0.49 on the 543
+      reviewed ones, 0.23 for the rules (ADR 0044, amendment of 2026-10-04).
 - [x] **Wire the trained model into the labeling file's suggestion** (T53): `export_category_labels.py`
       proposes from the trained model once one has been saved
       (`make train-category-model`), the rules-based guesser until then -- still reviewed, never

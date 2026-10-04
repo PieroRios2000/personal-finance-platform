@@ -142,6 +142,51 @@ logistic regression was tried; a tree-based model could use the amount better an
 The binding constraint is the number of labeled merchants in the weak categories (services,
 restaurants, transport), not the feature set.
 
+## Amendment: results re-run on the current labels (2026-10-04)
+
+`make train-category-model` was re-run before October's statements are labeled. The label set is
+the same as on 2026-10-03 (589 descriptions, 10 categories, 543 of them reviewed, 46 accepted as
+the rules' own suggestion), so the figures did not move; this records them in full, with the
+caveats, as the reference to beat once October's labels exist.
+
+One label per distinct description, merchant-grouped cross-validation (the script's own, one pass):
+
+| | Macro-F1 | Labels | Folds |
+|---|---|---|---|
+| Model, reviewed labels only | 0.492 | 543 | 3 |
+| Model, all labels | 0.615 | 589 | 5 |
+| Rules, all labels | 0.229 | 589 | n/a |
+| Rules, reviewed labels only | 0.049 | 543 | n/a |
+
+One row per movement (1,529 rows, 441 distinct description groups, merchant-grouped 5-fold,
+repeated over 5 shuffles, text only, offline script outside the repo): 0.593 on all labels
+(spread 0.036) and 0.465 on the 1,345 reviewed rows (spread 0.009).
+
+Precision per category on reviewed labels (the script prints precision, not recall): catch-all
+0.91, travel 0.79, entertainment 0.78, sports 0.60, income 0.50, health 0.50, transport 0.36,
+food 0.33, restaurants 0.27, services 0.00. On all labels transport rises to 0.71 and services to
+1.00, which shows how much of the all-labels score comes from rows the rules had already solved.
+
+Caveats that apply to every figure above:
+- **Few labels, very uneven.** The catch-all is 52% of the labels; several categories have a
+  few dozen examples or fewer, so one merchant moving between folds shifts that category's
+  precision by tens of points. Differences of 0.02 to 0.04 are noise.
+- **Two label qualities.** The 46 accepted-as-is labels make the all-labels score (0.615)
+  optimistic and the rules baseline on all labels (0.229) generous. The reviewed-only rules score
+  (0.049) is not a fair head-to-head either: a reviewed row is, by construction, one the owner
+  corrected or the rules had no opinion on. The model's reviewed-only 0.492 is the figure to quote.
+- **Label noise.** Labels attach to `(bank, description)`, not to the direction of the money, so
+  a description used for both an inflow and an outflow carries one category (five outflows labeled
+  as income were found this way, and the dashboard now shows them as not categorized, ADR 0043).
+- **Grain.** Per-description scores treat a once-seen merchant like a daily one; per-movement
+  scores weight by frequency. Both are kept because they answer different questions, and the
+  README labels each.
+
+CV wording that matches these numbers exactly: "Category classifier (TF-IDF character n-grams +
+logistic regression) on 589 self-labeled merchant descriptions in 10 categories: macro-F1 0.49
+on the 543 reviewed labels (merchant-grouped 3-fold CV), against 0.23 for a keyword-rules
+baseline on all labels."
+
 ## Related
 
 [ADR 0043](0043-transaction-categorization-human-in-the-loop-labeling.md),

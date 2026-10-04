@@ -29,6 +29,11 @@ confirms or overrides, never assigned silently. Design in
 | [`categorization/model.py`](../../categorization/model.py) | The classifier (TF-IDF char n-grams + logistic regression): `train()`, `predict()`, `score_rules()` for the same metrics on the baseline, `choose_confidence_threshold()`, `suggest()`, `Bundle`, `load()` |
 | [`scripts/train_category_model.py`](../../scripts/train_category_model.py) | `make train-category-model`: trains on every label imported so far, reports macro-F1 and precision per category next to the rules baseline (on all labels, and again trusted-only), logs to a local MLflow, saves a `Bundle` (pipeline + confidence threshold) under `~/finance-data/models/` |
 
+Current result on the owner's labels (re-run 2026-10-04, 589 descriptions, 10 categories):
+macro-F1 0.49 on the 543 reviewed labels (merchant-grouped 3-fold), 0.62 on all labels, 0.23 for
+the rules; every caveat and the per-category precision are in
+[ADR 0044](../decisions/0044-category-classifier-char-ngrams-vs-rules-baseline.md)'s last amendment.
+
 `export_category_labels.py`'s suggestion is the trained model's prediction once one has been
 saved there *and* its confidence clears the saved threshold, the rules-based guess otherwise
 (cold start, or the model isn't confident enough, T53) -- the same "propose, never decide" shape
