@@ -133,7 +133,9 @@ def merge(candidates: list[Candidate], previous: PlanFile | None) -> PlanFile:
     items: list[PlanItem] = []
     for old in previous.items:
         fresh = proposals.pop(old.key, None)
-        if fresh is None:
+        if old.proposed_kind == "":
+            items.append(old)
+        elif fresh is None:
             items.append(replace(old, note=_NOT_DETECTED))
         elif old.owner_edited:
             items.append(
@@ -164,6 +166,9 @@ def write_plan(path: Path, plan: PlanFile) -> None:
     items.append(list(ITEM_COLUMNS))
     for item in plan.items:
         items.append([getattr(item, column) for column in ITEM_COLUMNS])
+        for cell in items[items.max_row]:
+            if isinstance(cell.value, str) and cell.value.startswith("="):
+                cell.data_type = "s"
     for cell in items[1]:
         cell.font = Font(bold=True)
     items.freeze_panes = "A2"
@@ -204,6 +209,15 @@ def _expected_amount(value: object, row: int) -> float | None:
         ) from None
 
 
+def _system_number(value: object, column: str, row: int) -> float:
+    try:
+        return float(str(value or 0))
+    except ValueError:
+        raise ValueError(
+            f"{SHEET_ITEMS}: {column} in row {row} is not a number"
+        ) from None
+
+
 def read_plan(path: Path) -> PlanFile:
     workbook = load_workbook(path, data_only=True)
     for name in (SHEET_ITEMS, SHEET_META):
@@ -222,8 +236,12 @@ def read_plan(path: Path) -> PlanFile:
                 description=_text(cells["description"]),
                 currency=_text(cells["currency"]),
                 category=_text(cells["category"]),
-                months_seen=int(float(str(cells["months_seen"] or 0))),
-                typical_amount=float(str(cells["typical_amount"] or 0)),
+                months_seen=int(
+                    _system_number(cells["months_seen"], "months_seen", number)
+                ),
+                typical_amount=_system_number(
+                    cells["typical_amount"], "typical_amount", number
+                ),
                 proposed_kind=_text(cells["proposed_kind"]),
                 kind=_text(cells["kind"]),
                 expected_amount=_expected_amount(cells["expected_amount"], number),

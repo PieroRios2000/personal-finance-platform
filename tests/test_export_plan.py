@@ -158,7 +158,7 @@ def test_the_staging_file_is_private_and_removed_when_writing_fails(
     rows = [MonthlySpend(*r) for r in NETFLIX]
     monkeypatch.setattr(ep, "fetch_monthly_spend", lambda user_id: rows)
     seen: dict[str, int] = {}
-    real_write = ep.write_plan
+    real_write = write_plan
 
     def failing_write(path: Path, plan: Any) -> None:
         real_write(path, plan)

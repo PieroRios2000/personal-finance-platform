@@ -75,12 +75,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     plan = merge(candidates, previous)
 
     args.out.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    args.out.parent.chmod(0o700)
     # Written beside the target and renamed over it, so a crash mid-write can never
-    # destroy the choices the owner already made in the existing file.
+    # destroy the choices the owner already made in the existing file. The staging
+    # file is private from the moment it exists and never left behind.
     staging = args.out.with_name(args.out.name + ".tmp")
-    write_plan(staging, plan)
-    staging.chmod(0o600)
-    staging.replace(args.out)
+    previous_umask = os.umask(0o077)
+    try:
+        write_plan(staging, plan)
+        staging.replace(args.out)
+    finally:
+        os.umask(previous_umask)
+        staging.unlink(missing_ok=True)
 
     fixed = sum(1 for item in plan.items if item.proposed_kind == "fixed")
     kept = 0 if previous is None else len(previous.items)
@@ -89,7 +95,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"{fixed} proposed as fixed, {len(plan.items) - fixed} as variable"
     )
     if previous is not None:
-        print(f"re-export: {kept} existing row(s) kept their owner choices")
+        print(f"re-export: {kept} existing row(s) read, owner choices kept")
     print("Fill kind/expected_amount and the Meta sheet, save. Import comes with T57.")
     return 0
 
