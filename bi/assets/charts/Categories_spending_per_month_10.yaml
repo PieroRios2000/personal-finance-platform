@@ -12,7 +12,10 @@ params:
       0)
     label: Spent
   groupby:
-  - category
+  - expressionType: SQL
+    sqlExpression: CASE WHEN category = 'Ingresos' THEN 'Sin categorizar' ELSE category
+      END
+    label: category
   adhoc_filters:
   - expressionType: SIMPLE
     subject: date

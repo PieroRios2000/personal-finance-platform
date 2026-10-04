@@ -134,6 +134,13 @@ Labels still attach by `(user_id, bank, description)` whatever the direction, so
 used both ways keeps one category: on the owner's data 5 outflows (S/ 7,501) carry `Ingresos`.
 Whether to split labels by direction is left open.
 
+A first look at the section showed that bar as a category: an `Ingresos` bar among the spending.
+Without touching the label (it stays in `silver.category_labels` and in `rpt_movements.category`,
+no dbt change), the section now **shows** an outflow whose category is `Ingresos` as `Sin
+categorizar`: in the bar and monthly charts, as `no category yet` in the "where each one came
+from" chart (it is not counted as `you labelled it`), and in the review table, which lists it so
+the owner can relabel it. Splitting labels by direction remains the real fix and is still open.
+
 ## Related
 
 [ADR 0004](0004-real-pdfs-never-leave-your-machine.md),

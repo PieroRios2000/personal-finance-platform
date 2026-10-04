@@ -6,8 +6,10 @@ viz_type: pie
 params:
   groupby:
   - expressionType: SQL
-    sqlExpression: CASE WHEN category_confirmed THEN 'you labelled it' WHEN category
-      <> 'Sin categorizar' THEN 'the model guessed it' ELSE 'no category yet' END
+    sqlExpression: CASE WHEN category_confirmed AND category <> 'Ingresos' THEN 'you
+      labelled it' WHEN CASE WHEN category = 'Ingresos' THEN 'Sin categorizar' ELSE
+      category END <> 'Sin categorizar' THEN 'the model guessed it' ELSE 'no category
+      yet' END
     label: source
   metric:
     expressionType: SQL
