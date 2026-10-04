@@ -184,3 +184,16 @@ def test_a_file_without_the_expected_sheets_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Gastos fijos"):
         read_plan(path)
+
+
+def test_read_plan_names_the_row_when_expected_amount_is_not_a_number(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "plan.xlsx"
+    write_plan(path, merge([_candidate("NETFLIX.COM")], None))
+    workbook = load_workbook(path)
+    workbook["Gastos fijos"]["I2"] = "3,75"
+    workbook.save(path)
+
+    with pytest.raises(ValueError, match=r"expected_amount.*row 2"):
+        read_plan(path)
