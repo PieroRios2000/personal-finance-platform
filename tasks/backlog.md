@@ -136,11 +136,11 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       [spec](../docs/specs/category-forecast-and-savings-goal.md),
       [ADR 0048](../brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md);
       closes Phase 3's forecasting item and Phase 6's cash-flow projection). Each its own PR, in order:
-  - [ ] **T56** `forecasting/` skeleton, fixed-expense detection, `make export-plan`.
-  - [ ] **T57** `make import-plan`, bronze/silver plan tables, gold `rpt_fixed_expenses`.
+  - [ ] **T56** `forecasting/` skeleton, fixed-expense detection, `make export-plan` (workbook with `Instrucciones`, `Gastos fijos`, `Meta` incl. `usd_to_pen` and the emergency settings; `~/finance-data/plan/`).
+  - [ ] **T57** `make import-plan` (validates the dollar goal, rate and emergency fields), bronze/silver plan tables, gold `rpt_fixed_expenses`.
   - [ ] **T58** forecast core: series, five candidates + baseline, rolling-origin backtest, intervals.
   - [ ] **T59** `make forecast`: bronze outputs, MLflow, gold forecast, variance and quality tables.
-  - [ ] **T60** projection: three scenarios, time to goal, adjust view, gold tables.
+  - [ ] **T60** projection in dollars: buckets, calculated emergency target, two goal lines (`liquid`, `with_risk`), three scenarios, time to goal, adjust view, gold tables.
   - [ ] **T61** Superset "Forecast & goal" section with row-level security, demo seed.
   - [ ] **T62** realized-vs-backtest monitor, monthly routine and where-to-look updates.
   - [ ] **T63** (follow-up) experiment: recurrence and the fixed/variable mark as classifier features, ADR 0044's protocol and an acceptance margin over the fold spread; a null result is valid (spec section 4.8).

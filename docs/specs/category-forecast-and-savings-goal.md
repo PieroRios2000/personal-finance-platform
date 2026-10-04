@@ -1,6 +1,7 @@
 # Spec: monthly spend forecast per category and savings-goal projection
 
-Status: **proposed** (2026-10-04). Nothing here is built. Decision record:
+Status: **proposed** (2026-10-04, amended the same day with the owner's answers on the goal
+currency, the two savings buckets and the emergency fund). Nothing here is built. Decision record:
 [ADR 0048](../../brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md).
 Component note (planned): [Spend forecast](../../brain/components/spend-forecast.md).
 Tasks T56-T63 are listed in [`tasks/backlog.md`](../../tasks/backlog.md) and detailed below.
@@ -15,8 +16,9 @@ Answer three questions from the owner's own closed months, with numbers and hone
 
 1. **What will I spend next month, per category?** And which categories were above what was
    expected last month.
-2. **How long until I reach a savings goal I set**, from what is already saved plus what is
-   projected to be saved each month?
+2. **How long until I reach a savings goal I set, in dollars**, from what is already saved
+   (an emergency fund and the rest) plus what is projected to be saved each month, once an
+   emergency amount computed from my own spending and income is in place?
 3. **What would have to change** (monthly saving needed, by when) and where is the room: which
    categories are above their usual level.
 
@@ -25,7 +27,13 @@ Owner decisions (2026-10-04), taken as given:
 - The system **proposes** which recurring expenses look fixed; the owner **confirms** later which
   are fixed or variable.
 - The owner **enters a savings goal**; the output is the **time to reach it**, from the
-  liquid savings already held plus the projected monthly saving.
+  savings already held plus the projected monthly saving.
+- **The goal is in US dollars.** The owner holds soles and dollars, so adding them needs an
+  exchange rate, which the owner enters (`usd_to_pen`).
+- **Two buckets.** Ripley savings are the **emergency fund**; every investment (Tyba funds, Flip)
+  is **risk savings**.
+- **The goal includes an emergency amount calculated from the owner's spending and income**, not
+  typed: the emergency fund is filled first, then the goal.
 - The forecast is **per category**, to see where spending is above expected and adjust total
   spending.
 
@@ -49,10 +57,10 @@ Out of scope (each with the reason):
   is added to the file when a first real non-monthly item exists; today it would be a one-value
   column.
 - **An exchange-rate path and an external rate API.** v1 uses one owner-entered rate, constant
-  over the projection,. The Phase 6 "sol/dólar projection section"
-  stays planned; this spec does not block it (ADR 0025 keeps conversion out of bronze, silver
-  and gold).
-- **Investments** (ADR 0025): never part of the goal.
+  over the projection. The Phase 6 "sol/dólar projection section" stays planned; this spec does
+  not block it (ADR 0025 keeps conversion out of bronze, silver and gold).
+- **Investment returns.** Risk savings enter at their last closed month-end valuation and are held
+  flat: no market return is projected and no future contributions are assumed.
 - **Per-category budgets typed by the owner, advice text, a live endpoint, Dagster scheduling,
   deep-learning or Prophet-class models.** See section 5.
 - **Other users' forecasts on the public demo beyond the synthetic demo user.** Same rule as
@@ -66,8 +74,10 @@ Out of scope (each with the reason):
 |---|---|---|
 | Spending movements | `gold.rpt_movements` | Same definition as the dashboard: `flow_type = 'egreso' AND NOT is_internal_transfer`, the category shown (owner label, else the model's, else `Sin categorizar`; outflows labelled `Ingresos` shown as `Sin categorizar`, [ADR 0043](../../brain/decisions/0043-transaction-categorization-human-in-the-loop-labeling.md)). |
 | Income movements | `gold.fact_transactions` | `flow_type = 'ingreso' AND NOT is_internal_transfer`. |
-| Starting savings | `gold.rpt_capital.savings_balance` of the last closed month, per currency | Liquid bank accounts only; the `investments_balance` column is ignored (ADR 0025). Debt (`debt_balance`) is not netted: card spending is already counted as spending when charged. |
-| Plan workbook | `~/finance-data/manual/plan-de-ahorro.xlsx`, owner-edited | Section 4.1. Never in Git. |
+| Emergency bucket | Closing balance of the account named in `Meta.emergency_account` (default `Ripley`, the exact name typed in the manual Excel's `cuenta`), last closed month, per currency, from `gold.fct_account_balance_monthly` | `rpt_capital.savings_balance` adds every asset account together, so the split needs the account grain. |
+| Other liquid savings | Closing balance of the remaining asset accounts (BCP, Scotiabank) of the last closed month, per currency, same table | Debt (`debt_balance`) is not netted: card spending is already counted as spending when charged. |
+| Risk savings | `gold.fct_investment_monthly.closing_balance` of the last closed month, per fund and currency (what `rpt_capital.investments_balance` sums) | Month-end valuations from the manual Excel (ADR 0027, 0028). Shown as its own line, never mixed silently into the others (section 4.4). |
+| Plan workbook | `~/finance-data/plan/plan-de-ahorro.xlsx`, owner-edited | Section 4.1. Never in Git. |
 
 Only **closed months** enter, exactly as `rpt_movements` and `rpt_balances` (they leave out
 `first_day_of_current_month`). The latest data point is therefore the last closed month; the
@@ -83,8 +93,9 @@ All outputs carry `user_id` and get the same row-level-security rule as the exis
 | `rpt_category_variance` | `user_id, category, currency` | Latest closed month: actual, the forecast made without it, its 80 % interval, `status` (`above` / `within` / `below`), months `above` in the last 6. |
 | `rpt_forecast_series_quality` | `user_id, run_month, category, currency` | Selected model, months of history, backtest origins, MAE relative to the baseline, 80 % interval coverage, flags `low_history` and `baseline_used`. The "how much to trust it" table. |
 | `rpt_fixed_expenses` | `user_id, bank, description` | Confirmed fixed items: expected amount, last observed month, `deviation_pct`, months seen in the last 6. |
-| `rpt_goal_projection` | `user_id, scenario, month_index` | Month path per scenario: projected savings in the goal currency. |
-| `rpt_goal_summary` | `user_id, scenario` | `months_to_goal` (or null, "not reached in 120 months"), `reached_month`, required monthly saving, projected monthly saving, gap; and the headroom rows for the adjust view (section 4.5). |
+| `rpt_goal_projection` | `user_id, scenario, line, month_index` | Month path per scenario and per `line` (`liquid` = emergency fund and other liquid savings only, `with_risk` = also the investments), in dollars: emergency bucket, goal progress. |
+| `rpt_goal_summary` | `user_id, scenario, line` | `months_to_goal` (or null, "not reached in 120 months"), `reached_month`, required monthly saving, projected monthly saving, gap; and the headroom rows for the adjust view (section 4.5). |
+| `rpt_emergency_fund` | `user_id, scenario` | `emergency_target`, `emergency_bucket`, `emergency_gap`, `months_to_fill`, months of essential spending the bucket covers today, months of income the target equals, savings rate (section 4.4). |
 
 Bronze (written by Python, replace-by-partition, so a rebuild from the archive plus a re-run
 reproduces them): `plan_fixed_items`, `plan_goal`, `spend_forecasts`, `spend_forecast_series`,
@@ -109,17 +120,20 @@ seen in two currencies is listed once per currency with a note, which the owner 
 
 **The file** (`make export-plan`) follows the labeling file's pattern
 ([ADR 0043](../../brain/decisions/0043-transaction-categorization-human-in-the-loop-labeling.md)):
-one Excel in `~/finance-data/manual/`, sheets in Spanish like the owner's other workbooks.
+one Excel in `~/finance-data/plan/` (`plan-de-ahorro.xlsx`, mode 0600, outside Git), sheet names in
+Spanish like the owner's other workbooks and column headers in English like the labeling file.
 
 | Sheet | Columns | Who fills it |
 |---|---|---|
-| `Gastos fijos` | `bank`, `description`, `currency`, `category`, `months_seen`, `typical_amount`, `proposed_kind`, **`kind`** (`fixed` / `variable` / `ignore`), **`expected_amount`** | System prefills `kind = proposed_kind` and `expected_amount = typical_amount`; the owner edits the two bold columns. |
-| `Meta` | `goal_amount`, `goal_currency`, `target_date` (optional), `usd_to_pen`, `income_pen_override`, `income_usd_override` (optional) | Owner only. Exported empty on first run. |
+| `Instrucciones` | free text, in Spanish | Read-only: what to fill, the meaning of `fixed` / `variable` / `ignore`, how to re-run. |
+| `Gastos fijos` | `bank`, `description`, `currency`, `category`, `months_seen`, `typical_amount`, `proposed_kind`, **`kind`** (`fixed` / `variable` / `ignore`), **`expected_amount`**, `note` | System prefills `kind = proposed_kind` and `expected_amount = typical_amount`; the owner edits the two bold columns. `note` is the system's ("also seen in USD", "no longer detected"). |
+| `Meta` | A vertical sheet, one row per field: `field`, `value`, `help` (the help text is Spanish). Fields: `goal_amount` (**US dollars**), `usd_to_pen` (**soles per 1 dollar**, e.g. 3.75), `emergency_months` (default 6), `emergency_basis` (`all` or `fixed_only`, default `all`), `emergency_account` (default `Ripley`), `target_date` (optional), `income_pen_override`, `income_usd_override` (optional) | Owner fills `value`. Exported with the three defaults and the rest empty on first run. |
 
 Re-exporting **keeps the owner's choices**: rows already classified keep `kind` and
 `expected_amount`; new candidates are appended as proposals; a row no longer detected stays and
 says so. `make import-plan WORKBOOK=...` validates (known currency, positive amounts, a
-`target_date` in the future, a rate when any dollar amount is involved) and replaces the owner's
+`target_date` in the future, `goal_amount` > 0, `usd_to_pen` > 0, `emergency_months` between 1 and
+24, `emergency_basis` one of two values) and replaces the owner's
 plan whole, like the labels. Rejecting a bad file changes nothing.
 
 **How the kinds are used:**
@@ -129,8 +143,9 @@ plan whole, like the labels. Rejecting a bad file changes nothing.
   drifts from the expected one (> 10 %), so a price rise is noticed; the monthly routine
   re-proposes the observed typical amount without overwriting the owner's.
 - `variable`: stays in its category's series (default for anything unclassified).
-- `ignore`: a known one-off excluded from the variable series. Its excluded total is shown, so the
-  choice is visible rather than silently lowering the forecast.
+- `ignore`: a known one-off excluded from the variable series, and the place for a transfer to a
+  fund (an investment contribution leaves the bank account but is not spending). Its excluded total
+  is shown, so the choice is visible rather than silently lowering the forecast.
 
 **Reusable data model.** `plan_fixed_items` is keyed by `(user_id, bank, normalized description)`
 (currency is an attribute; the rare description in two currencies is two rows distinguished by currency in the file and resolved by the owner), the same join key as the category labels, and
@@ -192,41 +207,93 @@ that month** (a backtest row, so it works from the first run): `above` when actu
 category's own history predicted, with its own noise", not above an arbitrary budget. Fixed items
 show on their own table.
 
-### 4.4 Savings projection and scenarios (decision 4, owner point 2)
+### 4.4 Emergency fund, savings projection and scenarios (decision 4, owner point 2)
 
-Per month `t` after the last closed month, in the **goal currency**:
+Everything below is in **dollars**, the goal currency. This is the one place currencies are
+converted ([ADR 0025](../../brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md)):
+a sol amount becomes dollars by dividing by `usd_to_pen` (soles per 1 dollar, so `3.75` means
+S/ 3.75 buy US$ 1). The rate is the owner's, constant over the projection, and no converted amount
+is written back to bronze, silver or gold. **If `usd_to_pen` is empty or not positive the
+projection refuses to run**, writes no goal rows and says why ("`usd_to_pen` is needed to add soles
+and dollars"); it never defaults to a rate.
 
-`savings_t = savings_(t-1) + income_t - spending_t`
+**Buckets (decision 2).**
 
-- **Start:** liquid savings of the last closed month per currency (section 3.1), dollars converted
-  at the owner's `usd_to_pen` (or its inverse when the goal is in dollars).
+| Bucket | What | Source |
+|---|---|---|
+| Emergency | Ripley savings (`Meta.emergency_account`) | section 3.1 |
+| Other liquid | The remaining bank asset accounts | section 3.1 |
+| Risk | All investments, at the last closed month-end valuation, held flat | section 3.1 |
+
+**The emergency target is calculated, not typed (decision 3).** With `M` the monthly essential
+outflow in dollars:
+
+`emergency_target = emergency_months x M`
+
+- `M = fixed + variable`, per currency, then converted and added. `fixed` is the sum of the
+  `expected_amount` of the `kind = fixed` items. `variable` is the median of the last 6 closed
+  months' total variable spending of the currency (the `median_6` baseline of section 4.2 on the
+  total series, so it does not depend on which candidate won and is easy to explain). `ignore`
+  items are in neither.
+- `emergency_basis` is the switch for what "essential" means. `all` (default, **recommended**)
+  counts every spending category, the conservative choice: the target is larger, and nothing the
+  owner might call a luxury is guessed away. `fixed_only` counts only the fixed items, the
+  smallest defensible floor, for an owner who would cut all variable spending in a crisis.
+  Rejected: *a per-category essential flag* (more input than asked for; categories are already the
+  owner's, and `emergency_basis` can grow into it later).
+- `emergency_months` (default 6, 1 to 24) is the owner's.
+- **Cross-check against income** (shown beside the target, never changing it): the income used in
+  the projection (below) gives `savings_rate = (income - spending) / income` and
+  `months_of_income = emergency_target / income`. If the essential outflow is above the income, or
+  the target equals more than 24 months of income, the dashboard says so in plain words.
+- **Output** (`rpt_emergency_fund`): `emergency_target`, the current emergency bucket (Ripley),
+  `emergency_gap = max(0, target - bucket)`, `months_to_fill` at the projected saving (0 when
+  already filled; "not reached" like the goal), and the months of essential spending the bucket
+  covers today.
+
+**The projection.** Per month `t` after the last closed month, with the monthly saving
+`s_t = income_t - spending_t` in dollars (cash flow of the tracked bank accounts):
+
 - **Spending:** fixed items at their expected amount + the variable forecasts for `t = 1..3`;
   beyond that the last point forecast is held flat (or the last 12 months repeated when
   `seasonal_naive_12` was selected). The total-series interval gives the scenario spread.
 - **Income:** the median of the last 12 closed months of non-internal income (6 if fewer; below 6,
-  no scenarios, only a message), or the owner's override.
+  no scenarios, only a message), or the owner's override, converted at the same rate.
+- **Order of use:** new savings **fill the emergency gap first, then go to the goal**. With
+  `E0` the emergency bucket, `O0` the other liquid savings, `R0` the risk savings, `C_t = s_1 +
+  ... + s_t` and `x_t = E0 + C_t - emergency_target`:
+  - `emergency_t = min(emergency_target, E0 + C_t)`; `months_to_fill` is the first `t` with
+    `x_t >= 0`.
+  - **Line `liquid`** (the goal counts only liquid savings): `goal_t = O0 + max(0, x_t)`.
+  - **Line `with_risk`** (the goal also counts the investments): `goal_t = R0 + O0 + max(0, x_t)`.
+  - `months_to_goal` is the first `t` with `goal_t >= goal_amount`, per line. Money already in
+    Ripley above the target counts toward the goal; money in it below the target does not.
+- **Both lines are always shown.** Whether the investments count toward the goal is the owner's
+  open question 1 (section 9); until answered the dashboard does not pick a winner. The risk line
+  assumes no return and no contributions, so it is a floor on risk savings, not a forecast of them.
 - **Scenarios:** *base* = point forecasts and median income. *cautious* = spending at the
   total-series `p90` and income at the 25th percentile of the last 12 months. *optimistic* =
   spending at `p10` and income at the 75th percentile. They are **scenarios, not a confidence
   interval**: each month takes the same percentile, which is neither independent nor a joint
-  probability, and the summary and the dashboard say so.
-- **Output:** `months_to_goal` per scenario, the first month where savings reach `goal_amount`;
-  shown as `optimistic ≤ base ≤ cautious`. If monthly saving is not positive, or the goal is not
-  reached within 120 months, the answer is "not reached", never a number. The base scenario is
-  (to see the effect of the rate, change it in `Meta` and re-run).
-- **Cross-check:** for each of the last 6 closed months, the net flow (income − spending) is
-  compared with the change in `savings_balance`. If they disagree by more than 25 % of spending
-  in most months (untracked accounts, card debt carried, unrecorded cash), the dashboard shows a
-  warning that the projection does not explain the balance, and the balance change is displayed
-  next to it. Rejected as the primary method: projecting from balance changes alone (it cannot be
-  split by category, which is what the owner asked for).
+  probability, and the summary and the dashboard say so. The emergency target uses the base
+  `M` in every scenario (a target that moved with the scenario would hide the gap it measures).
+- **Output:** `months_to_goal` per scenario and line, shown as `optimistic <= base <= cautious`.
+  If monthly saving is not positive, or the goal is not reached within 120 months, the answer is
+  "not reached", never a number. To see the effect of the rate, change it in `Meta` and re-run.
+- **Cross-check:** for each of the last 6 closed months, the net flow (income - spending) is
+  compared with the change in the liquid balances (emergency + other liquid, in dollars). If they
+  disagree by more than 25 % of spending in most months (untracked accounts, card debt carried,
+  unrecorded cash, contributions to funds), the dashboard shows a warning that the projection does
+  not explain the balance, and the balance change is displayed next to it. Rejected as the primary
+  method: projecting from balance changes alone (it cannot be split by category, which is what the
+  owner asked for).
 
 ### 4.5 The "adjust" view (owner point 3)
 
-Numbers only, no advice text:
+Numbers only, no advice text, in dollars like the goal:
 
-- `required_monthly_saving` to reach the goal by `target_date` (if given) and the base scenario's
-  `projected_monthly_saving` (mean of months 1-3) → `gap`.
+- `required_monthly_saving` to reach the goal by `target_date` (if given), counting the emergency
+  gap first, and the base scenario's `projected_monthly_saving` (mean of months 1-3) -> `gap`.
 - Per variable category: the base forecast, a reference level the owner has actually achieved (the
   25th percentile of that category's last 12 months), `headroom = max(0, forecast - reference)`
   and its share of the total headroom. The sum of headrooms is compared with the gap
@@ -265,7 +332,7 @@ level comes from their own history, and budgets can be added later without chang
 
 - No description text, amount or total from real data in the repo, docs, CI logs, MLflow or
   alerts. Fixtures are synthetic series generated in the tests.
-- The plan workbook (descriptions, amounts, the goal) lives in `~/finance-data/manual/`, outside
+- The plan workbook (descriptions, amounts, the goal) lives in `~/finance-data/plan/`, outside
   Git, like the labeling workbook.
 - Console output of every script: counts and scores only.
 - The public demo (`pfp-prod`) shows the section for the synthetic `demo` user only; the seed gets
@@ -318,7 +385,9 @@ stays text-only. A null result is a valid outcome.
 | Uncertainty | Empirical error quantiles, pooled when short | Normal-theory intervals (monthly spend is skewed with a floor at 0); no interval (the owner needs to see "above expected" relative to noise) |
 | Total spending | Its own series and interval | Sum of category quantiles (assumes perfectly correlated errors) |
 | Projection | Three scenarios, time as a range, "not reached" allowed | One point estimate (false precision); Monte Carlo paths (assumes an error model nobody has validated on this data) |
-| FX | Owner-entered constant rate | Public rate API (new network dependency; the platform is local); a rate-path model (Phase 6, not needed to answer the goal question) |
+| Savings buckets | Emergency (Ripley) and risk (investments) as separate lines, both shown | One merged balance (hides that investments move with the market); counting the investments with no alternative line (the owner has not said which he wants) |
+| Emergency amount | Computed: `emergency_months` x monthly essential outflow, cross-checked against income | A typed amount (goes stale as spending changes); a fixed share of income (ignores what he actually spends) |
+| FX | Owner-entered constant rate, soles per dollar, refuse when missing | Public rate API (new network dependency; the platform is local); a rate-path model (Phase 6, not needed to answer the goal question) |
 | Where outputs live | Bronze → silver → gold | Python writing Postgres (breaks "rebuild from the lake"); computing it all in SQL (the backtest and the projection are logic that needs unit tests) |
 
 ## 6. Acceptance criteria (feature level)
@@ -331,8 +400,14 @@ stays text-only. A null result is a valid outcome.
       look-ahead); a flat noisy series selects the baseline; a planted seasonal series selects
       `seasonal_naive_12`; a series with fewer than 9 months is `low_history`.
 - [ ] The projection returns "not reached" for a non-positive saving, a monotone
-      `optimistic ≤ base ≤ cautious`, and the goal in either currency gives the same answer at the
-      same rate.
+      `optimistic <= base <= cautious`, and refuses to run, with its reason, when `usd_to_pen` is
+      empty or not positive.
+- [ ] Currency symmetry: the same holdings expressed in soles or in dollars at the same rate give
+      the same dollar totals.
+- [ ] Emergency fund: the target equals `emergency_months` x (fixed + median variable) in dollars
+      (and fixed only under `emergency_basis = fixed_only`); the gap is zero when the bucket is
+      above it; new savings fill the gap before the goal moves; `liquid <= with_risk` always;
+      `months_to_fill` is 0 when already filled.
 - [ ] Only closed months enter; the current month is never in a series (test with a frozen date).
 - [ ] The dashboard section appears for the demo user with row-level security (a user sees
       only their own rows) and shows the scenarios-not-confidence note.
@@ -350,7 +425,10 @@ stays text-only. A null result is a valid outcome.
 | Category labels move (the model's proposals are not owner labels) | The forecast reads the category shown today; a relabel rewrites history, so each run stores its own rows under its `run_month` and the variance view reads the latest run |
 | A one-off month (trip, repair) distorts a category | The median baseline is robust to it; `ignore` kind for known ones; the variance view marks `above` rather than hiding it |
 | Net flow does not explain the balance (accounts or cash not tracked) | The cross-check and its warning; the projection never claims more than the data supports |
-| Savings in dollars and goals in soles move with the rate | Constant owner rate, changed in `Meta` and re-run to see its effect; the FX path stays a separate Phase 6 item |
+| The goal is in dollars and part of the savings is in soles: the answer moves with the rate | Constant owner rate (soles per dollar), changed in `Meta` and re-run to see its effect; no rate, no projection; the FX path stays a separate Phase 6 item |
+| Contributions to funds paid from a tracked account look like spending and lower the projected saving | The owner marks them `ignore` (the file's instructions say so); the cross-check warns when the net flow does not explain the balance |
+| The risk line assumes no return, so it understates (or, in a bad year, overstates) risk savings | Stated on the dashboard; it enters at its last valuation and is a floor, not a forecast |
+| `Meta.emergency_account` does not match the exact name typed in the Excel | `import-plan` checks that the account exists among the user's asset accounts and rejects the file otherwise |
 | Fixed-expense thresholds fit the owner's file badly | Constants tested on synthetic data and calibrated once on the first real export; the owner's confirmation is the final word |
 | Real data leaking through logs, MLflow or fixtures | Counts and ratios only, a leak test, synthetic fixtures, gitleaks and the diff review (CLAUDE.md) |
 
@@ -361,11 +439,11 @@ first), `make ci-local` before the PR, brain updated, and the skills named in `t
 
 | Task | What | Depends on | Verification |
 |---|---|---|---|
-| **T56** | `forecasting/` package skeleton + fixed-expense detection (pure) + `make export-plan` (candidates, empty `Meta`, keeps prior choices). Adds `numpy` explicitly, wheel and import-linter entries. | none | Tests on synthetic series (planted fixed/variable/recurring); re-export preserves edits; `uv run pip-audit` unchanged apart from the explicit numpy; `make ci-local` |
-| **T57** | `make import-plan`: validation, `bronze.plan_fixed_items`, `bronze.plan_goal`; silver staging; gold `rpt_fixed_expenses`. | T56 | Bad file rejected whole; good file replaces the plan; dbt tests (`unique`, `accepted_values` for `kind`); `ci-local-full` |
+| **T56** | `forecasting/` package skeleton + fixed-expense detection (pure) + `make export-plan` (`Instrucciones`, candidates, `Meta` with its defaults, keeps prior choices; written to `~/finance-data/plan/`, mode 0600). Adds `numpy` explicitly, wheel and import-linter entries. | none | Tests on synthetic series (planted fixed/variable/recurring); re-export preserves edits; `uv run pip-audit` unchanged apart from the explicit numpy; `make ci-local` |
+| **T57** | `make import-plan`: validation (including the emergency fields and that `emergency_account` exists), `bronze.plan_fixed_items`, `bronze.plan_goal`; silver staging; gold `rpt_fixed_expenses`. | T56 | Bad file rejected whole; good file replaces the plan; dbt tests (`unique`, `accepted_values` for `kind`); `ci-local-full` |
 | **T58** | Forecast core (pure): series builder (closed months, zero-fill, fixed removed), five candidates, rolling-origin backtest, selection rule, empirical intervals, pooled fallback, metrics. | T56 | Property tests (no look-ahead, determinism, seasonal vs flat, short history, intermittent zeros); coverage ≥ floor |
 | **T59** | `make forecast` runner: read gold, write `bronze.spend_forecasts` and `spend_forecast_series`, MLflow experiment, silver/gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality`. | T57, T58 | Idempotent twice-run test; leak test on MLflow; `ci-local-full`; run on the demo user in a throwaway project |
-| **T60** | Projection (pure) + persistence: start balance, income, three scenarios, time-to-goal, cross-check, adjust view; gold `rpt_goal_projection`, `rpt_goal_summary`. | T59 | Property tests (monotone scenarios, "not reached", currency symmetry); dbt tests; `ci-local-full` |
+| **T60** | Projection (pure) + persistence: buckets, `usd_to_pen` conversion (refuse when missing), calculated emergency target and gap, income, three scenarios, the `liquid` and `with_risk` lines, time-to-goal, cross-check, adjust view; gold `rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund`. | T59 | Property tests (monotone scenarios, "not reached", currency symmetry, emergency target and order of use, `liquid <= with_risk`, refusal without a rate); dbt tests; `ci-local-full` |
 | **T61** | Superset section "Forecast & goal" (dashboards as code, row-level security on the new datasets) + demo seed plan. | T60 | `tests/test_bi_config.py` additions; throwaway project (`make bi-up`) check with the demo user; screenshot reviewed by the owner |
 | **T62** | Monitoring chart (realized vs backtest error), `docs/monthly-routine.md` step (`export-plan` → edit → `import-plan` → `forecast`), `docs/where-to-look.md` rows, brain and backlog closed out. | T61 | `tests/test_monthly_routine.py` still passes with the new targets in order; docs-links check |
 | **T63** (follow-up) | Experiment: recurrence and the fixed/variable mark as classifier features (section 4.8). Offline script; an amendment to ADR 0044 with the result either way; the model changes only if the acceptance margin is met. | T62, and real confirmed marks | Same folds as the text-only baseline; features computed inside each training fold; a test that the owner's mark is never read for an evaluation row |
@@ -374,18 +452,23 @@ The cost study and the anomaly detector remain separate Phase 3 items and do not
 
 ## 9. Open questions for the owner
 
-Each has a recommendation; the spec proceeds on it unless told otherwise.
+Each has a recommendation; the spec proceeds on it unless told otherwise. The goal currency
+(dollars) and the emergency fund (calculated, no typed reserve) were answered on 2026-10-04 and
+are built into sections 4.1 and 4.4.
 
-1. **Goal currency and date.** Recommend the goal in soles, `target_date` optional (without it
-   the output is only "how long", without the gap and required saving).
-2. **What counts as "already saved".** Recommend every liquid bank account including the Ripley
-   savings sheet, as ADR 0025 says. Should some amount be reserved (an emergency fund the goal
-   must not touch)? Recommend no reserve in v1; a `reserved_amount` cell in `Meta` is trivial to
-   add if you want one.
+1. **Does the goal amount count the investments (risk savings)?** This is the one point that
+   changes the answer. **Recommend showing both lines** (`liquid`: Ripley above the emergency
+   target, the other bank accounts and new savings; `with_risk`: plus the investments at their
+   last valuation) and leaving the choice to you after you see both. ADR 0025 had kept investments
+   out because they move with the market; it is amended to allow the second line, and no market
+   return is assumed.
+2. **Do the BCP and Scotiabank balances count toward the goal?** Recommend yes (they are liquid
+   savings, as before). If they are only working float for the month, say so and they move out of
+   the goal into "not counted".
 3. **Yearly expenses** (insurance, taxes, annual fees). Recommend leaving them inside the variable
    series for v1 and adding a `frequency` column when you have a real one.
 4. **Planned extras and known income changes.** Recommend deferring until the first real run shows
    whether the three scenarios already cover your irregular months.
 5. **Fixed vs variable.** This is yours, after the first `make export-plan`: the system proposes,
    you confirm. Recommend doing it once before the first forecast, then reviewing only changes
-   in the monthly routine.
+   in the monthly routine. In the same file, mark transfers to your funds as `ignore`.
