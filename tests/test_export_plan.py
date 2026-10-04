@@ -3,6 +3,7 @@ connection (the real one is exercised on the owner's machine). No description he
 ever real (T56, ADR 0048)."""
 
 import stat
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,8 @@ import psycopg
 import pytest
 from openpyxl import load_workbook
 
-from forecasting.plan_file import read_plan, write_plan
+from forecasting.fixed_expenses import MonthlySpend
+from forecasting.plan_file import PlanFile, read_plan, write_plan
 from scripts import export_plan as ep
 
 MONTHS = [date(2026, m, 1) for m in range(1, 7)]
@@ -96,7 +98,7 @@ def test_main_writes_a_private_workbook_and_prints_only_counts(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    rows = [ep.MonthlySpend(*r) for r in NETFLIX + GROCERIES]
+    rows = [MonthlySpend(*r) for r in NETFLIX + GROCERIES]
     monkeypatch.setattr(ep, "fetch_monthly_spend", lambda user_id: rows)
     out = tmp_path / "plan" / "plan-de-ahorro.xlsx"
 
@@ -115,18 +117,16 @@ def test_main_writes_a_private_workbook_and_prints_only_counts(
 def test_main_keeps_the_owner_choices_on_a_second_export(
     environment: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    rows = [ep.MonthlySpend(*r) for r in NETFLIX + GROCERIES]
+    rows = [MonthlySpend(*r) for r in NETFLIX + GROCERIES]
     monkeypatch.setattr(ep, "fetch_monthly_spend", lambda user_id: rows)
     out = tmp_path / "plan.xlsx"
     ep.main(["--user", "piero", "--out", str(out)])
     first = read_plan(out)
     edited = [
-        item.__class__(**{**item.__dict__, "kind": "ignore"})
-        if item.description == "NETFLIX.COM"
-        else item
+        replace(item, kind="ignore") if item.description == "NETFLIX.COM" else item
         for item in first.items
     ]
-    write_plan(out, first.__class__(tuple(edited), {**first.meta, "usd_to_pen": 3.7}))
+    write_plan(out, PlanFile(tuple(edited), {**first.meta, "usd_to_pen": 3.7}))
 
     assert ep.main(["--user", "piero", "--out", str(out)]) == 0
 
