@@ -126,8 +126,8 @@ Spanish like the owner's other workbooks and column headers in English like the 
 | Sheet | Columns | Who fills it |
 |---|---|---|
 | `Instrucciones` | free text, in Spanish | Read-only: what to fill, the meaning of `fixed` / `variable` / `ignore`, how to re-run. |
-| `Gastos fijos` | `bank`, `description`, `currency`, `category`, `months_seen`, `typical_amount`, `proposed_kind`, **`kind`** (`fixed` / `variable` / `ignore`), **`expected_amount`** | System prefills `kind = proposed_kind` and `expected_amount = typical_amount`; the owner edits the two bold columns. |
-| `Meta` | `goal_amount` (**US dollars**), `usd_to_pen` (**soles per 1 dollar**, e.g. 3.75), `emergency_months` (default 6), `emergency_basis` (`all` or `fixed_only`, default `all`), `emergency_account` (default `Ripley`), `target_date` (optional), `income_pen_override`, `income_usd_override` (optional) | Owner only. Exported with the three defaults and the rest empty on first run. |
+| `Gastos fijos` | `bank`, `description`, `currency`, `category`, `months_seen`, `typical_amount`, `proposed_kind`, **`kind`** (`fixed` / `variable` / `ignore`), **`expected_amount`**, `note` | System prefills `kind = proposed_kind` and `expected_amount = typical_amount`; the owner edits the two bold columns. `note` is the system's ("also seen in USD", "no longer detected"). |
+| `Meta` | A vertical sheet, one row per field: `field`, `value`, `help` (the help text is Spanish). Fields: `goal_amount` (**US dollars**), `usd_to_pen` (**soles per 1 dollar**, e.g. 3.75), `emergency_months` (default 6), `emergency_basis` (`all` or `fixed_only`, default `all`), `emergency_account` (default `Ripley`), `target_date` (optional), `income_pen_override`, `income_usd_override` (optional) | Owner fills `value`. Exported with the three defaults and the rest empty on first run. |
 
 Re-exporting **keeps the owner's choices**: rows already classified keep `kind` and
 `expected_amount`; new candidates are appended as proposals; a row no longer detected stays and
