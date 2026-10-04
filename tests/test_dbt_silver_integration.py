@@ -85,7 +85,14 @@ def _wipe_test_lake() -> None:
 
     pg_store.reset_database()  # dbt's tables live in this worker's Postgres database
     options = storage_options()
-    for name in ("transactions", "statements", "ingested_files", "investment_entries"):
+    for name in (
+        "transactions",
+        "statements",
+        "ingested_files",
+        "investment_entries",
+        "plan_fixed_items",
+        "plan_goal",
+    ):
         uri = table_uri(name)
         assert _TEST_LAKE_SUFFIX in uri
         if DeltaTable.is_deltatable(uri, storage_options=options):
