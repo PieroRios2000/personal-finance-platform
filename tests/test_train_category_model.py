@@ -104,6 +104,27 @@ def test_main_trains_scores_the_baseline_and_saves_the_model_locally(
     assert model_path.with_suffix(".joblib").exists()
 
 
+def test_the_saved_model_is_pinned_to_the_user_it_was_trained_for(
+    environment: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import joblib
+
+    monkeypatch.setattr(
+        tcm,
+        "fetch_labels",
+        lambda user_id: (
+            [f"{bank} {description}" for bank, description, _c, _t in _ROWS],
+            [category for _b, _d, category, _t in _ROWS],
+            [is_trusted for _b, _d, _c, is_trusted in _ROWS],
+        ),
+    )
+    model_path = tmp_path / "model"
+
+    tcm.main(["--user", "piero", "--model-path", str(model_path)])
+
+    assert joblib.load(model_path.with_suffix(".joblib")).trained_for == "piero"
+
+
 def test_main_requires_a_user(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PFP_USER", raising=False)
 

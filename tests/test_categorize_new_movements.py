@@ -238,8 +238,5 @@ def test_a_model_for_another_user_clears_this_users_stale_predictions(
 def _prediction_count(lake: Path) -> int:
     from deltalake import DeltaTable
 
-    return (
-        DeltaTable(str(lake / "bronze" / "category_predictions"))
-        .to_pyarrow_table()
-        .num_rows
-    )
+    table = DeltaTable(str(lake / "bronze" / "category_predictions"))
+    return int(table.to_pyarrow_table().num_rows)

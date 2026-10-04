@@ -72,10 +72,17 @@ class Bundle:
     `scripts/export_category_labels.py`): the fitted pipeline plus the confidence
     threshold below which its own prediction isn't trusted, chosen empirically by
     `choose_confidence_threshold` -- never eyeballed, since a logistic regression's
-    probabilities are not well calibrated on this few examples."""
+    probabilities are not well calibrated on this few examples.
+
+    `trained_for` is the user whose labels fitted it. The saved file is one per
+    install, but a fitted vocabulary is that person's own transaction text (ADR
+    0044): `scripts/categorize_new_movements.py` applies it to nobody else.
+    `None` is a bundle saved before this field existed, so nobody can be sure
+    whose it is."""
 
     pipeline: Pipeline
     confidence_threshold: float
+    trained_for: str | None = None
 
 
 def _new_pipeline() -> Pipeline:

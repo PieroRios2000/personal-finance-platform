@@ -13,6 +13,7 @@ ORDER = [
     "export-category-labels",
     "import-category-labels",
     "train-category-model",
+    "categorize-new-movements",
     "monitor-category-drift",
 ]
 

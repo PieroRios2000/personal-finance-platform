@@ -122,10 +122,9 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       batch-predict a category for every new, unconfirmed movement automatically
       (`scripts.categorize_new_movements`), writing a proposal into
       `gold.rpt_movements` (`category_confirmed = false`), never a live request.
-      `make ingest-uploads` (the upload-portal path, `process_submissions.py`) does not call
-      this yet -- left out of this task's scope, its own submission-per-user loop is a
-      different shape than the single-user `pfp ingest`/Dagster path this wires into; a
-      follow-up if that path turns out to need it too. **A FastAPI endpoint is optional**,
+      `make ingest-uploads` (the upload-portal path) reaches it through `pfp ingest` (ADR 0047
+      corrected an earlier note saying it did not); `pfp backfill` now calls it too, and the saved
+      model proposes only for the user it was trained for. **A FastAPI endpoint is optional**,
       only if a real caller ever needs one (e.g. the upload portal previewing a category
       before the owner processes a request) -- not built speculatively ahead of that.
 - [x] **Drift monitoring** (T55, ADR 0046): `make monitor-category-drift` runs Evidently's data drift
