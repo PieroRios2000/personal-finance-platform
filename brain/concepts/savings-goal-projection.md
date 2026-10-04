@@ -27,7 +27,14 @@ Gold already standardizes what the two banks print with opposite sign convention
 separates real money movement from transfers between the owner's own accounts. A projection
 built straight on the statements would have to rediscover both.
 
-## Open questions
+## Decided 2026-10-04
+
+The method is fixed by [ADR 0048](../decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md)
+and the [spec](../../docs/specs/category-forecast-and-savings-goal.md): simple models chosen by a
+backtest, three scenarios instead of one number, the owner's goal as input, one owner-entered
+exchange rate. Irregular months are covered by the scenarios, not weighed individually.
+
+## Still open
 
 - Exchange rate: the projection is the one place the project converts currencies. It needs a
   sol/dólar rate history and a projected rate path (its own section in Phase 6). Bronze, silver
@@ -41,3 +48,5 @@ built straight on the statements would have to rediscover both.
 - [dbt gold](../components/dbt-gold.md)
 - [Reconciliation](reconciliation.md)
 - [ADR 0025](../decisions/0025-savings-goal-projection-counts-liquid-savings-only.md)
+- [ADR 0048](../decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md)
+- [Spend forecast](../components/spend-forecast.md)
