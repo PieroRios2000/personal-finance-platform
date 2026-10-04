@@ -12,6 +12,7 @@ dependencies = [
     "evidently>=0.7.23",
     "joblib>=1.6.0",
     "mlflow>=3.16.1",
+    "numpy>=2.5.3",
     "openpyxl>=3.1.5",
     "pandas>=3.0.6",
     "pdfplumber>=0.11.10",
@@ -30,7 +31,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["ingestion", "lakehouse", "scripts", "orchestration", "alerting", "categorization"]
+packages = ["ingestion", "lakehouse", "scripts", "orchestration", "alerting", "categorization", "forecasting"]
 
 # `dagster dev`'s own auto-discovery (T21): this block is what lets the local web UI
 # find orchestration/definitions.py with no flag. `dagster asset materialize`/`dagster
@@ -183,7 +184,7 @@ source = ["ingestion", "lakehouse", "scripts"]
 # `ignore_imports` declares the one allowed dependency (T14): ingestion.cli orchestrates
 # both organizer and bronze; lakehouse depends only on the schema, never on the parsers.
 [tool.importlinter]
-root_packages = ["ingestion", "lakehouse", "orchestration", "alerting", "categorization"]
+root_packages = ["ingestion", "lakehouse", "orchestration", "alerting", "categorization", "forecasting"]
 
 [[tool.importlinter.contracts]]
 name = "Parsing does not import lakehouse (only ingestion.cli orchestrates both)"
@@ -231,4 +232,12 @@ forbidden_modules = ["ingestion", "lakehouse", "orchestration"]
 name = "categorization is standalone: no parsers, no lake, no orchestration"
 type = "forbidden"
 source_modules = ["categorization"]
+forbidden_modules = ["ingestion", "lakehouse", "orchestration"]
+
+# forecasting (T56, ADR 0048) is pure functions and the plan workbook's shape: no parsers, no
+# lake, no orchestration. The scripts that call it read gold and write files.
+[[tool.importlinter.contracts]]
+name = "forecasting is standalone: no parsers, no lake, no orchestration"
+type = "forbidden"
+source_modules = ["forecasting"]
 forbidden_modules = ["ingestion", "lakehouse", "orchestration"]

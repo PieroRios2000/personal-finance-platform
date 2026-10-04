@@ -124,6 +124,7 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | pytest-cov | 7.1.0 | dev | Coverage |
 | pytest-benchmark | 5.3.0 | dev | Parsing and bronze-write benchmarks, base vs PR (T15) |
 | openpyxl | 3.1.5 | runtime | Writes (and later reads) the manual Excel for Ripley savings and investments (`scripts/make_manual_templates.py`) |
+| numpy | 2.5.3 | runtime | Median and MAD for fixed-expense detection in `forecasting/` (was already installed through scikit-learn; now explicit) |
 | types-openpyxl | 3.1.5 | dev | Type stubs for openpyxl (mypy strict) |
 | pytest-xdist | 3.8.0 | dev | Runs the integration suite on several workers in CI (`-n 4`), each with its own test lake |
 | ruff | 0.16.7 | dev | Lint and format |
@@ -768,6 +769,18 @@ make monitor-category-drift PFP_USER=piero
 # Prints drifted yes/no per column and saves an HTML report under ~/finance-data/reports/.
 # Read it as a prompt, not a verdict: windows are a few hundred movements, and drift is not error.
 ```
+
+## 16. Savings plan workbook (T56, Phase 3, ADR 0048)
+
+```bash
+make export-plan PFP_USER=piero
+# writes ~/finance-data/plan/plan-de-ahorro.xlsx (0600): 'Instrucciones', 'Gastos fijos' (the
+# spending the history suggests is fixed; confirm or change 'kind' and 'expected_amount') and
+# 'Meta' (goal in dollars, soles per dollar, emergency months and account). Reads gold only.
+```
+
+Run it again whenever you like: your choices stay, new expenses are appended, and a row that
+stopped appearing is kept with a note. The import (`make import-plan`) comes with T57.
 
 ## Reproducing CI locally (`make ci-local`)
 
