@@ -79,19 +79,33 @@ def test_the_run_month_is_the_last_closed_month(written: list[Written]) -> None:
     assert call.run_month == date(2026, 9, 1)
 
 
-def test_future_rows_look_three_months_past_the_last_closed_month(
+def test_future_rows_look_36_months_past_the_last_closed_month(
     written: list[Written],
 ) -> None:
     fc.run("piero", TODAY)
 
     future = [r for r in written[0].forecasts if r.kind == "forecast"]
     mine = sorted(r for r in future if r.category == CATEGORY)
-    assert [(r.horizon, r.target_month) for r in mine] == [
-        (1, date(2026, 10, 1)),
-        (2, date(2026, 11, 1)),
-        (3, date(2026, 12, 1)),
-    ]
+    assert [r.horizon for r in mine] == list(range(1, 37))
+    assert mine[0].target_month == date(2026, 10, 1)
+    assert mine[-1].target_month == date(2029, 9, 1)
     assert all(r.actual is None for r in future)
+
+
+def test_intervals_stop_where_the_backtest_cannot_measure_them(
+    written: list[Written],
+) -> None:
+    fc.run("piero", TODAY)
+
+    mine = [
+        r
+        for r in written[0].forecasts
+        if r.kind == "forecast" and r.category == CATEGORY
+    ]
+    # 24 months leave 16 - h errors at horizon h: 12 or more only up to h = 4.
+    assert [r.horizon for r in mine if r.p10 is not None] == [1, 2, 3, 4]
+    assert all(r.p90 is None for r in mine if r.horizon > 4)
+    assert all(r.p50 >= 0 for r in mine)
 
 
 def test_backtest_rows_carry_the_actual_of_each_month(written: list[Written]) -> None:

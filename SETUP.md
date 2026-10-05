@@ -794,14 +794,15 @@ wider permissions. `Meta.emergency_account` must be the exact name of one of you
 (the `bank` of a savings account or the manual Excel's `cuenta`). No new dependency or variable.
 
 ```bash
-make forecast               # after `make build`: per-category forecast of the next 3 months (T59)
+make forecast               # after `make build`: per-category forecast of the next 36 months (T59, T64)
 ```
 
 It reads the closed months from gold, leaves out the charges your plan calls fixed or ignored,
 and writes bronze, then builds `silver.spend_forecast*` and `gold.fct_spend_forecast`,
 `rpt_category_variance` and `rpt_forecast_series_quality`. With a plan imported it also projects
-the dollar goal (T60): `gold.rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund` and
-`rpt_goal_headroom`; without a plan, or without `usd_to_pen`, it says so and skips. The terminal shows counts only;
+the dollar goal (T60): `gold.rpt_goal_plan`, `rpt_goal_cashflow`, `rpt_goal_balances` (the pieces the dashboard's
+`goal_dynamic` dataset recombines, T65), `rpt_goal_projection`, `rpt_goal_summary`,
+`rpt_emergency_fund` and `rpt_goal_headroom`; without a plan, or without `usd_to_pen`, it says so and skips. The terminal shows counts only;
 ratios and counts go to MLflow (`~/finance-data/mlflow.db`, or `MLFLOW_TRACKING_URI`). No new
 dependency: `mlflow` was added with the categorization model (T52).
 

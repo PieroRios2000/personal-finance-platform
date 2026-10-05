@@ -71,7 +71,8 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
   its own (the fixed ones are added in the projection as their expected amount).
 - `forecasting/candidates.py`: `naive_last`, `mean_3`, `median_6` (the baseline), `ses` (alpha 0.3)
   and `seasonal_naive_12`; no optimizer, so every number can be checked by hand.
-- `forecasting/backtest.py`: rolling origins from 9 months of training, horizons 1-3, no
+- `forecasting/backtest.py`: rolling origins from 9 months of training, forecasts 36 months ahead
+  (intervals only to horizon 12, where enough origins reach it; T64), no
   look-ahead. A candidate replaces the baseline only if its horizon-1 MAE is at least 5 % lower
   *and* it is closer on at least 60 % of the origins. Series with fewer than 9 months or 3 nonzero
   months keep the baseline and are marked `low_history`. Intervals are the point forecast plus the
@@ -86,7 +87,7 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
 
 - `scripts/forecast.py` (`make forecast`): reads the monthly variable spending from gold (same
   definition as `export-plan`), drops the plan's fixed and ignored charges, runs the T58 core and
-  writes two bronze Delta tables, `spend_forecasts` (kind `forecast` for horizons 1-3 and kind
+  writes two bronze Delta tables, `spend_forecasts` (kind `forecast` for horizons 1-36 and kind
   `backtest` for the one-step forecasts of closed months, with their `actual`) and
   `spend_forecast_series` (model, history, origins, `mae_rel`, `coverage`, flags). The column is
   `model_name`, not `model`, which is a reserved word for the SQL linter.
@@ -126,12 +127,28 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
 - `goal_headroom`: per category, forecast minus the 25th percentile of the last 12 months, and its
   share of the saving gap (the "adjust" view).
 
+## What T64-T65 built
+
+- Forecast horizon 36 (`HORIZONS`); `INTERVAL_HORIZONS = 12`: `p10`/`p90` are `NULL` past what the
+  backtest measures and `has_interval` marks the rows that have them (`fct_spend_forecast`,
+  `rpt_category_forecast`). The projection holds the last measured spread and then month 36 flat.
+- `rpt_forecast_realized.source`: `realized` (an older run against the month that closed) or
+  `backtest` (the latest run's one-step forecast of a closed month), so the chart has rows from
+  the first run.
+- `make forecast` also writes `goal_cashflow` and `goal_balances` (bronze, silver, gold
+  `rpt_goal_cashflow`, `rpt_goal_balances`) and gold `rpt_goal_plan`. `bi/sql/goal_dynamic.sql` is
+  the Superset virtual dataset behind the goal charts: four typed native filters (goal, exchange
+  rate, emergency months, horizon) change the answer with no new run; empty means the `Meta`
+  value. SQL equals `forecasting.projection` (integration test); row-level security covers it.
+- `rpt_goal_projection`, `rpt_goal_summary` and `rpt_emergency_fund` are still built but no
+  chart reads them.
+
 ## What T61 built
 
 - Superset section "Forecast & goal" (after the investments, before the movements), authored in
   `bi/build_dashboards.py` and exported to `bi/assets`: when the goal is reached (both lines, three
   scenarios side by side), projected progress in dollars, the emergency fund with its warnings,
-  where the plan has room, the next three months per category, categories above expected and how
+  where the plan has room, the next months per category (as many as the horizon filter says), categories above expected and how
   far to trust each series (the **median baseline** badge says no model beat it). A second
   Markdown note says the scenarios are not a confidence interval. The date range does not act on
   the section: it looks ahead.

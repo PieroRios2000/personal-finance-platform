@@ -2,13 +2,17 @@
 spec 4.2).
 
 At every origin from `MIN_TRAIN` months of training to the last closed month, each
-candidate forecasts the next `HORIZONS` months from the months before the origin only
-(no look-ahead). A candidate replaces the median baseline only if it beats it by at
-least 5 % in mean absolute error at horizon 1 *and* is closer on at least 60 % of the
-origins; otherwise `baseline_used`. Intervals are the point forecast plus the 10th and
-90th percentile of the selected model's own signed errors, pooled from the other series
-of the currency (scaled by level) when it has fewer than `MIN_ERRORS`. The coverage is
-measured on the same errors, so it is optimistic.
+candidate forecasts the next `INTERVAL_HORIZONS` months from the months before the
+origin only (no look-ahead). A candidate replaces the median baseline only if it beats
+it by at least 5 % in mean absolute error at horizon 1 *and* is closer on at least 60 %
+of the origins; otherwise `baseline_used`. Intervals are the point forecast plus the
+10th and 90th percentile of the selected model's own signed errors at that horizon,
+pooled from the other series of the currency (scaled by level) when it has fewer than
+`MIN_ERRORS`.
+The point forecast goes `HORIZONS` (36) months ahead, but the backtest can only measure
+errors up to `INTERVAL_HORIZONS` and only where enough origins reach that far: past that
+the interval is `None`, never an extrapolation. The coverage is measured on the same
+errors, so it is optimistic.
 """
 
 from collections import defaultdict
@@ -22,7 +26,8 @@ from forecasting.candidates import BASELINE, CANDIDATES, SEASON, forecast
 from forecasting.series import TOTAL, Series, add_months
 
 MIN_TRAIN = 9
-HORIZONS = 3
+HORIZONS = 36
+INTERVAL_HORIZONS = 12
 MIN_IMPROVEMENT = 0.05
 MIN_WIN_RATE = 0.60
 MIN_ERRORS = 12
@@ -69,15 +74,17 @@ Rolling = dict[tuple[int, str, int], float]
 
 
 def rolling_forecasts(values: np.ndarray) -> Rolling:
-    """`(origin, model, horizon) -> forecast`, each from `values[:origin]` only. The
-    seasonal model starts once a full year is available."""
+    """`(origin, model, horizon) -> forecast` up to `INTERVAL_HORIZONS`, each from
+    `values[:origin]` only. The seasonal model starts once a full year is available."""
     forecasts: Rolling = {}
     for origin in range(MIN_TRAIN, len(values)):
         history = values[:origin]
         for model in CANDIDATES:
             if model == "seasonal_naive_12" and origin < SEASON:
                 continue
-            for horizon, point in enumerate(forecast(model, history, HORIZONS), 1):
+            for horizon, point in enumerate(
+                forecast(model, history, INTERVAL_HORIZONS), 1
+            ):
                 if origin + horizon - 1 < len(values):
                     forecasts[(origin, model, horizon)] = float(point)
     return forecasts
@@ -138,15 +145,17 @@ def _level(values: np.ndarray) -> float:
     return float(values[-LEVEL_MONTHS:].mean())
 
 
-def _relative_errors(values: np.ndarray, rolling: Rolling, model: str) -> list[float]:
-    """Horizon-1 errors as a share of the series' level before each origin."""
+def _relative_errors(
+    values: np.ndarray, rolling: Rolling, model: str, horizon: int
+) -> list[float]:
+    """Errors at `horizon` as a share of the series' level before each origin."""
     out: list[float] = []
-    for (origin, name, horizon), point in rolling.items():
-        if name != model or horizon != 1:
+    for (origin, name, h), point in rolling.items():
+        if name != model or h != horizon:
             continue
         scale = float(values[max(0, origin - LEVEL_MONTHS) : origin].mean())
         if scale > 0:
-            out.append((float(values[origin]) - point) / scale)
+            out.append((float(values[origin + h - 1]) - point) / scale)
     return out
 
 
@@ -160,7 +169,7 @@ def _offsets(errors: Sequence[float]) -> tuple[float, float]:
 def fit_all(series: Sequence[Series]) -> list[SeriesFit]:
     """One fit per series, in the order given."""
     prepared = []
-    pool: dict[str, list[float]] = defaultdict(list)
+    pool: dict[tuple[str, int], list[float]] = defaultdict(list)
     for item in series:
         values = item.values
         low = (
@@ -170,7 +179,10 @@ def fit_all(series: Sequence[Series]) -> list[SeriesFit]:
         rolling = rolling_forecasts(values)
         model, ratio = _select(values, rolling, low)
         if item.category != TOTAL:
-            pool[item.currency].extend(_relative_errors(values, rolling, model))
+            for h in range(1, INTERVAL_HORIZONS + 1):
+                pool[(item.currency, h)].extend(
+                    _relative_errors(values, rolling, model, h)
+                )
         prepared.append((item, rolling, low, model, ratio))
 
     fits = []
@@ -178,14 +190,14 @@ def fit_all(series: Sequence[Series]) -> list[SeriesFit]:
         values = item.values
         point = forecast(model, values, HORIZONS)
         offsets = {
-            h: _offsets_for(values, rolling, model, h, pool[item.currency])
-            for h in range(1, HORIZONS + 1)
+            h: _offsets_for(values, rolling, model, h, pool[(item.currency, h)])
+            for h in range(1, INTERVAL_HORIZONS + 1)
         }
         future = tuple(
             Interval(
                 h,
                 add_months(item.months[-1], h),
-                *_pair(float(point[h - 1]), offsets[h]),
+                *_pair(float(point[h - 1]), offsets.get(h)),
             )
             for h in range(1, HORIZONS + 1)
         )

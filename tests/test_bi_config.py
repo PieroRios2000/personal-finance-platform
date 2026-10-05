@@ -2,6 +2,7 @@
 The live behaviour (import, connection as the read-only role, sample rows) is the PR's
 verification; these keep the configuration from drifting."""
 
+import ast
 import importlib.util
 import json
 import re
@@ -15,7 +16,12 @@ _ROOT = Path(__file__).resolve().parent.parent
 _BI = _ROOT / "bi"
 
 
-_DATASETS = {"rpt_movements": 2, "rpt_investments": 1, "rpt_balances": 3}
+_DATASETS = {
+    "rpt_movements": 2,
+    "rpt_investments": 1,
+    "rpt_balances": 3,
+    "goal_dynamic": 4,
+}
 # The "Forecast & goal" charts (T61) look ahead, so the dashboard's date range, which
 # narrows past months, has nothing to act on.
 _FORECAST_PREFIXES = (
@@ -26,9 +32,7 @@ _FORECAST_PREFIXES = (
     "Categories above",
 )
 _FORECAST_TABLES = {
-    "rpt_goal_projection",
-    "rpt_goal_summary",
-    "rpt_emergency_fund",
+    "goal_dynamic",
     "rpt_goal_headroom",
     "rpt_category_forecast",
     "rpt_category_variance",
@@ -115,6 +119,10 @@ def test_the_dashboard_has_calendar_and_slicing_filters() -> None:
         "Flow type": "flow_type",
         "Internal transfer": "is_internal_transfer",
         "Fund": "place",
+        "Goal (US$)": "goal_amount_usd",
+        "Exchange rate (PEN per US$)": "usd_to_pen",
+        "Emergency months": "emergency_months",
+        "Forecast horizon (months)": "horizon_months",
     }
 
 
@@ -137,10 +145,11 @@ def test_the_time_grain_starts_monthly_and_takes_its_options_from_a_dataset() ->
 
 def test_every_chart_reads_a_reporting_table_the_dashboard_exports() -> None:
     exported = {p.stem for p in (_BI / "assets" / "datasets").rglob("*.yaml")}
-    used = {c[0] for c in _builder().CHARTS}
+    builder = _builder()
+    used = {c[0] for c in builder.CHARTS}
 
     assert used == exported
-    assert all(name.startswith("rpt_") for name in used)
+    assert all(name.startswith("rpt_") or name in builder.VIRTUAL for name in used)
 
 
 def test_every_dated_chart_has_a_time_range_filter_for_the_date_range() -> None:
@@ -494,10 +503,17 @@ def test_the_realized_monitor_may_be_empty_until_a_second_run() -> None:
 def test_every_dashboard_dataset_is_row_level_secured() -> None:
     """A dataset that `bi/setup_access.py` does not list is not filtered by `user_id`:
     a second account would read the owner's rows (ADR 0036)."""
-    text = (_BI / "setup_access.py").read_text()
-    listed = set(re.findall(r'"(rpt_\w+)"', text))
+    tree = ast.parse((_BI / "setup_access.py").read_text())
+    [tables] = [
+        node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and [t.id for t in node.targets if isinstance(t, ast.Name)] == ["TABLES"]
+    ]
+    listed = {c.value for c in ast.walk(tables) if isinstance(c, ast.Constant)}
 
     assert {c[0] for c in _builder().CHARTS} <= listed
+    assert set(_builder().VIRTUAL) <= listed
 
 
 def test_the_goal_answer_shows_both_lines_and_all_three_scenarios() -> None:
@@ -505,7 +521,7 @@ def test_the_goal_answer_shows_both_lines_and_all_three_scenarios() -> None:
     text = json.dumps(chart[3])
     template = chart[3]["handlebarsTemplate"]
 
-    assert chart[0] == "rpt_goal_summary"
+    assert chart[0] == "goal_dynamic"
     for scenario in ("optimistic", "base", "cautious"):
         assert f"scenario = '{scenario}'" in text
     assert "with_risk" in text and "liquid" in text
@@ -516,7 +532,7 @@ def test_the_goal_answer_shows_both_lines_and_all_three_scenarios() -> None:
 def test_the_projection_chart_draws_every_line_and_scenario_in_dollars() -> None:
     chart = _charts()["Goal: projected progress"]
 
-    assert chart[0] == "rpt_goal_projection"
+    assert chart[0] == "goal_dynamic"
     assert chart[2] == "echarts_timeseries_line"
     assert "scenario" in json.dumps(chart[3]["groupby"])
     assert "line" in json.dumps(chart[3]["groupby"])
@@ -528,7 +544,7 @@ def test_the_emergency_fund_uses_the_base_scenario_and_shows_its_warnings() -> N
     text = json.dumps(chart[3]["adhoc_filters"])
     template = chart[3]["handlebarsTemplate"]
 
-    assert chart[0] == "rpt_emergency_fund"
+    assert chart[0] == "goal_dynamic"
     assert "scenario = 'base'" in text  # the target never moves with the scenario
     for flag in (
         "essential_over_income",
@@ -546,12 +562,12 @@ def test_dollar_tables_are_not_hidden_by_the_currency_filter() -> None:
 
     assert chart[0] == "rpt_goal_headroom"
     assert "currency" not in columns and "source_currency" in columns
-    for name in ("Forecast: next three months", "Categories above expected"):
+    for name in ("Forecast: next months", "Categories above expected"):
         assert "currency" in _charts()[name][3]["all_columns"]  # in its own currency
 
 
 def test_the_forecast_table_reads_the_latest_run_only() -> None:
-    chart = _charts()["Forecast: next three months"]
+    chart = _charts()["Forecast: next months"]
 
     assert chart[0] == "rpt_category_forecast"
     assert {"category", "target_month", "p10", "p50", "p90"} <= set(
@@ -570,3 +586,57 @@ def test_the_dashboard_says_plainly_when_the_baseline_is_the_model() -> None:
 def test_no_forecast_chart_uses_a_sub_query_which_superset_refuses() -> None:
     for name, chart in _forecast_charts().items():
         assert "(select" not in json.dumps(chart[3]).lower(), name
+
+
+_GOAL_FILTERS = {
+    "Goal (US$)": "goal_amount_usd",
+    "Exchange rate (PEN per US$)": "usd_to_pen",
+    "Emergency months": "emergency_months",
+    "Forecast horizon (months)": "horizon_months",
+}
+
+
+def test_the_goal_is_driven_by_four_typed_native_filters_that_start_empty() -> None:
+    """T65: the goal, the rate, the emergency months and the horizon are typed in the
+    filter bar; empty means the Meta sheet's value (the virtual dataset's default)."""
+    filters = _filters()
+
+    for name, column in _GOAL_FILTERS.items():
+        item = filters[name]
+        assert item["filterType"] == "filter_select"
+        assert item["targets"] == [
+            {"datasetId": _DATASETS["goal_dynamic"], "column": {"name": column}}
+        ]
+        assert item["controlValues"]["multiSelect"] is False
+        assert item["controlValues"]["enableEmptyFilter"] is False
+        assert item["defaultDataMask"]["filterState"] == {}
+
+
+def test_the_goal_dataset_is_a_virtual_one_built_from_the_committed_sql() -> None:
+    builder = _builder()
+
+    assert builder.VIRTUAL == {"goal_dynamic": _BI / "sql" / "goal_dynamic.sql"}
+    assert all(path.exists() for path in builder.VIRTUAL.values())
+    exported = _BI / "assets" / "datasets"
+    [dataset] = list(exported.rglob("goal_dynamic.yaml"))
+    assert "filter_values" in yaml.safe_load(dataset.read_text())["sql"]
+
+
+def test_the_projection_chart_stops_at_the_horizon_the_filter_sets() -> None:
+    chart = _charts()["Goal: projected progress"]
+
+    assert "month_index <= horizon_months" in json.dumps(chart[3]["adhoc_filters"])
+
+
+def test_the_forecast_table_follows_the_same_horizon() -> None:
+    chart = _charts()["Forecast: next months"]
+    text = json.dumps(chart[3]["adhoc_filters"])
+
+    assert "horizon_months" in text and "horizon" in text
+
+
+def test_the_realized_monitor_says_whether_a_row_is_realized_or_a_backtest() -> None:
+    chart = _charts()["Forecast: realized vs expected"]
+
+    assert "source" in chart[3]["all_columns"]
+    assert "backtest" in _builder().FORECAST_NOTE_TEXT

@@ -1005,6 +1005,20 @@ def test_replace_goal_projection_writes_every_table(lakehouse: Path) -> None:
                     "share": 1.0,
                 }
             ],
+            "goal_cashflow": [
+                {
+                    "scenario": "base",
+                    "month_index": 1,
+                    "month": date(2026, 10, 1),
+                    "currency": "PEN",
+                    "income": 4000.0,
+                    "fixed": 400.255,
+                    "variable": 1000.0,
+                }
+            ],
+            "goal_balances": [
+                {"bucket": "emergency", "currency": "PEN", "amount": 2000.0}
+            ],
         },
     )
 
@@ -1021,6 +1035,11 @@ def test_replace_goal_projection_writes_every_table(lakehouse: Path) -> None:
     assert fund["balance_mismatch"] is None
     assert fund["months_to_fill"] == 6
     assert _plan_table(lakehouse, "goal_headroom")[0]["headroom"] == Decimal("50.00")
+    [flow] = _plan_table(lakehouse, "goal_cashflow")
+    assert (flow["currency"], flow["month_index"]) == ("PEN", 1)
+    assert flow["fixed"] == Decimal("400.26")
+    [held] = _plan_table(lakehouse, "goal_balances")
+    assert (held["bucket"], held["amount"]) == ("emergency", Decimal("2000.00"))
 
 
 def test_replace_goal_projection_replaces_the_users_whole_set(

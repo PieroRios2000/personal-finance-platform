@@ -58,3 +58,11 @@ def test_seasonal_naive_needs_a_full_year() -> None:
 def test_an_unknown_model_is_an_error() -> None:
     with pytest.raises(ValueError, match="unknown"):
         forecast("prophet", _y(1, 2, 3), 1)
+
+
+def test_seasonal_naive_repeats_its_last_year_beyond_twelve_months() -> None:
+    year = [float(m) for m in range(1, 13)]
+
+    out = forecast("seasonal_naive_12", _y(99, *year), 30)
+
+    assert out.tolist() == (year * 3)[:30]

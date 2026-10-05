@@ -30,7 +30,7 @@ params:
       horizontalAlign: right
   row_limit: 200
   include_search: true
-  datasource: 9__table
+  datasource: 7__table
   viz_type: table
 query_context: null
 cache_timeout: null

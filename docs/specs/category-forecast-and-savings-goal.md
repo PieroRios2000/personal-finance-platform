@@ -4,7 +4,7 @@ Status: **proposed** (2026-10-04, amended the same day with the owner's answers 
 currency, the two savings buckets and the emergency fund). Nothing here is built. Decision record:
 [ADR 0048](../../brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md).
 Component note (planned): [Spend forecast](../../brain/components/spend-forecast.md).
-Tasks T56-T63 are listed in [`tasks/backlog.md`](../../tasks/backlog.md) and detailed below.
+Tasks T56-T65 are listed in [`tasks/backlog.md`](../../tasks/backlog.md) and detailed below.
 
 It closes two plan items at once: Phase 3's "monthly spend forecasting (time series)" and the
 cash-flow part of [Phase 6](../../brain/phases/phase-6.md) ("how long until I reach my savings
@@ -375,6 +375,50 @@ stays text-only. A null result is a valid outcome.
 - The prediction grain is per description ([ADR 0045](../../brain/decisions/0045-batch-categorization-at-ingest.md));
   features must be per `(bank, description)` too, or that grain changes.
 
+### 4.9 Amendment (T64-T65): 36 months ahead, and a goal the owner changes from Superset
+
+Owner request (2026-10-05): the forecast should reach at least three years, with the horizon
+adjustable, and the goal and its inputs should be changeable in Superset without a re-run.
+
+**Horizon (T64).** `forecasting/backtest.py` forecasts `HORIZONS = 36` months. The backtest can
+only measure the miss of a model up to `INTERVAL_HORIZONS = 12` months ahead, and only where at
+least `MIN_ERRORS = 12` origins reach that far. So `p50` exists for all 36 months, and `p10` and
+`p90` exist only where the backtest supports them; beyond that they are `NULL`, never an
+extrapolation, and `has_interval` (in `fct_spend_forecast` and `rpt_category_forecast`) says
+which rows have one. In the projection, variable spending follows the 36 months, keeps the last
+measured gap between the scenario's percentile and `p50` where the interval is missing, and
+holds month 36 flat up to month 120.
+
+**Realized vs expected (T64).** `rpt_forecast_realized` has a `source` column. `realized` is an
+older run's forecast against the month that then closed (empty until a second monthly run).
+`backtest` is the latest run's one-month-ahead forecast of a closed month, shown meanwhile so the
+chart is never empty; it has no `error_ratio` (it is the backtest itself).
+
+**Dynamic goal (T65).** Gold keeps the pieces of the projection, not its answer: `rpt_goal_cashflow`
+(per scenario, month and currency: income, fixed and variable spending), `rpt_goal_balances`
+(emergency, other liquid, risk and the essential monthly spending, per currency) and
+`rpt_goal_plan` (the `Meta` values). `bi/sql/goal_dynamic.sql` is a Superset *virtual dataset*
+that recombines them: it converts to dollars at the exchange rate, sizes the emergency target,
+accumulates the saving and finds the first month the goal is reached, for all three scenarios and
+both lines, 120 months. Four **native filters** drive it: *Goal (US$)*, *Exchange rate (PEN per
+US$)*, *Emergency months* and *Forecast horizon (months)*. Each is a free typed value; empty
+means the `Meta` value. The SQL reads them with `filter_values(..., remove_filter=True)` and a
+macro that accepts only digits (one dot, at most 1e12) and otherwise ignores the value, so
+nothing the viewer types reaches the query as text. The forecast table reads the horizon filter
+in its own WHERE with the same rule. Python's `forecasting.projection` stays the reference:
+`tests/test_dbt_goal_dynamic_integration.py` checks that the SQL equals it for the defaults and
+for typed values, for several users and for hostile input.
+
+Row-level security (ADR 0036) covers the virtual dataset (`goal_dynamic` is in
+`bi/setup_access.py`): the rule's `user_id` filter is applied on its output. Checked in a
+throwaway stack with two users and different goals: each sees only their own answer.
+
+Limits: the `Exchange rate` filter converts the balances, the flows and the goal, but the
+reconciliation flags of the emergency chart (`balance_mismatch`, `months_checked`) are computed
+by `make forecast` with the plan's rate and do not move with the filter. The old gold tables
+`rpt_goal_projection`, `rpt_goal_summary` and `rpt_emergency_fund` are still built (the
+Python projection is their source) but no chart reads them any more.
+
 ## 5. Alternatives considered
 
 | Decision | Chosen | Rejected, and why |
@@ -446,6 +490,8 @@ first), `make ci-local` before the PR, brain updated, and the skills named in `t
 | **T60** | Projection (pure) + persistence: buckets, `usd_to_pen` conversion (refuse when missing), calculated emergency target and gap, income, three scenarios, the `liquid` and `with_risk` lines, time-to-goal, cross-check, adjust view; gold `rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund`. | T59 | Property tests (monotone scenarios, "not reached", currency symmetry, emergency target and order of use, `liquid <= with_risk`, refusal without a rate); dbt tests; `ci-local-full` |
 | **T61** | Superset section "Forecast & goal" (dashboards as code, row-level security on the new datasets) + demo seed plan. | T60 | `tests/test_bi_config.py` additions; throwaway project (`make bi-up`) check with the demo user; screenshot reviewed by the owner |
 | **T62** | Monitoring chart (realized vs backtest error), `docs/monthly-routine.md` step (`export-plan` → edit → `import-plan` → `forecast`), `docs/where-to-look.md` rows, brain and backlog closed out. | T61 | `tests/test_monthly_routine.py` still passes with the new targets in order; docs-links check |
+| **T64** | Forecast 36 months ahead: `HORIZONS = 36`, intervals only where the backtest supports them (`has_interval`), the projection follows it; `rpt_forecast_realized.source` (`backtest` until a second run). | T62 | Backtest and projection tests (no interval past what is measured, no fabricated spread); dbt tests on `source`; throwaway-project run |
+| **T65** | Dynamic goal: `goal_cashflow` and `goal_balances` bronze/silver/gold, virtual dataset `goal_dynamic` and four native filters; RLS on the virtual dataset. | T64 | SQL equals Python (`tests/test_dbt_goal_dynamic_integration.py`); browser run on a throwaway project with the demo user; second user sees only their own |
 | **T63** (follow-up) | Experiment: recurrence and the fixed/variable mark as classifier features (section 4.8). Offline script; an amendment to ADR 0044 with the result either way; the model changes only if the acceptance margin is met. | T62, and real confirmed marks | Same folds as the text-only baseline; features computed inside each training fold; a test that the owner's mark is never read for an evaluation row |
 
 The cost study and the anomaly detector remain separate Phase 3 items and do not depend on this.

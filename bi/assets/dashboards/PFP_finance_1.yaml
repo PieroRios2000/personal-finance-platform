@@ -408,8 +408,8 @@ position:
     - GRID_ID
     - ROW-12
     meta:
-      width: 8
-      height: 34
+      width: 7
+      height: 46
       chartId: 18
       uuid: 5c38f876-c968-5e07-b6da-4d628677ffb2
       sliceName: 'Goal: when you reach it'
@@ -422,19 +422,25 @@ position:
     - GRID_ID
     - ROW-12
     meta:
-      width: 4
-      height: 34
+      width: 5
+      height: 46
       code: '### How to read the forecast and the goal
 
 
-        - Everything about the goal is in **US$**, at the `usd_to_pen` rate you set
-        in the Meta sheet.
+        - Everything about the goal is in **US$**. Type a **Goal (US$)**, an **Exchange
+        rate (PEN per US$)**, the **Emergency months** and a **Forecast horizon (months)**
+        in the filter bar and press *Apply filters*; left empty, each one takes the
+        value of the Meta sheet.
+
+        - The forecast goes 36 months ahead. The **interval** (p10 to p90) is shown
+        only where the backtest measured it (up to 12 months); beyond that the table
+        leaves it blank and only the median (p50) is a forecast.
 
         - **Optimistic, base and cautious** are three sets of assumptions (low, median
         and high spending; high, median and low income), not a confidence interval.
 
-        - The last forecast month is held flat after three months, and the investments
-        are held flat at their last valuation.
+        - Past the forecast the last month is held flat, and the investments are held
+        flat at their last valuation.
 
         - Savings in the emergency account fill the emergency fund; new savings fill
         it first, then go to the goal.
@@ -442,9 +448,12 @@ position:
         - **Forecast: how far to trust it** marks the categories that keep the **median
         baseline**: no model beat it in the backtest.
 
-        - **Forecast: realized vs expected** appears from the second monthly run:
-        a ratio near 1 means last month''s forecast missed as little as it did in
-        the backtest, well above 1 means worse.
+        - **Forecast: realized vs expected**: a row marked **backtest** is the latest
+        run''s one-month-ahead forecast of a month that already closed (how the model
+        would have done); a row marked **realized** is an older run''s forecast against
+        the month that then closed, from the second monthly run on. For one-month-ahead
+        rows a ratio near 1 means it missed as little as in the backtest, well above
+        1 means worse; longer horizons have no ratio.
 
 
         The date range does not apply here: these tables look ahead.'
@@ -543,8 +552,8 @@ position:
       width: 12
       height: 60
       chartId: 22
-      uuid: e42d51c7-0728-5a90-a870-19eed9b30a1f
-      sliceName: 'Forecast: next three months'
+      uuid: 27028cae-8804-5754-854d-b3cd8eac1a9b
+      sliceName: 'Forecast: next months'
   ROW-16:
     type: ROW
     id: ROW-16
@@ -927,6 +936,94 @@ metadata:
       datasetUuid: 673c06bf-c577-5fb4-b52b-54ddbe349e43
     controlValues:
       multiSelect: true
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-goal-(us$)
+    name: Goal (US$)
+    filterType: filter_select
+    targets:
+    - column:
+        name: goal_amount_usd
+      datasetUuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+    controlValues:
+      multiSelect: false
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-exchange-rate-(pen-per-us$)
+    name: Exchange rate (PEN per US$)
+    filterType: filter_select
+    targets:
+    - column:
+        name: usd_to_pen
+      datasetUuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+    controlValues:
+      multiSelect: false
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-emergency-months
+    name: Emergency months
+    filterType: filter_select
+    targets:
+    - column:
+        name: emergency_months
+      datasetUuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+    controlValues:
+      multiSelect: false
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-forecast-horizon-(months)
+    name: Forecast horizon (months)
+    filterType: filter_select
+    targets:
+    - column:
+        name: horizon_months
+      datasetUuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+    controlValues:
+      multiSelect: false
       enableEmptyFilter: false
       defaultToFirstItem: false
       searchAllOptions: false

@@ -15,11 +15,13 @@ SEASON = 12
 
 
 def forecast(model: str, history: np.ndarray, horizon: int) -> np.ndarray:
-    """`horizon` months ahead of `history`; the flat models repeat one value."""
+    """`horizon` months ahead of `history`; the flat models repeat one value and the
+    seasonal one repeats its last year."""
     if model == "seasonal_naive_12":
         if len(history) < SEASON:
             raise ValueError(f"seasonal_naive_12 needs {SEASON} months of history")
-        return history[len(history) - SEASON : len(history) - SEASON + horizon].copy()
+        year = history[len(history) - SEASON :]
+        return np.resize(year, horizon)
     return np.full(horizon, _level(model, history))
 
 

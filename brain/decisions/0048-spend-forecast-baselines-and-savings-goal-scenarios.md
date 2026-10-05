@@ -155,6 +155,24 @@ model is worth having. The full design is in
   afterwards, with the miss compared to the typical miss of the same run's backtest (same unit),
   not to `mae_rel`, which is a ratio to the baseline and would not compare. Judged by the owner.
 
+## Amendments (T64-T65)
+
+- **Horizon 36 months.** The point forecast goes 36 months ahead. The empirical interval is kept
+  to the horizons the backtest measures (12) and where at least 12 origins reach them; past that
+  `p10` and `p90` are `NULL` and `has_interval` is false. No interval is extrapolated: a wide band
+  we cannot measure would look like knowledge. The projection keeps the last measured gap
+  between the scenario's percentile and `p50`, and holds month 36 flat to 120.
+- **The goal is computed at read time.** Gold stores the monthly pieces (`rpt_goal_cashflow`,
+  `rpt_goal_balances`, `rpt_goal_plan`) and a Superset virtual dataset (`goal_dynamic`) finds the
+  month the goal is reached from the goal, exchange rate, emergency months and horizon typed in
+  native filters, so changing them needs no `make forecast`. The Python projection remains the
+  reference and a test checks the SQL equals it. Considered and rejected: one gold row per goal
+  value (cannot cover a typed value) and a dropdown of preset goals (not what was asked).
+- **Typed filters are untrusted input.** The SQL accepts a number or ignores the value; row-level
+  security (ADR 0036) covers the virtual dataset and was checked with two users.
+- **Realized vs expected shows the backtest meanwhile** (`source` = `backtest`), labelled, until
+  a second monthly run gives `realized` rows.
+
 ## Related
 
 - [Spec](../../docs/specs/category-forecast-and-savings-goal.md)

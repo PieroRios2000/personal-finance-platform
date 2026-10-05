@@ -7,6 +7,7 @@ params:
   query_mode: raw
   adhoc_filters: []
   all_columns:
+  - source
   - category
   - currency
   - target_month
@@ -45,7 +46,7 @@ params:
     targetValue: 2
   row_limit: 500
   include_search: true
-  datasource: 12__table
+  datasource: 10__table
   viz_type: table
 query_context: null
 cache_timeout: null

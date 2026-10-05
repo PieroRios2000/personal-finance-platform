@@ -44,7 +44,7 @@ params:
     targetValue: 0
   row_limit: 500
   include_search: true
-  datasource: 11__table
+  datasource: 9__table
   viz_type: table
 query_context: null
 cache_timeout: null

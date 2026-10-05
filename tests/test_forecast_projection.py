@@ -166,20 +166,51 @@ def test_money_above_the_target_in_the_emergency_account_counts_toward_the_goal(
     assert path[0] == pytest.approx((9000, 3000))
 
 
-def test_beyond_three_months_the_last_forecast_is_held_flat() -> None:
-    spend = TotalSpend(
-        history=[1000.0] * 12,
-        future=[
-            (900.0, 1000.0, 1100.0),
-            (1100.0, 1200.0, 1300.0),
-            (1300.0, 1400.0, 1500.0),
-        ],
+def test_the_forecast_is_followed_for_36_months_then_held_flat() -> None:
+    future = [(900.0, 1000.0 + 10 * i, 1100.0) for i in range(36)]
+    spend = TotalSpend(history=[1000.0] * 12, future=future)
+    plan = _plan(emergency_months=0, goal_amount=10.0**9)
+
+    path = _path(project(_inputs(plan=plan, spend={"USD": spend})), "base", "liquid")
+
+    steps = [path[t][1] - path[t - 1][1] for t in (1, 2, 35, 36, 37, 38)]
+    assert steps == pytest.approx([1500, 1490, 1160, 1150, 1150, 1150])
+
+
+def test_beyond_the_measured_intervals_the_last_spread_is_held() -> None:
+    future = [(900.0, 1000.0, 1100.0)] * 12 + [(None, 1200.0, None)] * 24
+    spend = TotalSpend(history=[1000.0] * 12, future=future)
+    plan = _plan(emergency_months=0, goal_amount=10.0**9)
+
+    result = project(_inputs(plan=plan, spend={"USD": spend}))
+
+    step = {
+        s: _path(result, s, "liquid")[13][1] - _path(result, s, "liquid")[12][1]
+        for s in ("base", "cautious", "optimistic")
+    }
+    assert step["base"] == pytest.approx(3000 - 500 - 1200)
+    assert step["cautious"] == pytest.approx(3000 - 500 - 1300)
+    assert step["optimistic"] == pytest.approx(3000 - 500 - 1100)
+
+
+def test_the_projection_returns_its_pieces_in_the_currency_they_were_earned() -> None:
+    result = project(_inputs())
+
+    assert len(result.cashflow) == 3 * 120
+    [first] = [r for r in result.cashflow if (r.scenario, r.month_index) == ("base", 1)]
+    assert (first.currency, first.income, first.fixed, first.variable) == (
+        "USD",
+        3000.0,
+        500.0,
+        1000.0,
     )
-
-    path = _path(project(_inputs(spend={"USD": spend})), "base", "liquid")
-
-    steps = [path[i][0] - path[i - 1][0] for i in range(1, 6)]
-    assert steps == pytest.approx([1500, 1300, 1100, 1100, 1100])
+    held = {(b.bucket, b.currency): b.amount for b in result.balances}
+    assert held == {
+        ("emergency", "USD"): 1000.0,
+        ("other_liquid", "USD"): 2000.0,
+        ("risk", "USD"): 5000.0,
+        ("essential", "USD"): 1500.0,
+    }
 
 
 def test_the_path_runs_120_months_from_the_last_closed_month() -> None:

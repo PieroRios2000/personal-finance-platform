@@ -214,6 +214,10 @@ def test_the_dashboard_forecast_is_the_latest_run_with_its_quality(
     assert (row["baseline_used"], row["n_months"]) == (True, 24)
 
 
+def _realized_rows() -> list[dict[str, Any]]:
+    return [r for r in _rows("gold.rpt_forecast_realized") if r["source"] == "realized"]
+
+
 def test_realized_compares_an_older_forecast_with_the_month_that_then_closed(
     lake: str, tmp_path: Path
 ) -> None:
@@ -246,7 +250,7 @@ def test_realized_compares_an_older_forecast_with_the_month_that_then_closed(
     result = _dbt_build(tmp_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    above, within = _rows("gold.rpt_forecast_realized")
+    above, within = _realized_rows()
     assert (above["category"], above["run_month"], above["target_month"]) == (
         "Above",
         older,
@@ -261,7 +265,7 @@ def test_realized_compares_an_older_forecast_with_the_month_that_then_closed(
     assert within["backtest_mae"] is None and within["error_ratio"] is None
 
 
-def test_realized_is_empty_while_no_forecast_month_has_closed(
+def test_nothing_is_realized_while_no_forecast_month_has_closed(
     lake: str, tmp_path: Path
 ) -> None:
     _seed_spending()
@@ -270,4 +274,82 @@ def test_realized_is_empty_while_no_forecast_month_has_closed(
     result = _dbt_build(tmp_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert _rows("gold.rpt_forecast_realized") == []
+    assert _realized_rows() == []
+
+
+def test_the_dashboard_forecast_says_where_the_interval_stops(
+    lake: str, tmp_path: Path
+) -> None:
+    _seed_spending()
+    bronze.replace_forecast_run(
+        _USER_ID,
+        RUN,
+        [
+            _row("Above", "forecast", _month(1), 1000.0),
+            _row(
+                "Above", "forecast", _month(24), 1000.0, horizon=24, p10=None, p90=None
+            ),
+        ],
+        [_series("Above")],
+    )
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = {r["horizon"]: r for r in _rows("gold.rpt_category_forecast")}
+    assert rows[1]["has_interval"] is True
+    assert rows[24]["has_interval"] is False and rows[24]["p10"] is None
+    flags = {
+        r["horizon"]: r["has_interval"]
+        for r in _rows("gold.fct_spend_forecast")
+        if r["kind"] == "forecast"
+    }
+    assert flags == {1: True, 24: False}
+
+
+def test_realized_shows_the_backtest_until_a_forecast_month_has_closed(
+    lake: str, tmp_path: Path
+) -> None:
+    _seed_spending()
+    _seed_run()
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = _rows("gold.rpt_forecast_realized")
+    assert rows
+    assert {r["source"] for r in rows} == {"backtest"}
+    above = [r for r in rows if r["category"] == "Above"]
+    assert all(r["actual"] is not None and r["horizon"] == 1 for r in above)
+    assert {r["status"] for r in above} <= {"above", "below", "within", "no_interval"}
+
+
+def test_realized_labels_each_row_by_where_its_actual_comes_from(
+    lake: str, tmp_path: Path
+) -> None:
+    _seed_spending()
+    older = date(2026, 8, 1)
+    bronze.replace_forecast_run(
+        _USER_ID,
+        older,
+        [
+            _row("Above", "backtest", date(2026, 8, 1), 1000.0, actual=1200.0),
+            _row("Above", "forecast", RUN, 1000.0),
+        ],
+        [_series("Above")],
+    )
+    bronze.replace_forecast_run(
+        _USER_ID,
+        RUN,
+        [_row("Above", "backtest", RUN, 1000.0, actual=1500.0)],
+        [_series("Above")],
+    )
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    by_source: dict[str, list[date]] = {}
+    for row in _rows("gold.rpt_forecast_realized"):
+        by_source.setdefault(row["source"], []).append(row["target_month"])
+    assert by_source["realized"] == [RUN]
+    assert sorted(by_source["backtest"]) == [date(2026, 8, 1), RUN]

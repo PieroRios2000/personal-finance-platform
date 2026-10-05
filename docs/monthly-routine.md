@@ -51,11 +51,18 @@ make export-plan          # the workbook with your fixed charges and the goal in
 # edit ~/finance-data/plan/plan-de-ahorro.xlsx (Meta sheet: usd_to_pen, goal, emergency account), save, then:
 make import-plan          # validates everything, nothing is written if a field is wrong
 make build
-make forecast             # per-category spend for the next three months, the goal projection
+make forecast             # per-category spend for the next 36 months, the goal projection
 ```
 
 Only the first two steps change from month to month when you edit the plan: if it did not
 change, `make build` then `make forecast` is enough. Open the **Forecast & goal** section of
-the dashboard. **Forecast: realized vs expected** is empty on the first run: from the second
-month on it compares last month's forecast with what happened (a ratio near 1 is as good as
-the backtest, red above 2). Where each table lives is in `docs/where-to-look.md`.
+the dashboard. **Forecast: realized vs expected** shows rows marked `backtest` on the first run
+(the model's one-month-ahead forecast of months that already closed); from the second month on
+it adds rows marked `realized`, last month's forecast against what happened (a ratio near 1 is
+as good as the backtest, red above 2). The interval (p10 to p90) is blank past 12 months: the
+backtest cannot measure it there.
+
+To try another goal, exchange rate, emergency months or forecast horizon, type it in the filter
+bar (*Goal (US$)*, *Exchange rate (PEN per US$)*, *Emergency months*, *Forecast horizon
+(months)*) and press *Apply filters*; no `make forecast` is needed, and an empty filter means the
+value of the `Meta` sheet. Where each table lives is in `docs/where-to-look.md`.

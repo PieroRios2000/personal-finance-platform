@@ -20,6 +20,7 @@ import numpy as np
 from forecasting.series import add_months
 
 HORIZON_MONTHS = 120
+FORECAST_MONTHS = 36
 SCENARIOS = ("base", "cautious", "optimistic")
 LINES = ("liquid", "with_risk")
 MIN_INCOME_MONTHS = 6
@@ -62,7 +63,7 @@ class Balances:
 @dataclass(frozen=True)
 class TotalSpend:
     """Variable spending of one currency: closed months (oldest first) and the
-    (p10, p50, p90) of horizons 1 to 3; an end is `None` without an interval."""
+    (p10, p50, p90) of horizons 1 to 36; an end is `None` where nothing was measured."""
 
     history: Sequence[float]
     future: Sequence[tuple[float | None, float, float | None]]
@@ -147,11 +148,37 @@ class Headroom:
 
 
 @dataclass(frozen=True)
+class CashflowPoint:
+    """One month of one scenario in the currency it was earned or spent in: the pieces
+    the dashboard recombines under its own rate."""
+
+    scenario: str
+    month_index: int
+    month: date
+    currency: str
+    income: float
+    fixed: float
+    variable: float
+
+
+@dataclass(frozen=True)
+class BalanceItem:
+    """What the account holds now (`emergency`, `other_liquid`, `risk`) or the monthly
+    essential spending that sizes the emergency target (`essential`)."""
+
+    bucket: str
+    currency: str
+    amount: float
+
+
+@dataclass(frozen=True)
 class Projection:
     path: list[PathPoint]
     summary: list[GoalSummary]
     emergency: list[EmergencyFund]
     headroom: list[Headroom]
+    cashflow: list[CashflowPoint]
+    balances: list[BalanceItem]
 
 
 def _to_usd(currency: str, amount: float, rate: float) -> float:
@@ -166,17 +193,18 @@ def _sum_usd(amounts: Mapping[str, float], rate: float) -> float:
     return sum(_to_usd(c, a, rate) for c, a in amounts.items())
 
 
-def _income_usd(inputs: Inputs, rate: float, percentile: float) -> float:
+def _income_by_currency(inputs: Inputs, percentile: float) -> dict[str, float]:
     plan = inputs.plan
-    total = 0.0
-    for currency in set(inputs.income) | set(plan.income_override):
+    out: dict[str, float] = {}
+    for currency in sorted(set(inputs.income) | set(plan.income_override)):
         if currency in plan.income_override:
-            amount = plan.income_override[currency]
+            out[currency] = plan.income_override[currency]
         else:
             history = inputs.income[currency][-INCOME_MONTHS:]
-            amount = float(np.percentile(history, percentile)) if history else 0.0
-        total += _to_usd(currency, amount, rate)
-    return total
+            out[currency] = (
+                float(np.percentile(history, percentile)) if history else 0.0
+            )
+    return out
 
 
 def _check_income(inputs: Inputs) -> None:
@@ -194,31 +222,40 @@ def _check_income(inputs: Inputs) -> None:
         )
 
 
-def _variable_usd(inputs: Inputs, rate: float, end: int) -> list[float]:
-    """The variable spending of horizons 1 to 3 in dollars; a missing interval end falls
-    back to the point forecast."""
-    out = []
-    for step in range(3):
-        total = 0.0
-        for currency, spend in inputs.spend.items():
-            row = spend.future[min(step, len(spend.future) - 1)]
-            picked = row[end]
-            value = row[1] if picked is None else picked
-            total += _to_usd(currency, value, rate)
-        out.append(total)
+def _variable_by_currency(inputs: Inputs, end: int) -> dict[str, list[float]]:
+    """The variable spending of months 1 to 120 per currency. The forecast is followed
+    for `FORECAST_MONTHS`, then its last month is held. Where the backtest measured no
+    interval the last measured spread is held, so a scenario never snaps back to the
+    point forecast."""
+    out: dict[str, list[float]] = {}
+    for currency, spend in inputs.spend.items():
+        spread, values = 0.0, []
+        for p10, p50, p90 in spend.future[:FORECAST_MONTHS]:
+            picked = (p10, p50, p90)[end]
+            if picked is not None:
+                spread = picked - p50
+            values.append(p50 + spread)
+        if not values:
+            values = [0.0]
+        values += [values[-1]] * (HORIZON_MONTHS - len(values))
+        out[currency] = values
+    return out
+
+
+def _essential_by_currency(inputs: Inputs) -> dict[str, float]:
+    plan = inputs.plan
+    out = dict(plan.fixed)
+    if plan.emergency_basis == "fixed_only":
+        return out
+    for currency, spend in inputs.spend.items():
+        if len(spend.history):
+            median = float(np.median(spend.history[-VARIABLE_MONTHS:]))
+            out[currency] = out.get(currency, 0.0) + median
     return out
 
 
 def _essential_monthly(inputs: Inputs, rate: float) -> float:
-    fixed = _sum_usd(inputs.plan.fixed, rate)
-    if inputs.plan.emergency_basis == "fixed_only":
-        return fixed
-    variable = sum(
-        _to_usd(currency, float(np.median(spend.history[-VARIABLE_MONTHS:])), rate)
-        for currency, spend in inputs.spend.items()
-        if len(spend.history)
-    )
-    return fixed + variable
+    return _sum_usd(_essential_by_currency(inputs), rate)
 
 
 def _required_saving(
@@ -297,6 +334,7 @@ def project(inputs: Inputs) -> Projection:
     _check_income(inputs)
 
     plan, balances, last = inputs.plan, inputs.balances, inputs.last_closed_month
+    cashflow: list[CashflowPoint] = []
     emergency0 = _sum_usd(balances.emergency, rate)
     other = _sum_usd(balances.other_liquid, rate)
     risk = _sum_usd(balances.risk, rate)
@@ -316,9 +354,28 @@ def project(inputs: Inputs) -> Projection:
     summary: list[GoalSummary] = []
     funds: list[EmergencyFund] = []
     for scenario in SCENARIOS:
-        income = _income_usd(inputs, rate, _INCOME_PERCENTILE[scenario])
-        variable = _variable_usd(inputs, rate, _SPEND_END[scenario])
-        savings = [income - fixed - variable[min(t, 3) - 1] for t in range(1, 121)]
+        earned = _income_by_currency(inputs, _INCOME_PERCENTILE[scenario])
+        income = _sum_usd(earned, rate)
+        variable = _variable_by_currency(inputs, _SPEND_END[scenario])
+        savings = [
+            income
+            - fixed
+            - sum(_to_usd(c, v[t - 1], rate) for c, v in variable.items())
+            for t in range(1, HORIZON_MONTHS + 1)
+        ]
+        for t in range(1, HORIZON_MONTHS + 1):
+            for currency in sorted(set(earned) | set(plan.fixed) | set(variable)):
+                cashflow.append(
+                    CashflowPoint(
+                        scenario,
+                        t,
+                        add_months(last, t),
+                        currency,
+                        earned.get(currency, 0.0),
+                        plan.fixed.get(currency, 0.0),
+                        variable[currency][t - 1] if currency in variable else 0.0,
+                    )
+                )
         projected = float(np.mean(savings[:3]))
         cumulative = np.concatenate(([0.0], np.cumsum(savings)))
         spare = emergency0 + cumulative - target
@@ -375,4 +432,14 @@ def project(inputs: Inputs) -> Projection:
                 avg_balance_change=cross[4],
             )
         )
-    return Projection(path, summary, funds, headroom)
+    held = [
+        BalanceItem(bucket, currency, amount)
+        for bucket, amounts in (
+            ("emergency", balances.emergency),
+            ("other_liquid", balances.other_liquid),
+            ("risk", balances.risk),
+            ("essential", _essential_by_currency(inputs)),
+        )
+        for currency, amount in amounts.items()
+    ]
+    return Projection(path, summary, funds, headroom, cashflow, held)

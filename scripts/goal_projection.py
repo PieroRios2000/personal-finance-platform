@@ -229,6 +229,8 @@ def _tables(projection: Projection) -> dict[str, list[dict[str, Any]]]:
         "goal_summary": [asdict(r) for r in projection.summary],
         "emergency_fund": [asdict(r) for r in projection.emergency],
         "goal_headroom": [asdict(r) for r in projection.headroom],
+        "goal_cashflow": [asdict(r) for r in projection.cashflow],
+        "goal_balances": [asdict(r) for r in projection.balances],
     }
 
 

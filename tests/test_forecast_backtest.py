@@ -93,18 +93,20 @@ def test_a_series_of_mostly_zeros_is_low_history() -> None:
 def test_the_next_three_months_follow_the_last_closed_month() -> None:
     fit = _one(_noisy_flat())
 
-    assert [i.target_month for i in fit.future] == [
+    assert [i.target_month for i in fit.future[:3]] == [
         date(2026, 10, 1),
         date(2026, 11, 1),
         date(2026, 12, 1),
     ]
-    assert [i.horizon for i in fit.future] == [1, 2, 3]
+    assert [i.horizon for i in fit.future[:3]] == [1, 2, 3]
 
 
 def test_intervals_are_ordered_and_never_below_zero() -> None:
     fit = _one(_noisy_flat())
 
-    for i in fit.future:
+    measured = [i for i in fit.future if i.p10 is not None]
+    assert measured
+    for i in measured:
         assert i.p10 is not None and i.p90 is not None
         assert 0 <= i.p10 <= i.p50 <= i.p90
 
@@ -184,3 +186,49 @@ def test_the_total_series_does_not_lend_its_errors_to_the_categories() -> None:
 
     assert with_total.future[0].p10 == without_total.future[0].p10
     assert with_total.future[0].p90 == without_total.future[0].p90
+
+
+def test_the_forecast_runs_36_months_ahead() -> None:
+    fit = _one(_noisy_flat())
+
+    assert [i.horizon for i in fit.future] == list(range(1, 37))
+    assert fit.future[-1].target_month == date(2029, 9, 1)
+    assert all(i.p50 >= 0 for i in fit.future)
+
+
+def test_intervals_stop_where_the_backtest_cannot_measure_them() -> None:
+    # 30 months: horizon h has 30 - 9 - h + 1 errors of its own, 12 are needed.
+    fit = _one(_noisy_flat(30))
+
+    covered = [i.horizon for i in fit.future if i.p10 is not None]
+    assert covered == list(range(1, 11))
+    assert all(i.p90 is None for i in fit.future if i.horizon > 10)
+    assert all(i.p50 > 0 for i in fit.future)
+
+
+def test_intervals_never_pass_twelve_months_however_long_the_history() -> None:
+    fit = _one(_noisy_flat(60))
+
+    covered = [i.horizon for i in fit.future if i.p10 is not None]
+    assert covered == list(range(1, 13))
+
+
+def test_short_series_borrow_errors_of_the_same_horizon_only() -> None:
+    # Each 20-month series has 12 - h errors at horizon h; five of them pool to 12 or
+    # more up to h = 9. Pooling the horizon-1 errors would give an interval to all 36.
+    peers = [_series(_noisy_flat(20, seed=s), category=f"Cat{s}") for s in range(5)]
+
+    for fit in fit_all(peers):
+        covered = [i.horizon for i in fit.future if i.p10 is not None]
+        assert covered == list(range(1, 10))
+
+
+def test_longer_horizons_have_wider_intervals_on_a_random_walk() -> None:
+    # A random walk's error variance grows with the horizon; a straight drift plus noise
+    # would only shift the errors, not widen them.
+    values = 1000 + np.cumsum(np.random.default_rng(0).normal(0, 40, 60))
+
+    fit = _one(values)
+
+    widths = [i.p90 - i.p10 for i in fit.future[:12] if i.p10 and i.p90]
+    assert widths[-1] > widths[0]
