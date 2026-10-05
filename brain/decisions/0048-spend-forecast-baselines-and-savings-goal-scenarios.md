@@ -104,6 +104,18 @@ model is worth having. The full design is in
 - Open for the owner: whether the goal counts the investments (spec, section 9, point 1).
 - Annual expenses, planned extras and an exchange-rate path are left open (spec, section 9).
 
+## Amendments (T58)
+
+- `Total` is the sum of the *variable* categories per currency, forecast as its own series;
+  fixed items enter the projection as their expected amount.
+- A run is identified by `run_month`, the first day of the last closed month: deterministic,
+  so running twice in a month is idempotent.
+- The backtest interval uses the series' final error quantiles for every origin, so its
+  reported coverage is optimistic; the dashboard says so.
+- On pure noise the rule false-switches to a candidate in roughly 12-27 % of series
+  (measured on synthetic iid noise, 24-36 months); the margin and win-rate conditions bound it,
+  they do not remove it.
+
 ## Related
 
 - [Spec](../../docs/specs/category-forecast-and-savings-goal.md)
