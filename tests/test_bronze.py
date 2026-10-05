@@ -862,7 +862,7 @@ def _forecast_row(**overrides: Any) -> bronze.ForecastRow:
         "currency": "PEN",
         "target_month": date(2026, 10, 1),
         "horizon": 1,
-        "model": "median_6",
+        "model_name": "median_6",
         "p10": 800.0,
         "p50": 1000.255,
         "p90": 1300.0,
@@ -876,7 +876,7 @@ def _series_row(**overrides: Any) -> bronze.ForecastSeriesRow:
     fields: dict[str, Any] = {
         "category": "Alimentacion",
         "currency": "PEN",
-        "model": "median_6",
+        "model_name": "median_6",
         "baseline_used": True,
         "low_history": False,
         "n_months": 24,
@@ -928,13 +928,13 @@ def test_replace_forecast_run_keeps_other_months_and_other_users(
     lakehouse: Path,
 ) -> None:
     bronze.replace_forecast_run(
-        "piero", date(2026, 8, 1), [_forecast_row(model="ses")], [_series_row()]
+        "piero", date(2026, 8, 1), [_forecast_row(model_name="ses")], [_series_row()]
     )
     bronze.replace_forecast_run("ana", date(2026, 9, 1), [_forecast_row()], [])
     bronze.replace_forecast_run("piero", date(2026, 9, 1), [_forecast_row()], [])
 
     rows = sorted(
-        (r["user_id"], r["run_month"], r["model"])
+        (r["user_id"], r["run_month"], r["model_name"])
         for r in _plan_table(lakehouse, "spend_forecasts")
     )
     assert rows == [

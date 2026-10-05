@@ -401,6 +401,70 @@ models:
               arguments:
                 values: [as_expected, deviating, not_seen]
 
+  - name: fct_spend_forecast
+    description: >
+      Fact (T59, ADR 0048): every forecast run, one row per user, `run_month`, `kind`,
+      category, currency and `target_month`. `backtest` rows forecast a month that
+      already closed, made without it, with its `actual`; `forecast` rows look ahead
+      (horizon 1 to 3) with a null `actual`. `p10` and `p90` bound an 80 % interval
+      from the model's own backtest errors (null when there are too few). Every run is
+      kept so a forecast can be compared with the actual that arrives later. Carries
+      `user_id` for row-level security; not monthly, no calendar filters.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              [user_id, run_month, kind, category, currency, target_month]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: kind
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [backtest, forecast]
+
+  - name: rpt_category_variance
+    description: >
+      Reporting table (T59, ADR 0048): per category and currency of the latest forecast
+      run, the last closed month's `actual` against the forecast made without it and
+      its 80 % interval. `status` is 'above' over `p90`, 'below' under `p10`, 'within',
+      or 'no_interval' when the series is too short for one. `months_above_last_6`
+      counts the recent months that were above. The interval is optimistic (see
+      `rpt_forecast_series_quality`). Carries `user_id` for row-level security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, category, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [above, within, below, no_interval]
+
+  - name: rpt_forecast_series_quality
+    description: >
+      Reporting table (T59, ADR 0048): per run, category and currency, the model
+      selected, months of history, backtest origins, `mae_rel` (error relative to the
+      median baseline, 1.0 = no better), the interval `coverage` (optimistic: measured
+      on the errors the interval came from) and the flags `baseline_used` and
+      `low_history`. How much to trust a forecast. Carries `user_id` for row-level
+      security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, run_month, category, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
   - name: rpt_reconciliation
     description: >
       Reporting table (T36): per account and currency, the opening balance of its first

@@ -39,7 +39,7 @@ def _row(
         "currency": "PEN",
         "target_month": target,
         "horizon": 1,
-        "model": "median_6",
+        "model_name": "median_6",
         "p10": p50 - 100,
         "p50": p50,
         "p90": p50 + 100,
@@ -58,7 +58,7 @@ def _series(category: str, **fields: Any) -> bronze.ForecastSeriesRow:
     values: dict[str, Any] = {
         "category": category,
         "currency": "PEN",
-        "model": "median_6",
+        "model_name": "median_6",
         "baseline_used": True,
         "low_history": False,
         "n_months": 24,

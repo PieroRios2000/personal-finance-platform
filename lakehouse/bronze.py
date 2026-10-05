@@ -161,6 +161,70 @@ _PLAN_GOAL_SCHEMA = pa.schema(
 )
 
 
+# T59 (ADR 0048): the forecast run, replaced by (user_id, run_month) so earlier runs
+# stay for the monitor (T62). `kind` is 'backtest' (a past one-step forecast with its
+# actual) or 'forecast'; p10/p90 are null when a series has too few errors.
+_SPEND_FORECASTS_SCHEMA = pa.schema(
+    [
+        ("user_id", pa.string()),
+        ("run_month", pa.date32()),
+        ("kind", pa.string()),
+        ("category", pa.string()),
+        ("currency", pa.string()),
+        ("target_month", pa.date32()),
+        ("horizon", pa.int32()),
+        ("model_name", pa.string()),
+        ("p10", _MONEY),
+        ("p50", _MONEY),
+        ("p90", _MONEY),
+        ("actual", _MONEY),
+        ("created_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
+
+_SPEND_FORECAST_SERIES_SCHEMA = pa.schema(
+    [
+        ("user_id", pa.string()),
+        ("run_month", pa.date32()),
+        ("category", pa.string()),
+        ("currency", pa.string()),
+        ("model_name", pa.string()),
+        ("baseline_used", pa.bool_()),
+        ("low_history", pa.bool_()),
+        ("n_months", pa.int32()),
+        ("n_origins", pa.int32()),
+        ("mae_rel", pa.float64()),
+        ("coverage", pa.float64()),
+        ("created_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
+
+
+class ForecastRow(NamedTuple):
+    kind: str
+    category: str
+    currency: str
+    target_month: date
+    horizon: int
+    model_name: str
+    p10: float | None
+    p50: float
+    p90: float | None
+    actual: float | None
+
+
+class ForecastSeriesRow(NamedTuple):
+    category: str
+    currency: str
+    model_name: str
+    baseline_used: bool
+    low_history: bool
+    n_months: int
+    n_origins: int
+    mae_rel: float
+    coverage: float | None
+
+
 class PlanItemRow(NamedTuple):
     bank: str
     description: str
@@ -237,6 +301,20 @@ def _delete_user_rows(name: str, user_id: str) -> None:
         return
     DeltaTable(uri, storage_options=options).delete(
         predicate=f"user_id = {_sql_literal(user_id)}"
+    )
+
+
+def _delete_run_rows(name: str, user_id: str, run_month: date) -> None:
+    """Delete `user_id`'s rows of `bronze/<name>` for one forecast run."""
+    uri = table_uri(name)
+    options = storage_options()
+    if not DeltaTable.is_deltatable(uri, storage_options=options):
+        return
+    DeltaTable(uri, storage_options=options).delete(
+        predicate=(
+            f"user_id = {_sql_literal(user_id)} "
+            f"AND run_month = CAST({_sql_literal(run_month.isoformat())} AS DATE)"
+        )
     )
 
 
@@ -562,3 +640,50 @@ def replace_investment_month(month: InvestmentMonth) -> None:
         for entry in month.entries
     ]
     _append("investment_entries", _INVESTMENT_ENTRIES_SCHEMA, rows)
+
+
+def replace_forecast_run(
+    user_id: str,
+    run_month: date,
+    forecasts: list[ForecastRow],
+    series: list[ForecastSeriesRow],
+) -> None:
+    """Replace `user_id`'s forecast run for `run_month` (the first day of the last
+    closed month), keeping every other run: running twice in a month changes nothing,
+    and the older forecasts stay to be compared with the actuals that arrive later
+    (T62). Both tables get the same `created_at`."""
+    _delete_run_rows("spend_forecasts", user_id, run_month)
+    _delete_run_rows("spend_forecast_series", user_id, run_month)
+    created_at = datetime.now(UTC)
+    if forecasts:
+        _append(
+            "spend_forecasts",
+            _SPEND_FORECASTS_SCHEMA,
+            [
+                {
+                    "user_id": user_id,
+                    "run_month": run_month,
+                    **row._asdict(),
+                    "p10": _money(row.p10),
+                    "p50": _money(row.p50),
+                    "p90": _money(row.p90),
+                    "actual": _money(row.actual),
+                    "created_at": created_at,
+                }
+                for row in forecasts
+            ],
+        )
+    if series:
+        _append(
+            "spend_forecast_series",
+            _SPEND_FORECAST_SERIES_SCHEMA,
+            [
+                {
+                    "user_id": user_id,
+                    "run_month": run_month,
+                    **row._asdict(),
+                    "created_at": created_at,
+                }
+                for row in series
+            ],
+        )

@@ -27,7 +27,7 @@ PFP = docker compose -p $(PFP_PROJECT)
 # Each environment's OpenMetadata artifacts (they hold a token and the Postgres password).
 export PFP_OM_ARTIFACTS = ./artifacts/$(PFP_ENV)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels export-plan import-plan train-category-model categorize-new-movements monitor-category-drift build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels export-plan import-plan forecast train-category-model categorize-new-movements monitor-category-drift build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -176,6 +176,15 @@ export-plan:
 # models. WORKBOOK defaults to ~/finance-data/plan/plan-de-ahorro.xlsx; PFP_USER like ingest.
 import-plan:
 	$(LOAD_ENV) && uv run python -m scripts.import_plan --user "$$PFP_USER" $(if $(WORKBOOK),--workbook "$(WORKBOOK)")
+
+# T59 (ADR 0048): per-category spend forecast for the next three months. Reads the closed
+# months from gold (so run `make build` first), writes bronze, then builds just the forecast
+# models. Counts only on the terminal; ratios and counts to MLflow (~/finance-data).
+FORECAST_MODELS = spend_forecasts spend_forecast_series fct_spend_forecast rpt_category_variance rpt_forecast_series_quality
+forecast:
+	$(LOAD_ENV) && uv run python -m scripts.forecast --user "$$PFP_USER" && \
+	uv run dbt deps --project-dir dbt --profiles-dir dbt && \
+	uv run dbt build --project-dir dbt --profiles-dir dbt --select $(FORECAST_MODELS)
 
 import-category-labels:
 	@test -n "$(WORKBOOK)" || { echo "usage: make import-category-labels WORKBOOK=~/finance-data/manual/categorias-transacciones.xlsx" >&2; exit 2; }

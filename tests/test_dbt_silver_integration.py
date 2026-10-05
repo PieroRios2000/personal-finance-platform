@@ -92,6 +92,8 @@ def _wipe_test_lake() -> None:
         "investment_entries",
         "plan_fixed_items",
         "plan_goal",
+        "spend_forecasts",
+        "spend_forecast_series",
     ):
         uri = table_uri(name)
         assert _TEST_LAKE_SUFFIX in uri
