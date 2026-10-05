@@ -1,14 +1,14 @@
 ---
 type: component
 phase: 3
-status: in progress (T56-T60 built, rest planned)
+status: in progress (T56-T61 built, rest planned)
 task: T56, T57, T58, T59, T60, T61, T62, T63
 ---
 
 # Spend forecast and savings goal
 
 A per-category monthly spend forecast with honest uncertainty, and the time to reach a savings
-goal the owner sets. Only T56 to T60 are built (fixed-expense detection, `make export-plan`, `make import-plan`, the forecast core, `make forecast` and the goal projection); the
+goal the owner sets. Only T56 to T61 are built (fixed-expense detection, `make export-plan`, `make import-plan`, the forecast core, `make forecast`, the goal projection and its dashboard section); the
 specification is
 [`docs/specs/category-forecast-and-savings-goal.md`](../../docs/specs/category-forecast-and-savings-goal.md)
 and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md).
@@ -21,7 +21,7 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
 | `make export-plan` (**built, T56**) / `make import-plan` (**built, T57**) | The owner's workbook (`~/finance-data/plan/`): fixed-expense proposals to confirm, the dollar goal, `usd_to_pen`, the emergency settings | T56, T57 |
 | Bronze `plan_fixed_items`, `plan_goal` → silver `plan_fixed_items`, `plan_goal` (**built, T57**) | The owner's confirmed plan, replaced whole on each import; empty until the first import | T57 |
 | `make forecast` (**built, T59**) | Reads gold, writes the bronze forecast tables, logs ratios and counts to MLflow, builds the forecast dbt models; since T60 it also projects the goal (`scripts/goal_projection.py`) and builds the projection models | T59, T60 |
-| Gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality` (**built, T59**), `rpt_fixed_expenses` (**built, T57**), `rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund`, `rpt_goal_headroom` (**built, T60**) | What the dashboard reads | T57, T59, T60 |
+| Gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality` (**built, T59**), `rpt_fixed_expenses` (**built, T57**), `rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund`, `rpt_goal_headroom` (**built, T60**), `rpt_category_forecast` (**built, T61**) | What the dashboard reads | T57, T59, T60, T61 |
 | Superset "Forecast & goal" section | Emergency target and gap, time to goal as a range for both lines (`liquid`, `with_risk`), categories above expected, the adjust view, how far to trust each series | T61 |
 | Realized-vs-backtest error chart | The monitor; joins the monthly routine | T62 |
 | Recurrence as classifier features | Follow-up experiment, null result allowed | T63 |
@@ -125,6 +125,24 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
   the last 6 months (flag when more than half the months differ by over 25 % of spending).
 - `goal_headroom`: per category, forecast minus the 25th percentile of the last 12 months, and its
   share of the saving gap (the "adjust" view).
+
+## What T61 built
+
+- Superset section "Forecast & goal" (after the investments, before the movements), authored in
+  `bi/build_dashboards.py` and exported to `bi/assets`: when the goal is reached (both lines, three
+  scenarios side by side), projected progress in dollars, the emergency fund with its warnings,
+  where the plan has room, the next three months per category, categories above expected and how
+  far to trust each series (the **median baseline** badge says no model beat it). A second
+  Markdown note says the scenarios are not a confidence interval. The date range does not act on
+  the section: it looks ahead.
+- Gold `rpt_category_forecast`: the latest run only, joined to the series quality. `rpt_goal_headroom`
+  names its currency column `source_currency`, so the dashboard's Currency filter does not drop
+  the dollar rows of a category charged in the other currency.
+- Row-level security (ADR 0036): `bi/setup_access.py` lists the six new tables; a test fails if a
+  chart reads a table it does not list.
+- `make demo` seeds a plan (`demo_plan`) and runs `make forecast`. The demo has eight closed months
+  and the backtest needs nine, so the demo shows baselines only and an empty
+  "Categories above expected" (the one chart allowed to read no rows at build).
 
 ## How it fits
 

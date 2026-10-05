@@ -1,0 +1,35 @@
+slice_name: 'Goal: projected progress'
+description: null
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_line
+params:
+  x_axis: month
+  time_grain_sqla: P1M
+  metrics:
+  - expressionType: SQL
+    sqlExpression: SUM(goal_progress)
+    label: Toward the goal
+  groupby:
+  - scenario
+  - expressionType: SQL
+    sqlExpression: CASE WHEN line = 'liquid' THEN 'liquid savings only' ELSE 'liquid
+      + investments' END
+    label: line
+  adhoc_filters: []
+  seriesType: smooth
+  x_axis_time_format: '%d %b %Y'
+  y_axis_format: ',.0f'
+  y_axis_title: US$ toward the goal
+  y_axis_title_margin: 50
+  y_axis_title_position: Left
+  rich_tooltip: true
+  row_limit: 10000
+  show_legend: true
+  datasource: 7__table
+  viz_type: echarts_timeseries_line
+query_context: null
+cache_timeout: null
+uuid: d5c1a2e4-9ffb-5610-aea1-f3d600c1f1f1
+version: 1.0.0
+dataset_uuid: 772d3cde-b76e-5c05-8c24-0855d546376e

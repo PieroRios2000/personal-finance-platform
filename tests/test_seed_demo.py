@@ -97,3 +97,29 @@ def test_the_fund_also_continues_across_windows() -> None:
     for month in october:
         if (month.year, month.month) in overlap:
             assert month == overlap[(month.year, month.month)]
+
+
+def test_the_demo_plan_fits_the_demo_accounts_and_can_be_projected() -> None:
+    """The plan the forecast section needs: the emergency account is one the demo has,
+    the fixed items are charges the demo really makes and the rate is positive (T61)."""
+    statements = seed_demo.demo_statements(_TODAY, user_id="demo")
+    items, goal = seed_demo.demo_plan(_TODAY)
+
+    assets = {s.bank for s in statements if s.account_kind == "asset"}
+    charged = {
+        (s.bank, t.description, s.currency) for s in statements for t in s.transactions
+    }
+    assert goal.emergency_account in assets
+    assert goal.usd_to_pen > 0 and goal.goal_amount > 0
+    assert goal.emergency_basis in ("all", "fixed_only")
+    fixed = [i for i in items if i.kind == "fixed"]
+    assert fixed and all(i.expected_amount for i in fixed)
+    assert {(i.bank, i.description, i.currency) for i in items} <= charged
+    assert goal.target_date is not None and goal.target_date > _TODAY
+
+
+def test_the_demo_plan_is_fictional_and_deterministic() -> None:
+    first = seed_demo.demo_plan(_TODAY)
+
+    assert first == seed_demo.demo_plan(_TODAY)
+    assert all(i.description.startswith("DEMO ") for i in first[0])

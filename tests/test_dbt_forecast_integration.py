@@ -26,7 +26,7 @@ lake = _lake
 RUN = date(2026, 9, 1)
 SELECT = (
     "spend_forecasts spend_forecast_series fct_spend_forecast "
-    "rpt_category_variance rpt_forecast_series_quality"
+    "rpt_category_variance rpt_forecast_series_quality rpt_category_forecast"
 )
 
 
@@ -187,3 +187,27 @@ def test_the_models_build_empty_before_any_forecast_run(
     for table in ("fct_spend_forecast", "rpt_category_variance"):
         assert _rows(f"gold.{table}") == []
     assert _rows("gold.rpt_forecast_series_quality") == []
+
+
+def test_the_dashboard_forecast_is_the_latest_run_with_its_quality(
+    lake: str, tmp_path: Path
+) -> None:
+    _seed_spending()
+    _seed_run()
+    older = date(2026, 8, 1)
+    bronze.replace_forecast_run(
+        _USER_ID, older, [_row("Above", "forecast", RUN, 700.0)], [_series("Above")]
+    )
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    [row] = _rows("gold.rpt_category_forecast")
+    assert (row["user_id"], row["run_month"], row["category"]) == (
+        _USER_ID,
+        RUN,
+        "Above",
+    )
+    assert row["target_month"] == _month(1)
+    assert row["p50"] == Decimal("1000.00")
+    assert (row["baseline_used"], row["n_months"]) == (True, 24)

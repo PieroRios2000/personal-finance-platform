@@ -127,7 +127,11 @@ def test_the_projection_reaches_gold_with_its_user_and_run(
     assert fund["base"]["target"] == Decimal("9000.00")
     assert fund["base"]["balance_mismatch"] is None
     assert fund["cautious"]["balance_mismatch"] is True
-    assert _rows("gold.rpt_goal_headroom")[0]["headroom"] == Decimal("50.00")
+    [headroom] = _rows("gold.rpt_goal_headroom")
+    assert headroom["headroom"] == Decimal("50.00")
+    # Dollars, whatever the category is charged in: not the dashboard's currency filter.
+    assert headroom["source_currency"] == "PEN"
+    assert "currency" not in headroom
 
 
 def test_the_tables_are_empty_before_any_projection(lake: str, tmp_path: Path) -> None:

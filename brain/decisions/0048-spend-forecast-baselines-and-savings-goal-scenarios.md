@@ -139,6 +139,16 @@ model is worth having. The full design is in
   income history is refused instead of diluted with zeros.
 - Amounts are rounded half-even to cents in bronze.
 
+## Amendments (T61)
+
+- Gold `rpt_category_forecast` (latest run, with the series quality) is what the dashboard reads;
+  the older runs stay in `fct_spend_forecast` for the realized-vs-backtest monitor (T62).
+- `rpt_goal_headroom.currency` is exposed as `source_currency`: its amounts are in dollars, and a
+  `currency` column would let the Currency filter hide rows.
+- The section ignores the date range (nothing in it is per calendar month) and shows both goal
+  lines and all three scenarios at once; the open question of whether the goal counts the
+  investments stays with the owner, the dashboard answers it both ways.
+
 ## Related
 
 - [Spec](../../docs/specs/category-forecast-and-savings-goal.md)

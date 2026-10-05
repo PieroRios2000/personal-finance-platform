@@ -32,9 +32,17 @@ position:
     - ROW-8
     - ROW-9
     - ROW-10
-    - ROW-11
+    - HEADER-11
     - ROW-12
     - ROW-13
+    - ROW-14
+    - ROW-15
+    - ROW-16
+    - ROW-17
+    - ROW-18
+    - ROW-19
+    - ROW-20
+    - ROW-21
     parents:
     - ROOT_ID
   HEADER_ID:
@@ -379,6 +387,217 @@ position:
     - GRID_ID
     meta:
       background: BACKGROUND_TRANSPARENT
+  HEADER-11:
+    type: HEADER
+    id: HEADER-11
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      text: Forecast & goal
+      headerSize: LARGE_HEADER
+      background: BACKGROUND_TRANSPARENT
+  CHART-17:
+    type: CHART
+    id: CHART-17
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-12
+    meta:
+      width: 8
+      height: 34
+      chartId: 18
+      uuid: 5c38f876-c968-5e07-b6da-4d628677ffb2
+      sliceName: 'Goal: when you reach it'
+  MARKDOWN-forecast:
+    type: MARKDOWN
+    id: MARKDOWN-forecast
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-12
+    meta:
+      width: 4
+      height: 34
+      code: '### How to read the forecast and the goal
+
+
+        - Everything about the goal is in **US$**, at the `usd_to_pen` rate you set
+        in the Meta sheet.
+
+        - **Optimistic, base and cautious** are three sets of assumptions (low, median
+        and high spending; high, median and low income), not a confidence interval.
+
+        - The last forecast month is held flat after three months, and the investments
+        are held flat at their last valuation.
+
+        - Savings in the emergency account fill the emergency fund; new savings fill
+        it first, then go to the goal.
+
+        - **Forecast: how far to trust it** marks the categories that keep the **median
+        baseline**: no model beat it in the backtest.
+
+
+        The date range does not apply here: these tables look ahead.'
+  ROW-12:
+    type: ROW
+    id: ROW-12
+    children:
+    - CHART-17
+    - MARKDOWN-forecast
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-18:
+    type: CHART
+    id: CHART-18
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-13
+    meta:
+      width: 12
+      height: 50
+      chartId: 19
+      uuid: d5c1a2e4-9ffb-5610-aea1-f3d600c1f1f1
+      sliceName: 'Goal: projected progress'
+  ROW-13:
+    type: ROW
+    id: ROW-13
+    children:
+    - CHART-18
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-19:
+    type: CHART
+    id: CHART-19
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-14
+    meta:
+      width: 12
+      height: 34
+      chartId: 20
+      uuid: ee374d9a-ec19-5dca-966d-fa5c35ab8b07
+      sliceName: Emergency fund
+  ROW-14:
+    type: ROW
+    id: ROW-14
+    children:
+    - CHART-19
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-20:
+    type: CHART
+    id: CHART-20
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-15
+    meta:
+      width: 12
+      height: 50
+      chartId: 21
+      uuid: b066af46-25f4-5bf6-9a66-0f0b527c1783
+      sliceName: 'Adjust: where the plan has room'
+  ROW-15:
+    type: ROW
+    id: ROW-15
+    children:
+    - CHART-20
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-21:
+    type: CHART
+    id: CHART-21
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-16
+    meta:
+      width: 12
+      height: 60
+      chartId: 22
+      uuid: e42d51c7-0728-5a90-a870-19eed9b30a1f
+      sliceName: 'Forecast: next three months'
+  ROW-16:
+    type: ROW
+    id: ROW-16
+    children:
+    - CHART-21
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-22:
+    type: CHART
+    id: CHART-22
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-17
+    meta:
+      width: 12
+      height: 50
+      chartId: 23
+      uuid: 6e3f1698-8488-5d92-a574-be95c4bf0b39
+      sliceName: Categories above expected
+  ROW-17:
+    type: ROW
+    id: ROW-17
+    children:
+    - CHART-22
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-23:
+    type: CHART
+    id: CHART-23
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-18
+    meta:
+      width: 12
+      height: 60
+      chartId: 24
+      uuid: b17ad4a0-41ac-5d05-9b02-80b50b665c00
+      sliceName: 'Forecast: how far to trust it'
+  ROW-18:
+    type: ROW
+    id: ROW-18
+    children:
+    - CHART-23
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
   CHART-13:
     type: CHART
     id: CHART-13
@@ -386,16 +605,16 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-11
+    - ROW-19
     meta:
       width: 12
       height: 60
       chartId: 14
       uuid: 8e81aaab-2fd3-59b0-b902-2d95666db6b9
       sliceName: Movements (check against your statements)
-  ROW-11:
+  ROW-19:
     type: ROW
-    id: ROW-11
+    id: ROW-19
     children:
     - CHART-13
     parents:
@@ -410,16 +629,16 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-12
+    - ROW-20
     meta:
       width: 12
       height: 60
       chartId: 15
       uuid: e0814a73-2359-50f6-aeb8-4d63a6174f02
       sliceName: Statement balances (check against your statements)
-  ROW-12:
+  ROW-20:
     type: ROW
-    id: ROW-12
+    id: ROW-20
     children:
     - CHART-14
     parents:
@@ -434,7 +653,7 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-13
+    - ROW-21
     meta:
       width: 12
       height: 40
@@ -442,9 +661,9 @@ position:
       uuid: 639b6207-0b0a-5895-8ebf-7b45be98dd81
       sliceName: 'Reconciliation: opening + movements = balance (difference must be
         0)'
-  ROW-13:
+  ROW-21:
     type: ROW
-    id: ROW-13
+    id: ROW-21
     children:
     - CHART-15
     parents:

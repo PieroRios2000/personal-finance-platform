@@ -8,8 +8,9 @@ positive, payments negative, ADR 0015), a small BCP account in dollars, and one
 investment fund with a month-end valuation each month. Everything is fictional and
 marked `DEMO`, every statement reconciles by construction, and only closed months are
 generated (the current one is left out, like the dashboard does). Running it twice
-writes nothing new. Then `dbt build` and the dashboard show the platform working before
-any real statement is loaded.
+writes nothing new. The plan (fixed charges, a dollar goal) is what the forecast section
+needs. Then `dbt build`, `make forecast` and the dashboard show the platform working
+before any real statement is loaded.
 """
 
 import argparse
@@ -206,6 +207,38 @@ def demo_investment_months(today: date, user_id: str = "demo") -> list[Investmen
     return months[-_FUND_MONTHS:]
 
 
+def demo_plan(today: date) -> tuple[list[bronze.PlanItemRow], bronze.PlanGoalRow]:
+    """The fictional owner's plan, for the "Forecast & goal" section (T61): rent and
+    utilities are the fixed charges, the goal is in dollars at an assumed rate, and the
+    emergency fund sits in the BCP accounts (the demo has no savings account)."""
+
+    def fixed(description: str, amount: float) -> bronze.PlanItemRow:
+        return bronze.PlanItemRow(
+            bank="BCP",
+            description=f"DEMO {description}",
+            currency="PEN",
+            category="Servicios",
+            months_seen=_MONTHS,
+            typical_amount=amount,
+            proposed_kind="fixed",
+            kind="fixed",
+            expected_amount=amount,
+            note="",
+        )
+
+    goal = bronze.PlanGoalRow(
+        goal_amount=3000.0,
+        usd_to_pen=3.75,
+        emergency_months=3,
+        emergency_basis="all",
+        emergency_account="BCP",
+        target_date=date(today.year + 3, today.month, 1),
+        income_pen_override=None,
+        income_usd_override=None,
+    )
+    return [fixed("RENT", 900.0), fixed("UTILITIES", 180.5)], goal
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--user", default=os.environ.get("PFP_USER") or "demo")
@@ -221,9 +254,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     months = demo_investment_months(today, args.user)
     for month in months:
         bronze.replace_investment_month(month)
+    bronze.replace_plan(args.user, *demo_plan(today))
     print(
         f"demo data for user {args.user!r}: {written} statement(s) written, "
-        f"{len(months)} fund month(s). Now: dbt build."
+        f"{len(months)} fund month(s), a plan. Now: dbt build, then make forecast."
     )
     return 0
 
