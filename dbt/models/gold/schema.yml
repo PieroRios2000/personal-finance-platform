@@ -406,7 +406,7 @@ models:
       Fact (T59, ADR 0048): every forecast run, one row per user, `run_month`, `kind`,
       category, currency and `target_month`. `backtest` rows forecast a month that
       already closed, made without it, with its `actual`; `forecast` rows look ahead
-      (horizon 1 to 3) with a null `actual`. `p10` and `p90` bound an 80 % interval
+      (horizon 1 to 36) with a null `actual`. `p10` and `p90` bound an 80 % interval
       from the model's own backtest errors (null when there are too few). Every run is
       kept so a forecast can be compared with the actual that arrives later. Carries
       `user_id` for row-level security; not monthly, no calendar filters.
@@ -424,6 +424,9 @@ models:
           - accepted_values:
               arguments:
                 values: [backtest, forecast]
+      - name: has_interval
+        data_tests:
+          - not_null
 
   - name: rpt_category_variance
     description: >
@@ -468,7 +471,7 @@ models:
   - name: rpt_category_forecast
     description: >
       Reporting table (T61, ADR 0048): what the dashboard shows of the forecast. The
-      latest run only, per user, category, currency and horizon (1 to 3 months ahead):
+      latest run only, per user, category, currency and horizon (1 to 36 months ahead):
       the interval (`p10`, `p50`, `p90`) and the quality of the series (model, whether
       the median baseline was used, months of history, `mae_rel`, `coverage`).
       Carries `user_id` for row-level security.
@@ -480,6 +483,12 @@ models:
       - name: user_id
         data_tests:
           - not_null
+      - name: has_interval
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
 
   - name: rpt_forecast_realized
     description: >

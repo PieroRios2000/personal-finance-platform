@@ -2,6 +2,7 @@
 The live behaviour (import, connection as the read-only role, sample rows) is the PR's
 verification; these keep the configuration from drifting."""
 
+import ast
 import importlib.util
 import json
 import re
@@ -502,8 +503,14 @@ def test_the_realized_monitor_may_be_empty_until_a_second_run() -> None:
 def test_every_dashboard_dataset_is_row_level_secured() -> None:
     """A dataset that `bi/setup_access.py` does not list is not filtered by `user_id`:
     a second account would read the owner's rows (ADR 0036)."""
-    text = (_BI / "setup_access.py").read_text()
-    listed = set(re.findall(r'"(\w+)"', text))
+    tree = ast.parse((_BI / "setup_access.py").read_text())
+    [tables] = [
+        node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and [t.id for t in node.targets if isinstance(t, ast.Name)] == ["TABLES"]
+    ]
+    listed = {c.value for c in ast.walk(tables) if isinstance(c, ast.Constant)}
 
     assert {c[0] for c in _builder().CHARTS} <= listed
     assert set(_builder().VIRTUAL) <= listed

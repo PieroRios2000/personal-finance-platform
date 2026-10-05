@@ -8,7 +8,8 @@ params:
   adhoc_filters:
   - expressionType: SQL
     sqlExpression: horizon <= {% set typed = (filter_values('horizon_months') or ['36'])[0]
-      | string %}{{ typed | int if typed.isascii() and typed.isdigit() else 36 }}
+      | string %}{{ typed | int if typed.isascii() and typed.isdigit() and typed |
+      length <= 4 else 36 }}
     clause: WHERE
   all_columns:
   - category

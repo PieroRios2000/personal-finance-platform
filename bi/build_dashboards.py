@@ -63,7 +63,8 @@ def _time_range(column: str) -> dict[str, Any]:
 _HORIZON_WHERE = (
     "horizon <= "
     "{% set typed = (filter_values('horizon_months') or ['36'])[0] | string %}"
-    "{{ typed | int if typed.isascii() and typed.isdigit() else 36 }}"
+    "{{ typed | int if typed.isascii() and typed.isdigit() and typed | length <= 4"
+    " else 36 }}"
 )
 
 
@@ -1099,9 +1100,9 @@ FORECAST_NOTE_TEXT = (
     "- **Forecast: realized vs expected**: a row marked **backtest** is the latest "
     "run's one-month-ahead forecast of a month that already closed (how the model "
     "would have done); a row marked **realized** is an older run's forecast against "
-    "the month that then closed, from the second monthly run on. For realized rows, "
-    "a ratio near 1 means it missed as little as in the backtest, well above 1 "
-    "means worse.\n\n"
+    "the month that then closed, from the second monthly run on. For one-month-ahead "
+    "rows a ratio near 1 means it missed as little as in the "
+    "backtest, well above 1 means worse; longer horizons have no ratio.\n\n"
     "The date range does not apply here: these tables look ahead."
 )
 NOTES = {NOTE: NOTE_TEXT, FORECAST_NOTE: FORECAST_NOTE_TEXT}

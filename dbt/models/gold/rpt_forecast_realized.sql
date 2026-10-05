@@ -7,7 +7,9 @@
 -- row. `realized_error` is the miss in the series' own currency; `backtest_mae` is the
 -- typical miss of the same run's backtest rows, in the same unit, and `error_ratio` is the
 -- first over the second: near 1 the forecast did as well as it did when it was tested,
--- well above it did worse (null when the run had no backtest or it never missed).
+-- well above it did worse (null when the run had no backtest or it never missed, and null
+-- past horizon 1: the backtest MAE is a one-step miss, a longer forecast is expected to miss
+-- more and would read as worse for no reason).
 -- `status` is `above` over `p90`, `below` under `p10`, `within` otherwise and
 -- `no_interval` when the run had no interval. The owner judges it; there is no drift test
 -- on about two dozen points per series (ADR 0046).
@@ -69,8 +71,12 @@ realized as (
         closed_months.actual,
         backtest_miss.backtest_mae,
         abs(closed_months.actual - forecast.p50) as realized_error,
-        abs(closed_months.actual - forecast.p50)
-        / nullif(backtest_miss.backtest_mae, 0) as error_ratio,
+        case
+            when forecast.horizon = 1
+                then
+                    abs(closed_months.actual - forecast.p50)
+                    / nullif(backtest_miss.backtest_mae, 0)
+        end as error_ratio,
         'realized' as source  -- noqa: RF04
     from {{ ref('fct_spend_forecast') }} as forecast
     inner join closed_months
