@@ -217,6 +217,7 @@ def test_the_dashboard_forecast_is_the_latest_run_with_its_quality(
 def test_realized_compares_an_older_forecast_with_the_month_that_then_closed(
     lake: str, tmp_path: Path
 ) -> None:
+    _seed_spending()
     older = date(2026, 8, 1)
     bronze.replace_forecast_run(
         _USER_ID,
