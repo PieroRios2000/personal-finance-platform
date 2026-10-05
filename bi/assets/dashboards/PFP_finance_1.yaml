@@ -43,6 +43,7 @@ position:
     - ROW-19
     - ROW-20
     - ROW-21
+    - ROW-22
     parents:
     - ROOT_ID
   HEADER_ID:
@@ -441,6 +442,10 @@ position:
         - **Forecast: how far to trust it** marks the categories that keep the **median
         baseline**: no model beat it in the backtest.
 
+        - **Forecast: realized vs expected** appears from the second monthly run:
+        a ratio near 1 means last month''s forecast missed as little as it did in
+        the backtest, well above 1 means worse.
+
 
         The date range does not apply here: these tables look ahead.'
   ROW-12:
@@ -598,9 +603,9 @@ position:
     - GRID_ID
     meta:
       background: BACKGROUND_TRANSPARENT
-  CHART-13:
+  CHART-24:
     type: CHART
-    id: CHART-13
+    id: CHART-24
     children: []
     parents:
     - ROOT_ID
@@ -608,13 +613,37 @@ position:
     - ROW-19
     meta:
       width: 12
+      height: 50
+      chartId: 25
+      uuid: 35a3d93e-9415-523d-806a-dc359f152173
+      sliceName: 'Forecast: realized vs expected'
+  ROW-19:
+    type: ROW
+    id: ROW-19
+    children:
+    - CHART-24
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-13:
+    type: CHART
+    id: CHART-13
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-20
+    meta:
+      width: 12
       height: 60
       chartId: 14
       uuid: 8e81aaab-2fd3-59b0-b902-2d95666db6b9
       sliceName: Movements (check against your statements)
-  ROW-19:
+  ROW-20:
     type: ROW
-    id: ROW-19
+    id: ROW-20
     children:
     - CHART-13
     parents:
@@ -629,16 +658,16 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-20
+    - ROW-21
     meta:
       width: 12
       height: 60
       chartId: 15
       uuid: e0814a73-2359-50f6-aeb8-4d63a6174f02
       sliceName: Statement balances (check against your statements)
-  ROW-20:
+  ROW-21:
     type: ROW
-    id: ROW-20
+    id: ROW-21
     children:
     - CHART-14
     parents:
@@ -653,7 +682,7 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-21
+    - ROW-22
     meta:
       width: 12
       height: 40
@@ -661,9 +690,9 @@ position:
       uuid: 639b6207-0b0a-5895-8ebf-7b45be98dd81
       sliceName: 'Reconciliation: opening + movements = balance (difference must be
         0)'
-  ROW-21:
+  ROW-22:
     type: ROW
-    id: ROW-21
+    id: ROW-22
     children:
     - CHART-15
     parents:

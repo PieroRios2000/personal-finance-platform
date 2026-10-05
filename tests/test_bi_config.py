@@ -32,6 +32,7 @@ _FORECAST_TABLES = {
     "rpt_goal_headroom",
     "rpt_category_forecast",
     "rpt_category_variance",
+    "rpt_forecast_realized",
 }
 
 
@@ -477,6 +478,17 @@ def test_forecast_and_goal_is_its_own_section_after_the_investments() -> None:
     assert rows.index(["Investments: return and"]) < title < rows.index(["Movements"])
     assert len(forecast) >= 8
     assert {c[0] for c in _forecast_charts().values()} == _FORECAST_TABLES
+
+
+def test_the_realized_monitor_may_be_empty_until_a_second_run() -> None:
+    """Realized rows need an older run whose forecast month has since closed, so a
+    fresh install (or the demo, run once) has none: the build must not fail on it."""
+    builder = _builder()
+    name = "Forecast: realized vs expected"
+
+    assert name in _charts()
+    assert name in builder.MAY_BE_EMPTY
+    assert any(p == "Forecast: realized" for row in builder.LAYOUT for p, _, _ in row)
 
 
 def test_every_dashboard_dataset_is_row_level_secured() -> None:

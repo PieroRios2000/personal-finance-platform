@@ -1,14 +1,14 @@
 ---
 type: component
 phase: 3
-status: in progress (T56-T61 built, rest planned)
+status: in progress (T56-T62 built, T63 planned)
 task: T56, T57, T58, T59, T60, T61, T62, T63
 ---
 
 # Spend forecast and savings goal
 
 A per-category monthly spend forecast with honest uncertainty, and the time to reach a savings
-goal the owner sets. Only T56 to T61 are built (fixed-expense detection, `make export-plan`, `make import-plan`, the forecast core, `make forecast`, the goal projection and its dashboard section); the
+goal the owner sets. Only T56 to T62 are built (fixed-expense detection, `make export-plan`, `make import-plan`, the forecast core, `make forecast`, the goal projection, its dashboard section and the realized-error monitor); the
 specification is
 [`docs/specs/category-forecast-and-savings-goal.md`](../../docs/specs/category-forecast-and-savings-goal.md)
 and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md).
@@ -21,7 +21,7 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
 | `make export-plan` (**built, T56**) / `make import-plan` (**built, T57**) | The owner's workbook (`~/finance-data/plan/`): fixed-expense proposals to confirm, the dollar goal, `usd_to_pen`, the emergency settings | T56, T57 |
 | Bronze `plan_fixed_items`, `plan_goal` → silver `plan_fixed_items`, `plan_goal` (**built, T57**) | The owner's confirmed plan, replaced whole on each import; empty until the first import | T57 |
 | `make forecast` (**built, T59**) | Reads gold, writes the bronze forecast tables, logs ratios and counts to MLflow, builds the forecast dbt models; since T60 it also projects the goal (`scripts/goal_projection.py`) and builds the projection models | T59, T60 |
-| Gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality` (**built, T59**), `rpt_fixed_expenses` (**built, T57**), `rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund`, `rpt_goal_headroom` (**built, T60**), `rpt_category_forecast` (**built, T61**) | What the dashboard reads | T57, T59, T60, T61 |
+| Gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality` (**built, T59**), `rpt_fixed_expenses` (**built, T57**), `rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund`, `rpt_goal_headroom` (**built, T60**), `rpt_category_forecast` (**built, T61**), `rpt_forecast_realized` (**built, T62**) | What the dashboard reads | T57, T59, T60, T61, T62 |
 | Superset "Forecast & goal" section | Emergency target and gap, time to goal as a range for both lines (`liquid`, `with_risk`), categories above expected, the adjust view, how far to trust each series | T61 |
 | Realized-vs-backtest error chart | The monitor; joins the monthly routine | T62 |
 | Recurrence as classifier features | Follow-up experiment, null result allowed | T63 |
@@ -143,6 +143,20 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
 - `make demo` seeds a plan (`demo_plan`) and runs `make forecast`. The demo has eight closed months
   and the backtest needs nine, so the demo shows baselines only and an empty
   "Categories above expected" (the one chart allowed to read no rows at build).
+
+## What T62 built
+
+- Gold `rpt_forecast_realized`: each older `forecast` row whose month has since closed, with the
+  actual (from the latest run that backtested that month), the miss, the typical miss of that same
+  run's backtest in the same unit (`backtest_mae`), their ratio (`error_ratio`) and whether the
+  actual fell `within`, `above` or `below` the interval. Empty until a second run exists after a
+  forecast month has closed. The owner judges it; no drift test, two dozen points are too few
+  (ADR 0046).
+- Dashboard chart "Forecast: realized vs expected" (red where `error_ratio` > 2), allowed to read no
+  rows at build; the Markdown note says it appears from the second monthly run.
+- `docs/monthly-routine.md` step 4 (`export-plan` → edit → `import-plan` → `build` → `forecast`),
+  checked in order by `tests/test_monthly_routine.py`; `docs/where-to-look.md` names the section's
+  tables.
 
 ## How it fits
 

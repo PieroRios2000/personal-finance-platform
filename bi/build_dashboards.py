@@ -876,6 +876,48 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "styleTemplate": _FORECAST_STYLE,
         },
     ),
+    (
+        "rpt_forecast_realized",
+        "Forecast: realized vs expected",
+        "table",
+        {
+            "query_mode": "raw",
+            # An older forecast against the month that then closed. `error_ratio` is the
+            # miss over the backtest's typical miss: red where it did clearly worse.
+            "adhoc_filters": [],
+            "all_columns": [
+                "category",
+                "currency",
+                "target_month",
+                "horizon",
+                "actual",
+                "p10",
+                "p50",
+                "p90",
+                "status",
+                "error_ratio",
+            ],
+            "order_by_cols": ['["target_month", false]', '["error_ratio", false]'],
+            "column_config": {
+                **{
+                    name: {"d3NumberFormat": ",.2f", "horizontalAlign": "right"}
+                    for name in ("actual", "p10", "p50", "p90")
+                },
+                "error_ratio": {"d3NumberFormat": ",.1f", "horizontalAlign": "right"},
+                "target_month": {"d3TimeFormat": "%b %Y"},
+            },
+            "conditional_formatting": [
+                {
+                    "colorScheme": "#fbd0d2",
+                    "column": "error_ratio",
+                    "operator": ">",
+                    "targetValue": 2,
+                }
+            ],
+            "row_limit": 500,
+            "include_search": True,
+        },
+    ),
 ]
 
 
@@ -1014,14 +1056,18 @@ FORECAST_NOTE_TEXT = (
     "- Savings in the emergency account fill the emergency fund; new savings fill it "
     "first, then go to the goal.\n"
     "- **Forecast: how far to trust it** marks the categories that keep the "
-    "**median baseline**: no model beat it in the backtest.\n\n"
+    "**median baseline**: no model beat it in the backtest.\n"
+    "- **Forecast: realized vs expected** appears from the second monthly run: a "
+    "ratio near 1 means last month's forecast missed as little as it did in the "
+    "backtest, well above 1 means worse.\n\n"
     "The date range does not apply here: these tables look ahead."
 )
 NOTES = {NOTE: NOTE_TEXT, FORECAST_NOTE: FORECAST_NOTE_TEXT}
 
 # Charts that read nothing on a short history: the variance table compares a month
-# with a backtest forecast, which needs nine closed months, and the demo has eight.
-MAY_BE_EMPTY = {"Categories above expected"}
+# with a backtest forecast, which needs nine closed months, and the demo has eight; the
+# realized table needs a second forecast run after a forecast month has closed.
+MAY_BE_EMPTY = {"Categories above expected", "Forecast: realized vs expected"}
 
 # The grid: (chart name prefix, width out of 12, height) per cell, row by row.
 LAYOUT: list[list[tuple[str, int, int]]] = [
@@ -1044,6 +1090,7 @@ LAYOUT: list[list[tuple[str, int, int]]] = [
     [("Forecast: next three", 12, 60)],
     [("Categories above", 12, 50)],
     [("Forecast: how far", 12, 60)],
+    [("Forecast: realized", 12, 50)],
     [("Movements", 12, 60)],
     [("Statement balances", 12, 60)],
     [("Reconciliation", 12, 40)],

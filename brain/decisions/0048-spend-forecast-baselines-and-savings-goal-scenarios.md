@@ -149,6 +149,12 @@ model is worth having. The full design is in
   lines and all three scenarios at once; the open question of whether the goal counts the
   investments stays with the owner, the dashboard answers it both ways.
 
+## Amendments (T62)
+
+- The monitor is `gold.rpt_forecast_realized`: an older forecast against the month that closed
+  afterwards, with the miss compared to the typical miss of the same run's backtest (same unit),
+  not to `mae_rel`, which is a ratio to the baseline and would not compare. Judged by the owner.
+
 ## Related
 
 - [Spec](../../docs/specs/category-forecast-and-savings-goal.md)

@@ -26,7 +26,8 @@ lake = _lake
 RUN = date(2026, 9, 1)
 SELECT = (
     "spend_forecasts spend_forecast_series fct_spend_forecast "
-    "rpt_category_variance rpt_forecast_series_quality rpt_category_forecast"
+    "rpt_category_variance rpt_forecast_series_quality rpt_category_forecast "
+    "rpt_forecast_realized"
 )
 
 
@@ -211,3 +212,61 @@ def test_the_dashboard_forecast_is_the_latest_run_with_its_quality(
     assert row["target_month"] == _month(1)
     assert row["p50"] == Decimal("1000.00")
     assert (row["baseline_used"], row["n_months"]) == (True, 24)
+
+
+def test_realized_compares_an_older_forecast_with_the_month_that_then_closed(
+    lake: str, tmp_path: Path
+) -> None:
+    older = date(2026, 8, 1)
+    bronze.replace_forecast_run(
+        _USER_ID,
+        older,
+        # Backtest misses of 0, 0 and 200 around 1000: the typical miss is 66.67.
+        [
+            _row("Above", "backtest", date(2026, 6, 1), 1000.0, actual=1000.0),
+            _row("Above", "backtest", date(2026, 7, 1), 1000.0, actual=1000.0),
+            _row("Above", "backtest", date(2026, 8, 1), 1000.0, actual=1200.0),
+            _row("Above", "forecast", RUN, 1000.0),
+            _row("Above", "forecast", _month(1), 1000.0, horizon=2),
+            _row("Within", "forecast", RUN, 1000.0),
+        ],
+        [_series("Above"), _series("Within")],
+    )
+    bronze.replace_forecast_run(
+        _USER_ID,
+        RUN,
+        [
+            _row("Above", "backtest", RUN, 1000.0, actual=1500.0),
+            _row("Within", "backtest", RUN, 1000.0, actual=1000.0),
+        ],
+        [_series("Above"), _series("Within")],
+    )
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    above, within = _rows("gold.rpt_forecast_realized")
+    assert (above["category"], above["run_month"], above["target_month"]) == (
+        "Above",
+        older,
+        RUN,
+    )
+    assert (above["actual"], above["p50"]) == (Decimal("1500.00"), Decimal("1000.00"))
+    assert above["status"] == "above"
+    assert above["realized_error"] == Decimal("500.00")
+    assert float(above["backtest_mae"]) == pytest.approx(200 / 3)
+    assert float(above["error_ratio"]) == pytest.approx(7.5)
+    assert (within["status"], within["realized_error"]) == ("within", Decimal("0.00"))
+    assert within["backtest_mae"] is None and within["error_ratio"] is None
+
+
+def test_realized_is_empty_while_no_forecast_month_has_closed(
+    lake: str, tmp_path: Path
+) -> None:
+    _seed_spending()
+    _seed_run()
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _rows("gold.rpt_forecast_realized") == []
