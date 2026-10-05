@@ -8,7 +8,9 @@ all spending gives a target of 6 x 1500 = 9000, with 1000 already in the emergen
 account, 2000 in other liquid accounts and 5000 in investments. The goal is 10000.
 """
 
+from dataclasses import replace
 from datetime import date
+from typing import Any
 
 import pytest
 
@@ -29,14 +31,9 @@ LAST_CLOSED = date(2026, 9, 1)
 RATE = 4.0
 
 
-def _plan(**fields: object) -> Plan:
-    values: dict[str, object] = {
-        "goal_amount": 10000.0,
-        "usd_to_pen": RATE,
-        "fixed": {"USD": 500.0},
-    }
-    values.update(fields)
-    return Plan(**values)  # type: ignore[arg-type]
+def _plan(**fields: Any) -> Plan:
+    base = Plan(goal_amount=10000.0, usd_to_pen=RATE, fixed={"USD": 500.0})
+    return replace(base, **fields)
 
 
 def _spend(
@@ -48,20 +45,19 @@ def _spend(
     )
 
 
-def _inputs(**fields: object) -> Inputs:
-    values: dict[str, object] = {
-        "plan": _plan(),
-        "balances": Balances(
+def _inputs(**fields: Any) -> Inputs:
+    base = Inputs(
+        plan=_plan(),
+        balances=Balances(
             emergency={"USD": 1000.0},
             other_liquid={"USD": 2000.0},
             risk={"USD": 5000.0},
         ),
-        "last_closed_month": LAST_CLOSED,
-        "income": {"USD": [3000.0] * 12},
-        "spend": {"USD": _spend()},
-    }
-    values.update(fields)
-    return Inputs(**values)  # type: ignore[arg-type]
+        last_closed_month=LAST_CLOSED,
+        income={"USD": [3000.0] * 12},
+        spend={"USD": _spend()},
+    )
+    return replace(base, **fields)
 
 
 def _months(result: Projection, scenario: str, line: str) -> int | None:
@@ -385,7 +381,8 @@ def test_headroom_is_the_forecast_above_the_categorys_better_quartile() -> None:
     assert taxis.headroom == 0
     assert food.share == pytest.approx(1.0)
     [row] = [r for r in result.summary if (r.scenario, r.line) == ("base", "liquid")]
-    assert row.headroom_share_of_gap == pytest.approx(125 / row.gap)  # type: ignore[operator]
+    assert row.gap is not None
+    assert row.headroom_share_of_gap == pytest.approx(125 / row.gap)
 
 
 def test_headroom_is_converted_to_dollars() -> None:

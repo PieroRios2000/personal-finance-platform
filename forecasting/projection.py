@@ -340,9 +340,8 @@ def project(inputs: Inputs) -> Projection:
             months = _first_month(
                 [bool(v >= plan.goal_amount - _EPSILON) for v in goal[line]]
             )
-            gap = (
-                None if required[line] is None else max(0.0, required[line] - projected)  # type: ignore[operator]
-            )
+            needed = required[line]
+            gap = None if needed is None else max(0.0, needed - projected)
             summary.append(
                 GoalSummary(
                     scenario,
