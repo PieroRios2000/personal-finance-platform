@@ -43,3 +43,19 @@ make monitor-category-drift    # has the data changed shape? a prompt, not a ver
 
 Training pins the saved model to the user it was trained for. Run it again after any
 re-labelling. Record the new macro-F1 (reviewed labels, folds) in `docs/operations-log.md`.
+
+## 4. Plan and forecast
+
+```bash
+make export-plan          # the workbook with your fixed charges and the goal in dollars
+# edit ~/finance-data/plan/plan-de-ahorro.xlsx (Meta sheet: usd_to_pen, goal, emergency account), save, then:
+make import-plan          # validates everything, nothing is written if a field is wrong
+make build
+make forecast             # per-category spend for the next three months, the goal projection
+```
+
+Only the first two steps change from month to month when you edit the plan: if it did not
+change, `make build` then `make forecast` is enough. Open the **Forecast & goal** section of
+the dashboard. **Forecast: realized vs expected** is empty on the first run: from the second
+month on it compares last month's forecast with what happened (a ratio near 1 is as good as
+the backtest, red above 2). Where each table lives is in `docs/where-to-look.md`.

@@ -176,8 +176,11 @@ failed with "dagster-webserver must be installed").
 
 `http://localhost:8088` → *Sign in with Dex* → your email and password. What is there:
 
-- **Dashboards** → `PFP finance`: 17 charts in sections (cash flow, capital, balances, investments,
-  categories, reconciliation, upload).
+- **Dashboards** → `PFP finance`: 25 charts in sections (cash flow, capital, balances, investments,
+  categories, forecast and goal, reconciliation, upload). The **Forecast & goal** section reads
+  the gold tables `rpt_goal_*`, `rpt_emergency_fund`, `rpt_category_forecast`,
+  `rpt_category_variance` and `rpt_forecast_realized` (monthly step: `make forecast`,
+  [monthly routine](monthly-routine.md)).
 - **Charts** (`/chart/list/`): each chart's query and SQL (*View query*). **Datasets** (`/tablemodelview/list/`):
   the gold tables each chart reads.
 - **SQL Lab** (`/sqllab/`) → database `PFP gold (read-only)`: any `SELECT` on `gold.*`. You only see

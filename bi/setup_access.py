@@ -29,6 +29,7 @@ TABLES = (
     "rpt_goal_headroom",
     "rpt_category_forecast",
     "rpt_category_variance",
+    "rpt_forecast_realized",
 )
 RLS_NAME = "Per-user data (T41)"
 RLS_CLAUSE = "user_id = '{{ current_username() }}'"
