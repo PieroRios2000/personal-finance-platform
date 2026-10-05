@@ -408,8 +408,8 @@ position:
     - GRID_ID
     - ROW-12
     meta:
-      width: 8
-      height: 34
+      width: 7
+      height: 46
       chartId: 18
       uuid: 5c38f876-c968-5e07-b6da-4d628677ffb2
       sliceName: 'Goal: when you reach it'
@@ -422,19 +422,25 @@ position:
     - GRID_ID
     - ROW-12
     meta:
-      width: 4
-      height: 34
+      width: 5
+      height: 46
       code: '### How to read the forecast and the goal
 
 
-        - Everything about the goal is in **US$**, at the `usd_to_pen` rate you set
-        in the Meta sheet.
+        - Everything about the goal is in **US$**. Type a **Goal (US$)**, an **Exchange
+        rate (PEN per US$)**, the **Emergency months** and a **Forecast horizon (months)**
+        in the filter bar and press *Apply filters*; left empty, each one takes the
+        value of the Meta sheet.
+
+        - The forecast goes 36 months ahead. The **interval** (p10 to p90) is shown
+        only where the backtest measured it (up to 12 months); beyond that the table
+        leaves it blank and only the median (p50) is a forecast.
 
         - **Optimistic, base and cautious** are three sets of assumptions (low, median
         and high spending; high, median and low income), not a confidence interval.
 
-        - The last forecast month is held flat after three months, and the investments
-        are held flat at their last valuation.
+        - Past the forecast the last month is held flat, and the investments are held
+        flat at their last valuation.
 
         - Savings in the emergency account fill the emergency fund; new savings fill
         it first, then go to the goal.
@@ -442,9 +448,12 @@ position:
         - **Forecast: how far to trust it** marks the categories that keep the **median
         baseline**: no model beat it in the backtest.
 
-        - **Forecast: realized vs expected** appears from the second monthly run:
-        a ratio near 1 means last month''s forecast missed as little as it did in
-        the backtest, well above 1 means worse.
+        - **Forecast: realized vs expected**: a row marked **backtest** is the latest
+        run''s one-month-ahead forecast of a month that already closed (how the model
+        would have done); a row marked **realized** is an older run''s forecast against
+        the month that then closed, from the second monthly run on. For realized rows,
+        a ratio near 1 means it missed as little as in the backtest, well above 1
+        means worse.
 
 
         The date range does not apply here: these tables look ahead.'

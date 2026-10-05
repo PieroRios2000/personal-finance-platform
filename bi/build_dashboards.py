@@ -1081,19 +1081,27 @@ NOTE_TEXT = (
 )
 FORECAST_NOTE_TEXT = (
     "### How to read the forecast and the goal\n\n"
-    "- Everything about the goal is in **US$**, at the `usd_to_pen` rate you set in "
-    "the Meta sheet.\n"
+    "- Everything about the goal is in **US$**. Type a **Goal (US$)**, an **Exchange "
+    "rate (PEN per US$)**, the **Emergency months** and a **Forecast horizon "
+    "(months)** in the filter bar and press *Apply filters*; left empty, each one "
+    "takes the value of the Meta sheet.\n"
+    "- The forecast goes 36 months ahead. The **interval** (p10 to p90) is shown only "
+    "where the backtest measured it (up to 12 months); beyond that the table leaves "
+    "it blank and only the median (p50) is a forecast.\n"
     "- **Optimistic, base and cautious** are three sets of assumptions (low, median "
     "and high spending; high, median and low income), not a confidence interval.\n"
-    "- The last forecast month is held flat after three months, and the investments "
-    "are held flat at their last valuation.\n"
+    "- Past the forecast the last month is held flat, and the investments are held "
+    "flat at their last valuation.\n"
     "- Savings in the emergency account fill the emergency fund; new savings fill it "
     "first, then go to the goal.\n"
     "- **Forecast: how far to trust it** marks the categories that keep the "
     "**median baseline**: no model beat it in the backtest.\n"
-    "- **Forecast: realized vs expected** appears from the second monthly run: a "
-    "ratio near 1 means last month's forecast missed as little as it did in the "
-    "backtest, well above 1 means worse.\n\n"
+    "- **Forecast: realized vs expected**: a row marked **backtest** is the latest "
+    "run's one-month-ahead forecast of a month that already closed (how the model "
+    "would have done); a row marked **realized** is an older run's forecast against "
+    "the month that then closed, from the second monthly run on. For realized rows, "
+    "a ratio near 1 means it missed as little as in the backtest, well above 1 "
+    "means worse.\n\n"
     "The date range does not apply here: these tables look ahead."
 )
 NOTES = {NOTE: NOTE_TEXT, FORECAST_NOTE: FORECAST_NOTE_TEXT}
@@ -1117,7 +1125,7 @@ LAYOUT: list[list[tuple[str, int, int]]] = [
     [("Investments: return and", 12, 32)],
     [("Investments: return per", 8, 50), (NOTE, 4, 50)],
     [(f"{SECTION}Forecast & goal", 12, 6)],
-    [("Goal: when you reach it", 8, 34), (FORECAST_NOTE, 4, 34)],
+    [("Goal: when you reach it", 7, 46), (FORECAST_NOTE, 5, 46)],
     [("Goal: projected progress", 12, 50)],
     [("Emergency fund", 12, 34)],
     [("Adjust: where", 12, 50)],
