@@ -793,6 +793,16 @@ your whole plan. It also puts the file back to mode 0600 if Excel on Windows re-
 wider permissions. `Meta.emergency_account` must be the exact name of one of your asset accounts
 (the `bank` of a savings account or the manual Excel's `cuenta`). No new dependency or variable.
 
+```bash
+make forecast               # after `make build`: per-category forecast of the next 3 months (T59)
+```
+
+It reads the closed months from gold, leaves out the charges your plan calls fixed or ignored,
+and writes bronze, then builds `silver.spend_forecast*` and `gold.fct_spend_forecast`,
+`rpt_category_variance` and `rpt_forecast_series_quality`. The terminal shows counts only;
+ratios and counts go to MLflow (`~/finance-data/mlflow.db`, or `MLFLOW_TRACKING_URI`). No new
+dependency: `mlflow` was added with the categorization model (T52).
+
 ## Reproducing CI locally (`make ci-local`)
 
 A PR can fail in CI for a reason that never shows on your machine: a variable CI does not set, a

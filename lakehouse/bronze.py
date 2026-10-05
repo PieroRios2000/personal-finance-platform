@@ -291,31 +291,21 @@ def _delete_file_rows(name: str, column: str, user_id: str, file_sha256: str) ->
     )
 
 
-def _delete_user_rows(name: str, user_id: str) -> None:
+def _delete_user_rows(name: str, user_id: str, run_month: date | None = None) -> None:
     """Delete every row of `bronze/<name>` that belongs to `user_id` -- the whole-set
     replace `replace_category_labels()` needs, since a label file has no per-file
-    identity of its own to scope a narrower delete by."""
+    identity of its own to scope a narrower delete by. With `run_month`, only that
+    forecast run's rows."""
     uri = table_uri(name)
     options = storage_options()
     if not DeltaTable.is_deltatable(uri, storage_options=options):
         return
-    DeltaTable(uri, storage_options=options).delete(
-        predicate=f"user_id = {_sql_literal(user_id)}"
-    )
-
-
-def _delete_run_rows(name: str, user_id: str, run_month: date) -> None:
-    """Delete `user_id`'s rows of `bronze/<name>` for one forecast run."""
-    uri = table_uri(name)
-    options = storage_options()
-    if not DeltaTable.is_deltatable(uri, storage_options=options):
-        return
-    DeltaTable(uri, storage_options=options).delete(
-        predicate=(
-            f"user_id = {_sql_literal(user_id)} "
-            f"AND run_month = CAST({_sql_literal(run_month.isoformat())} AS DATE)"
+    predicate = f"user_id = {_sql_literal(user_id)}"
+    if run_month is not None:
+        predicate += (
+            f" AND run_month = CAST({_sql_literal(run_month.isoformat())} AS DATE)"
         )
-    )
+    DeltaTable(uri, storage_options=options).delete(predicate=predicate)
 
 
 def replace_category_labels(
@@ -652,8 +642,8 @@ def replace_forecast_run(
     closed month), keeping every other run: running twice in a month changes nothing,
     and the older forecasts stay to be compared with the actuals that arrive later
     (T62). Both tables get the same `created_at`."""
-    _delete_run_rows("spend_forecasts", user_id, run_month)
-    _delete_run_rows("spend_forecast_series", user_id, run_month)
+    _delete_user_rows("spend_forecasts", user_id, run_month)
+    _delete_user_rows("spend_forecast_series", user_id, run_month)
     created_at = datetime.now(UTC)
     if forecasts:
         _append(

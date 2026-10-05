@@ -1,14 +1,14 @@
 ---
 type: component
 phase: 3
-status: in progress (T56, T57, T58 built, rest planned)
+status: in progress (T56-T59 built, rest planned)
 task: T56, T57, T58, T59, T60, T61, T62, T63
 ---
 
 # Spend forecast and savings goal
 
 A per-category monthly spend forecast with honest uncertainty, and the time to reach a savings
-goal the owner sets. Only T56, T57 and T58 are built (fixed-expense detection, `make export-plan`, `make import-plan` and the forecast core); the
+goal the owner sets. Only T56 to T59 are built (fixed-expense detection, `make export-plan`, `make import-plan`, the forecast core and `make forecast`); the
 specification is
 [`docs/specs/category-forecast-and-savings-goal.md`](../../docs/specs/category-forecast-and-savings-goal.md)
 and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md).
@@ -20,8 +20,8 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
 | `forecasting/` (pure functions) | Fixed-expense detection (**built, T56**), series builder, five candidates and a trailing-median baseline, rolling-origin backtest, empirical intervals (**built, T58**), projection | T56, T58, T60 |
 | `make export-plan` (**built, T56**) / `make import-plan` (**built, T57**) | The owner's workbook (`~/finance-data/plan/`): fixed-expense proposals to confirm, the dollar goal, `usd_to_pen`, the emergency settings | T56, T57 |
 | Bronze `plan_fixed_items`, `plan_goal` → silver `plan_fixed_items`, `plan_goal` (**built, T57**) | The owner's confirmed plan, replaced whole on each import; empty until the first import | T57 |
-| `make forecast` | Reads gold, writes bronze forecast and projection tables, logs ratios and counts to MLflow, builds the new dbt models | T59 |
-| Gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality`, `rpt_fixed_expenses` (**built, T57**), `rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund` | What the dashboard reads | T57, T59, T60 |
+| `make forecast` (**built, T59**) | Reads gold, writes the bronze forecast tables, logs ratios and counts to MLflow, builds the forecast dbt models; the projection tables join it in T60 | T59, T60 |
+| Gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality` (**built, T59**), `rpt_fixed_expenses` (**built, T57**), `rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund` | What the dashboard reads | T57, T59, T60 |
 | Superset "Forecast & goal" section | Emergency target and gap, time to goal as a range for both lines (`liquid`, `with_risk`), categories above expected, the adjust view, how far to trust each series | T61 |
 | Realized-vs-backtest error chart | The monitor; joins the monthly routine | T62 |
 | Recurrence as classifier features | Follow-up experiment, null result allowed | T63 |
@@ -81,6 +81,26 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
   optimistic; on pure noise the selection rule still switches away from the baseline in roughly
   12-27 % of series (winner's curse), which is why the 5 % margin and the win rate are both
   required.
+
+## What T59 built
+
+- `scripts/forecast.py` (`make forecast`): reads the monthly variable spending from gold (same
+  definition as `export-plan`), drops the plan's fixed and ignored charges, runs the T58 core and
+  writes two bronze Delta tables, `spend_forecasts` (kind `forecast` for horizons 1-3 and kind
+  `backtest` for the one-step forecasts of closed months, with their `actual`) and
+  `spend_forecast_series` (model, history, origins, `mae_rel`, `coverage`, flags). The column is
+  `model_name`, not `model`, which is a reserved word for the SQL linter.
+- A run is replaced by `(user_id, run_month)`; older runs stay, so the forecast made last month
+  can be compared with this month's actual (T62). Running twice in a month changes nothing.
+- The `Total` series is excluded from the pooled relative errors that give short series an
+  interval: it is a sum of the categories already in the pool.
+- MLflow gets ratios and counts only (experiment `spend-forecast`, tracking store
+  `~/finance-data/mlflow.db` or `MLFLOW_TRACKING_URI`); the terminal gets counts only.
+- dbt: silver `spend_forecasts`, `spend_forecast_series` (empty with the same columns until the
+  first run); gold `fct_spend_forecast`, `rpt_forecast_series_quality` and `rpt_category_variance`
+  (last closed month's actual against the interval of the forecast made without it:
+  `above`/`within`/`below`/`no_interval`, plus how many of the last six months were above).
+  All carry `user_id` for row-level security; the Superset datasets and their rules come with T61.
 
 ## How it fits
 
