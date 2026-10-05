@@ -281,6 +281,60 @@ models:
         data_tests:
           - not_null
 
+  - name: plan_fixed_items
+    description: >
+      Silver (T57, ADR 0048): the owner's plan of recurring expenses, one row per
+      `(bank, description, currency)` with the `kind` he chose and his
+      `expected_amount`. Empty (same columns) until a plan has been imported
+      (`make import-plan`).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, bank, description, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: kind
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [fixed, variable, ignore]
+      - name: currency
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [PEN, USD]
+      - name: expected_amount
+        description: Required (and positive) for `fixed`, optional for the other kinds.
+        data_tests:
+          - not_null:
+              config:
+                where: "kind = 'fixed'"
+
+  - name: plan_goal
+    description: >
+      Silver (T57, ADR 0048): the owner's savings goal in US dollars (`goal_currency`
+      is always USD), the `usd_to_pen` rate (soles per dollar) and the emergency-fund
+      settings; one row per user. Empty (same columns) until a plan has been imported.
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+          - unique
+      - name: goal_amount
+        data_tests:
+          - not_null
+      - name: usd_to_pen
+        data_tests:
+          - not_null
+      - name: emergency_basis
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [all, fixed_only]
+
   - name: category_predictions
     description: >
       Silver (T54, ADR 0045): the trained model's own guess per `(bank,

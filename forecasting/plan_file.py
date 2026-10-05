@@ -6,7 +6,9 @@ names are Spanish like the owner's other workbooks; headers are English like the
 labeling file.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from dataclasses import field as dataclass_field
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
@@ -71,7 +73,8 @@ _INSTRUCTIONS = (
     "quedar vacíos.",
     "5. Guarda el archivo. Si vuelves a correr make export-plan se conservan tus "
     "elecciones y solo se agregan los gastos nuevos que aparezcan.",
-    "6. El siguiente paso, make import-plan, llega con la tarea T57.",
+    "6. Cuando termines, corre make import-plan: revisa todo el archivo, te dice "
+    "fila por fila qué corregir y no carga nada hasta que esté todo bien.",
 )
 _NOT_DETECTED = f"no longer detected in the last {WINDOW_MONTHS} months"
 
@@ -88,6 +91,7 @@ class PlanItem:
     kind: str
     expected_amount: float | None
     note: str = ""
+    row: int = dataclass_field(default=0, compare=False)
 
     @property
     def key(self) -> tuple[str, str, str]:
@@ -218,7 +222,29 @@ def _system_number(value: object, column: str, row: int) -> float:
         ) from None
 
 
-def read_plan(path: Path) -> PlanFile:
+def _read_item(cells: Mapping[str, object], number: int) -> PlanItem:
+    return PlanItem(
+        bank=_text(cells["bank"]),
+        description=_text(cells["description"]),
+        currency=_text(cells["currency"]),
+        category=_text(cells["category"]),
+        months_seen=int(_system_number(cells["months_seen"], "months_seen", number)),
+        typical_amount=_system_number(
+            cells["typical_amount"], "typical_amount", number
+        ),
+        proposed_kind=_text(cells["proposed_kind"]),
+        kind=_text(cells["kind"]),
+        expected_amount=_expected_amount(cells["expected_amount"], number),
+        note=_text(cells["note"]),
+        row=number,
+    )
+
+
+def read_plan(path: Path, problems: list[str] | None = None) -> PlanFile:
+    """The workbook as a `PlanFile`. A cell that is not a number raises `ValueError`
+    naming its column and row, unless `problems` is given: then that message is
+    collected, the row is left out and reading goes on, so the importer can list every
+    problem at once."""
     workbook = load_workbook(path, data_only=True)
     for name in (SHEET_ITEMS, SHEET_META):
         if name not in workbook.sheetnames:
@@ -230,24 +256,12 @@ def read_plan(path: Path) -> PlanFile:
         cells = dict(zip(ITEM_COLUMNS, row, strict=False))
         if not _text(cells["description"]):
             continue
-        items.append(
-            PlanItem(
-                bank=_text(cells["bank"]),
-                description=_text(cells["description"]),
-                currency=_text(cells["currency"]),
-                category=_text(cells["category"]),
-                months_seen=int(
-                    _system_number(cells["months_seen"], "months_seen", number)
-                ),
-                typical_amount=_system_number(
-                    cells["typical_amount"], "typical_amount", number
-                ),
-                proposed_kind=_text(cells["proposed_kind"]),
-                kind=_text(cells["kind"]),
-                expected_amount=_expected_amount(cells["expected_amount"], number),
-                note=_text(cells["note"]),
-            )
-        )
+        try:
+            items.append(_read_item(cells, number))
+        except ValueError as error:
+            if problems is None:
+                raise
+            problems.append(str(error))
 
     meta: dict[str, object] = dict.fromkeys(META_DEFAULTS)
     for field, value, *_ in workbook[SHEET_META].iter_rows(min_row=2, values_only=True):

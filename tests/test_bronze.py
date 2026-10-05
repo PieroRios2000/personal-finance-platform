@@ -710,3 +710,146 @@ def test_distinct_bank_descriptions_normalizes_padding_and_case(
     assert bronze.distinct_bank_descriptions("piero") == [
         ("BCP", "UBER TRIP HELP.UBER.COM")
     ]
+
+
+def _plan_item(
+    description: str = "PLANTED RENT", **overrides: Any
+) -> bronze.PlanItemRow:
+    fields: dict[str, Any] = {
+        "bank": "BCP",
+        "description": description,
+        "currency": "PEN",
+        "category": "Servicios",
+        "months_seen": 6,
+        "typical_amount": 1200.0,
+        "proposed_kind": "fixed",
+        "kind": "fixed",
+        "expected_amount": 1250.5,
+        "note": "",
+    }
+    fields.update(overrides)
+    return bronze.PlanItemRow(**fields)
+
+
+def _plan_goal(**overrides: Any) -> bronze.PlanGoalRow:
+    fields: dict[str, Any] = {
+        "goal_amount": 10000.0,
+        "usd_to_pen": 3.7525,
+        "emergency_months": 6,
+        "emergency_basis": "all",
+        "emergency_account": "Ripley",
+        "target_date": date(2027, 12, 31),
+        "income_pen_override": None,
+        "income_usd_override": None,
+    }
+    fields.update(overrides)
+    return bronze.PlanGoalRow(**fields)
+
+
+def _plan_table(lakehouse: Path, name: str) -> Any:
+    from deltalake import DeltaTable
+
+    return DeltaTable(str(lakehouse / "bronze" / name)).to_pyarrow_table().to_pylist()
+
+
+def test_replace_plan_writes_one_row_per_item_and_one_goal_row(
+    lakehouse: Path,
+) -> None:
+    bronze.replace_plan(
+        "piero",
+        [_plan_item("PLANTED RENT"), _plan_item("PLANTED GYM", kind="variable")],
+        _plan_goal(),
+    )
+
+    items = _plan_table(lakehouse, "plan_fixed_items")
+    goal = _plan_table(lakehouse, "plan_goal")
+    assert sorted((r["description"], r["kind"]) for r in items) == [
+        ("PLANTED GYM", "variable"),
+        ("PLANTED RENT", "fixed"),
+    ]
+    assert {r["user_id"] for r in items} == {"piero"}
+    assert items[0]["expected_amount"] == Decimal("1250.50")
+    assert len(goal) == 1
+    assert goal[0]["goal_amount"] == Decimal("10000.00")
+    assert goal[0]["usd_to_pen"] == 3.7525
+    assert goal[0]["goal_currency"] == "USD"
+    assert goal[0]["target_date"] == date(2027, 12, 31)
+    assert goal[0]["income_pen_override"] is None
+
+
+def test_replace_plan_stamps_both_tables_with_the_same_load_time(
+    lakehouse: Path,
+) -> None:
+    bronze.replace_plan("piero", [_plan_item()], _plan_goal())
+
+    items = _plan_table(lakehouse, "plan_fixed_items")
+    goal = _plan_table(lakehouse, "plan_goal")
+    assert items[0]["loaded_at"] == goal[0]["loaded_at"]
+
+
+def test_replace_plan_replaces_the_whole_plan_not_appends(lakehouse: Path) -> None:
+    bronze.replace_plan(
+        "piero", [_plan_item("PLANTED RENT"), _plan_item("PLANTED GYM")], _plan_goal()
+    )
+    bronze.replace_plan("piero", [_plan_item("PLANTED RENT")], _plan_goal(usd_to_pen=4))
+
+    items = _plan_table(lakehouse, "plan_fixed_items")
+    goal = _plan_table(lakehouse, "plan_goal")
+    assert [r["description"] for r in items] == ["PLANTED RENT"]
+    assert [r["usd_to_pen"] for r in goal] == [4.0]
+
+
+def test_replace_plan_is_scoped_to_the_user(lakehouse: Path) -> None:
+    bronze.replace_plan("ana", [_plan_item("ANA RENT")], _plan_goal())
+    bronze.replace_plan("bea", [_plan_item("BEA RENT")], _plan_goal())
+    bronze.replace_plan("ana", [_plan_item("ANA NEW")], _plan_goal())
+
+    rows = sorted(
+        (r["user_id"], r["description"])
+        for r in _plan_table(lakehouse, "plan_fixed_items")
+    )
+    assert rows == [("ana", "ANA NEW"), ("bea", "BEA RENT")]
+    assert sorted(r["user_id"] for r in _plan_table(lakehouse, "plan_goal")) == [
+        "ana",
+        "bea",
+    ]
+
+
+def test_replace_plan_with_no_items_still_writes_the_goal(lakehouse: Path) -> None:
+    bronze.replace_plan("piero", [_plan_item()], _plan_goal())
+
+    bronze.replace_plan("piero", [], _plan_goal())
+
+    assert _plan_table(lakehouse, "plan_fixed_items") == []
+    assert len(_plan_table(lakehouse, "plan_goal")) == 1
+
+
+def _empty_statement(
+    bank: str, *, user_id: str = "piero", kind: str = "asset"
+) -> tuple[Statement, str]:
+    tag = f"{user_id}:{bank}".encode()
+    statement = _statement(
+        user_id=user_id,
+        bank=bank,
+        account_id=hashlib.sha256(tag).hexdigest(),
+        account_kind=kind,
+        closing_balance=Decimal("100.00"),
+        transactions=[],
+    )
+    return statement, hashlib.sha256(tag + b"file").hexdigest()
+
+
+def test_asset_account_names_are_the_users_asset_banks_only() -> None:
+    for bank, user_id, kind in [
+        ("BCP", "piero", "asset"),
+        ("Ripley", "piero", "asset"),
+        ("Scotiabank", "piero", "liability"),
+        ("Other", "ana", "asset"),
+    ]:
+        bronze.write_statement(*_empty_statement(bank, user_id=user_id, kind=kind))
+
+    assert bronze.asset_account_names("piero") == {"BCP", "Ripley"}
+
+
+def test_asset_account_names_on_a_fresh_lake_is_empty() -> None:
+    assert bronze.asset_account_names("piero") == set()

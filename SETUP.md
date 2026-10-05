@@ -780,7 +780,18 @@ make export-plan PFP_USER=piero
 ```
 
 Run it again whenever you like: your choices stay, new expenses are appended, and a row that
-stopped appearing is kept with a note. The import (`make import-plan`) comes with T57.
+stopped appearing is kept with a note.
+
+```bash
+make import-plan            # reads ~/finance-data/plan/plan-de-ahorro.xlsx; WORKBOOK=... for another file
+make build                  # silver.plan_* and gold.rpt_fixed_expenses
+```
+
+The import (T57) checks the whole file and lists every problem at once by sheet, row number or
+field name (never the values you typed); if there is any, nothing is written. A good file replaces
+your whole plan. It also puts the file back to mode 0600 if Excel on Windows re-saved it with
+wider permissions. `Meta.emergency_account` must be the exact name of one of your asset accounts
+(the `bank` of a savings account or the manual Excel's `cuenta`). No new dependency or variable.
 
 ## Reproducing CI locally (`make ci-local`)
 
