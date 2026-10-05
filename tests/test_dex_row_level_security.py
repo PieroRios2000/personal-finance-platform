@@ -35,7 +35,7 @@ def test_the_rule_is_a_base_filter_that_exempts_only_admin() -> None:
     assert "rls.roles = [admin]" in _SETUP_ACCESS
 
 
-def test_it_grants_gamma_not_admin_on_the_five_gold_tables() -> None:
+def test_it_grants_gamma_not_admin_on_the_gold_tables() -> None:
     assert "TABLES = (" in _SETUP_ACCESS
     for table in (
         "rpt_movements",
@@ -43,6 +43,12 @@ def test_it_grants_gamma_not_admin_on_the_five_gold_tables() -> None:
         "rpt_balances",
         "rpt_investments",
         "rpt_reconciliation",
+        "rpt_goal_projection",
+        "rpt_goal_summary",
+        "rpt_emergency_fund",
+        "rpt_goal_headroom",
+        "rpt_category_forecast",
+        "rpt_category_variance",
     ):
         assert f'"{table}"' in _SETUP_ACCESS
     assert 'find_role("Gamma")' in _SETUP_ACCESS

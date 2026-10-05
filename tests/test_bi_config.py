@@ -16,6 +16,23 @@ _BI = _ROOT / "bi"
 
 
 _DATASETS = {"rpt_movements": 2, "rpt_investments": 1, "rpt_balances": 3}
+# The "Forecast & goal" charts (T61) look ahead, so the dashboard's date range, which
+# narrows past months, has nothing to act on.
+_FORECAST_PREFIXES = (
+    "Goal:",
+    "Emergency fund",
+    "Adjust:",
+    "Forecast:",
+    "Categories above",
+)
+_FORECAST_TABLES = {
+    "rpt_goal_projection",
+    "rpt_goal_summary",
+    "rpt_emergency_fund",
+    "rpt_goal_headroom",
+    "rpt_category_forecast",
+    "rpt_category_variance",
+}
 
 
 def _compose() -> dict[str, Any]:
@@ -129,7 +146,7 @@ def test_every_dated_chart_has_a_time_range_filter_for_the_date_range() -> None:
     """Superset's Date range filter only narrows a chart that already has a time-range
     (TEMPORAL_RANGE) filter on its date column; without one it does nothing."""
     for name, chart in _charts().items():
-        if name.startswith(("Reconciliation", "Upload")):  # not per month
+        if name.startswith(("Reconciliation", "Upload", *_FORECAST_PREFIXES)):
             assert chart[3]["adhoc_filters"] == []
             continue
         ranges = [
@@ -441,3 +458,100 @@ def test_the_link_is_the_portals_address_from_the_environment() -> None:
     assert 'href="{{upload_url}}"' in template and "{{#if movements}}" in template
     assert '"upload_url": lambda: os.environ.get("PFP_UPLOAD_URL", "")' in config
     assert environment["PFP_UPLOAD_URL"].startswith("${PFP_UPLOAD_PUBLIC_URL:-http://")
+
+
+def _forecast_charts() -> dict[str, tuple[str, str, str, dict[str, Any]]]:
+    return {n: c for n, c in _charts().items() if n.startswith(_FORECAST_PREFIXES)}
+
+
+def test_forecast_and_goal_is_its_own_section_after_the_investments() -> None:
+    builder = _builder()
+    rows = [[p for p, _, _ in row] for row in builder.LAYOUT]
+    title = rows.index([f"{builder.SECTION}Forecast & goal"])
+    after = [p for row in rows[title + 1 :] for p in row]
+    forecast = [p for p in after if p.startswith(_FORECAST_PREFIXES + (builder.NOTE,))]
+
+    assert rows.index(["Investments: return and"]) < title < rows.index(["Movements"])
+    assert len(forecast) >= 8
+    assert {c[0] for c in _forecast_charts().values()} == _FORECAST_TABLES
+
+
+def test_every_dashboard_dataset_is_row_level_secured() -> None:
+    """A dataset that `bi/setup_access.py` does not list is not filtered by `user_id`:
+    a second account would read the owner's rows (ADR 0036)."""
+    text = (_BI / "setup_access.py").read_text()
+    listed = set(re.findall(r'"(rpt_\w+)"', text))
+
+    assert {c[0] for c in _builder().CHARTS} <= listed
+
+
+def test_the_goal_answer_shows_both_lines_and_all_three_scenarios() -> None:
+    chart = _charts()["Goal: when you reach it"]
+    text = json.dumps(chart[3])
+    template = chart[3]["handlebarsTemplate"]
+
+    assert chart[0] == "rpt_goal_summary"
+    for scenario in ("optimistic", "base", "cautious"):
+        assert f"scenario = '{scenario}'" in text
+    assert "with_risk" in text and "liquid" in text
+    assert "not reached" in text  # a goal out of reach is never a number
+    assert "not a confidence interval" in template
+
+
+def test_the_projection_chart_draws_every_line_and_scenario_in_dollars() -> None:
+    chart = _charts()["Goal: projected progress"]
+
+    assert chart[0] == "rpt_goal_projection"
+    assert chart[2] == "echarts_timeseries_line"
+    assert "scenario" in json.dumps(chart[3]["groupby"])
+    assert "line" in json.dumps(chart[3]["groupby"])
+    assert "US$" in chart[3]["y_axis_title"]
+
+
+def test_the_emergency_fund_uses_the_base_scenario_and_shows_its_warnings() -> None:
+    chart = _charts()["Emergency fund"]
+    text = json.dumps(chart[3]["adhoc_filters"])
+    template = chart[3]["handlebarsTemplate"]
+
+    assert chart[0] == "rpt_emergency_fund"
+    assert "scenario = 'base'" in text  # the target never moves with the scenario
+    for flag in (
+        "essential_over_income",
+        "target_over_two_years_income",
+        "balance_mismatch",
+    ):
+        assert f"{{{{#if {flag}}}}}" in template
+
+
+def test_dollar_tables_are_not_hidden_by_the_currency_filter() -> None:
+    """The adjust view is in dollars whatever a category is charged in; a `currency`
+    column would let the dashboard's Currency filter drop the soles or dollars rows."""
+    chart = _charts()["Adjust: where the plan has room"]
+    columns = chart[3]["all_columns"]
+
+    assert chart[0] == "rpt_goal_headroom"
+    assert "currency" not in columns and "source_currency" in columns
+    for name in ("Forecast: next three months", "Categories above expected"):
+        assert "currency" in _charts()[name][3]["all_columns"]  # in its own currency
+
+
+def test_the_forecast_table_reads_the_latest_run_only() -> None:
+    chart = _charts()["Forecast: next three months"]
+
+    assert chart[0] == "rpt_category_forecast"
+    assert {"category", "target_month", "p10", "p50", "p90"} <= set(
+        chart[3]["all_columns"]
+    )
+
+
+def test_the_dashboard_says_plainly_when_the_baseline_is_the_model() -> None:
+    chart = _charts()["Forecast: how far to trust it"]
+    text = json.dumps(chart[3])
+
+    assert "baseline_used" in text
+    assert "median baseline" in chart[3]["handlebarsTemplate"]
+
+
+def test_no_forecast_chart_uses_a_sub_query_which_superset_refuses() -> None:
+    for name, chart in _forecast_charts().items():
+        assert "(select" not in json.dumps(chart[3]).lower(), name
