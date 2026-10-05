@@ -127,6 +127,18 @@ model is worth having. The full design is in
 - `rpt_category_variance` compares the last closed month with the forecast made without it (a
   backtest row), so it works from the first run and needs no previous month's run.
 
+## Amendments (T60)
+
+- The projection output is four bronze tables (`goal_projection`, `goal_summary`, `emergency_fund`,
+  `goal_headroom`), each with silver and gold copies. `goal_projection` and `goal_summary` carry a
+  `line` column (`liquid`, `with_risk`), so both goal lines are always available. They are replaced
+  as one set per user: a refused or empty projection clears the old rows.
+- Past the 3 forecast months the last month's spending is held flat; the investments are held flat
+  at their last valuation.
+- Income history starts at the owner's first income month (not at the start of spending), so a short
+  income history is refused instead of diluted with zeros.
+- Amounts are rounded half-even to cents in bronze.
+
 ## Related
 
 - [Spec](../../docs/specs/category-forecast-and-savings-goal.md)
