@@ -146,7 +146,10 @@ def test_every_dated_chart_has_a_time_range_filter_for_the_date_range() -> None:
     """Superset's Date range filter only narrows a chart that already has a time-range
     (TEMPORAL_RANGE) filter on its date column; without one it does nothing."""
     for name, chart in _charts().items():
-        if name.startswith(("Reconciliation", "Upload", *_FORECAST_PREFIXES)):
+        if name.startswith(_FORECAST_PREFIXES):  # looks ahead: any filter is a WHERE
+            assert all(f["expressionType"] == "SQL" for f in chart[3]["adhoc_filters"])
+            continue
+        if name.startswith(("Reconciliation", "Upload")):  # not per month
             assert chart[3]["adhoc_filters"] == []
             continue
         ranges = [
@@ -250,7 +253,7 @@ def test_every_chart_has_a_cell_in_the_layout() -> None:
         p
         for row in builder.LAYOUT
         for p, _, _ in row
-        if p != builder.NOTE and not p.startswith(builder.SECTION)
+        if not p.startswith((builder.NOTE, builder.SECTION))
     ]
 
     for name in names:
@@ -447,7 +450,7 @@ def test_the_dashboard_starts_with_a_link_to_the_upload_portal() -> None:
 def test_the_link_is_the_portals_address_from_the_environment() -> None:
     metrics = [
         m["sqlExpression"]
-        for m in _builder().CHARTS[-1][3]["metrics"]
+        for m in _charts()["Upload your files"][3]["metrics"]
         if "upload_url" in m["sqlExpression"]
     ]
     template = (_BI / "templates" / "upload_prompt.hbs").read_text()

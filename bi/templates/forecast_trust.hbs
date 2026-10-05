@@ -1,0 +1,16 @@
+<table class="fc">
+  <thead>
+    <tr><th>Category</th><th>Currency</th><th>Forecast made with</th><th class="num">Months of history</th>
+      <th class="num">Typical miss</th><th class="num">Inside the range</th></tr>
+  </thead>
+  <tbody>
+  {{#each data}}
+    <tr>
+      <td>{{category}}</td><td>{{currency}}</td>
+      <td>{{#if baseline_used}}<span class="badge baseline">median baseline</span>{{else}}<span class="badge model">{{model_name}}</span>{{/if}}
+        {{#if low_history}} <span class="badge little">little history</span>{{/if}}</td>
+      <td class="num">{{n_months}}</td><td class="num">{{mae}}</td><td class="num">{{inside}}</td>
+    </tr>
+  {{/each}}
+  </tbody>
+</table>

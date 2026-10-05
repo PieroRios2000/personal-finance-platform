@@ -1,0 +1,17 @@
+{{#each data}}
+<table class="fc">
+  <thead><tr><th>Counting</th><th class="num">Optimistic</th><th class="num">Base</th>
+    <th class="num">Cautious</th><th class="num">Needs a month</th></tr></thead>
+  <tbody>
+    <tr><td>Liquid savings only</td>
+      <td class="num">{{optimistic_liquid}}</td><td class="num">{{base_liquid}}</td>
+      <td class="num">{{cautious_liquid}}</td><td class="num">{{required_liquid}}</td></tr>
+    <tr><td>Liquid + investments</td>
+      <td class="num">{{optimistic_with_risk}}</td><td class="num">{{base_with_risk}}</td>
+      <td class="num">{{cautious_with_risk}}</td><td class="num">{{required_with_risk}}</td></tr>
+  </tbody>
+</table>
+<div class="foot">At the base pace you save {{projected}} a month. Optimistic, base and
+  cautious are three sets of assumptions, not a confidence interval. &ldquo;Needs a month&rdquo;
+  is what reaches the goal by your target date (a dash if the Meta sheet has none).</div>
+{{/each}}

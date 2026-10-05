@@ -1,0 +1,18 @@
+{{#each data}}
+<div class="fund">
+  <div class="kpis">
+    <div class="kpi cap"><div class="label">Emergency target</div>
+      <div class="value">{{target}}</div>
+      <div class="note">about {{months_of_income}} months of your income</div></div>
+    <div class="kpi {{#if filled}}fund-ok{{else}}fund-gap{{/if}}"><div class="label">Emergency savings now</div>
+      <div class="value">{{bucket}}</div>
+      <div class="note">covers {{months_covered}} months</div></div>
+    <div class="kpi"><div class="label">Still to save</div>
+      <div class="value">{{gap}}</div>
+      <div class="note">{{fill}}</div></div>
+  </div>
+  {{#if essential_over_income}}<div class="warn">Essential spending is above your income: at this pace the fund does not fill.</div>{{/if}}
+  {{#if target_over_two_years_income}}<div class="warn">The target is more than two years of income: check <b>emergency_months</b> in the Meta sheet.</div>{{/if}}
+  {{#if balance_mismatch}}<div class="warn">Your balances did not follow income minus spending in {{mismatch_months}} of the last {{months_checked}} months: some money moves outside the statements loaded.</div>{{/if}}
+</div>
+{{/each}}
