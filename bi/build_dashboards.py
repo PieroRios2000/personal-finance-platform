@@ -59,17 +59,16 @@ def _time_range(column: str) -> dict[str, Any]:
     }
 
 
-def _horizon_where(column: str) -> str:
-    """The Forecast horizon filter (T65) as a chart WHERE on `column`: the typed value,
-    only if it is plain digits, else 36. The filter lives on the goal dataset; a chart
-    on another table reads it here. `column` counts from 0 at the first month ahead,
-    the goal's `month_index` from 1, hence the + 1."""
-    return (
-        f"{column} + 1 <= "
-        "{% set typed = (filter_values('horizon_months') or ['36'])[0] | string %}"
-        "{{ typed | int if typed.isascii() and typed.isdigit() and typed | length <= 4"
-        " else 36 }}"
-    )
+# The Forecast horizon filter (T65) as a chart WHERE on `months_ahead`: the typed value,
+# only if it is plain digits, else 36. The filter lives on the goal dataset; a chart on
+# another table reads it here. `months_ahead` counts from 0 at the first month ahead,
+# the goal's `month_index` from 1, hence the + 1.
+_HORIZON_WHERE = (
+    "months_ahead + 1 <= "
+    "{% set typed = (filter_values('horizon_months') or ['36'])[0] | string %}"
+    "{{ typed | int if typed.isascii() and typed.isdigit() and typed | length <= 4"
+    " else 36 }}"
+)
 
 
 def _where(expression: str) -> dict[str, Any]:
@@ -812,7 +811,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "groupby": [_sql_column("split_part(line, ' · ', 2)", "line")],
             "adhoc_filters": [
                 _where("line IN ('5 · Monthly saving', '7 · Planned saving')"),
-                _where(_horizon_where("months_ahead")),
+                _where(_HORIZON_WHERE),
             ],
             "seriesType": "line",
             "x_axis_time_format": _DATE_FORMAT,
@@ -845,7 +844,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "rowOrder": "key_a_to_z",
             "colOrder": "key_a_to_z",
             "valueFormat": ",.2f",
-            "adhoc_filters": [_where(_horizon_where("months_ahead"))],
+            "adhoc_filters": [_where(_HORIZON_WHERE)],
             "row_limit": 10000,
         },
     ),
