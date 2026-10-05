@@ -144,9 +144,19 @@ def _build(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_a_closed_month_shows_what_happened_and_what_was_planned(
+def _users() -> list[str]:
+    with pg_store.connect() as connection:
+        rows = connection.execute(
+            "select distinct user_id from gold.rpt_income_statement"
+        ).fetchall()
+    return [user for (user,) in rows]
+
+
+def test_closed_months_and_months_ahead_of_the_statement(
     lake: str, tmp_path: Path
 ) -> None:
+    """One build (a dbt build costs ~95 s) for what the three views of the statement
+    show: a closed month, the months ahead and the open month, which is never actual."""
     _seed_months()
     _plan()
     _seed_forecast()
@@ -169,16 +179,6 @@ def test_a_closed_month_shows_what_happened_and_what_was_planned(
     assert earlier["7 · Planned saving"] == (Decimal("1900"), "plan")
     assert earlier["8 · Saving vs plan"][0] == Decimal("70")
 
-
-def test_the_months_ahead_come_from_the_forecast_and_the_base_scenario(
-    lake: str, tmp_path: Path
-) -> None:
-    _seed_months()
-    _plan()
-    _seed_forecast()
-
-    _build(tmp_path)
-
     assert _lines(_month(1)) == {
         "1 · Income": (Decimal("3000"), "forecast"),
         "2 · Fixed expenses": (Decimal("1000"), "forecast"),
@@ -191,16 +191,6 @@ def test_the_months_ahead_come_from_the_forecast_and_the_base_scenario(
         "7 · Planned saving": (Decimal("1850"), "plan"),
     }
     assert _amounts(_month(2))["5 · Monthly saving"] == Decimal("1940")
-
-
-def test_the_open_month_is_never_counted_as_an_actual(
-    lake: str, tmp_path: Path
-) -> None:
-    _seed_months()
-    _plan()
-    _seed_forecast()
-
-    _build(tmp_path)
 
     with pg_store.connect() as connection:
         [(count,)] = connection.execute(
@@ -215,14 +205,6 @@ def test_the_open_month_is_never_counted_as_an_actual(
     assert count == 0
     assert labels == [(f"{_month(1):%Y-%m} (forecast)",)]
     assert all(user == _USER_ID for user in _users())
-
-
-def _users() -> list[str]:
-    with pg_store.connect() as connection:
-        rows = connection.execute(
-            "select distinct user_id from gold.rpt_income_statement"
-        ).fetchall()
-    return [user for (user,) in rows]
 
 
 def test_without_a_plan_or_a_forecast_it_is_just_what_happened(
