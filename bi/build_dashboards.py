@@ -1019,6 +1019,10 @@ FORECAST_NOTE_TEXT = (
 )
 NOTES = {NOTE: NOTE_TEXT, FORECAST_NOTE: FORECAST_NOTE_TEXT}
 
+# Charts that read nothing on a short history: the variance table compares a month
+# with a backtest forecast, which needs nine closed months, and the demo has eight.
+MAY_BE_EMPTY = {"Categories above expected"}
+
 # The grid: (chart name prefix, width out of 12, height) per cell, row by row.
 LAYOUT: list[list[tuple[str, int, int]]] = [
     [("Upload your files", 12, 32)],
@@ -1243,7 +1247,7 @@ def build(client: Superset, bi_password: str) -> int:
         )["id"]
         rows = _sample_rows(client, datasets[table], params)
         print(f"{name}: {rows} sample row(s)")
-        if not rows:
+        if not rows and name not in MAY_BE_EMPTY:
             raise RuntimeError(
                 f"{name!r} reads no data: check the gold tables are built"
             )

@@ -660,7 +660,7 @@ project**, `pfp-poc`: one group in Docker Desktop, one network, one command (ADR
 ```bash
 make env           # a fresh clone: writes .env with generated secrets (never overwrites yours)
 make up            # storage + Postgres + Superset (the dashboards)
-make demo          # artificial data (eight closed months of a fictional person) -> bronze, then dbt build
+make demo          # artificial data (eight closed months of a fictional person) -> bronze, then dbt build and the forecast
 make up-catalog    # ... plus OpenMetadata (~4.6 GiB of RAM; see section 10)
 make status        # what is running, and the URLs
 make down          # stop everything, KEEP the data (the lake, the tables, the dashboards)
