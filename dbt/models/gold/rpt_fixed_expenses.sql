@@ -73,15 +73,15 @@ compared as (
         fixed_items.currency,
         fixed_items.category,
         fixed_items.expected_amount,
-        coalesce(observed.months_seen_last_6, 0) as months_seen_last_6,
         observed.last_observed_month,
         observed.last_observed_amount,
+        fixed_items.loaded_at as plan_loaded_at,
+        coalesce(observed.months_seen_last_6, 0) as months_seen_last_6,
         round(
             (observed.last_observed_amount - fixed_items.expected_amount)
             * 100.0 / fixed_items.expected_amount,
             1
-        ) as deviation_pct,
-        fixed_items.loaded_at as plan_loaded_at
+        ) as deviation_pct
     from fixed_items
     left join observed
         on
