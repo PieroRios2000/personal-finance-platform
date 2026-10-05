@@ -1,0 +1,189 @@
+"""silver.spend_forecast* and the three gold forecast tables (T59, ADR 0048).
+
+Seeds the forecast bronze tables directly through `bronze.replace_forecast_run`, builds
+the forecast models and checks the variance verdicts. Deselected by default (needs
+SeaweedFS and Postgres, like the rest of the dbt integration suite). Run with
+`pytest -m integration`. All data is synthetic.
+"""
+
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from lakehouse import bronze
+from tests import pg_store
+from tests.test_dbt_gold_integration import lake as _lake
+from tests.test_dbt_plan_integration import _seed_spending
+from tests.test_dbt_silver_integration import _USER_ID, _dbt_build
+
+pytestmark = pytest.mark.integration
+
+lake = _lake
+
+RUN = date(2026, 9, 1)
+SELECT = (
+    "spend_forecasts spend_forecast_series fct_spend_forecast "
+    "rpt_category_variance rpt_forecast_series_quality"
+)
+
+
+def _row(
+    category: str, kind: str, target: date, p50: float, **fields: Any
+) -> bronze.ForecastRow:
+    values: dict[str, Any] = {
+        "kind": kind,
+        "category": category,
+        "currency": "PEN",
+        "target_month": target,
+        "horizon": 1,
+        "model": "median_6",
+        "p10": p50 - 100,
+        "p50": p50,
+        "p90": p50 + 100,
+        "actual": None,
+    }
+    values.update(fields)
+    return bronze.ForecastRow(**values)
+
+
+def _month(offset: int) -> date:
+    index = RUN.year * 12 + RUN.month - 1 + offset
+    return date(index // 12, index % 12 + 1, 1)
+
+
+def _series(category: str, **fields: Any) -> bronze.ForecastSeriesRow:
+    values: dict[str, Any] = {
+        "category": category,
+        "currency": "PEN",
+        "model": "median_6",
+        "baseline_used": True,
+        "low_history": False,
+        "n_months": 24,
+        "n_origins": 15,
+        "mae_rel": 1.0,
+        "coverage": 0.8,
+    }
+    values.update(fields)
+    return bronze.ForecastSeriesRow(**values)
+
+
+def _backtest(category: str, actuals: list[float]) -> list[bronze.ForecastRow]:
+    """`actuals` end at the run month; the interval is always 900..1100 around 1000."""
+    count = len(actuals)
+    return [
+        _row(category, "backtest", _month(i - count + 1), 1000.0, actual=actual)
+        for i, actual in enumerate(actuals)
+    ]
+
+
+def _rows(relation: str) -> list[dict[str, Any]]:
+    with pg_store.connect() as connection:
+        cursor = connection.execute(f"select * from {relation} order by 1, 2, 3, 4")
+        assert cursor.description is not None
+        names = [column.name for column in cursor.description]
+        return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+
+
+def _seed_run() -> None:
+    forecasts = (
+        _backtest("Above", [1000.0] * 5 + [1500.0])
+        + _backtest("Within", [1000.0] * 6)
+        + _backtest("Below", [1000.0] * 5 + [500.0])
+        + _backtest("Repeat", [1500.0, 1500.0, 1000.0, 1500.0, 1000.0, 1000.0])
+        + [_row("Above", "forecast", _month(1), 1000.0)]
+        + [
+            _row(
+                "Sparse",
+                "backtest",
+                _month(0),
+                700.0,
+                p10=None,
+                p90=None,
+                actual=900.0,
+            )
+        ]
+    )
+    bronze.replace_forecast_run(
+        _USER_ID,
+        RUN,
+        forecasts,
+        [_series(c) for c in ("Above", "Within", "Below", "Repeat")]
+        + [_series("Sparse", low_history=True, coverage=None)],
+    )
+
+
+def test_variance_compares_the_last_closed_month_with_its_interval(
+    lake: str, tmp_path: Path
+) -> None:
+    _seed_spending()
+    _seed_run()
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = {row["category"]: row for row in _rows("gold.rpt_category_variance")}
+    assert {c: r["status"] for c, r in rows.items()} == {
+        "Above": "above",
+        "Within": "within",
+        "Below": "below",
+        "Repeat": "within",
+        "Sparse": "no_interval",
+    }
+    above = rows["Above"]
+    assert above["user_id"] == _USER_ID
+    assert above["actual"] == Decimal("1500.00")
+    assert above["p90"] == Decimal("1100.00")
+    assert above["target_month"] == RUN
+    assert above["difference"] == Decimal("500.00")
+    assert above["months_above_last_6"] == 1
+    assert rows["Repeat"]["months_above_last_6"] == 3
+    assert rows["Within"]["months_above_last_6"] == 0
+
+
+def test_the_forecast_table_keeps_every_run_and_kind(lake: str, tmp_path: Path) -> None:
+    _seed_spending()
+    _seed_run()
+    older = date(2026, 8, 1)
+    bronze.replace_forecast_run(
+        _USER_ID, older, [_row("Above", "forecast", RUN, 1000.0)], []
+    )
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = _rows("gold.fct_spend_forecast")
+    assert {r["run_month"] for r in rows} == {RUN, older}
+    assert {r["kind"] for r in rows} == {"backtest", "forecast"}
+    future = [r for r in rows if r["kind"] == "forecast" and r["run_month"] == RUN]
+    assert [r["target_month"] for r in future] == [_month(1)]
+    assert future[0]["actual"] is None
+
+
+def test_series_quality_flags_low_history(lake: str, tmp_path: Path) -> None:
+    _seed_spending()
+    _seed_run()
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    quality = {r["category"]: r for r in _rows("gold.rpt_forecast_series_quality")}
+    assert quality["Sparse"]["low_history"] is True
+    assert quality["Sparse"]["coverage"] is None
+    assert quality["Above"]["baseline_used"] is True
+    assert quality["Above"]["n_origins"] == 15
+
+
+def test_the_models_build_empty_before_any_forecast_run(
+    lake: str, tmp_path: Path
+) -> None:
+    _seed_spending()
+
+    result = _dbt_build(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    for table in ("fct_spend_forecast", "rpt_category_variance"):
+        assert _rows(f"gold.{table}") == []
+    assert _rows("gold.rpt_forecast_series_quality") == []

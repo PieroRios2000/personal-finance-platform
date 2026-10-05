@@ -170,3 +170,17 @@ def test_the_summary_counts_baselines_and_weights_by_spend() -> None:
     expected = (beaten.mae_rel * 1 + flat.mae_rel * 3) / 4
     assert summary["mae_rel_weighted"] == pytest.approx(expected)
     assert summary["mae_rel_mean"] == pytest.approx((beaten.mae_rel + flat.mae_rel) / 2)
+
+
+def test_the_total_series_does_not_lend_its_errors_to_the_categories() -> None:
+    """A sparse category (too few errors of its own) borrows only other categories'
+    errors: the total's relative errors are smaller and would shrink its interval."""
+    sparse = _series(_noisy_flat(11, seed=3), category="Rare")
+    steady = [_series(_noisy_flat(36, seed=s), category=f"Cat{s}") for s in range(1, 4)]
+    total = _series(np.full(36, 3000.0) + np.arange(36) % 2, category="Total")
+
+    with_total = fit_all([sparse, *steady, total])[0]
+    without_total = fit_all([sparse, *steady])[0]
+
+    assert with_total.future[0].p10 == without_total.future[0].p10
+    assert with_total.future[0].p90 == without_total.future[0].p90
