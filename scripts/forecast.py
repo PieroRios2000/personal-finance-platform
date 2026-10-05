@@ -119,8 +119,11 @@ def _log_to_mlflow(
     weights = [float(s.values[-backtest.LEVEL_MONTHS :].sum()) for _f, s in pairs]
     metrics = backtest.summarize([f for f, _s in pairs], weights)
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI))
-    mlflow.set_experiment(EXPERIMENT)
-    with mlflow.start_run(run_name="spend-forecast"):
+    experiment = mlflow.get_experiment_by_name(EXPERIMENT)
+    experiment_id = (
+        experiment.experiment_id if experiment else mlflow.create_experiment(EXPERIMENT)
+    )
+    with mlflow.start_run(experiment_id=experiment_id, run_name="spend-forecast"):
         mlflow.log_params(
             {
                 "min_train_months": backtest.MIN_TRAIN,
