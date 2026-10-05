@@ -951,7 +951,7 @@ def _path_row(**overrides: Any) -> dict[str, Any]:
         "line": "liquid",
         "month_index": 0,
         "month": date(2026, 9, 1),
-        "emergency": 1000.005,
+        "emergency": 1000.255,
         "goal_progress": 2000.0,
     }
     fields.update(overrides)
@@ -970,7 +970,7 @@ def test_replace_goal_projection_writes_every_table(lakehouse: Path) -> None:
                     "line": "liquid",
                     "months_to_goal": None,
                     "reached_month": None,
-                    "required_monthly_saving": 12.345,
+                    "required_monthly_saving": 12.346,
                     "projected_monthly_saving": 500.0,
                     "gap": None,
                     "headroom_share_of_gap": 0.5,
@@ -1012,7 +1012,7 @@ def test_replace_goal_projection_writes_every_table(lakehouse: Path) -> None:
     assert len(path) == 2
     assert {r["user_id"] for r in path} == {"piero"}
     assert {r["run_month"] for r in path} == {date(2026, 9, 1)}
-    assert path[0]["emergency"] == Decimal("1000.01")
+    assert path[0]["emergency"] == Decimal("1000.26")
     summary = _plan_table(lakehouse, "goal_summary")[0]
     assert summary["months_to_goal"] is None
     assert summary["required_monthly_saving"] == Decimal("12.35")

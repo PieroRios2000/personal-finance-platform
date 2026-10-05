@@ -15,6 +15,7 @@ deltalake 1.6.3 while building this. A fixed schema on every write sidesteps
 that entirely; 18 total digits comfortably covers any realistic amount.
 """
 
+from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, NamedTuple
@@ -223,6 +224,67 @@ class ForecastSeriesRow(NamedTuple):
     n_origins: int
     mae_rel: float
     coverage: float | None
+
+
+# T60 (ADR 0048): the goal projection, in dollars. Four small tables replaced as one
+# set per user on every run (only the latest projection matters). The columns between
+# `run_month` and `created_at` are the fields of `forecasting.projection`'s rows.
+def _goal_schema(*fields: tuple[str, pa.DataType]) -> pa.Schema:
+    return pa.schema(
+        [
+            ("user_id", pa.string()),
+            ("run_month", pa.date32()),
+            *fields,
+            ("created_at", pa.timestamp("us", tz="UTC")),
+        ]
+    )
+
+
+_GOAL_SCHEMAS: dict[str, pa.Schema] = {
+    "goal_projection": _goal_schema(
+        ("scenario", pa.string()),
+        ("line", pa.string()),
+        ("month_index", pa.int32()),
+        ("month", pa.date32()),
+        ("emergency", _MONEY),
+        ("goal_progress", _MONEY),
+    ),
+    "goal_summary": _goal_schema(
+        ("scenario", pa.string()),
+        ("line", pa.string()),
+        ("months_to_goal", pa.int32()),
+        ("reached_month", pa.date32()),
+        ("required_monthly_saving", _MONEY),
+        ("projected_monthly_saving", _MONEY),
+        ("gap", _MONEY),
+        ("headroom_share_of_gap", pa.float64()),
+    ),
+    "emergency_fund": _goal_schema(
+        ("scenario", pa.string()),
+        ("target", _MONEY),
+        ("bucket", _MONEY),
+        ("gap", _MONEY),
+        ("months_to_fill", pa.int32()),
+        ("months_covered", pa.float64()),
+        ("months_of_income", pa.float64()),
+        ("savings_rate", pa.float64()),
+        ("essential_over_income", pa.bool_()),
+        ("target_over_two_years_income", pa.bool_()),
+        ("balance_mismatch", pa.bool_()),
+        ("mismatch_months", pa.int32()),
+        ("months_checked", pa.int32()),
+        ("avg_net_flow", _MONEY),
+        ("avg_balance_change", _MONEY),
+    ),
+    "goal_headroom": _goal_schema(
+        ("category", pa.string()),
+        ("currency", pa.string()),
+        ("forecast", _MONEY),
+        ("reference", _MONEY),
+        ("headroom", _MONEY),
+        ("share", pa.float64()),
+    ),
+}
 
 
 class PlanItemRow(NamedTuple):
@@ -675,5 +737,34 @@ def replace_forecast_run(
                     "created_at": created_at,
                 }
                 for row in series
+            ],
+        )
+
+
+def replace_goal_projection(
+    user_id: str, run_month: date, rows: Mapping[str, Sequence[Mapping[str, Any]]]
+) -> None:
+    """Replace `user_id`'s whole goal projection with `rows`, keyed by table name
+    (`_GOAL_SCHEMAS`). A table missing from `rows` is cleared, so a run that refuses
+    to project (no exchange rate, too little income history) leaves no stale answer
+    behind. Every table gets the same `created_at`; amounts keep 2 decimals."""
+    created_at = datetime.now(UTC)
+    for name, schema in _GOAL_SCHEMAS.items():
+        _delete_user_rows(name, user_id)
+        table_rows = rows.get(name, ())
+        if not table_rows:
+            continue
+        money = {f.name for f in schema if pa.types.is_decimal(f.type)}
+        _append(
+            name,
+            schema,
+            [
+                {
+                    "user_id": user_id,
+                    "run_month": run_month,
+                    **{k: _money(v) if k in money else v for k, v in row.items()},
+                    "created_at": created_at,
+                }
+                for row in table_rows
             ],
         )
