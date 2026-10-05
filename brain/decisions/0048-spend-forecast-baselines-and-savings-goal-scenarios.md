@@ -116,6 +116,45 @@ model is worth having. The full design is in
   (measured on synthetic iid noise, 24-36 months); the margin and win-rate conditions bound it,
   they do not remove it.
 
+## Amendments (T59)
+
+- The forecast output is two bronze tables: `spend_forecasts` (forecast and backtest rows in one
+  table, told apart by `kind`) and `spend_forecast_series` (per-series quality). Both are
+  replaced by `(user_id, run_month)` and keep older runs; Python writes bronze only, dbt owns
+  silver and gold (ADR 0029).
+- The model column is `model_name` (`model` is a reserved word for the SQL linter).
+- `Total` does not feed the pooled relative errors used for short-history intervals.
+- `rpt_category_variance` compares the last closed month with the forecast made without it (a
+  backtest row), so it works from the first run and needs no previous month's run.
+
+## Amendments (T60)
+
+- The projection output is four bronze tables (`goal_projection`, `goal_summary`, `emergency_fund`,
+  `goal_headroom`), each with silver and gold copies. `goal_projection` and `goal_summary` carry a
+  `line` column (`liquid`, `with_risk`), so both goal lines are always available. They are replaced
+  as one set per user: a refused or empty projection clears the old rows.
+- Past the 3 forecast months the last month's spending is held flat; the investments are held flat
+  at their last valuation.
+- Income history starts at the owner's first income month (not at the start of spending), so a short
+  income history is refused instead of diluted with zeros.
+- Amounts are rounded half-even to cents in bronze.
+
+## Amendments (T61)
+
+- Gold `rpt_category_forecast` (latest run, with the series quality) is what the dashboard reads;
+  the older runs stay in `fct_spend_forecast` for the realized-vs-backtest monitor (T62).
+- `rpt_goal_headroom.currency` is exposed as `source_currency`: its amounts are in dollars, and a
+  `currency` column would let the Currency filter hide rows.
+- The section ignores the date range (nothing in it is per calendar month) and shows both goal
+  lines and all three scenarios at once; the open question of whether the goal counts the
+  investments stays with the owner, the dashboard answers it both ways.
+
+## Amendments (T62)
+
+- The monitor is `gold.rpt_forecast_realized`: an older forecast against the month that closed
+  afterwards, with the miss compared to the typical miss of the same run's backtest (same unit),
+  not to `mae_rel`, which is a ratio to the baseline and would not compare. Judged by the owner.
+
 ## Related
 
 - [Spec](../../docs/specs/category-forecast-and-savings-goal.md)

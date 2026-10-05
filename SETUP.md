@@ -660,7 +660,7 @@ project**, `pfp-poc`: one group in Docker Desktop, one network, one command (ADR
 ```bash
 make env           # a fresh clone: writes .env with generated secrets (never overwrites yours)
 make up            # storage + Postgres + Superset (the dashboards)
-make demo          # artificial data (eight closed months of a fictional person) -> bronze, then dbt build
+make demo          # artificial data (eight closed months of a fictional person) -> bronze, then dbt build and the forecast
 make up-catalog    # ... plus OpenMetadata (~4.6 GiB of RAM; see section 10)
 make status        # what is running, and the URLs
 make down          # stop everything, KEEP the data (the lake, the tables, the dashboards)
@@ -792,6 +792,18 @@ field name (never the values you typed); if there is any, nothing is written. A 
 your whole plan. It also puts the file back to mode 0600 if Excel on Windows re-saved it with
 wider permissions. `Meta.emergency_account` must be the exact name of one of your asset accounts
 (the `bank` of a savings account or the manual Excel's `cuenta`). No new dependency or variable.
+
+```bash
+make forecast               # after `make build`: per-category forecast of the next 3 months (T59)
+```
+
+It reads the closed months from gold, leaves out the charges your plan calls fixed or ignored,
+and writes bronze, then builds `silver.spend_forecast*` and `gold.fct_spend_forecast`,
+`rpt_category_variance` and `rpt_forecast_series_quality`. With a plan imported it also projects
+the dollar goal (T60): `gold.rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund` and
+`rpt_goal_headroom`; without a plan, or without `usd_to_pen`, it says so and skips. The terminal shows counts only;
+ratios and counts go to MLflow (`~/finance-data/mlflow.db`, or `MLFLOW_TRACKING_URI`). No new
+dependency: `mlflow` was added with the categorization model (T52).
 
 ## Reproducing CI locally (`make ci-local`)
 

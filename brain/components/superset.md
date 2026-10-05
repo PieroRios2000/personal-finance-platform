@@ -22,7 +22,7 @@ see only the `user_id` they were scoped to, unless they are the owner (T41, ADR 
 | [`bi/superset_config.py`](../../bi/superset_config.py) | Secret key, metadata database URI, sign-in through Dex (T39, ADR 0034), and the role/RLS wiring (T41, ADR 0036), all from the environment |
 | [`bi/init-metadata.sh`](../../bi/init-metadata.sh) | Idempotent: the `superset` role and database in PFP's Postgres |
 | [`bi/start.sh`](../../bi/start.sh) | Migrate, create admin, import `bi/assets` (password filled in from the environment), run [`bi/setup_access.py`](../../bi/setup_access.py) (T41), serve |
-| [`bi/assets/`](../../bi/assets) | The dashboards as code: Superset's export YAML (database, three `rpt_*` datasets, eight charts, one dashboard with its filters and CSS) |
+| [`bi/assets/`](../../bi/assets) | The dashboards as code: Superset's export YAML (database, three `rpt_*` datasets, 25 charts, one dashboard with its filters and CSS) |
 | [`bi/templates/`](../../bi/templates) | The HTML (Handlebars) and CSS of the summary cards and the investments table, and the dashboard-wide CSS |
 | [`bi/templates/upload_prompt.hbs`](../../bi/templates/upload_prompt.hbs) | T45: the dashboard's first row: a count of the movements the account may see, so an account with none gets a message and a button to the [upload portal](upload-portal.md), and one with data a slim link. Height 32 (a proper banner: an icon, bigger type, a bigger button), after the owner found 21 (its previous height) still too short |
 | [`bi/cleanup_stale.py`](../../bi/cleanup_stale.py) | Run by `start.sh` after the import: removes the dashboard's charts that are not in the export, and our datasets no chart uses |

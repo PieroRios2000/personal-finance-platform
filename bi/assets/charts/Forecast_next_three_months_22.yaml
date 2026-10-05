@@ -1,0 +1,40 @@
+slice_name: 'Forecast: next three months'
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  adhoc_filters: []
+  all_columns:
+  - category
+  - currency
+  - target_month
+  - p10
+  - p50
+  - p90
+  - model_name
+  order_by_cols:
+  - '["category", true]'
+  - '["target_month", true]'
+  column_config:
+    p10:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    p50:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    p90:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    target_month:
+      d3TimeFormat: '%b %Y'
+  row_limit: 1000
+  include_search: true
+  datasource: 10__table
+  viz_type: table
+query_context: null
+cache_timeout: null
+uuid: e42d51c7-0728-5a90-a870-19eed9b30a1f
+version: 1.0.0
+dataset_uuid: 01f414bd-67e3-5863-99d5-8a2ce09fc201

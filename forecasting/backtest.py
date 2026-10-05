@@ -19,7 +19,7 @@ from datetime import date
 import numpy as np
 
 from forecasting.candidates import BASELINE, CANDIDATES, SEASON, forecast
-from forecasting.series import Series, add_months
+from forecasting.series import TOTAL, Series, add_months
 
 MIN_TRAIN = 9
 HORIZONS = 3
@@ -169,7 +169,8 @@ def fit_all(series: Sequence[Series]) -> list[SeriesFit]:
         )
         rolling = rolling_forecasts(values)
         model, ratio = _select(values, rolling, low)
-        pool[item.currency].extend(_relative_errors(values, rolling, model))
+        if item.category != TOTAL:
+            pool[item.currency].extend(_relative_errors(values, rolling, model))
         prepared.append((item, rolling, low, model, ratio))
 
     fits = []

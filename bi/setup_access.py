@@ -5,7 +5,7 @@ needs each dataset's live id, which the export in `bi/assets` does not carry
 (dataset/role permissions and row-level-security rules are not part of a dashboard
 export). Idempotent, so a restart is safe -- same as the rest of `start.sh`.
 
-Grants the `Gamma` role read access to the five gold datasets (everyone but the
+Grants the `Gamma` role read access to the gold datasets (everyone but the
 owner gets Gamma, `bi/superset_config.py`), and creates the one row-level security
 rule that filters every query against them to `user_id = '{{ current_username() }}'`,
 except for the `Admin` role (the owner). No REST endpoint exists for role/permission
@@ -23,6 +23,13 @@ TABLES = (
     "rpt_balances",
     "rpt_investments",
     "rpt_reconciliation",
+    "rpt_goal_projection",
+    "rpt_goal_summary",
+    "rpt_emergency_fund",
+    "rpt_goal_headroom",
+    "rpt_category_forecast",
+    "rpt_category_variance",
+    "rpt_forecast_realized",
 )
 RLS_NAME = "Per-user data (T41)"
 RLS_CLAUSE = "user_id = '{{ current_username() }}'"

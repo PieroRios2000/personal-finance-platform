@@ -1,14 +1,14 @@
 ---
 type: component
 phase: 3
-status: in progress (T56, T57, T58 built, rest planned)
+status: in progress (T56-T62 built, T63 planned)
 task: T56, T57, T58, T59, T60, T61, T62, T63
 ---
 
 # Spend forecast and savings goal
 
 A per-category monthly spend forecast with honest uncertainty, and the time to reach a savings
-goal the owner sets. Only T56, T57 and T58 are built (fixed-expense detection, `make export-plan`, `make import-plan` and the forecast core); the
+goal the owner sets. Only T56 to T62 are built (fixed-expense detection, `make export-plan`, `make import-plan`, the forecast core, `make forecast`, the goal projection, its dashboard section and the realized-error monitor); the
 specification is
 [`docs/specs/category-forecast-and-savings-goal.md`](../../docs/specs/category-forecast-and-savings-goal.md)
 and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md).
@@ -17,11 +17,11 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
 
 | Piece | What it does | Task |
 |---|---|---|
-| `forecasting/` (pure functions) | Fixed-expense detection (**built, T56**), series builder, five candidates and a trailing-median baseline, rolling-origin backtest, empirical intervals (**built, T58**), projection | T56, T58, T60 |
+| `forecasting/` (pure functions) | Fixed-expense detection (**built, T56**), series builder, five candidates and a trailing-median baseline, rolling-origin backtest, empirical intervals (**built, T58**), projection in dollars (**built, T60**) | T56, T58, T60 |
 | `make export-plan` (**built, T56**) / `make import-plan` (**built, T57**) | The owner's workbook (`~/finance-data/plan/`): fixed-expense proposals to confirm, the dollar goal, `usd_to_pen`, the emergency settings | T56, T57 |
 | Bronze `plan_fixed_items`, `plan_goal` → silver `plan_fixed_items`, `plan_goal` (**built, T57**) | The owner's confirmed plan, replaced whole on each import; empty until the first import | T57 |
-| `make forecast` | Reads gold, writes bronze forecast and projection tables, logs ratios and counts to MLflow, builds the new dbt models | T59 |
-| Gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality`, `rpt_fixed_expenses` (**built, T57**), `rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund` | What the dashboard reads | T57, T59, T60 |
+| `make forecast` (**built, T59**) | Reads gold, writes the bronze forecast tables, logs ratios and counts to MLflow, builds the forecast dbt models; since T60 it also projects the goal (`scripts/goal_projection.py`) and builds the projection models | T59, T60 |
+| Gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality` (**built, T59**), `rpt_fixed_expenses` (**built, T57**), `rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund`, `rpt_goal_headroom` (**built, T60**), `rpt_category_forecast` (**built, T61**), `rpt_forecast_realized` (**built, T62**) | What the dashboard reads | T57, T59, T60, T61, T62 |
 | Superset "Forecast & goal" section | Emergency target and gap, time to goal as a range for both lines (`liquid`, `with_risk`), categories above expected, the adjust view, how far to trust each series | T61 |
 | Realized-vs-backtest error chart | The monitor; joins the monthly routine | T62 |
 | Recurrence as classifier features | Follow-up experiment, null result allowed | T63 |
@@ -81,6 +81,82 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
   optimistic; on pure noise the selection rule still switches away from the baseline in roughly
   12-27 % of series (winner's curse), which is why the 5 % margin and the win rate are both
   required.
+
+## What T59 built
+
+- `scripts/forecast.py` (`make forecast`): reads the monthly variable spending from gold (same
+  definition as `export-plan`), drops the plan's fixed and ignored charges, runs the T58 core and
+  writes two bronze Delta tables, `spend_forecasts` (kind `forecast` for horizons 1-3 and kind
+  `backtest` for the one-step forecasts of closed months, with their `actual`) and
+  `spend_forecast_series` (model, history, origins, `mae_rel`, `coverage`, flags). The column is
+  `model_name`, not `model`, which is a reserved word for the SQL linter.
+- A run is replaced by `(user_id, run_month)`; older runs stay, so the forecast made last month
+  can be compared with this month's actual (T62). Running twice in a month changes nothing.
+- The `Total` series is excluded from the pooled relative errors that give short series an
+  interval: it is a sum of the categories already in the pool.
+- MLflow gets ratios and counts only (experiment `spend-forecast`, tracking store
+  `~/finance-data/mlflow.db` or `MLFLOW_TRACKING_URI`); the terminal gets counts only.
+- dbt: silver `spend_forecasts`, `spend_forecast_series` (empty with the same columns until the
+  first run); gold `fct_spend_forecast`, `rpt_forecast_series_quality` and `rpt_category_variance`
+  (last closed month's actual against the interval of the forecast made without it:
+  `above`/`within`/`below`/`no_interval`, plus how many of the last six months were above).
+  All carry `user_id` for row-level security; the Superset datasets and their rules come with T61.
+
+## What T60 built
+
+- `forecasting/projection.py`: pure functions, no I/O. The one place soles become dollars
+  (`amount / usd_to_pen`); with no positive rate, or fewer than 6 months of income and no override,
+  it raises `ProjectionRefused` and the run prints "goal projection skipped: <reason>" and clears
+  the old rows. Never a guessed rate.
+- Buckets: emergency (`Meta.emergency_account`), other liquid, risk (investments). The target is
+  `emergency_months` times the monthly essential outflow (`emergency_basis` all or fixed_only).
+  New savings fill the emergency gap first; only the surplus counts toward the goal.
+- Two lines always: `liquid`, and `with_risk` (investments held flat at their last valuation).
+  Three scenarios: base (p50 spending, median income), cautious (total p90, income p25),
+  optimistic (p10, income p75). Beyond the 3 forecast months the last month is held flat; a goal
+  not reached in 120 months is `NULL`, shown as "not reached".
+- `scripts/goal_projection.py` runs at the end of `make forecast` from the same fits and writes
+  four bronze tables (`goal_projection`, `goal_summary`, `emergency_fund`, `goal_headroom`),
+  replaced as one set per user (not per run month). Silver and gold copy them
+  (`rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund`, `rpt_goal_headroom`), all with
+  `user_id` for row-level security.
+- `emergency_fund` also carries plausibility flags (essential spending above income, target above
+  two years of income) and a cross-check of the liquid balance against income minus spending over
+  the last 6 months (flag when more than half the months differ by over 25 % of spending).
+- `goal_headroom`: per category, forecast minus the 25th percentile of the last 12 months, and its
+  share of the saving gap (the "adjust" view).
+
+## What T61 built
+
+- Superset section "Forecast & goal" (after the investments, before the movements), authored in
+  `bi/build_dashboards.py` and exported to `bi/assets`: when the goal is reached (both lines, three
+  scenarios side by side), projected progress in dollars, the emergency fund with its warnings,
+  where the plan has room, the next three months per category, categories above expected and how
+  far to trust each series (the **median baseline** badge says no model beat it). A second
+  Markdown note says the scenarios are not a confidence interval. The date range does not act on
+  the section: it looks ahead.
+- Gold `rpt_category_forecast`: the latest run only, joined to the series quality. `rpt_goal_headroom`
+  names its currency column `source_currency`, so the dashboard's Currency filter does not drop
+  the dollar rows of a category charged in the other currency.
+- Row-level security (ADR 0036): `bi/setup_access.py` lists the six new tables; a test fails if a
+  chart reads a table it does not list.
+- `make demo` seeds a plan (`demo_plan`) and runs `make forecast`. The demo has eight closed months
+  and the backtest needs nine, so the demo shows baselines only and an empty
+  "Categories above expected" (the one chart allowed to read no rows at build).
+
+## What T62 built
+
+- Gold `rpt_forecast_realized`: each older `forecast` row whose month has since closed, with the
+  actual (from the latest run that backtested that month), the miss, the typical miss of that same
+  run's backtest in the same unit (`backtest_mae`), their ratio (`error_ratio`) and whether the
+  actual fell `within`, `above` or `below` the interval. Empty until a second run exists after a
+  forecast month has closed. The owner judges it; no drift test, two dozen points are too few
+  (ADR 0046).
+- Dashboard chart "Forecast: realized vs expected" (red where `error_ratio` > 2), allowed to read no
+  rows at build; the Markdown note says it appears from the second monthly run.
+- `docs/monthly-routine.md` step 4 (`export-plan` → edit → `import-plan` → `build` → `forecast`),
+  checked in order by `tests/test_monthly_routine.py`; `docs/where-to-look.md` names the section's
+  tables.
 
 ## How it fits
 

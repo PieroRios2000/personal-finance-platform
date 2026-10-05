@@ -401,6 +401,177 @@ models:
               arguments:
                 values: [as_expected, deviating, not_seen]
 
+  - name: fct_spend_forecast
+    description: >
+      Fact (T59, ADR 0048): every forecast run, one row per user, `run_month`, `kind`,
+      category, currency and `target_month`. `backtest` rows forecast a month that
+      already closed, made without it, with its `actual`; `forecast` rows look ahead
+      (horizon 1 to 3) with a null `actual`. `p10` and `p90` bound an 80 % interval
+      from the model's own backtest errors (null when there are too few). Every run is
+      kept so a forecast can be compared with the actual that arrives later. Carries
+      `user_id` for row-level security; not monthly, no calendar filters.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              [user_id, run_month, kind, category, currency, target_month]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: kind
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [backtest, forecast]
+
+  - name: rpt_category_variance
+    description: >
+      Reporting table (T59, ADR 0048): per category and currency of the latest forecast
+      run, the last closed month's `actual` against the forecast made without it and
+      its 80 % interval. `status` is 'above' over `p90`, 'below' under `p10`, 'within',
+      or 'no_interval' when the series is too short for one. `months_above_last_6`
+      counts the recent months that were above. The interval is optimistic (see
+      `rpt_forecast_series_quality`). Carries `user_id` for row-level security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, category, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [above, within, below, no_interval]
+
+  - name: rpt_forecast_series_quality
+    description: >
+      Reporting table (T59, ADR 0048): per run, category and currency, the model
+      selected, months of history, backtest origins, `mae_rel` (error relative to the
+      median baseline, 1.0 = no better), the interval `coverage` (optimistic: measured
+      on the errors the interval came from) and the flags `baseline_used` and
+      `low_history`. How much to trust a forecast. Carries `user_id` for row-level
+      security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, run_month, category, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
+  - name: rpt_category_forecast
+    description: >
+      Reporting table (T61, ADR 0048): what the dashboard shows of the forecast. The
+      latest run only, per user, category, currency and horizon (1 to 3 months ahead):
+      the interval (`p10`, `p50`, `p90`) and the quality of the series (model, whether
+      the median baseline was used, months of history, `mae_rel`, `coverage`).
+      Carries `user_id` for row-level security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, category, currency, horizon]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
+  - name: rpt_forecast_realized
+    description: >
+      Reporting table (T62, ADR 0048): how an older forecast did once its month closed,
+      per user, run, category, currency and target month. The actual, the miss
+      (`realized_error`), the typical miss of the same run's backtest (`backtest_mae`),
+      their ratio (`error_ratio`) and whether the actual fell `within`, `above` or `below`
+      the interval. Empty until a forecast month has closed since an earlier run.
+      Carries `user_id` for row-level security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, run_month, category, currency, target_month]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
+  - name: rpt_goal_projection
+    description: >
+      Reporting table (T60, ADR 0048): the path to the savings goal in US dollars, one
+      row per user, scenario, `line` ('liquid' counts liquid savings only, 'with_risk'
+      adds the investments held flat) and month index (0 = the last closed month, up
+      to 120): the emergency bucket and the progress toward the goal. Scenarios are
+      the same assumptions throughout, not a confidence interval. Carries `user_id`
+      for row-level security; not monthly, no calendar filters.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, scenario, line, month_index]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: scenario
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [base, cautious, optimistic]
+      - name: line
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [liquid, with_risk]
+
+  - name: rpt_goal_summary
+    description: >
+      Reporting table (T60, ADR 0048): per user, scenario and line, `months_to_goal`
+      (null = not reached in 120 months), `reached_month`, the saving the target date
+      needs, the one projected, the `gap` between them and the share of that gap the
+      adjust view's headroom could close. US dollars. Carries `user_id` for row-level
+      security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, scenario, line]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
+  - name: rpt_emergency_fund
+    description: >
+      Reporting table (T60, ADR 0048): per user and scenario, the emergency `target`
+      (months of essential spending), the `bucket` held, the `gap`, `months_to_fill`,
+      coverage in months, the savings rate and the sanity flags (essential spending
+      over income, target over two years of income, balance not matching the flow).
+      US dollars. Carries `user_id` for row-level security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, scenario]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
+  - name: rpt_goal_headroom
+    description: >
+      Reporting table (T60, ADR 0048): the adjust view, per user, category and the
+      currency it is charged in (`source_currency`): the forecast, the owner's usual
+      (25th percentile of the last 12 months), the headroom between them and its share
+      of the total. US dollars. Carries `user_id` for row-level security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, category, source_currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
   - name: rpt_reconciliation
     description: >
       Reporting table (T36): per account and currency, the opening balance of its first

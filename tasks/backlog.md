@@ -139,10 +139,10 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
   - [x] **T56** `forecasting/` skeleton, fixed-expense detection, `make export-plan` (workbook with `Instrucciones`, `Gastos fijos`, `Meta` incl. `usd_to_pen` and the emergency settings; `~/finance-data/plan/`).
   - [x] **T57** `make import-plan` (validates the dollar goal, rate and emergency fields), bronze/silver plan tables, gold `rpt_fixed_expenses`.
   - [x] **T58** forecast core: series, five candidates + baseline, rolling-origin backtest, intervals.
-  - [ ] **T59** `make forecast`: bronze outputs, MLflow, gold forecast, variance and quality tables.
-  - [ ] **T60** projection in dollars: buckets, calculated emergency target, two goal lines (`liquid`, `with_risk`), three scenarios, time to goal, adjust view, gold tables.
-  - [ ] **T61** Superset "Forecast & goal" section with row-level security, demo seed.
-  - [ ] **T62** realized-vs-backtest monitor, monthly routine and where-to-look updates.
+  - [x] **T59** `make forecast`: bronze outputs, MLflow, gold forecast, variance and quality tables.
+  - [x] **T60** projection in dollars: buckets, calculated emergency target, two goal lines (`liquid`, `with_risk`), three scenarios, time to goal, adjust view, gold tables.
+  - [x] **T61** Superset "Forecast & goal" section with row-level security, demo seed.
+  - [x] **T62** realized-vs-backtest monitor, monthly routine and where-to-look updates.
   - [ ] **T63** (follow-up) experiment: recurrence and the fixed/variable mark as classifier features, ADR 0044's protocol and an acceptance margin over the fold spread; a null result is valid (spec section 4.8).
 - [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
       model -- macro-F1 and per-category precision (not just accuracy), latency, cost per
