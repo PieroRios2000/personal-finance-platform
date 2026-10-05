@@ -1,0 +1,38 @@
+slice_name: 'Income statement: month by month'
+description: null
+certified_by: null
+certification_details: null
+viz_type: pivot_table_v2
+params:
+  groupbyRows:
+  - currency
+  - line
+  groupbyColumns:
+  - month_label
+  metrics:
+  - expressionType: SQL
+    sqlExpression: SUM(amount)
+    label: Amount
+  metricsLayout: COLUMNS
+  aggregateFunction: Sum
+  rowTotals: false
+  colTotals: false
+  transposePivot: false
+  combineMetric: false
+  rowOrder: key_a_to_z
+  colOrder: key_a_to_z
+  valueFormat: ',.2f'
+  adhoc_filters:
+  - expressionType: SQL
+    sqlExpression: months_ahead + 1 <= {% set typed = (filter_values('horizon_months')
+      or ['36'])[0] | string %}{{ typed | int if typed.isascii() and typed.isdigit()
+      and typed | length <= 4 else 36 }}
+    clause: WHERE
+  row_limit: 10000
+  datasource: 8__table
+  viz_type: pivot_table_v2
+query_context: null
+cache_timeout: null
+uuid: 30f1798d-727b-5896-bf22-6ff40128f025
+version: 1.0.0
+dataset_uuid: 89eb93b9-8ef5-5f9d-a20f-30abfcc335b4

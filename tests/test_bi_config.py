@@ -30,6 +30,7 @@ _FORECAST_PREFIXES = (
     "Adjust:",
     "Forecast:",
     "Categories above",
+    "Income statement",
 )
 _FORECAST_TABLES = {
     "goal_dynamic",
@@ -37,6 +38,7 @@ _FORECAST_TABLES = {
     "rpt_category_forecast",
     "rpt_category_variance",
     "rpt_forecast_realized",
+    "rpt_income_statement",
 }
 
 
@@ -260,10 +262,7 @@ def test_every_chart_has_a_cell_in_the_layout() -> None:
     builder = _builder()
     names = [c[1] for c in builder.CHARTS]
     prefixes = [
-        p
-        for row in builder.LAYOUT
-        for p, _, _ in row
-        if not p.startswith((builder.NOTE, builder.SECTION))
+        p for row in builder.LAYOUT for p, _, _ in row if not p.startswith(builder.NOTE)
     ]
 
     for name in names:
@@ -272,30 +271,62 @@ def test_every_chart_has_a_cell_in_the_layout() -> None:
         assert sum(n.startswith(prefix) for n in names) == 1, prefix
 
 
-def test_categories_are_their_own_section_of_the_dashboard() -> None:
-    """The classification (T51-T54) is a section with its own title, after the cash
-    flow and before the investments, made of the four `Categories:` charts."""
+def _tab_rows(builder: Any, name: str) -> list[list[str]]:
+    rows = dict(builder.TABS)[name]
+    return [[p for p, _, _ in row] for row in rows]
+
+
+def test_the_dashboard_has_four_tabs_each_chart_in_exactly_one() -> None:
+    """T66 (ADR 0048): savings, categories, forecast & goal and the income statement are
+    four tabs, so soles and dollars never share a page with the forecast."""
     builder = _builder()
-    rows = [[p for p, _, _ in row] for row in builder.LAYOUT]
-    title = next(
-        i for i, row in enumerate(rows) if row == [f"{builder.SECTION}Categories"]
-    )
-    cells = [p for row in rows[title + 1 : title + 4] for p in row]
+    names = [name for name, _ in builder.TABS]
+    cells = [p for name in names for row in _tab_rows(builder, name) for p in row]
 
-    assert len(cells) == 4
-    assert all(p.startswith("Categories:") for p in cells)
-    names = [c[1] for c in builder.CHARTS if c[1].startswith("Categories:")]
-    assert len(names) == 4
+    assert names == ["Savings", "Categories", "Forecast & goal", "Income statement"]
+    chart_names = [c[1] for c in builder.CHARTS]
+    for chart in chart_names:
+        owners = [p for p in cells if chart.startswith(p) and p != builder.NOTE]
+        assert len(owners) == 1, chart
 
+
+def test_each_tab_holds_its_own_charts() -> None:
+    builder = _builder()
+
+    def flat(name: str) -> list[str]:
+        return [p for row in _tab_rows(builder, name) for p in row]
+
+    categories = [p for p in flat("Categories") if not p.startswith(builder.NOTE)]
+    assert len(categories) == 4 and all(p.startswith("Categories:") for p in categories)
+    assert "Cash flow summary" in flat("Savings")
+    forecast = [p for p in flat("Forecast & goal") if not p.startswith(builder.NOTE)]
+    assert all(p.startswith(_FORECAST_PREFIXES) for p in forecast)
+    assert not any(p.startswith("Income statement") for p in forecast)
+    statement = flat("Income statement")
+    assert [p for p in statement if p.startswith("Income statement")] == [
+        "Income statement: saving",
+        "Income statement: month",
+    ]
+    assert "Categories above" in statement
+
+
+def test_the_position_json_nests_rows_under_tabs() -> None:
+    builder = _builder()
     layout = builder._position(
         list(range(len(builder.CHARTS))),
         [c[1] for c in builder.CHARTS],
         ["u"] * len(builder.CHARTS),
     )
-    header = layout[f"HEADER-{title}"]
-    assert header["meta"]["text"] == "Categories"
-    assert header["parents"] == ["ROOT_ID", "GRID_ID"]
-    assert f"HEADER-{title}" in layout["GRID_ID"]["children"]
+
+    assert layout["ROOT_ID"]["children"] == ["TABS-main"]
+    assert layout["GRID_ID"]["children"] == []
+    tabs = layout["TABS-main"]["children"]
+    assert [layout[t]["meta"]["text"] for t in tabs] == [n for n, _ in builder.TABS]
+    for tab in tabs:
+        for row in layout[tab]["children"]:
+            assert layout[row]["parents"] == ["ROOT_ID", "TABS-main", tab]
+            for cell in layout[row]["children"]:
+                assert layout[cell]["parents"][-1] == row
 
 
 def test_the_category_charts_cover_spending_only() -> None:
@@ -446,7 +477,8 @@ def test_the_dashboard_starts_with_a_link_to_the_upload_portal() -> None:
     dashboard = yaml.safe_load(
         next((_BI / "assets" / "dashboards").glob("*.yaml")).read_text()
     )
-    first_row = dashboard["position"]["GRID_ID"]["children"][0]
+    first_tab = dashboard["position"]["TABS-main"]["children"][0]
+    first_row = dashboard["position"][first_tab]["children"][0]
     first_chart = dashboard["position"][dashboard["position"][first_row]["children"][0]]
 
     assert builder.LAYOUT[0][0][0] == "Upload your files"
@@ -477,15 +509,13 @@ def _forecast_charts() -> dict[str, tuple[str, str, str, dict[str, Any]]]:
     return {n: c for n, c in _charts().items() if n.startswith(_FORECAST_PREFIXES)}
 
 
-def test_forecast_and_goal_is_its_own_section_after_the_investments() -> None:
+def test_forecast_and_goal_is_its_own_tab() -> None:
     builder = _builder()
-    rows = [[p for p, _, _ in row] for row in builder.LAYOUT]
-    title = rows.index([f"{builder.SECTION}Forecast & goal"])
-    after = [p for row in rows[title + 1 :] for p in row]
-    forecast = [p for p in after if p.startswith(_FORECAST_PREFIXES + (builder.NOTE,))]
+    rows = _tab_rows(builder, "Forecast & goal")
+    forecast = [p for row in rows for p in row if not p.startswith(builder.NOTE)]
 
-    assert rows.index(["Investments: return and"]) < title < rows.index(["Movements"])
-    assert len(forecast) >= 8
+    assert len(forecast) >= 6
+    assert all(p.startswith(_FORECAST_PREFIXES) for p in forecast)
     assert {c[0] for c in _forecast_charts().values()} == _FORECAST_TABLES
 
 
@@ -562,17 +592,29 @@ def test_dollar_tables_are_not_hidden_by_the_currency_filter() -> None:
 
     assert chart[0] == "rpt_goal_headroom"
     assert "currency" not in columns and "source_currency" in columns
-    for name in ("Forecast: next months", "Categories above expected"):
-        assert "currency" in _charts()[name][3]["all_columns"]  # in its own currency
+    assert "currency" in _charts()["Categories above expected"][3]["all_columns"]
+    pivot = _charts()["Income statement: month by month"][3]
+    assert pivot["groupbyRows"][0] == "currency"  # each currency in its own rows
 
 
-def test_the_forecast_table_reads_the_latest_run_only() -> None:
-    chart = _charts()["Forecast: next months"]
+def test_the_income_statement_is_a_pivot_of_lines_by_month() -> None:
+    """The table the forecast used to have is a statement: lines (income, spending by
+    category, saving, planned saving) down, months across, one currency at a time."""
+    chart = _charts()["Income statement: month by month"]
 
-    assert chart[0] == "rpt_category_forecast"
-    assert {"category", "target_month", "p10", "p50", "p90"} <= set(
-        chart[3]["all_columns"]
-    )
+    assert chart[0] == "rpt_income_statement" and chart[2] == "pivot_table_v2"
+    assert chart[3]["groupbyRows"] == ["currency", "line"]
+    assert chart[3]["groupbyColumns"] == ["month_label"]
+    assert chart[3]["metrics"][0]["sqlExpression"] == "SUM(amount)"
+    assert chart[3]["rowOrder"] == chart[3]["colOrder"] == "key_a_to_z"
+
+
+def test_the_saving_chart_compares_the_saving_with_the_planned_one() -> None:
+    chart = _charts()["Income statement: saving against the plan"]
+    text = json.dumps(chart[3]["adhoc_filters"], ensure_ascii=False)
+
+    assert chart[0] == "rpt_income_statement"
+    assert "5 · Monthly saving" in text and "7 · Planned saving" in text
 
 
 def test_the_dashboard_says_plainly_when_the_baseline_is_the_model() -> None:
@@ -628,11 +670,32 @@ def test_the_projection_chart_stops_at_the_horizon_the_filter_sets() -> None:
     assert "month_index <= horizon_months" in json.dumps(chart[3]["adhoc_filters"])
 
 
-def test_the_forecast_table_follows_the_same_horizon() -> None:
-    chart = _charts()["Forecast: next months"]
-    text = json.dumps(chart[3]["adhoc_filters"])
+def test_the_income_statement_follows_the_same_horizon() -> None:
+    """`months_ahead` counts from 0 at the first month ahead, the goal's `month_index`
+    from 1: the same typed value must keep the same number of months ahead."""
+    for name in (
+        "Income statement: saving against the plan",
+        "Income statement: month by month",
+    ):
+        text = json.dumps(_charts()[name][3]["adhoc_filters"])
+        assert "months_ahead + 1 <= " in text, name
+        assert "filter_values('horizon_months')" in text, name
 
-    assert "horizon_months" in text and "horizon" in text
+
+def test_the_typed_goal_filters_only_apply_to_the_forecast_and_statement_tabs() -> None:
+    builder = _builder()
+    scope = {
+        "rootPath": [
+            builder.tab_id("Forecast & goal"),
+            builder.tab_id("Income statement"),
+        ],
+        "excluded": [],
+    }
+
+    for name in _GOAL_FILTERS:
+        assert _filters()[name]["scope"] == scope, name
+    for name in ("Currency", "Date range", "Bank", "Year"):
+        assert _filters()[name]["scope"]["rootPath"] == ["ROOT_ID"], name
 
 
 def test_the_realized_monitor_says_whether_a_row_is_realized_or_a_backtest() -> None:
