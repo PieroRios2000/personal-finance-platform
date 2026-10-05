@@ -6,8 +6,9 @@ Reads gold in a read-only session (the same `PFP_PG_*` variables dbt uses), take
 closed months only, leaves out the charges the owner's plan calls fixed or ignored,
 backtests five simple models against a trailing median per series and writes the
 forecasts and the per-series quality to bronze, replacing this user's run for the last
-closed month (ADR 0048, spec 4.2). dbt builds silver and gold from there
-(`make forecast` runs it). Logs ratios and counts to MLflow, never a name or an amount,
+closed month (ADR 0048, spec 4.2). It then projects the savings goal from the same fits
+(`scripts.goal_projection`, T60). dbt builds silver and gold from there (`make forecast`
+runs it). Logs ratios and counts to MLflow, never a name or an amount,
 and prints counts only."""
 
 import argparse
@@ -25,6 +26,7 @@ from forecasting import backtest
 from forecasting.candidates import CANDIDATES
 from forecasting.series import TOTAL, Series, add_months, build_series
 from lakehouse import bronze
+from scripts import goal_projection
 from scripts.export_plan import fetch_monthly_spend
 from scripts.pg_databases import conninfo
 
@@ -175,6 +177,7 @@ def run(user_id: str, today: date) -> int:
         f"{int(metrics['baseline_used'])} of {int(metrics['series'])} categories "
         f"keep the median baseline, {int(metrics['low_history'])} have little history"
     )
+    goal_projection.run(user_id, run_month, fits, series, spending)
     return 0
 
 
