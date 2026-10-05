@@ -542,10 +542,10 @@ models:
 
   - name: rpt_goal_headroom
     description: >
-      Reporting table (T60, ADR 0048): the adjust view, per user, category and the currency
-      it is charged in (`source_currency`) the forecast, the owner's usual (25th percentile of the last 12 months), the
-      headroom between them and its share of the total. US dollars. Carries `user_id`
-      for row-level security.
+      Reporting table (T60, ADR 0048): the adjust view, per user, category and the
+      currency it is charged in (`source_currency`): the forecast, the owner's usual
+      (25th percentile of the last 12 months), the headroom between them and its share
+      of the total. US dollars. Carries `user_id` for row-level security.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
