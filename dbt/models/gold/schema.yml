@@ -465,6 +465,22 @@ models:
         data_tests:
           - not_null
 
+  - name: rpt_category_forecast
+    description: >
+      Reporting table (T61, ADR 0048): what the dashboard shows of the forecast. The
+      latest run only, per user, category, currency and horizon (1 to 3 months ahead):
+      the interval (`p10`, `p50`, `p90`) and the quality of the series (model, whether
+      the median baseline was used, months of history, `mae_rel`, `coverage`).
+      Carries `user_id` for row-level security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, category, currency, horizon]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
   - name: rpt_goal_projection
     description: >
       Reporting table (T60, ADR 0048): the path to the savings goal in US dollars, one
@@ -526,14 +542,14 @@ models:
 
   - name: rpt_goal_headroom
     description: >
-      Reporting table (T60, ADR 0048): the adjust view, per user, category and currency
-      the forecast, the owner's usual (25th percentile of the last 12 months), the
+      Reporting table (T60, ADR 0048): the adjust view, per user, category and the currency
+      it is charged in (`source_currency`) the forecast, the owner's usual (25th percentile of the last 12 months), the
       headroom between them and its share of the total. US dollars. Carries `user_id`
       for row-level security.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
-            combination_of_columns: [user_id, category, currency]
+            combination_of_columns: [user_id, category, source_currency]
     columns:
       - name: user_id
         data_tests:

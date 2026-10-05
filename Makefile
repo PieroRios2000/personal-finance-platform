@@ -180,7 +180,7 @@ import-plan:
 # T59 (ADR 0048): per-category spend forecast for the next three months. Reads the closed
 # months from gold (so run `make build` first), writes bronze, then builds just the forecast
 # models. Counts only on the terminal; ratios and counts to MLflow (~/finance-data).
-FORECAST_MODELS = spend_forecasts spend_forecast_series fct_spend_forecast rpt_category_variance rpt_forecast_series_quality goal_projection goal_summary emergency_fund goal_headroom rpt_goal_projection rpt_goal_summary rpt_emergency_fund rpt_goal_headroom
+FORECAST_MODELS = spend_forecasts spend_forecast_series fct_spend_forecast rpt_category_variance rpt_forecast_series_quality rpt_category_forecast goal_projection goal_summary emergency_fund goal_headroom rpt_goal_projection rpt_goal_summary rpt_emergency_fund rpt_goal_headroom
 forecast:
 	$(LOAD_ENV) && uv run python -m scripts.forecast --user "$$PFP_USER" && \
 	uv run dbt deps --project-dir dbt --profiles-dir dbt && \
@@ -214,14 +214,16 @@ build:
 	$(LOAD_ENV) && uv run dbt deps --project-dir dbt --profiles-dir dbt && \
 	uv run dbt build --project-dir dbt --profiles-dir dbt
 
-# Eight closed months of a fictional person, straight to bronze (scripts/seed_demo.py), then
-# silver and gold. Needs `make up` first. Idempotent; real data can be loaded next to it (use
-# a different PFP_USER for it) or the demo removed with `make poc-down`.
+# Eight closed months of a fictional person and a plan for them, straight to bronze
+# (scripts/seed_demo.py), then silver and gold, then the forecast (T61). Needs `make up`
+# first. Idempotent; real data can be loaded next to it (use a different PFP_USER for
+# it) or the demo removed with `make poc-down`.
 demo: env-guard
 	@$(MAKE) --no-print-directory guard-user TARGET=demo
 	$(LOAD_ENV) && uv run python -m scripts.seed_demo && \
 	uv run dbt deps --project-dir dbt --profiles-dir dbt && \
 	uv run dbt build --project-dir dbt --profiles-dir dbt
+	@$(MAKE) --no-print-directory forecast
 	@echo "Open the dashboard: make status shows the Superset URL (user admin)."
 
 bi-check: pg-check
