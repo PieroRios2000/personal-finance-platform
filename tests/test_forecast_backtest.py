@@ -223,8 +223,10 @@ def test_short_series_borrow_errors_of_the_same_horizon_only() -> None:
         assert covered == list(range(1, 10))
 
 
-def test_longer_horizons_have_wider_intervals_on_a_series_that_drifts() -> None:
-    values = 500 + 25 * np.arange(48.0) + np.random.default_rng(8).normal(0, 20, 48)
+def test_longer_horizons_have_wider_intervals_on_a_random_walk() -> None:
+    # A random walk's error variance grows with the horizon; a straight drift plus noise
+    # would only shift the errors, not widen them.
+    values = 1000 + np.cumsum(np.random.default_rng(0).normal(0, 40, 60))
 
     fit = _one(values)
 
