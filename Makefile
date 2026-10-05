@@ -180,7 +180,7 @@ import-plan:
 # T59 (ADR 0048): per-category spend forecast for the next three months. Reads the closed
 # months from gold (so run `make build` first), writes bronze, then builds just the forecast
 # models. Counts only on the terminal; ratios and counts to MLflow (~/finance-data).
-FORECAST_MODELS = spend_forecasts spend_forecast_series fct_spend_forecast rpt_category_variance rpt_forecast_series_quality rpt_category_forecast rpt_forecast_realized goal_projection goal_summary emergency_fund goal_headroom rpt_goal_projection rpt_goal_summary rpt_emergency_fund rpt_goal_headroom goal_cashflow goal_balances rpt_goal_plan rpt_goal_cashflow rpt_goal_balances
+FORECAST_MODELS = spend_forecasts spend_forecast_series fct_spend_forecast rpt_category_variance rpt_forecast_series_quality rpt_category_forecast rpt_forecast_realized goal_projection goal_summary emergency_fund goal_headroom rpt_goal_projection rpt_goal_summary rpt_emergency_fund rpt_goal_headroom goal_cashflow goal_balances rpt_goal_plan rpt_goal_cashflow rpt_goal_balances rpt_income_statement
 forecast:
 	$(LOAD_ENV) && uv run python -m scripts.forecast --user "$$PFP_USER" && \
 	uv run dbt deps --project-dir dbt --profiles-dir dbt && \

@@ -53,7 +53,7 @@ params:
     .warn { background: #fff4e5; border-left: 5px solid #f5a524; border-radius: 8px;\n\
     \        padding: 8px 12px; font-size: 13px; color: #7a4b00; }\n.kpi.fund-ok {\
     \ border-left-color: #1f9d6b; } .kpi.fund-gap { border-left-color: #f5a524; }\n"
-  datasource: 8__table
+  datasource: 10__table
   viz_type: handlebars
 query_context: null
 cache_timeout: null

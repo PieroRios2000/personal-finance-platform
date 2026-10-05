@@ -49,6 +49,7 @@ def test_it_grants_gamma_not_admin_on_the_gold_tables() -> None:
         "rpt_goal_headroom",
         "rpt_category_forecast",
         "rpt_category_variance",
+        "rpt_income_statement",
     ):
         assert f'"{table}"' in _SETUP_ACCESS
     assert 'find_role("Gamma")' in _SETUP_ACCESS

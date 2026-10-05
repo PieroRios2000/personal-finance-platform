@@ -172,6 +172,13 @@ model is worth having. The full design is in
   security (ADR 0036) covers the virtual dataset and was checked with two users.
 - **Realized vs expected shows the backtest meanwhile** (`source` = `backtest`), labelled, until
   a second monthly run gives `realized` rows.
+- **T66: income statement.** The forecast and the spending by category are read as a monthly
+  income statement per currency (`rpt_income_statement`), in its own dashboard tab. Planned
+  saving = income - expected expenses, where expected expenses are the plan's fixed amounts plus
+  the median forecast of total variable spending from the latest run; a closed month is compared
+  with the backtest of that run. Considered and rejected: planned saving from the owner's Meta
+  goal only (no month-by-month plan), and showing p10-p90 per month in the statement (a pivot of
+  intervals is unreadable; they stay in `rpt_category_forecast`).
 
 ## Related
 

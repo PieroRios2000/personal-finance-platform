@@ -1,0 +1,41 @@
+slice_name: 'Income statement: saving against the plan'
+description: null
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_line
+params:
+  x_axis: month
+  time_grain_sqla: P1M
+  metrics:
+  - expressionType: SQL
+    sqlExpression: SUM(amount)
+    label: Amount
+  groupby:
+  - expressionType: SQL
+    sqlExpression: "split_part(line, ' \xB7 ', 2)"
+    label: line
+  adhoc_filters:
+  - expressionType: SQL
+    sqlExpression: "line IN ('5 \xB7 Monthly saving', '7 \xB7 Planned saving')"
+    clause: WHERE
+  - expressionType: SQL
+    sqlExpression: months_ahead + 1 <= {% set typed = (filter_values('horizon_months')
+      or ['36'])[0] | string %}{{ typed | int if typed.isascii() and typed.isdigit()
+      and typed | length <= 4 else 36 }}
+    clause: WHERE
+  seriesType: line
+  x_axis_time_format: '%d %b %Y'
+  y_axis_format: ',.0f'
+  y_axis_title: Saving in the selected currency
+  y_axis_title_margin: 50
+  y_axis_title_position: Left
+  rich_tooltip: true
+  row_limit: 1000
+  show_legend: true
+  datasource: 8__table
+  viz_type: echarts_timeseries_line
+query_context: null
+cache_timeout: null
+uuid: 4e750ea1-7fef-58dd-8b99-7b85e5041cf4
+version: 1.0.0
+dataset_uuid: 89eb93b9-8ef5-5f9d-a20f-30abfcc335b4

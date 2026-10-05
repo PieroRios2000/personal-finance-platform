@@ -17,6 +17,7 @@ import http.cookiejar
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import urllib.error
@@ -58,10 +59,12 @@ def _time_range(column: str) -> dict[str, Any]:
     }
 
 
-# The Forecast horizon filter (T65) as a chart WHERE: the typed value, only if it is
-# plain digits, else 36. The filter lives on the goal dataset; the table reads it here.
+# The Forecast horizon filter (T65) as a chart WHERE on `months_ahead`: the typed value,
+# only if it is plain digits, else 36. The filter lives on the goal dataset; a chart on
+# another table reads it here. `months_ahead` counts from 0 at the first month ahead,
+# the goal's `month_index` from 1, hence the + 1.
 _HORIZON_WHERE = (
-    "horizon <= "
+    "months_ahead + 1 <= "
     "{% set typed = (filter_values('horizon_months') or ['36'])[0] | string %}"
     "{{ typed | int if typed.isascii() and typed.isdigit() and typed | length <= 4"
     " else 36 }}"
@@ -796,34 +799,53 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         },
     ),
     (
-        "rpt_category_forecast",
-        "Forecast: next months",
-        "table",
+        "rpt_income_statement",
+        "Income statement: saving against the plan",
+        "echarts_timeseries_line",
         {
-            "query_mode": "raw",
-            # The latest run only, in each category's own currency (Currency filter),
-            # for as many months as the Forecast horizon filter says (36 until one is
-            # typed). The interval is blank where the backtest could not measure one.
-            "adhoc_filters": [_where(_HORIZON_WHERE)],
-            "all_columns": [
-                "category",
-                "currency",
-                "target_month",
-                "p10",
-                "p50",
-                "p90",
-                "model_name",
+            "x_axis": "month",
+            "time_grain_sqla": "P1M",
+            "metrics": [_sql_metric("SUM(amount)", "Amount")],
+            # What was saved (closed months) or is expected to be (months ahead) next to
+            # what the plan and the forecast said it would be.
+            "groupby": [_sql_column("split_part(line, ' · ', 2)", "line")],
+            "adhoc_filters": [
+                _where("line IN ('5 · Monthly saving', '7 · Planned saving')"),
+                _where(_HORIZON_WHERE),
             ],
-            "order_by_cols": ['["category", true]', '["target_month", true]'],
-            "column_config": {
-                **{
-                    name: {"d3NumberFormat": ",.2f", "horizontalAlign": "right"}
-                    for name in ("p10", "p50", "p90")
-                },
-                "target_month": {"d3TimeFormat": "%b %Y"},
-            },
-            "row_limit": 5000,
-            "include_search": True,
+            "seriesType": "line",
+            "x_axis_time_format": _DATE_FORMAT,
+            "y_axis_format": ",.0f",
+            "y_axis_title": "Saving in the selected currency",
+            "y_axis_title_margin": 50,
+            "y_axis_title_position": "Left",
+            "rich_tooltip": True,
+            "row_limit": 1000,
+            "show_legend": True,
+        },
+    ),
+    (
+        "rpt_income_statement",
+        "Income statement: month by month",
+        "pivot_table_v2",
+        {
+            # One currency at a time (Currency filter, shown in the first column). The
+            # lines carry their order ("1 · Income" ... "8 · Saving vs plan"); closed
+            # months come first and the months ahead are labelled "(forecast)".
+            "groupbyRows": ["currency", "line"],
+            "groupbyColumns": ["month_label"],
+            "metrics": [_sql_metric("SUM(amount)", "Amount")],
+            "metricsLayout": "COLUMNS",
+            "aggregateFunction": "Sum",
+            "rowTotals": False,
+            "colTotals": False,
+            "transposePivot": False,
+            "combineMetric": False,
+            "rowOrder": "key_a_to_z",
+            "colOrder": "key_a_to_z",
+            "valueFormat": ",.2f",
+            "adhoc_filters": [_where(_HORIZON_WHERE)],
+            "row_limit": 10000,
         },
     ),
     (
@@ -986,6 +1008,21 @@ class Superset:
         return self._call(method, path)
 
 
+# The dashboard's tabs, left to right (T66). Soles and dollars are never added, and
+# what is read together lives together: the savings per currency, the spending by
+# category, the goal and its forecast, and the monthly income statement.
+SAVINGS, CATEGORIES, FORECAST, STATEMENT = (
+    "Savings",
+    "Categories",
+    "Forecast & goal",
+    "Income statement",
+)
+
+
+def tab_id(name: str) -> str:
+    return "TAB-" + re.sub(r"\W+", "-", name.lower()).strip("-")
+
+
 def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
     """The dashboard's filter bar. The calendar filters (date range, time grain, year,
     quarter, month) and bank, account, currency, flow type and fund. A filter applies
@@ -1033,6 +1070,10 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
         item = select(name, "goal_dynamic", column, multi=False)
         item["targets"] = [{"datasetId": goal, "column": {"name": column}}]
         item["controlValues"]["enableEmptyFilter"] = False
+        item["scope"] = {
+            "rootPath": [tab_id(FORECAST), tab_id(STATEMENT)],
+            "excluded": [],
+        }
         return item
 
     # The dataset is where the filter takes its grains from; without one it is blank.
@@ -1069,8 +1110,8 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
 # the layout prefix, the text is in NOTES.
 NOTE = "@note"
 FORECAST_NOTE = f"{NOTE}:forecast"
-# A section title across the grid: "@section:" plus the text, alone in its row.
-SECTION = "@section:"
+STATEMENT_NOTE = f"{NOTE}:statement"
+CATEGORIES_NOTE = f"{NOTE}:categories"
 NOTE_TEXT = (
     "### How to read the returns\n\n"
     "- **valuation**: the month closed at a real month-end value.\n"
@@ -1080,15 +1121,18 @@ NOTE_TEXT = (
     "and the balances are always there.\n\n"
     "One currency at a time: use the **Currency** filter."
 )
+CATEGORIES_NOTE_TEXT = (
+    "Everything on this page is in the **one currency** the **Currency** filter has "
+    "selected (soles by default); soles and dollars are never added."
+)
 FORECAST_NOTE_TEXT = (
     "### How to read the forecast and the goal\n\n"
     "- Everything about the goal is in **US$**. Type a **Goal (US$)**, an **Exchange "
     "rate (PEN per US$)**, the **Emergency months** and a **Forecast horizon "
     "(months)** in the filter bar and press *Apply filters*; left empty, each one "
     "takes the value of the Meta sheet.\n"
-    "- The forecast goes 36 months ahead. The **interval** (p10 to p90) is shown only "
-    "where the backtest measured it (up to 12 months); beyond that the table leaves "
-    "it blank and only the median (p50) is a forecast.\n"
+    "- The forecast goes 36 months ahead. Its month-by-month numbers, by category, "
+    "are in the **Income statement** tab.\n"
     "- **Optimistic, base and cautious** are three sets of assumptions (low, median "
     "and high spending; high, median and low income), not a confidence interval.\n"
     "- Past the forecast the last month is held flat, and the investments are held "
@@ -1105,48 +1149,94 @@ FORECAST_NOTE_TEXT = (
     "backtest, well above 1 means worse; longer horizons have no ratio.\n\n"
     "The date range does not apply here: these tables look ahead."
 )
-NOTES = {NOTE: NOTE_TEXT, FORECAST_NOTE: FORECAST_NOTE_TEXT}
+STATEMENT_NOTE_TEXT = (
+    "### How to read the income statement\n\n"
+    "- One currency at a time: the **Currency** filter (soles by default).\n"
+    "- A **closed month** is what happened. A month marked **(forecast)** is expected: "
+    "the income is the base scenario's, the fixed expenses are the plan's and the "
+    "rest is the forecast's median (p50), by category.\n"
+    "- **Monthly saving** = income - fixed expenses - the rest of the spending.\n"
+    "- **Planned saving** = income - **expected expenses**; expected expenses = the "
+    "plan's fixed amounts + the forecast's median for the month's total variable "
+    "spending. For a closed month it is the forecast made for it, with the income "
+    "that really came in.\n"
+    "- **Saving vs plan** (closed months) = monthly saving - planned saving. Negative: "
+    "you spent more than expected.\n"
+    "- Charges the plan marks *ignore* are not forecast, so they show as spending "
+    "with nothing planned. **~ Not split by category** is the part of the total "
+    "forecast that no category carries.\n"
+    "- Type a **Forecast horizon (months)** to show fewer months ahead (36 by "
+    "default). The date range does not apply here."
+)
+NOTES = {
+    NOTE: NOTE_TEXT,
+    FORECAST_NOTE: FORECAST_NOTE_TEXT,
+    STATEMENT_NOTE: STATEMENT_NOTE_TEXT,
+    CATEGORIES_NOTE: CATEGORIES_NOTE_TEXT,
+}
 
 # Charts that read nothing on a short history: the variance table compares a month
 # with a backtest forecast, which needs nine closed months, and the demo has eight; the
 # realized table needs a second forecast run after a forecast month has closed.
 MAY_BE_EMPTY = {"Categories above expected", "Forecast: realized vs expected"}
 
-# The grid: (chart name prefix, width out of 12, height) per cell, row by row.
-LAYOUT: list[list[tuple[str, int, int]]] = [
-    [("Upload your files", 12, 32)],
-    [("Cash flow summary", 12, 22)],
-    [("Period analysed", 6, 22), ("Debt at the end", 6, 22)],
-    [("Capital summary", 6, 22), ("Net position summary", 6, 22)],
-    [("Cash flow: money", 6, 50), ("Balance per month", 6, 50)],
-    [(f"{SECTION}Categories", 12, 6)],
-    [("Categories: what you", 6, 50), ("Categories: where", 6, 50)],
-    [("Categories: spending per", 12, 50)],
-    [("Categories: movements", 12, 60)],
-    [("Investments: return and", 12, 32)],
-    [("Investments: return per", 8, 50), (NOTE, 4, 50)],
-    [(f"{SECTION}Forecast & goal", 12, 6)],
-    [("Goal: when you reach it", 7, 46), (FORECAST_NOTE, 5, 46)],
-    [("Goal: projected progress", 12, 50)],
-    [("Emergency fund", 12, 34)],
-    [("Adjust: where", 12, 50)],
-    [("Forecast: next months", 12, 60)],
-    [("Categories above", 12, 50)],
-    [("Forecast: how far", 12, 60)],
-    [("Forecast: realized", 12, 50)],
-    [("Movements", 12, 60)],
-    [("Statement balances", 12, 60)],
-    [("Reconciliation", 12, 40)],
+# The grid, tab by tab: (chart name prefix, width out of 12, height) per cell, by row.
+TABS: list[tuple[str, list[list[tuple[str, int, int]]]]] = [
+    (
+        SAVINGS,
+        [
+            [("Upload your files", 12, 32)],
+            [("Cash flow summary", 12, 22)],
+            [("Period analysed", 6, 22), ("Debt at the end", 6, 22)],
+            [("Capital summary", 6, 22), ("Net position summary", 6, 22)],
+            [("Cash flow: money", 6, 50), ("Balance per month", 6, 50)],
+            [("Investments: return and", 12, 32)],
+            [("Investments: return per", 8, 50), (NOTE, 4, 50)],
+            [("Movements", 12, 60)],
+            [("Statement balances", 12, 60)],
+            [("Reconciliation", 12, 40)],
+        ],
+    ),
+    (
+        CATEGORIES,
+        [
+            [(CATEGORIES_NOTE, 12, 8)],
+            [("Categories: what you", 6, 50), ("Categories: where", 6, 50)],
+            [("Categories: spending per", 12, 50)],
+            [("Categories: movements", 12, 60)],
+        ],
+    ),
+    (
+        FORECAST,
+        [
+            [("Goal: when you reach it", 7, 46), (FORECAST_NOTE, 5, 46)],
+            [("Goal: projected progress", 12, 50)],
+            [("Emergency fund", 12, 34)],
+            [("Adjust: where", 12, 50)],
+            [("Forecast: how far", 12, 60)],
+            [("Forecast: realized", 12, 50)],
+        ],
+    ),
+    (
+        STATEMENT,
+        [
+            [("Income statement: saving", 8, 50), (STATEMENT_NOTE, 4, 50)],
+            [("Income statement: month", 12, 80)],
+            [("Categories above", 12, 50)],
+        ],
+    ),
 ]
+LAYOUT = [row for _, rows in TABS for row in rows]
 
 
 def _position(
     chart_ids: Sequence[int], names: Sequence[str], uuids: Sequence[str]
 ) -> dict[str, Any]:
-    """The dashboard grid, from LAYOUT: each cell finds its chart by name prefix."""
+    """The dashboard grid, from TABS: each cell finds its chart by name prefix."""
+    tabs = "TABS-main"
     layout: dict[str, Any] = {
         "DASHBOARD_VERSION_KEY": "v2",
-        "ROOT_ID": {"type": "ROOT", "id": "ROOT_ID", "children": ["GRID_ID"]},
+        "ROOT_ID": {"type": "ROOT", "id": "ROOT_ID", "children": [tabs]},
         "GRID_ID": {
             "type": "GRID",
             "id": "GRID_ID",
@@ -1158,61 +1248,74 @@ def _position(
             "id": "HEADER_ID",
             "meta": {"text": "PFP finance"},
         },
+        tabs: {
+            "type": "TABS",
+            "id": tabs,
+            "children": [tab_id(name) for name, _ in TABS],
+            "parents": ["ROOT_ID"],
+            "meta": {},
+        },
     }
-    for row_number, cells in enumerate(LAYOUT):
-        row_id = f"ROW-{row_number}"
-        if cells[0][0].startswith(SECTION):
-            title_id = f"HEADER-{row_number}"
-            layout["GRID_ID"]["children"].append(title_id)
-            layout[title_id] = {
-                "type": "HEADER",
-                "id": title_id,
-                "children": [],
-                "parents": ["ROOT_ID", "GRID_ID"],
-                "meta": {
-                    "text": cells[0][0].removeprefix(SECTION),
-                    "headerSize": "LARGE_HEADER",
-                    "background": "BACKGROUND_TRANSPARENT",
-                },
-            }
-            continue
-        layout["GRID_ID"]["children"].append(row_id)
-        children = []
-        for prefix, width, height in cells:
-            if prefix in NOTES:
-                note_id = f"MARKDOWN-{prefix.removeprefix(NOTE).lstrip(':') or 'note'}"
-                layout[note_id] = {
-                    "type": "MARKDOWN",
-                    "id": note_id,
-                    "children": [],
-                    "parents": ["ROOT_ID", "GRID_ID", row_id],
-                    "meta": {"width": width, "height": height, "code": NOTES[prefix]},
-                }
-                children.append(note_id)
-                continue
-            i = next(n for n, name in enumerate(names) if name.startswith(prefix))
-            cell_id = f"CHART-{i}"
-            children.append(cell_id)
-            layout[cell_id] = {
-                "type": "CHART",
-                "id": cell_id,
-                "children": [],
-                "parents": ["ROOT_ID", "GRID_ID", row_id],
-                "meta": {
-                    "width": width,
-                    "height": height,
-                    "chartId": chart_ids[i],
-                    "uuid": uuids[i],
-                    "sliceName": names[i],
-                },
-            }
-        layout[row_id] = {
-            "type": "ROW",
-            "id": row_id,
-            "children": children,
-            "parents": ["ROOT_ID", "GRID_ID"],
-            "meta": {"background": "BACKGROUND_TRANSPARENT"},
+    row_number = 0
+    for tab_name, rows in TABS:
+        tab = tab_id(tab_name)
+        layout[tab] = {
+            "type": "TAB",
+            "id": tab,
+            "children": [],
+            "parents": ["ROOT_ID", tabs],
+            "meta": {
+                "text": tab_name,
+                "defaultText": "Tab title",
+                "placeholder": "Tab title",
+            },
         }
+        for cells in rows:
+            row_id = f"ROW-{row_number}"
+            row_number += 1
+            layout[tab]["children"].append(row_id)
+            parents = ["ROOT_ID", tabs, tab, row_id]
+            children = []
+            for prefix, width, height in cells:
+                if prefix in NOTES:
+                    note = prefix.removeprefix(NOTE).lstrip(":") or "note"
+                    note_id = f"MARKDOWN-{note}"
+                    layout[note_id] = {
+                        "type": "MARKDOWN",
+                        "id": note_id,
+                        "children": [],
+                        "parents": parents,
+                        "meta": {
+                            "width": width,
+                            "height": height,
+                            "code": NOTES[prefix],
+                        },
+                    }
+                    children.append(note_id)
+                    continue
+                i = next(n for n, name in enumerate(names) if name.startswith(prefix))
+                cell_id = f"CHART-{i}"
+                children.append(cell_id)
+                layout[cell_id] = {
+                    "type": "CHART",
+                    "id": cell_id,
+                    "children": [],
+                    "parents": parents,
+                    "meta": {
+                        "width": width,
+                        "height": height,
+                        "chartId": chart_ids[i],
+                        "uuid": uuids[i],
+                        "sliceName": names[i],
+                    },
+                }
+            layout[row_id] = {
+                "type": "ROW",
+                "id": row_id,
+                "children": children,
+                "parents": ["ROOT_ID", tabs, tab],
+                "meta": {"background": "BACKGROUND_TRANSPARENT"},
+            }
     return layout
 
 
@@ -1232,6 +1335,8 @@ def _sample_rows(client: Superset, dataset: int, params: dict[str, Any]) -> int:
         for column in [
             params.get("x_axis"),
             *params.get("groupby", []),
+            *params.get("groupbyRows", []),
+            *params.get("groupbyColumns", []),
             *params.get("all_columns", []),
         ]
         if column

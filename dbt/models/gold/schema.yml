@@ -541,6 +541,42 @@ models:
         data_tests:
           - not_null
 
+  - name: rpt_income_statement
+    description: >
+      Reporting table (T66, ADR 0048): the monthly income statement per currency, long
+      format, one row per user, currency, month and `line` (the line's own order is its
+      numeric prefix). Last 12 closed months (`kind` actual) and every month the latest
+      forecast covers (`forecast`); `plan` lines are the expected expenses and the
+      planned saving (income minus the plan's fixed amounts and the forecast's median).
+      Carries `user_id` for row-level security; not a calendar table, no calendar
+      filters.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, currency, month, line]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: currency
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["PEN", "USD"]
+      - name: kind
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["actual", "forecast", "plan"]
+      - name: line
+        data_tests:
+          - not_null
+      - name: amount
+        data_tests:
+          - not_null
+
   - name: rpt_goal_balances
     description: >
       Reporting table (T65, ADR 0048): the balances the projection starts from and the

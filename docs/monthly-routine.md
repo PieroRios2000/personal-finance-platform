@@ -55,8 +55,10 @@ make forecast             # per-category spend for the next 36 months, the goal 
 ```
 
 Only the first two steps change from month to month when you edit the plan: if it did not
-change, `make build` then `make forecast` is enough. Open the **Forecast & goal** section of
-the dashboard. **Forecast: realized vs expected** shows rows marked `backtest` on the first run
+change, `make build` then `make forecast` is enough. Open the **Income statement** tab of the
+dashboard to see, month by month, whether you save what was planned (planned saving = income
+minus the plan's fixed expenses and the forecast's median for the rest), then the **Forecast & goal**
+tab. **Forecast: realized vs expected** shows rows marked `backtest` on the first run
 (the model's one-month-ahead forecast of months that already closed); from the second month on
 it adds rows marked `realized`, last month's forecast against what happened (a ratio near 1 is
 as good as the backtest, red above 2). The interval (p10 to p90) is blank past 12 months: the
