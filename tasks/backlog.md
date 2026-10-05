@@ -143,6 +143,8 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
   - [x] **T60** projection in dollars: buckets, calculated emergency target, two goal lines (`liquid`, `with_risk`), three scenarios, time to goal, adjust view, gold tables.
   - [x] **T61** Superset "Forecast & goal" section with row-level security, demo seed.
   - [x] **T62** realized-vs-backtest monitor, monthly routine and where-to-look updates.
+  - [x] **T64** forecast 36 months ahead (intervals only where the backtest measures them, `has_interval`), `rpt_forecast_realized.source` (`backtest` until a second run).
+  - [x] **T65** dynamic goal from Superset: `goal_cashflow`/`goal_balances` pieces, virtual dataset `goal_dynamic` and four typed native filters (goal, exchange rate, emergency months, horizon), row-level security on it.
   - [ ] **T63** (follow-up) experiment: recurrence and the fixed/variable mark as classifier features, ADR 0044's protocol and an acceptance margin over the fold spread; a null result is valid (spec section 4.8).
 - [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
       model -- macro-F1 and per-category precision (not just accuracy), latency, cost per

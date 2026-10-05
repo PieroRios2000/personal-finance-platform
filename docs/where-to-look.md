@@ -178,9 +178,13 @@ failed with "dagster-webserver must be installed").
 
 - **Dashboards** → `PFP finance`: 25 charts in sections (cash flow, capital, balances, investments,
   categories, forecast and goal, reconciliation, upload). The **Forecast & goal** section reads
-  the gold tables `rpt_goal_*`, `rpt_emergency_fund`, `rpt_category_forecast`,
-  `rpt_category_variance` and `rpt_forecast_realized` (monthly step: `make forecast`,
-  [monthly routine](monthly-routine.md)).
+  the virtual dataset `goal_dynamic` (SQL in `bi/sql/goal_dynamic.sql`, built from the gold tables
+  `rpt_goal_plan`, `rpt_goal_cashflow` and `rpt_goal_balances`) and the gold tables
+  `rpt_category_forecast`, `rpt_category_variance` and `rpt_forecast_realized` (monthly step:
+  `make forecast`, [monthly routine](monthly-routine.md)). To try another goal, exchange rate,
+  emergency months or forecast horizon, type it in the dashboard's filter bar (*Goal (US$)*,
+  *Exchange rate (PEN per US$)*, *Emergency months*, *Forecast horizon (months)*) and press
+  *Apply filters*; empty means the `Meta` value.
 - **Charts** (`/chart/list/`): each chart's query and SQL (*View query*). **Datasets** (`/tablemodelview/list/`):
   the gold tables each chart reads.
 - **SQL Lab** (`/sqllab/`) → database `PFP gold (read-only)`: any `SELECT` on `gold.*`. You only see

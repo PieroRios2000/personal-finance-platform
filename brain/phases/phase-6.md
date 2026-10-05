@@ -25,7 +25,7 @@ session starts from facts. Scope decision:
 
 The cash-flow projection is specified together with Phase 3's spend forecast, because it needs the
 per-category forecast: [spec](../../docs/specs/category-forecast-and-savings-goal.md),
-[ADR 0048](../decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md) (tasks T56-T62).
+[ADR 0048](../decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md) (tasks T56-T62; T64-T65 extend it to 36 months and a goal editable from Superset).
 The owner enters the goal in dollars; the output is the time to reach it as a range over three scenarios, after filling an emergency amount calculated from his spending and income. The
 exchange rate in v1 is one owner-entered rate; the rate-history and rate-path section below is still
 planned.
