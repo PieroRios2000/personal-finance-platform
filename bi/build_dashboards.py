@@ -58,6 +58,15 @@ def _time_range(column: str) -> dict[str, Any]:
     }
 
 
+# The Forecast horizon filter (T65) as a chart WHERE: the typed value, only if it is
+# plain digits, else 36. The filter lives on the goal dataset; the table reads it here.
+_HORIZON_WHERE = (
+    "horizon <= "
+    "{% set typed = (filter_values('horizon_months') or ['36'])[0] | string %}"
+    "{{ typed | int if typed.isascii() and typed.isdigit() else 36 }}"
+)
+
+
 def _where(expression: str) -> dict[str, Any]:
     return {"expressionType": "SQL", "sqlExpression": expression, "clause": "WHERE"}
 
@@ -69,6 +78,8 @@ _GREEN, _RED, _AMBER = "#1f9d6b", "#e5484d", "#f5a524"
 # Handlebars charts, HTML and CSS of our own over the query's single row
 # (bi/templates/). Numbers are formatted in SQL (to_char), so templates stay plain.
 _TEMPLATES = Path(__file__).resolve().parent / "templates"
+# Datasets that are a SQL query, not a gold table (T65): name -> the committed file.
+VIRTUAL = {"goal_dynamic": Path(__file__).resolve().parent / "sql" / "goal_dynamic.sql"}
 DASHBOARD_CSS = (_TEMPLATES / "dashboard.css").read_text()
 _KPI_STYLE = (_TEMPLATES / "kpi.css").read_text()
 _CASH_FLOW_KPI = (_TEMPLATES / "cash_flow_kpi.hbs").read_text()
@@ -654,7 +665,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         },
     ),
     (
-        "rpt_goal_summary",
+        "goal_dynamic",
         "Goal: when you reach it",
         "handlebars",
         {
@@ -683,7 +694,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         },
     ),
     (
-        "rpt_goal_projection",
+        "goal_dynamic",
         "Goal: projected progress",
         "echarts_timeseries_line",
         {
@@ -698,7 +709,9 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
                     "line",
                 ),
             ],
-            "adhoc_filters": [],
+            # The Forecast horizon filter: the path is computed to 120 months, the chart
+            # shows as many as the filter says (36 until one is typed).
+            "adhoc_filters": [_where("month_index <= horizon_months")],
             "seriesType": "smooth",
             "x_axis_time_format": _DATE_FORMAT,
             "y_axis_format": ",.0f",
@@ -711,7 +724,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         },
     ),
     (
-        "rpt_emergency_fund",
+        "goal_dynamic",
         "Emergency fund",
         "handlebars",
         {
@@ -719,9 +732,9 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "groupby": [],
             # One scenario only: the target is the same in all three.
             "metrics": [
-                _sql_metric(_usd("MAX(target)"), "target"),
-                _sql_metric(_usd("MAX(bucket)"), "bucket"),
-                _sql_metric(_usd("MAX(gap)"), "gap"),
+                _sql_metric(_usd("MAX(emergency_target)"), "target"),
+                _sql_metric(_usd("MAX(emergency_now)"), "bucket"),
+                _sql_metric(_usd("MAX(emergency_gap)"), "gap"),
                 _sql_metric(
                     "COALESCE(to_char(MAX(months_of_income), 'FM990.0'), '-')",
                     "months_of_income",
@@ -730,9 +743,11 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
                     "COALESCE(to_char(MAX(months_covered), 'FM990.0'), '-')",
                     "months_covered",
                 ),
-                _sql_metric("CASE WHEN MAX(gap) <= 0 THEN 1 ELSE 0 END", "filled"),
                 _sql_metric(
-                    "CASE WHEN MAX(gap) <= 0 THEN 'already full' "
+                    "CASE WHEN MAX(emergency_gap) <= 0 THEN 1 ELSE 0 END", "filled"
+                ),
+                _sql_metric(
+                    "CASE WHEN MAX(emergency_gap) <= 0 THEN 'already full' "
                     "WHEN MAX(months_to_fill) IS NULL THEN 'not within 10 years' "
                     "ELSE 'full in ' || MAX(months_to_fill) || ' months (base pace)' "
                     "END",
@@ -781,12 +796,14 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
     ),
     (
         "rpt_category_forecast",
-        "Forecast: next three months",
+        "Forecast: next months",
         "table",
         {
             "query_mode": "raw",
-            # The latest run only, in each category's own currency (Currency filter).
-            "adhoc_filters": [],
+            # The latest run only, in each category's own currency (Currency filter),
+            # for as many months as the Forecast horizon filter says (36 until one is
+            # typed). The interval is blank where the backtest could not measure one.
+            "adhoc_filters": [_where(_HORIZON_WHERE)],
             "all_columns": [
                 "category",
                 "currency",
@@ -804,7 +821,7 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
                 },
                 "target_month": {"d3TimeFormat": "%b %Y"},
             },
-            "row_limit": 1000,
+            "row_limit": 5000,
             "include_search": True,
         },
     ),
@@ -882,10 +899,13 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
         "table",
         {
             "query_mode": "raw",
-            # An older forecast against the month that then closed. `error_ratio` is the
-            # miss over the backtest's typical miss: red where it did clearly worse.
+            # An older forecast against the month that then closed (`source` realized),
+            # or, until a second monthly run exists, the latest run's one-step forecast
+            # of a past month (`source` backtest). `error_ratio` is the miss over the
+            # backtest's typical miss: red where it did clearly worse (realized only).
             "adhoc_filters": [],
             "all_columns": [
+                "source",
                 "category",
                 "currency",
                 "target_month",
@@ -973,6 +993,7 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
     (PEN by default): currencies are never added together."""
 
     movements = datasets["rpt_movements"]
+    goal = datasets["goal_dynamic"]
 
     def base(name: str, filter_type: str, target: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -1004,6 +1025,15 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
         }
         return item
 
+    def typed(name: str, column: str) -> dict[str, Any]:
+        """A filter the viewer types a number into (T65): empty means the Meta sheet's
+        value. `bi/sql/goal_dynamic.sql` reads it and turns it into a number or ignores
+        it; the filter never reaches the query as text."""
+        item = select(name, "goal_dynamic", column, multi=False)
+        item["targets"] = [{"datasetId": goal, "column": {"name": column}}]
+        item["controlValues"]["enableEmptyFilter"] = False
+        return item
+
     # The dataset is where the filter takes its grains from; without one it is blank.
     grain = base("Time grain", "filter_timegrain", {"datasetId": movements})
     grain["defaultDataMask"] = {
@@ -1027,6 +1057,10 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
         select("Flow type", "rpt_movements", "flow_type"),
         select("Internal transfer", "rpt_movements", "is_internal_transfer"),
         select("Fund", "rpt_investments", "place"),
+        typed("Goal (US$)", "goal_amount_usd"),
+        typed("Exchange rate (PEN per US$)", "usd_to_pen"),
+        typed("Emergency months", "emergency_months"),
+        typed("Forecast horizon (months)", "horizon_months"),
     ]
 
 
@@ -1087,7 +1121,7 @@ LAYOUT: list[list[tuple[str, int, int]]] = [
     [("Goal: projected progress", 12, 50)],
     [("Emergency fund", 12, 34)],
     [("Adjust: where", 12, 50)],
-    [("Forecast: next three", 12, 60)],
+    [("Forecast: next months", 12, 60)],
     [("Categories above", 12, 50)],
     [("Forecast: how far", 12, 60)],
     [("Forecast: realized", 12, 50)],
@@ -1261,11 +1295,10 @@ def build(client: Superset, bi_password: str) -> int:
 
     datasets: dict[str, int] = {}
     for table in dict.fromkeys(chart[0] for chart in CHARTS):
-        datasets[table] = client.json(
-            "POST",
-            "/dataset/",
-            {"database": database, "schema": "gold", "table_name": table},
-        )["id"]
+        body = {"database": database, "schema": "gold", "table_name": table}
+        if table in VIRTUAL:
+            body["sql"] = VIRTUAL[table].read_text()
+        datasets[table] = client.json("POST", "/dataset/", body)["id"]
 
     dashboard = client.json(
         "POST",

@@ -1,11 +1,15 @@
-slice_name: 'Forecast: next three months'
+slice_name: 'Forecast: next months'
 description: null
 certified_by: null
 certification_details: null
 viz_type: table
 params:
   query_mode: raw
-  adhoc_filters: []
+  adhoc_filters:
+  - expressionType: SQL
+    sqlExpression: horizon <= {% set typed = (filter_values('horizon_months') or ['36'])[0]
+      | string %}{{ typed | int if typed.isascii() and typed.isdigit() else 36 }}
+    clause: WHERE
   all_columns:
   - category
   - currency
@@ -29,12 +33,12 @@ params:
       horizontalAlign: right
     target_month:
       d3TimeFormat: '%b %Y'
-  row_limit: 1000
+  row_limit: 5000
   include_search: true
-  datasource: 10__table
+  datasource: 8__table
   viz_type: table
 query_context: null
 cache_timeout: null
-uuid: e42d51c7-0728-5a90-a870-19eed9b30a1f
+uuid: 27028cae-8804-5754-854d-b3cd8eac1a9b
 version: 1.0.0
 dataset_uuid: 01f414bd-67e3-5863-99d5-8a2ce09fc201

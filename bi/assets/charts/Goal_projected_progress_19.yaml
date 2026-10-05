@@ -16,7 +16,10 @@ params:
     sqlExpression: CASE WHEN line = 'liquid' THEN 'liquid savings only' ELSE 'liquid
       + investments' END
     label: line
-  adhoc_filters: []
+  adhoc_filters:
+  - expressionType: SQL
+    sqlExpression: month_index <= horizon_months
+    clause: WHERE
   seriesType: smooth
   x_axis_time_format: '%d %b %Y'
   y_axis_format: ',.0f'
@@ -26,10 +29,10 @@ params:
   rich_tooltip: true
   row_limit: 10000
   show_legend: true
-  datasource: 7__table
+  datasource: 6__table
   viz_type: echarts_timeseries_line
 query_context: null
 cache_timeout: null
 uuid: d5c1a2e4-9ffb-5610-aea1-f3d600c1f1f1
 version: 1.0.0
-dataset_uuid: 772d3cde-b76e-5c05-8c24-0855d546376e
+dataset_uuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc

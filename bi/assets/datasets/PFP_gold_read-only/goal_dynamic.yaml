@@ -1,0 +1,439 @@
+table_name: goal_dynamic
+main_dttm_col: month
+description: null
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: pfp
+schema: gold
+sql: "{#- The dynamic goal (T65, ADR 0048): the Superset virtual dataset behind \"\
+  Goal: when you\nreach it\", \"projected progress\" and \"Emergency fund\". It recombines\
+  \ the monthly pieces\nof the projection (`gold.rpt_goal_cashflow`, `gold.rpt_goal_balances`)\
+  \ under the goal, the\nexchange rate and the emergency months that the dashboard's\
+  \ native filters hold, and falls\nback to the `Meta` values (`gold.rpt_goal_plan`)\
+  \ while a filter is empty. It must give the\nanswer of `forecasting.projection`\
+  \ for the same inputs (tests/test_dbt_goal_dynamic_*).\n\nThe native filters are\
+  \ typed free values. `filter_values(..., remove_filter=True)` reads\nthem here and\
+  \ keeps Superset from also adding them as a WHERE on the result. A value\nreaches\
+  \ the SQL only as a number: commas are dropped, then it must be digits with at most\n\
+  one dot and at most 1e12, or it is ignored. No comments inside the SQL itself. -#}\n\
+  {%- macro typed(column) -%}\n{%- set values = filter_values(column, remove_filter=True)\
+  \ -%}\n{%- set text = ((values[0] if values else '') | string).replace(',', '').strip()\
+  \ -%}\n{%- if text and text.isascii() and text.replace('.', '', 1).isdigit() and\
+  \ text | length <= 15 and text | float <= 1000000000000 -%}\n{{ text | float }}\n\
+  {%- else -%}\nnull\n{%- endif -%}\n{%- endmacro -%}\nwith params as (\n    select\n\
+  \        plan.user_id,\n        plan.target_date,\n        coalesce({{ typed('goal_amount_usd')\
+  \ }}, plan.goal_amount) as goal_amount_usd,\n        coalesce(nullif({{ typed('usd_to_pen')\
+  \ }}, 0), plan.usd_to_pen) as usd_to_pen,\n        coalesce({{ typed('emergency_months')\
+  \ }}, plan.emergency_months) as emergency_months,\n        coalesce({{ typed('horizon_months')\
+  \ }}, plan.horizon_months) as horizon_months\n    from gold.rpt_goal_plan as plan\n\
+  ),\n\nheld as (\n    select\n        params.user_id,\n        balances.bucket,\n\
+  \        balances.run_month,\n        case balances.currency\n            when 'USD'\
+  \ then balances.amount\n            when 'PEN' then balances.amount / params.usd_to_pen\n\
+  \        end as usd\n    from gold.rpt_goal_balances as balances\n    inner join\
+  \ params on balances.user_id = params.user_id\n),\n\nstart as (\n    select\n  \
+  \      held.user_id,\n        max(held.run_month) as run_month,\n        coalesce(sum(held.usd)\
+  \ filter (where held.bucket = 'emergency'), 0) as emergency_now,\n        coalesce(sum(held.usd)\
+  \ filter (where held.bucket = 'other_liquid'), 0) as other_liquid,\n        coalesce(sum(held.usd)\
+  \ filter (where held.bucket = 'risk'), 0) as risk,\n        coalesce(sum(held.usd)\
+  \ filter (where held.bucket = 'essential'), 0) as essential\n    from held\n   \
+  \ group by held.user_id\n),\n\nsized as (\n    select\n        start.*,\n      \
+  \  params.target_date,\n        params.emergency_months * start.essential as emergency_target\n\
+  \    from start\n    inner join params on start.user_id = params.user_id\n),\n\n\
+  monthly as (\n    select\n        flow.user_id,\n        flow.scenario,\n      \
+  \  flow.month_index,\n        flow.month,\n        sum(\n            case flow.currency\n\
+  \                when 'USD' then flow.income\n                when 'PEN' then flow.income\
+  \ / params.usd_to_pen\n            end\n        ) as income,\n        sum(\n   \
+  \         case flow.currency\n                when 'USD' then flow.income - flow.fixed\
+  \ - flow.variable\n                when 'PEN' then (flow.income - flow.fixed - flow.variable)\
+  \ / params.usd_to_pen\n            end\n        ) as saving\n    from gold.rpt_goal_cashflow\
+  \ as flow\n    inner join params on flow.user_id = params.user_id\n    group by\
+  \ flow.user_id, flow.scenario, flow.month_index, flow.month\n),\n\nscenarios as\
+  \ (\n    select\n        user_id,\n        scenario,\n        avg(saving) filter\
+  \ (where month_index <= 3) as projected_monthly_saving,\n        max(income) filter\
+  \ (where month_index = 1) as income\n    from monthly\n    group by user_id, scenario\n\
+  ),\n\ncumulative as (\n    select\n        user_id,\n        scenario,\n       \
+  \ month_index,\n        month,\n        sum(saving) over (partition by user_id,\
+  \ scenario order by month_index) as saved\n    from monthly\n    union all\n   \
+  \ select\n        scenarios.user_id,\n        scenarios.scenario,\n        0 as\
+  \ month_index,\n        sized.run_month as month,\n        0.0 as saved\n    from\
+  \ scenarios\n    inner join sized on scenarios.user_id = sized.user_id\n),\n\nlines\
+  \ as (\n    select 'liquid' as line\n    union all\n    select 'with_risk' as line\n\
+  ),\n\npath as (\n    select\n        cumulative.user_id,\n        cumulative.scenario,\n\
+  \        lines.line,\n        cumulative.month_index,\n        cumulative.month,\n\
+  \        sized.emergency_now + cumulative.saved - sized.emergency_target as spare,\n\
+  \        least(\n            greatest(sized.emergency_now + cumulative.saved, 0),\
+  \ sized.emergency_target\n        ) as emergency,\n        case lines.line\n   \
+  \         when 'liquid' then sized.other_liquid\n            else sized.other_liquid\
+  \ + sized.risk\n        end + greatest(0, sized.emergency_now + cumulative.saved\
+  \ - sized.emergency_target) as goal_progress\n    from cumulative\n    cross join\
+  \ lines\n    inner join sized on cumulative.user_id = sized.user_id\n),\n\nreached\
+  \ as (\n    select\n        path.*,\n        min(path.month_index) filter (\n  \
+  \          where path.goal_progress >= params.goal_amount_usd - 0.000000001\n  \
+  \      ) over (partition by path.user_id, path.scenario, path.line) as months_to_goal,\n\
+  \        min(path.month) filter (\n            where path.goal_progress >= params.goal_amount_usd\
+  \ - 0.000000001\n        ) over (partition by path.user_id, path.scenario, path.line)\
+  \ as reached_month,\n        min(path.month_index) filter (\n            where path.spare\
+  \ >= -0.000000001\n        ) over (partition by path.user_id, path.scenario, path.line)\
+  \ as months_to_fill\n    from path\n    inner join params on path.user_id = params.user_id\n\
+  ),\n\nneeded as (\n    select\n        sized.user_id,\n        lines.line,\n   \
+  \     (\n            (date_part('year', sized.target_date) - date_part('year', sized.run_month))\
+  \ * 12\n            + date_part('month', sized.target_date) - date_part('month',\
+  \ sized.run_month)\n        ) as months_left,\n        case lines.line\n       \
+  \     when 'liquid' then sized.other_liquid\n            else sized.other_liquid\
+  \ + sized.risk\n        end as counted\n    from sized\n    cross join lines\n)\n\
+  \nselect\n    reached.user_id,\n    reached.scenario,\n    reached.line,\n    reached.month_index,\n\
+  \    reached.month,\n    reached.emergency,\n    reached.goal_progress,\n    reached.months_to_goal,\n\
+  \    reached.reached_month,\n    scenarios.projected_monthly_saving,\n    case\n\
+  \        when needed.months_left is null or needed.months_left < 1 then null\n \
+  \       when params.goal_amount_usd - needed.counted <= 0 then 0.0\n        else\
+  \ greatest(\n            0,\n            (\n                sized.emergency_target\
+  \ + params.goal_amount_usd - needed.counted\n                - sized.emergency_now\n\
+  \            ) / needed.months_left\n        )\n    end as required_monthly_saving,\n\
+  \    sized.emergency_target,\n    sized.emergency_now,\n    greatest(0, sized.emergency_target\
+  \ - sized.emergency_now) as emergency_gap,\n    reached.months_to_fill,\n    case\
+  \ when sized.essential > 0 then sized.emergency_now / sized.essential end as months_covered,\n\
+  \    case when scenarios.income > 0 then sized.emergency_target / scenarios.income\
+  \ end as months_of_income,\n    sized.essential > scenarios.income as essential_over_income,\n\
+  \    sized.emergency_target > 24 * scenarios.income as target_over_two_years_income,\n\
+  \    params.goal_amount_usd,\n    params.usd_to_pen,\n    params.emergency_months,\n\
+  \    params.horizon_months,\n    checks.balance_mismatch,\n    checks.mismatch_months,\n\
+  \    checks.months_checked\nfrom reached\ninner join params on reached.user_id =\
+  \ params.user_id\ninner join sized on reached.user_id = sized.user_id\ninner join\
+  \ scenarios on reached.user_id = scenarios.user_id and reached.scenario = scenarios.scenario\n\
+  inner join needed on reached.user_id = needed.user_id and reached.line = needed.line\n\
+  left join gold.rpt_emergency_fund as checks\n    on reached.user_id = checks.user_id\
+  \ and reached.scenario = checks.scenario\n"
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+uuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description: null
+  d3format: null
+  currency: null
+  extra: null
+  warning_text: null
+columns:
+- column_name: target_over_two_years_income
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: essential_over_income
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: balance_mismatch
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: goal_amount_usd
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: DECIMAL
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: reached_month
+  verbose_name: null
+  is_dttm: true
+  is_active: true
+  type: DATE
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: month
+  verbose_name: null
+  is_dttm: true
+  is_active: true
+  type: DATE
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: projected_monthly_saving
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: FLOAT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: required_monthly_saving
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: FLOAT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: months_of_income
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: FLOAT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: usd_to_pen
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: FLOAT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: emergency_target
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: FLOAT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: emergency_gap
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: FLOAT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: goal_progress
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: FLOAT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: months_covered
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: FLOAT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: emergency_now
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: FLOAT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: emergency
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: FLOAT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: months_to_goal
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: months_to_fill
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: mismatch_months
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: months_checked
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: emergency_months
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: month_index
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: horizon_months
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: user_id
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: STRING
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: scenario
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: STRING
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: line
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: STRING
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+version: 1.0.0
+database_uuid: 1efd4d8d-27dc-50a1-a0ab-ba8b4f599b5f

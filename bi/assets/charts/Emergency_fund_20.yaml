@@ -8,13 +8,13 @@ params:
   groupby: []
   metrics:
   - expressionType: SQL
-    sqlExpression: '''US$ '' || to_char(MAX(target), ''FM999,999,999,990.00'')'
+    sqlExpression: '''US$ '' || to_char(MAX(emergency_target), ''FM999,999,999,990.00'')'
     label: target
   - expressionType: SQL
-    sqlExpression: '''US$ '' || to_char(MAX(bucket), ''FM999,999,999,990.00'')'
+    sqlExpression: '''US$ '' || to_char(MAX(emergency_now), ''FM999,999,999,990.00'')'
     label: bucket
   - expressionType: SQL
-    sqlExpression: '''US$ '' || to_char(MAX(gap), ''FM999,999,999,990.00'')'
+    sqlExpression: '''US$ '' || to_char(MAX(emergency_gap), ''FM999,999,999,990.00'')'
     label: gap
   - expressionType: SQL
     sqlExpression: COALESCE(to_char(MAX(months_of_income), 'FM990.0'), '-')
@@ -23,10 +23,10 @@ params:
     sqlExpression: COALESCE(to_char(MAX(months_covered), 'FM990.0'), '-')
     label: months_covered
   - expressionType: SQL
-    sqlExpression: CASE WHEN MAX(gap) <= 0 THEN 1 ELSE 0 END
+    sqlExpression: CASE WHEN MAX(emergency_gap) <= 0 THEN 1 ELSE 0 END
     label: filled
   - expressionType: SQL
-    sqlExpression: CASE WHEN MAX(gap) <= 0 THEN 'already full' WHEN MAX(months_to_fill)
+    sqlExpression: CASE WHEN MAX(emergency_gap) <= 0 THEN 'already full' WHEN MAX(months_to_fill)
       IS NULL THEN 'not within 10 years' ELSE 'full in ' || MAX(months_to_fill) ||
       ' months (base pace)' END
     label: fill
@@ -96,10 +96,10 @@ params:
     \ 5px solid #f5a524; border-radius: 8px;\n        padding: 8px 12px; font-size:\
     \ 13px; color: #7a4b00; }\n.kpi.fund-ok { border-left-color: #1f9d6b; } .kpi.fund-gap\
     \ { border-left-color: #f5a524; }\n"
-  datasource: 8__table
+  datasource: 6__table
   viz_type: handlebars
 query_context: null
 cache_timeout: null
 uuid: ee374d9a-ec19-5dca-966d-fa5c35ab8b07
 version: 1.0.0
-dataset_uuid: bfe119db-4999-51e7-a251-def61633b49e
+dataset_uuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc

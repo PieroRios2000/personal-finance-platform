@@ -543,8 +543,8 @@ position:
       width: 12
       height: 60
       chartId: 22
-      uuid: e42d51c7-0728-5a90-a870-19eed9b30a1f
-      sliceName: 'Forecast: next three months'
+      uuid: 27028cae-8804-5754-854d-b3cd8eac1a9b
+      sliceName: 'Forecast: next months'
   ROW-16:
     type: ROW
     id: ROW-16
@@ -927,6 +927,94 @@ metadata:
       datasetUuid: 673c06bf-c577-5fb4-b52b-54ddbe349e43
     controlValues:
       multiSelect: true
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-goal-(us$)
+    name: Goal (US$)
+    filterType: filter_select
+    targets:
+    - column:
+        name: goal_amount_usd
+      datasetUuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+    controlValues:
+      multiSelect: false
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-exchange-rate-(pen-per-us$)
+    name: Exchange rate (PEN per US$)
+    filterType: filter_select
+    targets:
+    - column:
+        name: usd_to_pen
+      datasetUuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+    controlValues:
+      multiSelect: false
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-emergency-months
+    name: Emergency months
+    filterType: filter_select
+    targets:
+    - column:
+        name: emergency_months
+      datasetUuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+    controlValues:
+      multiSelect: false
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-forecast-horizon-(months)
+    name: Forecast horizon (months)
+    filterType: filter_select
+    targets:
+    - column:
+        name: horizon_months
+      datasetUuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+    controlValues:
+      multiSelect: false
       enableEmptyFilter: false
       defaultToFirstItem: false
       searchAllOptions: false

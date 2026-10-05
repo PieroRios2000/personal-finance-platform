@@ -206,9 +206,14 @@ select
     params.goal_amount_usd,
     params.usd_to_pen,
     params.emergency_months,
-    params.horizon_months
+    params.horizon_months,
+    checks.balance_mismatch,
+    checks.mismatch_months,
+    checks.months_checked
 from reached
 inner join params on reached.user_id = params.user_id
 inner join sized on reached.user_id = sized.user_id
 inner join scenarios on reached.user_id = scenarios.user_id and reached.scenario = scenarios.scenario
 inner join needed on reached.user_id = needed.user_id and reached.line = needed.line
+left join gold.rpt_emergency_fund as checks
+    on reached.user_id = checks.user_id and reached.scenario = checks.scenario

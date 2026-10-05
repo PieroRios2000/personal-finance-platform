@@ -23,14 +23,15 @@ TABLES = (
     "rpt_balances",
     "rpt_investments",
     "rpt_reconciliation",
-    "rpt_goal_projection",
-    "rpt_goal_summary",
-    "rpt_emergency_fund",
+    "goal_dynamic",
     "rpt_goal_headroom",
     "rpt_category_forecast",
     "rpt_category_variance",
     "rpt_forecast_realized",
 )
+# Datasets the dashboards no longer use (T65) but a stack that imported an older export
+# still holds: covered by the same rule when present, never required.
+RETIRED = ("rpt_goal_projection", "rpt_goal_summary", "rpt_emergency_fund")
 RLS_NAME = "Per-user data (T41)"
 RLS_CLAUSE = "user_id = '{{ current_username() }}'"
 
@@ -51,13 +52,13 @@ def main() -> None:
 
         tables = (
             db.session.query(SqlaTable)
-            .filter(SqlaTable.table_name.in_(TABLES))
+            .filter(SqlaTable.table_name.in_(TABLES + RETIRED))
             .join(SqlaTable.database)
             .filter_by(database_name=DATABASE_NAME)
             .all()
         )
-        if len(tables) != len(TABLES):
-            found = {t.table_name for t in tables}
+        found = {t.table_name for t in tables}
+        if not set(TABLES) <= found:
             raise RuntimeError(f"missing gold dataset(s): {set(TABLES) - found}")
 
         for table in tables:
