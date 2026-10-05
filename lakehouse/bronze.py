@@ -226,8 +226,11 @@ class ForecastSeriesRow(NamedTuple):
     coverage: float | None
 
 
-# T60 (ADR 0048): the goal projection, in dollars. Four small tables replaced as one
-# set per user on every run (only the latest projection matters). The columns between
+# T60 (ADR 0048): the goal projection, in dollars. Small tables replaced as one set per
+# user on every run (only the latest projection matters). T65 adds `goal_cashflow` and
+# `goal_balances`: the same projection's pieces in the currency they were earned in, so
+# the dashboard can recombine them under its own goal, rate and emergency months. The
+# columns between
 # `run_month` and `created_at` are the fields of `forecasting.projection`'s rows.
 def _goal_schema(*fields: tuple[str, pa.DataType]) -> pa.Schema:
     return pa.schema(
@@ -283,6 +286,20 @@ _GOAL_SCHEMAS: dict[str, pa.Schema] = {
         ("reference", _MONEY),
         ("headroom", _MONEY),
         ("share", pa.float64()),
+    ),
+    "goal_cashflow": _goal_schema(
+        ("scenario", pa.string()),
+        ("month_index", pa.int32()),
+        ("month", pa.date32()),
+        ("currency", pa.string()),
+        ("income", _MONEY),
+        ("fixed", _MONEY),
+        ("variable", _MONEY),
+    ),
+    "goal_balances": _goal_schema(
+        ("bucket", pa.string()),
+        ("currency", pa.string()),
+        ("amount", _MONEY),
     ),
 }
 

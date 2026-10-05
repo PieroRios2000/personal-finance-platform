@@ -8,6 +8,7 @@ SeaweedFS and Postgres, like the rest of the dbt integration suite). Run with
 `pytest -m integration`. All data is synthetic.
 """
 
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -50,12 +51,14 @@ SCENARIO_STEP = {"base": 0, "cautious": 1, "optimistic": 2}
 
 
 def _inputs(plan: Plan = PLAN) -> Inputs:
-    interval = [(900.0 + 10 * i, 1000.0 + 10 * i, 1100.0 + 10 * i) for i in range(12)]
-    held_spread = [(None, 1200.0 + 5 * i, None) for i in range(24)]
-    pen = TotalSpend([1000.0 + 20 * (i % 4) for i in range(12)], interval + held_spread)
-    usd = TotalSpend(
-        [150.0] * 12, [(120.0, 150.0, 190.0)] * 12 + [(None, 160.0, None)] * 24
-    )
+    pen_future: list[tuple[float | None, float, float | None]] = [
+        (900.0 + 10 * i, 1000.0 + 10 * i, 1100.0 + 10 * i) for i in range(12)
+    ] + [(None, 1200.0 + 5 * i, None) for i in range(24)]
+    usd_future: list[tuple[float | None, float, float | None]] = [
+        (120.0, 150.0, 190.0)
+    ] * 12 + [(None, 160.0, None)] * 24
+    pen = TotalSpend([1000.0 + 20 * (i % 4) for i in range(12)], pen_future)
+    usd = TotalSpend([150.0] * 12, usd_future)
     return Inputs(
         plan=plan,
         balances=Balances(
@@ -102,7 +105,7 @@ def _build(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def _sql(filters: dict[str, list[object]] | None = None) -> list[dict[str, Any]]:
+def _sql(filters: Mapping[str, Sequence[object]] | None = None) -> list[dict[str, Any]]:
     return _rows(render(filters))
 
 
@@ -196,7 +199,8 @@ def test_typing_a_goal_and_a_rate_changes_the_answer(lake: str, tmp_path: Path) 
             for r in _sql(filters)
             if (r["scenario"], r["line"], r["month_index"]) == ("base", "liquid", 0)
         ]
-        return row["months_to_goal"]
+        months_to_goal: int | None = row["months_to_goal"]
+        return months_to_goal
 
     assert months({"goal_amount_usd": ["12000"]}) != months(
         {"goal_amount_usd": ["90000"]}

@@ -107,7 +107,7 @@ def test_intervals_are_ordered_and_never_below_zero() -> None:
     measured = [i for i in fit.future if i.p10 is not None]
     assert measured
     for i in measured:
-        assert i.p90 is not None
+        assert i.p10 is not None and i.p90 is not None
         assert 0 <= i.p10 <= i.p50 <= i.p90
 
 

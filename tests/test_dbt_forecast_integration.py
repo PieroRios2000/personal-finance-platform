@@ -348,7 +348,7 @@ def test_realized_labels_each_row_by_where_its_actual_comes_from(
     result = _dbt_build(tmp_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    by_source = {}
+    by_source: dict[str, list[date]] = {}
     for row in _rows("gold.rpt_forecast_realized"):
         by_source.setdefault(row["source"], []).append(row["target_month"])
     assert by_source["realized"] == [RUN]

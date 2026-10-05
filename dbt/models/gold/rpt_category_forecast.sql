@@ -1,7 +1,8 @@
 -- gold.rpt_category_forecast: what the dashboard shows of the forecast (T61, ADR 0048): the
--- latest run only, one row per user, category, currency and horizon (1 to 3 months ahead),
--- with the interval and how far to trust the series (model, whether the median baseline was
--- used, months of history, `mae_rel`, `coverage`). Older runs and the backtest rows stay in
+-- latest run only, one row per user, category, currency and horizon (1 to 36 months ahead),
+-- with the interval (`has_interval` is false where the backtest could not measure one) and
+-- how far to trust the series (model, whether the median baseline was used, months of
+-- history, `mae_rel`, `coverage`). Older runs and the backtest rows stay in
 -- `fct_spend_forecast`; the realized-vs-backtest monitor reads those.
 --
 -- Carries `user_id` for row-level security (ADR 0036). Not a calendar-month table: no
@@ -28,6 +29,7 @@ select
     fct_spend_forecast.p10,
     fct_spend_forecast.p50,
     fct_spend_forecast.p90,
+    fct_spend_forecast.has_interval,
     rpt_forecast_series_quality.baseline_used,
     rpt_forecast_series_quality.low_history,
     rpt_forecast_series_quality.n_months,

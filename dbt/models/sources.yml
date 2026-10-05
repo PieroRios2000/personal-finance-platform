@@ -85,6 +85,17 @@ sources:
         description: >
           Per category, how far the forecast sits above the owner's usual (T60, spec
           4.5). Written with `goal_projection`; same existence rule.
+      - name: goal_cashflow
+        description: >
+          The monthly pieces behind the savings projection (T65, ADR 0048): per
+          scenario, month (1 to 120) and currency, the income, fixed and variable
+          spending in the currency they were earned or charged in. Written with
+          `goal_projection`; same existence rule.
+      - name: goal_balances
+        description: >
+          What the projection starts from (T65): the emergency, other liquid and risk
+          balances per currency, and the monthly essential spending. Written with
+          `goal_projection`; same existence rule.
       - name: category_predictions
         description: >
           The trained model's own guess for a movement's (bank, description),

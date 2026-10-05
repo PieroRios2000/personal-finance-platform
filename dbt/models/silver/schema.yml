@@ -377,6 +377,34 @@ models:
         data_tests:
           - not_null
 
+  - name: goal_cashflow
+    description: >
+      Silver (T65, ADR 0048): the pieces of the savings projection per user, scenario,
+      month index (1 to 120) and currency, in the currency they were earned or charged
+      in. Empty (same columns) until `make forecast` has projected.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, scenario, month_index, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
+  - name: goal_balances
+    description: >
+      Silver (T65, ADR 0048): what the projection starts from, per user, bucket
+      (`emergency`, `other_liquid`, `risk`, and `essential` for the monthly essential
+      spending) and currency. Empty (same columns) until `make forecast` has projected.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, bucket, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
   - name: goal_projection
     description: >
       Silver (T60, ADR 0048): the savings-goal path in US dollars, one row per user,

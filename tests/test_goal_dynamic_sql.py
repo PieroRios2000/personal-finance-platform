@@ -13,7 +13,7 @@ PARAMETERS = ("goal_amount_usd", "usd_to_pen", "emergency_months", "horizon_mont
 
 def _defaults(sql: str, column: str) -> str:
     [line] = re.findall(rf"^\s*(.*) as {column},?$", sql, flags=re.MULTILINE)
-    return line
+    return str(line)
 
 
 def test_no_filter_leaves_every_parameter_to_its_default() -> None:
