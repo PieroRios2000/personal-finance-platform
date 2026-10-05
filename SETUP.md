@@ -799,7 +799,9 @@ make forecast               # after `make build`: per-category forecast of the n
 
 It reads the closed months from gold, leaves out the charges your plan calls fixed or ignored,
 and writes bronze, then builds `silver.spend_forecast*` and `gold.fct_spend_forecast`,
-`rpt_category_variance` and `rpt_forecast_series_quality`. The terminal shows counts only;
+`rpt_category_variance` and `rpt_forecast_series_quality`. With a plan imported it also projects
+the dollar goal (T60): `gold.rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund` and
+`rpt_goal_headroom`; without a plan, or without `usd_to_pen`, it says so and skips. The terminal shows counts only;
 ratios and counts go to MLflow (`~/finance-data/mlflow.db`, or `MLFLOW_TRACKING_URI`). No new
 dependency: `mlflow` was added with the categorization model (T52).
 

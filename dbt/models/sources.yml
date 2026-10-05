@@ -67,6 +67,24 @@ sources:
           Per series of a forecast run (T59, ADR 0048): the selected model, months of
           history, backtest origins, MAE relative to the baseline and interval
           coverage. Written with `spend_forecasts`; same existence rule.
+      - name: goal_projection
+        description: >
+          The savings-goal path in US dollars (T60, ADR 0048): one row per scenario,
+          line and month (0 to 120). Replaced as one set per user on every `make
+          forecast`. Only exists once a projection has run; models on it use
+          `bronze_table_exists` too.
+      - name: goal_summary
+        description: >
+          Months to the goal and the saving it needs, per scenario and line (T60).
+          Written with `goal_projection`; same existence rule.
+      - name: emergency_fund
+        description: >
+          The emergency fund per scenario: target, bucket, gap, coverage and sanity
+          flags (T60). Written with `goal_projection`; same existence rule.
+      - name: goal_headroom
+        description: >
+          Per category, how far the forecast sits above the owner's usual (T60, spec
+          4.5). Written with `goal_projection`; same existence rule.
       - name: category_predictions
         description: >
           The trained model's own guess for a movement's (bank, description),

@@ -465,6 +465,80 @@ models:
         data_tests:
           - not_null
 
+  - name: rpt_goal_projection
+    description: >
+      Reporting table (T60, ADR 0048): the path to the savings goal in US dollars, one
+      row per user, scenario, `line` ('liquid' counts liquid savings only, 'with_risk'
+      adds the investments held flat) and month index (0 = the last closed month, up
+      to 120): the emergency bucket and the progress toward the goal. Scenarios are
+      the same assumptions throughout, not a confidence interval. Carries `user_id`
+      for row-level security; not monthly, no calendar filters.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, scenario, line, month_index]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: scenario
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [base, cautious, optimistic]
+      - name: line
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [liquid, with_risk]
+
+  - name: rpt_goal_summary
+    description: >
+      Reporting table (T60, ADR 0048): per user, scenario and line, `months_to_goal`
+      (null = not reached in 120 months), `reached_month`, the saving the target date
+      needs, the one projected, the `gap` between them and the share of that gap the
+      adjust view's headroom could close. US dollars. Carries `user_id` for row-level
+      security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, scenario, line]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
+  - name: rpt_emergency_fund
+    description: >
+      Reporting table (T60, ADR 0048): per user and scenario, the emergency `target`
+      (months of essential spending), the `bucket` held, the `gap`, `months_to_fill`,
+      coverage in months, the savings rate and the sanity flags (essential spending
+      over income, target over two years of income, balance not matching the flow).
+      US dollars. Carries `user_id` for row-level security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, scenario]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
+  - name: rpt_goal_headroom
+    description: >
+      Reporting table (T60, ADR 0048): the adjust view, per user, category and currency
+      the forecast, the owner's usual (25th percentile of the last 12 months), the
+      headroom between them and its share of the total. US dollars. Carries `user_id`
+      for row-level security.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, category, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
   - name: rpt_reconciliation
     description: >
       Reporting table (T36): per account and currency, the opening balance of its first
