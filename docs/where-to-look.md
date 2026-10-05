@@ -176,8 +176,15 @@ failed with "dagster-webserver must be installed").
 
 `http://localhost:8088` → *Sign in with Dex* → your email and password. What is there:
 
-- **Dashboards** → `PFP finance`: 25 charts in sections (cash flow, capital, balances, investments,
-  categories, forecast and goal, reconciliation, upload). The **Forecast & goal** section reads
+- **Dashboards** → `PFP finance`: 26 charts in four tabs, so soles and dollars never share a page
+  with the forecast: **Savings** (cash flow, capital, balances, investments, reconciliation,
+  upload), **Categories**, **Forecast & goal** and **Income statement**. The filter bar shows the
+  four typed goal filters only on the last two tabs (the others are collapsed under *Filters out of
+  scope*). The **Income statement** tab reads the gold table `rpt_income_statement`: per currency
+  (the *Currency* filter), months across and lines down (income, fixed expenses, spending by
+  category, total, monthly saving, expected expenses, planned saving, saving vs plan); the first
+  twelve closed months are what happened and the months marked *(forecast)* are expected. The
+  **Forecast & goal** tab reads
   the virtual dataset `goal_dynamic` (SQL in `bi/sql/goal_dynamic.sql`, built from the gold tables
   `rpt_goal_plan`, `rpt_goal_cashflow` and `rpt_goal_balances`) and the gold tables
   `rpt_category_forecast`, `rpt_category_variance` and `rpt_forecast_realized` (monthly step:

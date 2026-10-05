@@ -8,7 +8,7 @@ task: T56, T57, T58, T59, T60, T61, T62, T63
 # Spend forecast and savings goal
 
 A per-category monthly spend forecast with honest uncertainty, and the time to reach a savings
-goal the owner sets. Only T56 to T62 are built (fixed-expense detection, `make export-plan`, `make import-plan`, the forecast core, `make forecast`, the goal projection, its dashboard section and the realized-error monitor); the
+goal the owner sets. Only T56 to T62 and T64 to T66 are built (fixed-expense detection, `make export-plan`, `make import-plan`, the forecast core, `make forecast`, the goal projection, its dashboard section and the realized-error monitor); the
 specification is
 [`docs/specs/category-forecast-and-savings-goal.md`](../../docs/specs/category-forecast-and-savings-goal.md)
 and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md).
@@ -22,7 +22,8 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
 | Bronze `plan_fixed_items`, `plan_goal` → silver `plan_fixed_items`, `plan_goal` (**built, T57**) | The owner's confirmed plan, replaced whole on each import; empty until the first import | T57 |
 | `make forecast` (**built, T59**) | Reads gold, writes the bronze forecast tables, logs ratios and counts to MLflow, builds the forecast dbt models; since T60 it also projects the goal (`scripts/goal_projection.py`) and builds the projection models | T59, T60 |
 | Gold `fct_spend_forecast`, `rpt_category_variance`, `rpt_forecast_series_quality` (**built, T59**), `rpt_fixed_expenses` (**built, T57**), `rpt_goal_projection`, `rpt_goal_summary`, `rpt_emergency_fund`, `rpt_goal_headroom` (**built, T60**), `rpt_category_forecast` (**built, T61**), `rpt_forecast_realized` (**built, T62**) | What the dashboard reads | T57, T59, T60, T61, T62 |
-| Superset "Forecast & goal" section | Emergency target and gap, time to goal as a range for both lines (`liquid`, `with_risk`), categories above expected, the adjust view, how far to trust each series | T61 |
+| Superset "Income statement" tab | Per currency and month: income, fixed expenses, spending by category, monthly saving, planned saving and the gap to it (`rpt_income_statement`); the dashboard is split in four tabs | T66 |
+| Superset "Forecast & goal" tab | Emergency target and gap, time to goal as a range for both lines (`liquid`, `with_risk`), categories above expected, the adjust view, how far to trust each series | T61 |
 | Realized-vs-backtest error chart | The monitor; joins the monthly routine | T62 |
 | Recurrence as classifier features | Follow-up experiment, null result allowed | T63 |
 
@@ -142,6 +143,24 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
   value. SQL equals `forecasting.projection` (integration test); row-level security covers it.
 - `rpt_goal_projection`, `rpt_goal_summary` and `rpt_emergency_fund` are still built but no
   chart reads them.
+
+## What T66 built
+
+- The dashboard is four tabs (Savings, Categories, Forecast & goal, Income statement) so the
+  forecast is not read next to a page that mixes currencies. The typed goal filters are scoped to
+  the last two tabs; Currency stays global and single-valued.
+- Gold `rpt_income_statement` (ADR 0048, amendment): one row per user, currency, month and line,
+  for the last 12 closed months and every month the latest run covers. `kind` is `actual`,
+  `forecast` or `plan`. **Planned saving = income - expected expenses**; expected expenses are the
+  plan's fixed amounts plus the median (p50) forecast of the month's total variable spending, taken
+  from the latest run (its one-step backtest for a month that already closed, so closed months can
+  be compared with what was planned). Income is what came in for a closed month and the base
+  scenario's for a month ahead. *Saving vs plan* is monthly saving minus planned saving.
+- It replaces the "Forecast: next months" table, so the per-month p10 and p90 are no longer shown
+  (still in `rpt_category_forecast`); the statement shows the median only. What no category
+  carries of the total is the line "~ Not split by category". The Forecast horizon filter also
+  cuts the statement (`months_ahead + 1 <= horizon`).
+- `make forecast` rebuilds it with the other forecast models; row-level security lists it.
 
 ## What T61 built
 

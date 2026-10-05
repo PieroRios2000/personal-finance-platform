@@ -802,7 +802,7 @@ and writes bronze, then builds `silver.spend_forecast*` and `gold.fct_spend_fore
 `rpt_category_variance` and `rpt_forecast_series_quality`. With a plan imported it also projects
 the dollar goal (T60): `gold.rpt_goal_plan`, `rpt_goal_cashflow`, `rpt_goal_balances` (the pieces the dashboard's
 `goal_dynamic` dataset recombines, T65), `rpt_goal_projection`, `rpt_goal_summary`,
-`rpt_emergency_fund` and `rpt_goal_headroom`; without a plan, or without `usd_to_pen`, it says so and skips. The terminal shows counts only;
+`rpt_emergency_fund` and `rpt_goal_headroom`; `gold.rpt_income_statement` (T66, the dashboard's monthly income statement) is rebuilt too; without a plan, or without `usd_to_pen`, it says so and skips. The terminal shows counts only;
 ratios and counts go to MLflow (`~/finance-data/mlflow.db`, or `MLFLOW_TRACKING_URI`). No new
 dependency: `mlflow` was added with the categorization model (T52).
 
