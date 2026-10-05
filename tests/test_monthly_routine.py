@@ -15,6 +15,9 @@ ORDER = [
     "train-category-model",
     "categorize-new-movements",
     "monitor-category-drift",
+    "export-plan",
+    "import-plan",
+    "forecast",
 ]
 
 
@@ -43,3 +46,9 @@ def test_the_runbook_says_when_a_months_statements_appear() -> None:
     text = RUNBOOK.read_text()
     assert "first day of the next month" in text
     assert "first_day_of_current_month" in text
+
+
+def test_the_runbook_has_the_plan_and_forecast_step_and_its_monitor() -> None:
+    text = RUNBOOK.read_text()
+    assert "Forecast: realized vs expected" in text
+    assert "docs/where-to-look.md" in text
