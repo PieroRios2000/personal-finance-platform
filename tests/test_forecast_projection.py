@@ -11,6 +11,7 @@ account, 2000 in other liquid accounts and 5000 in investments. The goal is 1000
 from datetime import date
 
 import pytest
+
 from forecasting.projection import (
     Balances,
     CategoryOutlook,
@@ -151,10 +152,10 @@ def test_the_risk_line_is_never_slower_than_the_liquid_one() -> None:
 def test_new_savings_fill_the_emergency_account_before_the_goal() -> None:
     path = _path(project(_inputs()), "base", "liquid")
 
-    assert path[0] == (pytest.approx(1000), pytest.approx(2000))
-    assert path[5] == (pytest.approx(8500), pytest.approx(2000))
-    assert path[6] == (pytest.approx(9000), pytest.approx(3000))
-    assert path[7] == (pytest.approx(9000), pytest.approx(4500))
+    assert path[0] == pytest.approx((1000, 2000))
+    assert path[5] == pytest.approx((8500, 2000))
+    assert path[6] == pytest.approx((9000, 3000))
+    assert path[7] == pytest.approx((9000, 4500))
 
 
 def test_money_above_the_target_in_the_emergency_account_counts_toward_the_goal() -> (
@@ -166,7 +167,7 @@ def test_money_above_the_target_in_the_emergency_account_counts_toward_the_goal(
 
     path = _path(project(_inputs(balances=balances)), "base", "liquid")
 
-    assert path[0] == (pytest.approx(9000), pytest.approx(3000))
+    assert path[0] == pytest.approx((9000, 3000))
 
 
 def test_beyond_three_months_the_last_forecast_is_held_flat() -> None:
