@@ -129,7 +129,7 @@ def _lines(month: date, currency: str = "PEN") -> dict[str, tuple[Decimal, str]]
     with pg_store.connect() as connection:
         rows = connection.execute(
             "select line, amount, kind from gold.rpt_income_statement "
-            "where month = %s and currency = %s",
+            "where month = ? and currency = ?",
             (month, currency),
         ).fetchall()
     return {line: (Decimal(amount), kind) for line, amount, kind in rows}
@@ -209,7 +209,7 @@ def test_the_open_month_is_never_counted_as_an_actual(
         ).fetchall()
         labels = connection.execute(
             "select distinct month_label from gold.rpt_income_statement "
-            "where month = %s",
+            "where month = ?",
             (_month(1),),
         ).fetchall()
     assert count == 0

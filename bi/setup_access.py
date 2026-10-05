@@ -28,6 +28,7 @@ TABLES = (
     "rpt_category_forecast",
     "rpt_category_variance",
     "rpt_forecast_realized",
+    "rpt_income_statement",
 )
 # Datasets the dashboards no longer use (T65) but a stack that imported an older export
 # still holds: covered by the same rule when present, never required.
