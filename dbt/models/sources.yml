@@ -55,6 +55,18 @@ sources:
           ADR 0048): one row per user, `usd_to_pen` is soles per dollar. Replaced with
           `plan_fixed_items` in the same import. Only exists once a plan has been
           imported; models on it use `bronze_table_exists` too.
+      - name: spend_forecasts
+        description: >
+          The spend forecast (T59, ADR 0048): one row per (run_month, kind, category,
+          currency, target_month), `kind` 'backtest' (a past one-step forecast with its
+          actual) or 'forecast'. Replaced by (user_id, run_month) on every
+          `make forecast`, so older runs stay for the monitor. Only exists once a
+          forecast has run; models on it use `bronze_table_exists` too.
+      - name: spend_forecast_series
+        description: >
+          Per series of a forecast run (T59, ADR 0048): the selected model, months of
+          history, backtest origins, MAE relative to the baseline and interval
+          coverage. Written with `spend_forecasts`; same existence rule.
       - name: category_predictions
         description: >
           The trained model's own guess for a movement's (bank, description),

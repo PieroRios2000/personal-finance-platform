@@ -335,6 +335,48 @@ models:
               arguments:
                 values: [all, fixed_only]
 
+  - name: spend_forecasts
+    description: >
+      Silver (T59, ADR 0048): the forecast runs, one row per user, run (first day of
+      the last closed month), `kind` ('backtest' = a past one-step forecast with its
+      `actual`, 'forecast' = the next months), category, currency and target month.
+      Empty (same columns) until `make forecast` has run.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              [user_id, run_month, kind, category, currency, target_month]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: kind
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [backtest, forecast]
+      - name: p50
+        data_tests:
+          - not_null
+
+  - name: spend_forecast_series
+    description: >
+      Silver (T59, ADR 0048): how much to trust each forecast series of a run (model,
+      history, origins, MAE relative to the baseline, interval coverage, flags). Empty
+      (same columns) until `make forecast` has run.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, run_month, category, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: baseline_used
+        data_tests:
+          - not_null
+
   - name: category_predictions
     description: >
       Silver (T54, ADR 0045): the trained model's own guess per `(bank,

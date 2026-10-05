@@ -116,6 +116,17 @@ model is worth having. The full design is in
   (measured on synthetic iid noise, 24-36 months); the margin and win-rate conditions bound it,
   they do not remove it.
 
+## Amendments (T59)
+
+- The forecast output is two bronze tables: `spend_forecasts` (forecast and backtest rows in one
+  table, told apart by `kind`) and `spend_forecast_series` (per-series quality). Both are
+  replaced by `(user_id, run_month)` and keep older runs; Python writes bronze only, dbt owns
+  silver and gold (ADR 0029).
+- The model column is `model_name` (`model` is a reserved word for the SQL linter).
+- `Total` does not feed the pooled relative errors used for short-history intervals.
+- `rpt_category_variance` compares the last closed month with the forecast made without it (a
+  backtest row), so it works from the first run and needs no previous month's run.
+
 ## Related
 
 - [Spec](../../docs/specs/category-forecast-and-savings-goal.md)

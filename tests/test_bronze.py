@@ -853,3 +853,93 @@ def test_asset_account_names_are_the_users_asset_banks_only() -> None:
 
 def test_asset_account_names_on_a_fresh_lake_is_empty() -> None:
     assert bronze.asset_account_names("piero") == set()
+
+
+def _forecast_row(**overrides: Any) -> bronze.ForecastRow:
+    fields: dict[str, Any] = {
+        "kind": "forecast",
+        "category": "Alimentacion",
+        "currency": "PEN",
+        "target_month": date(2026, 10, 1),
+        "horizon": 1,
+        "model_name": "median_6",
+        "p10": 800.0,
+        "p50": 1000.255,
+        "p90": 1300.0,
+        "actual": None,
+    }
+    fields.update(overrides)
+    return bronze.ForecastRow(**fields)
+
+
+def _series_row(**overrides: Any) -> bronze.ForecastSeriesRow:
+    fields: dict[str, Any] = {
+        "category": "Alimentacion",
+        "currency": "PEN",
+        "model_name": "median_6",
+        "baseline_used": True,
+        "low_history": False,
+        "n_months": 24,
+        "n_origins": 15,
+        "mae_rel": 1.0,
+        "coverage": 0.8,
+    }
+    fields.update(overrides)
+    return bronze.ForecastSeriesRow(**fields)
+
+
+def test_replace_forecast_run_writes_forecasts_and_series(lakehouse: Path) -> None:
+    bronze.replace_forecast_run(
+        "piero",
+        date(2026, 9, 1),
+        [_forecast_row(), _forecast_row(p10=None, p90=None, horizon=2)],
+        [_series_row()],
+    )
+
+    forecasts = _plan_table(lakehouse, "spend_forecasts")
+    series = _plan_table(lakehouse, "spend_forecast_series")
+    assert len(forecasts) == 2
+    assert {r["user_id"] for r in forecasts} == {"piero"}
+    assert {r["run_month"] for r in forecasts} == {date(2026, 9, 1)}
+    first = min(forecasts, key=lambda r: r["horizon"])
+    assert first["p50"] == Decimal("1000.26")
+    assert first["actual"] is None
+    assert [r["p10"] for r in sorted(forecasts, key=lambda r: r["horizon"])] == [
+        Decimal("800.00"),
+        None,
+    ]
+    assert len(series) == 1
+    assert series[0]["baseline_used"] is True
+    assert series[0]["coverage"] == 0.8
+    assert forecasts[0]["created_at"] == series[0]["created_at"]
+
+
+def test_replace_forecast_run_twice_does_not_duplicate(lakehouse: Path) -> None:
+    for _ in range(2):
+        bronze.replace_forecast_run(
+            "piero", date(2026, 9, 1), [_forecast_row()], [_series_row()]
+        )
+
+    assert len(_plan_table(lakehouse, "spend_forecasts")) == 1
+    assert len(_plan_table(lakehouse, "spend_forecast_series")) == 1
+
+
+def test_replace_forecast_run_keeps_other_months_and_other_users(
+    lakehouse: Path,
+) -> None:
+    bronze.replace_forecast_run(
+        "piero", date(2026, 8, 1), [_forecast_row(model_name="ses")], [_series_row()]
+    )
+    bronze.replace_forecast_run("ana", date(2026, 9, 1), [_forecast_row()], [])
+    bronze.replace_forecast_run("piero", date(2026, 9, 1), [_forecast_row()], [])
+
+    rows = sorted(
+        (r["user_id"], r["run_month"], r["model_name"])
+        for r in _plan_table(lakehouse, "spend_forecasts")
+    )
+    assert rows == [
+        ("ana", date(2026, 9, 1), "median_6"),
+        ("piero", date(2026, 8, 1), "ses"),
+        ("piero", date(2026, 9, 1), "median_6"),
+    ]
+    assert len(_plan_table(lakehouse, "spend_forecast_series")) == 1
