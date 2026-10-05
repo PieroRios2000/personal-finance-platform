@@ -943,3 +943,114 @@ def test_replace_forecast_run_keeps_other_months_and_other_users(
         ("piero", date(2026, 9, 1), "median_6"),
     ]
     assert len(_plan_table(lakehouse, "spend_forecast_series")) == 1
+
+
+def _path_row(**overrides: Any) -> dict[str, Any]:
+    fields: dict[str, Any] = {
+        "scenario": "base",
+        "line": "liquid",
+        "month_index": 0,
+        "month": date(2026, 9, 1),
+        "emergency": 1000.005,
+        "goal_progress": 2000.0,
+    }
+    fields.update(overrides)
+    return fields
+
+
+def test_replace_goal_projection_writes_every_table(lakehouse: Path) -> None:
+    bronze.replace_goal_projection(
+        "piero",
+        date(2026, 9, 1),
+        {
+            "goal_projection": [_path_row(), _path_row(month_index=1)],
+            "goal_summary": [
+                {
+                    "scenario": "base",
+                    "line": "liquid",
+                    "months_to_goal": None,
+                    "reached_month": None,
+                    "required_monthly_saving": 12.345,
+                    "projected_monthly_saving": 500.0,
+                    "gap": None,
+                    "headroom_share_of_gap": 0.5,
+                }
+            ],
+            "emergency_fund": [
+                {
+                    "scenario": "base",
+                    "target": 9000.0,
+                    "bucket": 1000.0,
+                    "gap": 8000.0,
+                    "months_to_fill": 6,
+                    "months_covered": 0.5,
+                    "months_of_income": 3.0,
+                    "savings_rate": 0.2,
+                    "essential_over_income": False,
+                    "target_over_two_years_income": False,
+                    "balance_mismatch": None,
+                    "mismatch_months": 0,
+                    "months_checked": 0,
+                    "avg_net_flow": None,
+                    "avg_balance_change": None,
+                }
+            ],
+            "goal_headroom": [
+                {
+                    "category": "Alimentacion",
+                    "currency": "PEN",
+                    "forecast": 300.0,
+                    "reference": 250.0,
+                    "headroom": 50.0,
+                    "share": 1.0,
+                }
+            ],
+        },
+    )
+
+    path = _plan_table(lakehouse, "goal_projection")
+    assert len(path) == 2
+    assert {r["user_id"] for r in path} == {"piero"}
+    assert {r["run_month"] for r in path} == {date(2026, 9, 1)}
+    assert path[0]["emergency"] == Decimal("1000.01")
+    summary = _plan_table(lakehouse, "goal_summary")[0]
+    assert summary["months_to_goal"] is None
+    assert summary["required_monthly_saving"] == Decimal("12.35")
+    assert summary["headroom_share_of_gap"] == 0.5
+    fund = _plan_table(lakehouse, "emergency_fund")[0]
+    assert fund["balance_mismatch"] is None
+    assert fund["months_to_fill"] == 6
+    assert _plan_table(lakehouse, "goal_headroom")[0]["headroom"] == Decimal("50.00")
+
+
+def test_replace_goal_projection_replaces_the_users_whole_set(
+    lakehouse: Path,
+) -> None:
+    for _ in range(2):
+        bronze.replace_goal_projection(
+            "piero", date(2026, 9, 1), {"goal_projection": [_path_row()]}
+        )
+    bronze.replace_goal_projection(
+        "ana", date(2026, 9, 1), {"goal_projection": [_path_row()]}
+    )
+    bronze.replace_goal_projection(
+        "piero", date(2026, 10, 1), {"goal_projection": [_path_row(month_index=3)]}
+    )
+
+    rows = sorted(
+        (r["user_id"], r["run_month"], r["month_index"])
+        for r in _plan_table(lakehouse, "goal_projection")
+    )
+    assert rows == [("ana", date(2026, 9, 1), 0), ("piero", date(2026, 10, 1), 3)]
+
+
+def test_replace_goal_projection_with_nothing_clears_the_users_rows(
+    lakehouse: Path,
+) -> None:
+    bronze.replace_goal_projection(
+        "piero", date(2026, 9, 1), {"goal_projection": [_path_row()]}
+    )
+
+    bronze.replace_goal_projection("piero", date(2026, 10, 1), {})
+
+    assert _plan_table(lakehouse, "goal_projection") == []
