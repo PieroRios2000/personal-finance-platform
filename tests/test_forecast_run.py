@@ -14,6 +14,7 @@ import pytest
 from forecasting.fixed_expenses import MonthlySpend
 from lakehouse import bronze
 from scripts import forecast as fc
+from scripts import goal_projection as gp
 
 TODAY = date(2026, 10, 4)
 CATEGORY = "PLANTEDCATEGORY"
@@ -46,10 +47,14 @@ def _spend(
     ]
 
 
+projected: list[tuple[Any, ...]] = []
+
+
 @pytest.fixture
 def written(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> list[Written]:
     monkeypatch.setenv("MLFLOW_TRACKING_URI", f"sqlite:///{tmp_path / 'mlflow.db'}")
     calls: list[Written] = []
+    projected.clear()
 
     def capture(
         user_id: str,
@@ -62,6 +67,7 @@ def written(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> list[Written]:
     monkeypatch.setattr(bronze, "replace_forecast_run", capture)
     monkeypatch.setattr(fc, "fetch_plan_exclusions", lambda user_id: set())
     monkeypatch.setattr(fc, "fetch_monthly_spend", lambda user_id: _spend())
+    monkeypatch.setattr(gp, "run", lambda *args: projected.append(args))
     return calls
 
 
@@ -120,6 +126,27 @@ def test_fixed_and_ignored_items_leave_the_series(
     fc.run("piero", TODAY)
 
     assert {r.category for r in written[0].series} == {CATEGORY, "Total"}
+
+
+def test_the_goal_is_projected_from_the_same_fits_after_the_forecast_is_written(
+    written: list[Written],
+) -> None:
+    fc.run("piero", TODAY)
+
+    [(user_id, run_month, fits, series, spending)] = projected
+    assert (user_id, run_month) == ("piero", date(2026, 9, 1))
+    assert len(fits) == len(series) == 2
+    assert len(spending) == 24
+
+
+def test_a_run_that_writes_nothing_does_not_project(
+    written: list[Written], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(fc, "fetch_monthly_spend", lambda user_id: [])
+
+    fc.run("piero", TODAY)
+
+    assert projected == []
 
 
 def test_two_runs_produce_the_same_rows(written: list[Written]) -> None:
