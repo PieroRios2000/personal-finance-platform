@@ -99,6 +99,26 @@ def test_the_goal_is_projected_in_dollars_from_the_forecast_and_the_balances(
     assert len(rows["goal_projection"]) == 3 * 2 * 121
 
 
+def test_the_pieces_behind_the_projection_are_written_for_the_dashboard(
+    written: list[tuple[str, date, dict[str, Any]]],
+) -> None:
+    _run()
+
+    rows = written[0][2]
+    assert len(rows["goal_cashflow"]) == 3 * 120
+    first = next(
+        r
+        for r in rows["goal_cashflow"]
+        if (r["scenario"], r["month_index"]) == ("base", 1)
+    )
+    assert first["currency"] == "PEN"
+    assert first["fixed"] == pytest.approx(400)
+    held = {(r["bucket"], r["currency"]): r["amount"] for r in rows["goal_balances"]}
+    assert held[("emergency", "PEN")] == pytest.approx(2000)
+    assert held[("risk", "USD")] == pytest.approx(3000)
+    assert held[("essential", "PEN")] == pytest.approx(400 + 1000)
+
+
 def test_the_adjust_view_has_one_row_per_variable_category(
     written: list[tuple[str, date, dict[str, Any]]],
 ) -> None:
