@@ -157,14 +157,6 @@ def _offsets(errors: Sequence[float]) -> tuple[float, float]:
     )
 
 
-def _bounds(
-    point: float, offsets: tuple[float, float] | None
-) -> tuple[float | None, float | None]:
-    if offsets is None:
-        return None, None
-    return max(0.0, point + offsets[0]), max(0.0, point + offsets[1])
-
-
 def fit_all(series: Sequence[Series]) -> list[SeriesFit]:
     """One fit per series, in the order given."""
     prepared = []
@@ -245,8 +237,9 @@ def _offsets_for(
 def _pair(
     point: float, offsets: tuple[float, float] | None
 ) -> tuple[float | None, float, float | None]:
-    low, high = _bounds(point, offsets)
-    return low, point, high
+    if offsets is None:
+        return None, point, None
+    return max(0.0, point + offsets[0]), point, max(0.0, point + offsets[1])
 
 
 def _coverage(
@@ -263,17 +256,17 @@ def _coverage(
 
 def summarize(fits: Sequence[SeriesFit], weights: Sequence[float]) -> dict[str, float]:
     """Counts and ratios for a run: no amount and no name (ADR 0004)."""
-    ratios = np.array([f.mae_rel for f in fits])
     covered = [f.coverage for f in fits if f.coverage is not None]
+    ratios = np.array([f.mae_rel for f in fits])
     total = float(sum(weights))
-    weighted = (
-        float(np.dot(ratios, weights) / total) if total > 0 else float(ratios.mean())
-    )
+    mean = float(ratios.mean()) if len(fits) else 0.0
     return {
         "series": float(len(fits)),
         "baseline_used": float(sum(f.baseline_used for f in fits)),
         "low_history": float(sum(f.low_history for f in fits)),
-        "mae_rel_mean": float(ratios.mean()) if len(fits) else 0.0,
-        "mae_rel_weighted": weighted if len(fits) else 0.0,
+        "mae_rel_mean": mean,
+        "mae_rel_weighted": float(np.dot(ratios, weights) / total)
+        if total > 0
+        else mean,
         "coverage_mean": float(np.mean(covered)) if covered else 0.0,
     }

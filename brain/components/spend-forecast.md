@@ -1,14 +1,14 @@
 ---
 type: component
 phase: 3
-status: in progress (T56, T57 built, rest planned)
+status: in progress (T56, T57, T58 built, rest planned)
 task: T56, T57, T58, T59, T60, T61, T62, T63
 ---
 
 # Spend forecast and savings goal
 
 A per-category monthly spend forecast with honest uncertainty, and the time to reach a savings
-goal the owner sets. Only T56 and T57 are built (fixed-expense detection, `make export-plan` and `make import-plan`); the
+goal the owner sets. Only T56, T57 and T58 are built (fixed-expense detection, `make export-plan`, `make import-plan` and the forecast core); the
 specification is
 [`docs/specs/category-forecast-and-savings-goal.md`](../../docs/specs/category-forecast-and-savings-goal.md)
 and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md).
@@ -17,7 +17,7 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
 
 | Piece | What it does | Task |
 |---|---|---|
-| `forecasting/` (pure functions) | Fixed-expense detection (**built, T56**), series builder, five candidates and a trailing-median baseline, rolling-origin backtest, empirical intervals, projection | T56, T58, T60 |
+| `forecasting/` (pure functions) | Fixed-expense detection (**built, T56**), series builder, five candidates and a trailing-median baseline, rolling-origin backtest, empirical intervals (**built, T58**), projection | T56, T58, T60 |
 | `make export-plan` (**built, T56**) / `make import-plan` (**built, T57**) | The owner's workbook (`~/finance-data/plan/`): fixed-expense proposals to confirm, the dollar goal, `usd_to_pen`, the emergency settings | T56, T57 |
 | Bronze `plan_fixed_items`, `plan_goal` → silver `plan_fixed_items`, `plan_goal` (**built, T57**) | The owner's confirmed plan, replaced whole on each import; empty until the first import | T57 |
 | `make forecast` | Reads gold, writes bronze forecast and projection tables, logs ratios and counts to MLflow, builds the new dbt models | T59 |
@@ -62,6 +62,25 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
   six closed months' spending, with `deviation_pct` and a `status` (`as_expected`, `deviating`
   above 10 %, `not_seen`). It carries `user_id` for row-level security; its Superset dataset and
   rule come with the dashboard section (T61), since setup fails on a table Superset does not know.
+
+## What T58 built
+
+- `forecasting/series.py` (pure): monthly variable spending per (category, currency) over closed
+  months, zero-filled from the first month with data in that currency; fixed and ignored charges
+  leave the series. `Total` is the sum of the variable categories of one currency, forecast on
+  its own (the fixed ones are added in the projection as their expected amount).
+- `forecasting/candidates.py`: `naive_last`, `mean_3`, `median_6` (the baseline), `ses` (alpha 0.3)
+  and `seasonal_naive_12`; no optimizer, so every number can be checked by hand.
+- `forecasting/backtest.py`: rolling origins from 9 months of training, horizons 1-3, no
+  look-ahead. A candidate replaces the baseline only if its horizon-1 MAE is at least 5 % lower
+  *and* it is closer on at least 60 % of the origins. Series with fewer than 9 months or 3 nonzero
+  months keep the baseline and are marked `low_history`. Intervals are the point forecast plus the
+  10th/90th percentile of the model's own signed errors (floored at 0); under 12 errors they
+  borrow the currency's pooled relative errors scaled by the series level, else no interval.
+- Known limits: the coverage is measured on the same errors that set the interval, so it is
+  optimistic; on pure noise the selection rule still switches away from the baseline in roughly
+  12-27 % of series (winner's curse), which is why the 5 % margin and the win rate are both
+  required.
 
 ## How it fits
 
