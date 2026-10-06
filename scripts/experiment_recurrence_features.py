@@ -14,12 +14,14 @@ import os
 import sys
 from collections.abc import Sequence
 from datetime import date
+from typing import Any
 
 import psycopg
 from psycopg.conninfo import make_conninfo
 
 from categorization import feature_experiment as fx
 from categorization import recurrence
+from categorization.recurrence import Merchant
 
 _MOVEMENTS = """
     select m.bank, m.description, m.date, m.amount,
@@ -51,6 +53,17 @@ def _normalize(name: str) -> str:
     return name.lower().replace("ó", "o").replace("í", "i").replace("é", "e")
 
 
+def fetch(user_id: str) -> tuple[list[tuple[Any, ...]], dict[Merchant, str]]:
+    """The user's non-internal movements (with the trusted category, or `None`) and
+    the plan's marks by merchant."""
+    with psycopg.connect(_conninfo()) as conn, conn.cursor() as cursor:
+        cursor.execute(_MOVEMENTS, {"user": user_id})
+        rows = cursor.fetchall()
+        cursor.execute(_PLAN, {"user": user_id})
+        marks = recurrence.kind_by_merchant(cursor.fetchall())
+    return rows, marks
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--user", default=os.environ.get("PFP_USER"))
@@ -60,11 +73,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("error: --user is required (or set PFP_USER)", file=sys.stderr)
         return 2
 
-    with psycopg.connect(_conninfo()) as conn, conn.cursor() as cursor:
-        cursor.execute(_MOVEMENTS, {"user": args.user})
-        rows = cursor.fetchall()
-        cursor.execute(_PLAN, {"user": args.user})
-        marks = recurrence.kind_by_merchant(cursor.fetchall())
+    rows, marks = fetch(args.user)
 
     occurrences = [
         recurrence.Occurrence(
