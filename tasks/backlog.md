@@ -146,7 +146,7 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
   - [x] **T64** forecast 36 months ahead (intervals only where the backtest measures them, `has_interval`), `rpt_forecast_realized.source` (`backtest` until a second run).
   - [x] **T65** dynamic goal from Superset: `goal_cashflow`/`goal_balances` pieces, virtual dataset `goal_dynamic` and four typed native filters (goal, exchange rate, emergency months, horizon), row-level security on it.
   - [x] **T66** dashboard in four tabs (Savings, Categories, Forecast & goal, Income statement) and `rpt_income_statement`: the month-by-month statement of income, spending by category, saving and planned saving, per currency.
-  - [ ] **T63** (follow-up) experiment: recurrence and the fixed/variable mark as classifier features, ADR 0044's protocol and an acceptance margin over the fold spread; a null result is valid (spec section 4.8).
+  - [x] **T63** experiment: recurrence and the fixed/variable mark as classifier features, ADR 0044's protocol and an acceptance margin over the fold spread. Null result (ADR 0049): no variant beat text-only (0.468) by the fold SD (0.107); the classifier stays text-only.
 - [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
       model -- macro-F1 and per-category precision (not just accuracy), latency, cost per
       transaction, cost per month at this project's real volume, against the same held-out labels.

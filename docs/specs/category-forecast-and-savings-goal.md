@@ -356,6 +356,8 @@ deviation of the fold-to-fold spread (reported with N and folds, as ADR 0044 doe
 weak-category precision drops. Otherwise the result is recorded as an amendment and the model
 stays text-only. A null result is a valid outcome.
 
+**Outcome (2026-10-05, T63):** null; see [ADR 0049](../../brain/decisions/0049-recurrence-and-plan-marks-do-not-help-the-category-classifier.md).
+
 **Risks, stated up front.**
 
 - ADR 0044 already tested extra non-text features (bank, currency, flow type, log amount, month)
