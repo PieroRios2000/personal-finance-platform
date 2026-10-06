@@ -7,7 +7,7 @@ a description."""
 import random
 import statistics
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pandas as pd
 from sklearn.compose import ColumnTransformer
@@ -76,12 +76,13 @@ class Result:
     """`pooled_f1`: one macro-F1 per shuffle, over all its held-out predictions.
     `fold_f1`: the macro-F1 of every single fold of every shuffle.
     `precision`: per-category precision of the pooled predictions, averaged over
-    shuffles."""
+    shuffles. `row_accuracy`: per row, the share of shuffles that predicted it right."""
 
     pooled_f1: list[float]
     fold_f1: list[float]
     precision: dict[str, float]
     folds: int
+    row_accuracy: list[float] = field(default_factory=list)
 
     @property
     def mean_f1(self) -> float:
@@ -131,6 +132,7 @@ def evaluate(
     classes = sorted(set(y))
     pooled, per_fold = [], []
     precisions = []
+    hits = [0.0] * len(y)
     for seed in seeds:
         fold_of = merchant_folds(groups, folds, seed)
         predicted = [""] * len(y)
@@ -151,6 +153,8 @@ def evaluate(
                     )
                 )
             )
+        for row, guess in enumerate(predicted):
+            hits[row] += float(guess == y[row]) / len(seeds)
         pooled.append(float(f1_score(y, predicted, average="macro", zero_division=0)))
         precisions.append(
             precision_score(y, predicted, labels=classes, average=None, zero_division=0)
@@ -163,6 +167,7 @@ def evaluate(
         fold_f1=per_fold,
         precision=dict(zip(classes, mean_precision, strict=True)),
         folds=folds,
+        row_accuracy=hits,
     )
 
 
