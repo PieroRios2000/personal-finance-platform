@@ -9,7 +9,7 @@ from categorization import feature_experiment as fx
 from categorization.recurrence import Recurrence
 
 
-def test_a_merchant_never_straddles_two_folds_and_seeds_are_reproducible():
+def test_a_merchant_never_straddles_two_folds_and_seeds_are_reproducible() -> None:
     groups = [f"M{i % 12}" for i in range(60)]
 
     first = fx.merchant_folds(groups, folds=4, seed=1)
@@ -20,7 +20,7 @@ def test_a_merchant_never_straddles_two_folds_and_seeds_are_reproducible():
     assert fx.merchant_folds(groups, folds=4, seed=2) != first
 
 
-def test_the_frame_marks_missing_values_and_one_hot_encodes_the_kind():
+def test_the_frame_marks_missing_values_and_one_hot_encodes_the_kind() -> None:
     frame = fx.feature_frame(
         ["BCP A", "BCP B"],
         [Recurrence(6, 0.5, 0.2), Recurrence(0, None, None)],
@@ -35,9 +35,12 @@ def test_the_frame_marks_missing_values_and_one_hot_encodes_the_kind():
     assert second[["kind_fixed", "kind_variable", "kind_ignore"]].sum() == 0
 
 
-def _separable_by_number():
+def _separable_by_number() -> tuple[list[str], list[Recurrence], list[str], list[str]]:
     rng = random.Random(0)
-    texts, recs, labels, groups = [], [], [], []
+    texts: list[str] = []
+    recs: list[Recurrence] = []
+    labels: list[str] = []
+    groups: list[str] = []
     for i in range(80):
         label = "A" if i % 2 else "B"
         texts.append("".join(rng.choices("abcdefgh", k=8)))
@@ -49,7 +52,7 @@ def _separable_by_number():
     return texts, recs, labels, groups
 
 
-def test_a_numeric_signal_that_text_lacks_lifts_the_score():
+def test_a_numeric_signal_that_text_lacks_lifts_the_score() -> None:
     texts, recs, labels, groups = _separable_by_number()
     frame = fx.feature_frame(texts, recs, [None] * len(texts))
 
@@ -62,13 +65,15 @@ def test_a_numeric_signal_that_text_lacks_lifts_the_score():
     assert len(with_numbers.fold_f1) == 10
 
 
-def _result(mean, fold_sd_values, precision):
+def _result(
+    mean: float, fold_sd_values: list[float], precision: dict[str, float]
+) -> fx.Result:
     return fx.Result(
         pooled_f1=[mean], fold_f1=fold_sd_values, precision=precision, folds=5
     )
 
 
-def test_a_variant_is_adopted_only_beyond_one_fold_sd_and_without_weak_drops():
+def test_a_variant_is_adopted_only_beyond_one_fold_sd_and_without_weak_drops() -> None:
     base = _result(0.50, [0.40, 0.60, 0.45, 0.55], {"Servicios": 0.2, "Salud": 0.5})
     clear = _result(0.80, [0.8], {"Servicios": 0.3, "Salud": 0.5})
     noise = _result(0.52, [0.5], {"Servicios": 0.3, "Salud": 0.5})
