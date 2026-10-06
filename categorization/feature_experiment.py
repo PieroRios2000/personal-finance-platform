@@ -81,7 +81,6 @@ class Result:
     pooled_f1: list[float]
     fold_f1: list[float]
     precision: dict[str, float]
-    folds: int
     row_accuracy: list[float] = field(default_factory=list)
 
     @property
@@ -166,7 +165,6 @@ def evaluate(
         pooled_f1=pooled,
         fold_f1=per_fold,
         precision=dict(zip(classes, mean_precision, strict=True)),
-        folds=folds,
         row_accuracy=hits,
     )
 
@@ -181,7 +179,6 @@ def merchant_groups(banks: Sequence[str], descriptions: Sequence[str]) -> list[s
 class Verdict:
     adopt: bool
     margin: float
-    fold_sd: float
     dropped: list[str]
 
 
@@ -200,6 +197,5 @@ def verdict(base: Result, candidate: Result, weak: Sequence[str]) -> Verdict:
     return Verdict(
         adopt=margin > base.fold_sd and not dropped,
         margin=margin,
-        fold_sd=base.fold_sd,
         dropped=dropped,
     )

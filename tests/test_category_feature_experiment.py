@@ -68,9 +68,7 @@ def test_a_numeric_signal_that_text_lacks_lifts_the_score() -> None:
 def _result(
     mean: float, fold_sd_values: list[float], precision: dict[str, float]
 ) -> fx.Result:
-    return fx.Result(
-        pooled_f1=[mean], fold_f1=fold_sd_values, precision=precision, folds=5
-    )
+    return fx.Result(pooled_f1=[mean], fold_f1=fold_sd_values, precision=precision)
 
 
 def test_a_variant_is_adopted_only_beyond_one_fold_sd_and_without_weak_drops() -> None:
