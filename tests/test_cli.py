@@ -298,7 +298,9 @@ def test_ingest_predicts_categories_for_new_movements_when_a_model_exists(
     ]
     categories = ["Gastos varios"] * 4 + ["Ingresos"] * 4 + ["Servicios"] * 2
     pipeline, _metrics = model.train(descriptions, categories)
-    bundle = model.Bundle(pipeline=pipeline, confidence_threshold=0.0)
+    bundle = model.Bundle(
+        pipeline=pipeline, confidence_threshold=0.0, trained_for="piero"
+    )
     model_path = tmp_path / "model.joblib"
     joblib.dump(bundle, model_path)
     monkeypatch.setenv("PFP_CATEGORY_MODEL_PATH", str(model_path))
@@ -316,6 +318,124 @@ def test_ingest_predicts_categories_for_new_movements_when_a_model_exists(
 
     assert code == 0
     assert "Categorias: 4 new description(s) predicted" in out
+
+
+def _write_model_for(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, user: str
+) -> None:
+    import joblib
+
+    from categorization import model
+
+    descriptions = [
+        "COMPRA TIENDA FICTICIA",
+        "COMPRA TIENDA UNO",
+        "PAGO SERVICIO FICTICIO",
+        "PAGO SERVICIO DOS",
+        "DEPOSITO SUELDO FICTICIO",
+        "DEPOSITO SUELDO TRES",
+        "TRANSFERENCIA RECIBIDA FICTICIA",
+        "TRANSFERENCIA RECIBIDA CUATRO",
+        "COMPRA TIENDA CINCO",
+        "PAGO SERVICIO SEIS",
+    ]
+    categories = ["Gastos varios"] * 4 + ["Ingresos"] * 4 + ["Servicios"] * 2
+    pipeline, _metrics = model.train(descriptions, categories)
+    bundle = model.Bundle(pipeline=pipeline, confidence_threshold=0.0, trained_for=user)
+    model_path = tmp_path / "model.joblib"
+    joblib.dump(bundle, model_path)
+    monkeypatch.setenv("PFP_CATEGORY_MODEL_PATH", str(model_path))
+
+
+def test_ingest_for_another_user_does_not_use_the_owners_model(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`make ingest-uploads` runs `pfp ingest --user <uploader>` for people other
+    than the owner; the one installed model was trained on the owner's labels."""
+    inbox_root = tmp_path / "inbox"
+    inbox = inbox_root / "ana-1111"
+    inbox.mkdir(parents=True)
+    (inbox / "statement.pdf").write_bytes(_bcp_pdf())
+    _write_model_for(tmp_path, monkeypatch, "piero")
+
+    code, out, _ = run(
+        capsys,
+        "ingest",
+        "--user",
+        "ana-1111",
+        "--inbox-root",
+        str(inbox_root),
+        "--archive-root",
+        str(tmp_path / "raw"),
+    )
+
+    assert code == 0
+    assert "Bronze: 1 statement(s) written" in out
+    assert "Categorias:" not in out
+
+
+def test_backfill_predicts_categories_for_the_descriptions_it_re_parsed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A backfill rewrites bronze rows from the archive, so it can surface
+    descriptions the earlier parse did not have: the model must see them too."""
+    inbox_root = tmp_path / "inbox"
+    archive_root = tmp_path / "raw"
+    inbox = inbox_root / "piero"
+    inbox.mkdir(parents=True)
+    (inbox / "statement.pdf").write_bytes(_bcp_pdf())
+    run(
+        capsys,
+        "ingest",
+        "--user",
+        "piero",
+        "--inbox-root",
+        str(inbox_root),
+        "--archive-root",
+        str(archive_root),
+    )
+    _write_model_for(tmp_path, monkeypatch, "piero")
+
+    code, out, _ = run(
+        capsys, "backfill", "--user", "piero", "--archive-root", str(archive_root)
+    )
+
+    assert code == 0
+    assert "Categorias: 4 new description(s) predicted" in out
+
+
+def test_backfill_dry_run_predicts_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inbox_root = tmp_path / "inbox"
+    archive_root = tmp_path / "raw"
+    inbox = inbox_root / "piero"
+    inbox.mkdir(parents=True)
+    (inbox / "statement.pdf").write_bytes(_bcp_pdf())
+    run(
+        capsys,
+        "ingest",
+        "--user",
+        "piero",
+        "--inbox-root",
+        str(inbox_root),
+        "--archive-root",
+        str(archive_root),
+    )
+    _write_model_for(tmp_path, monkeypatch, "piero")
+
+    code, out, _ = run(
+        capsys,
+        "backfill",
+        "--user",
+        "piero",
+        "--archive-root",
+        str(archive_root),
+        "--dry-run",
+    )
+
+    assert code == 0
+    assert "Categorias:" not in out
 
 
 def test_ingest_fails_clearly_without_a_user(

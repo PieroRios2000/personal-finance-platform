@@ -17,6 +17,7 @@ import http.cookiejar
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import urllib.error
@@ -58,6 +59,18 @@ def _time_range(column: str) -> dict[str, Any]:
     }
 
 
+# The Forecast horizon filter (T65) as a chart WHERE on `months_ahead`: the typed value,
+# only if it is plain digits, else 36. The filter lives on the goal dataset; a chart on
+# another table reads it here. `months_ahead` counts from 0 at the first month ahead,
+# the goal's `month_index` from 1, hence the + 1.
+_HORIZON_WHERE = (
+    "months_ahead + 1 <= "
+    "{% set typed = (filter_values('horizon_months') or ['36'])[0] | string %}"
+    "{{ typed | int if typed.isascii() and typed.isdigit() and typed | length <= 4"
+    " else 36 }}"
+)
+
+
 def _where(expression: str) -> dict[str, Any]:
     return {"expressionType": "SQL", "sqlExpression": expression, "clause": "WHERE"}
 
@@ -69,6 +82,8 @@ _GREEN, _RED, _AMBER = "#1f9d6b", "#e5484d", "#f5a524"
 # Handlebars charts, HTML and CSS of our own over the query's single row
 # (bi/templates/). Numbers are formatted in SQL (to_char), so templates stay plain.
 _TEMPLATES = Path(__file__).resolve().parent / "templates"
+# Datasets that are a SQL query, not a gold table (T65): name -> the committed file.
+VIRTUAL = {"goal_dynamic": Path(__file__).resolve().parent / "sql" / "goal_dynamic.sql"}
 DASHBOARD_CSS = (_TEMPLATES / "dashboard.css").read_text()
 _KPI_STYLE = (_TEMPLATES / "kpi.css").read_text()
 _CASH_FLOW_KPI = (_TEMPLATES / "cash_flow_kpi.hbs").read_text()
@@ -78,6 +93,7 @@ _RANGE_KPI = (_TEMPLATES / "range_kpi.hbs").read_text()
 _DEBT_KPI = (_TEMPLATES / "debt_kpi.hbs").read_text()
 _UPLOAD_PROMPT = (_TEMPLATES / "upload_prompt.hbs").read_text()
 _UPLOAD_STYLE = (_TEMPLATES / "upload_prompt.css").read_text()
+_FORECAST_STYLE = (_TEMPLATES / "forecast.css").read_text()
 
 
 # Money in and out are read from `signed_amount` (ADR 0031): the effect on you, the same
@@ -126,6 +142,40 @@ def _capital(column: str) -> str:
     """One of rpt_capital's balances at the latest month, formatted (or a dash)."""
     latest = f"COALESCE(SUM({column}) FILTER (WHERE month_recency = 1), 0)"
     return _or_dash(f"to_char({latest}, {_MONEY})")
+
+
+_BASE = "scenario = 'base'"
+
+
+def _usd(expression: str) -> str:
+    return f"'US$ ' || to_char({expression}, {_MONEY})"
+
+
+def _reach(scenario: str, line: str) -> dict[str, Any]:
+    """When one scenario and line reach the goal, as text: a goal out of reach is
+    'not reached', never a number (ADR 0048)."""
+    return _sql_metric(
+        "COALESCE(MAX(CASE "
+        f"WHEN scenario = '{scenario}' AND line = '{line}' THEN CASE "
+        "WHEN months_to_goal IS NULL THEN 'not reached' "
+        "WHEN months_to_goal = 0 THEN 'already reached' "
+        "ELSE to_char(reached_month, 'Mon YYYY') || ' (' || months_to_goal || ' mo)' "
+        "END END), '-')",
+        f"{scenario}_{line}",
+    )
+
+
+def _required(line: str) -> dict[str, Any]:
+    saving = f"MAX(required_monthly_saving) FILTER (WHERE {_BASE} AND line = '{line}')"
+    return _sql_metric(f"COALESCE({_usd(saving)}, '-')", f"required_{line}")
+
+
+def _flag(column: str) -> dict[str, Any]:
+    return _sql_metric(f"CASE WHEN BOOL_OR({column}) THEN 1 ELSE 0 END", column)
+
+
+def _percent(column: str) -> str:
+    return f"COALESCE(to_char({column} * 100, 'FM990') || '%', '-')"
 
 
 _CHANGE = f"({_balance_at(1)} - {_balance_at(2)})"
@@ -618,6 +668,299 @@ CHARTS: list[tuple[str, str, str, dict[str, Any]]] = [
             "styleTemplate": _UPLOAD_STYLE,
         },
     ),
+    (
+        "goal_dynamic",
+        "Goal: when you reach it",
+        "handlebars",
+        {
+            "query_mode": "aggregate",
+            "groupby": [],
+            # The goal is in dollars and looks ahead: no date range applies. Both lines
+            # are always shown (does the goal count the investments?), one column per
+            # scenario.
+            "metrics": [
+                *(
+                    _reach(scenario, line)
+                    for line in ("liquid", "with_risk")
+                    for scenario in ("optimistic", "base", "cautious")
+                ),
+                _required("liquid"),
+                _required("with_risk"),
+                _sql_metric(
+                    _usd(f"MAX(projected_monthly_saving) FILTER (WHERE {_BASE})"),
+                    "projected",
+                ),
+            ],
+            "adhoc_filters": [],
+            "row_limit": 1,
+            "handlebarsTemplate": (_TEMPLATES / "goal_summary.hbs").read_text(),
+            "styleTemplate": _FORECAST_STYLE,
+        },
+    ),
+    (
+        "goal_dynamic",
+        "Goal: projected progress",
+        "echarts_timeseries_line",
+        {
+            "x_axis": "month",
+            "time_grain_sqla": "P1M",
+            "metrics": [_sql_metric("SUM(goal_progress)", "Toward the goal")],
+            "groupby": [
+                "scenario",
+                _sql_column(
+                    "CASE WHEN line = 'liquid' THEN 'liquid savings only' "
+                    "ELSE 'liquid + investments' END",
+                    "line",
+                ),
+            ],
+            # The Forecast horizon filter: the path is computed to 120 months, the chart
+            # shows as many as the filter says (36 until one is typed).
+            "adhoc_filters": [_where("month_index <= horizon_months")],
+            "seriesType": "smooth",
+            "x_axis_time_format": _DATE_FORMAT,
+            "y_axis_format": ",.0f",
+            "y_axis_title": "US$ toward the goal",
+            "y_axis_title_margin": 50,
+            "y_axis_title_position": "Left",
+            "rich_tooltip": True,
+            "row_limit": 10000,
+            "show_legend": True,
+        },
+    ),
+    (
+        "goal_dynamic",
+        "Emergency fund",
+        "handlebars",
+        {
+            "query_mode": "aggregate",
+            "groupby": [],
+            # One scenario only: the target is the same in all three.
+            "metrics": [
+                _sql_metric(_usd("MAX(emergency_target)"), "target"),
+                _sql_metric(_usd("MAX(emergency_now)"), "bucket"),
+                _sql_metric(_usd("MAX(emergency_gap)"), "gap"),
+                _sql_metric(
+                    "COALESCE(to_char(MAX(months_of_income), 'FM990.0'), '-')",
+                    "months_of_income",
+                ),
+                _sql_metric(
+                    "COALESCE(to_char(MAX(months_covered), 'FM990.0'), '-')",
+                    "months_covered",
+                ),
+                _sql_metric(
+                    "CASE WHEN MAX(emergency_gap) <= 0 THEN 1 ELSE 0 END", "filled"
+                ),
+                _sql_metric(
+                    "CASE WHEN MAX(emergency_gap) <= 0 THEN 'already full' "
+                    "WHEN MAX(months_to_fill) IS NULL THEN 'not within 10 years' "
+                    "ELSE 'full in ' || MAX(months_to_fill) || ' months (base pace)' "
+                    "END",
+                    "fill",
+                ),
+                _flag("essential_over_income"),
+                _flag("target_over_two_years_income"),
+                _flag("balance_mismatch"),
+                _sql_metric("COALESCE(MAX(mismatch_months), 0)", "mismatch_months"),
+                _sql_metric("COALESCE(MAX(months_checked), 0)", "months_checked"),
+            ],
+            "adhoc_filters": [_where(_BASE)],
+            "row_limit": 1,
+            "handlebarsTemplate": (_TEMPLATES / "emergency_fund.hbs").read_text(),
+            "styleTemplate": _KPI_STYLE + _FORECAST_STYLE,
+        },
+    ),
+    (
+        "rpt_goal_headroom",
+        "Adjust: where the plan has room",
+        "table",
+        {
+            "query_mode": "raw",
+            # Dollars, whatever each category is charged in (`source_currency`): the
+            # forecast above the owner's own usual, biggest first.
+            "adhoc_filters": [],
+            "all_columns": [
+                "category",
+                "source_currency",
+                "forecast",
+                "reference",
+                "headroom",
+                "share",
+            ],
+            "order_by_cols": ['["headroom", false]'],
+            "column_config": {
+                **{
+                    name: {"d3NumberFormat": ",.2f", "horizontalAlign": "right"}
+                    for name in ("forecast", "reference", "headroom")
+                },
+                "share": {"d3NumberFormat": ".0%", "horizontalAlign": "right"},
+            },
+            "row_limit": 200,
+            "include_search": True,
+        },
+    ),
+    (
+        "rpt_income_statement",
+        "Income statement: saving against the plan",
+        "echarts_timeseries_line",
+        {
+            "x_axis": "month",
+            "time_grain_sqla": "P1M",
+            "metrics": [_sql_metric("SUM(amount)", "Amount")],
+            # What was saved (closed months) or is expected to be (months ahead) next to
+            # what the plan and the forecast said it would be.
+            "groupby": [_sql_column("split_part(line, ' · ', 2)", "line")],
+            "adhoc_filters": [
+                _where("line IN ('5 · Monthly saving', '7 · Planned saving')"),
+                _where(_HORIZON_WHERE),
+            ],
+            "seriesType": "line",
+            "x_axis_time_format": _DATE_FORMAT,
+            "y_axis_format": ",.0f",
+            "y_axis_title": "Saving in the selected currency",
+            "y_axis_title_margin": 50,
+            "y_axis_title_position": "Left",
+            "rich_tooltip": True,
+            "row_limit": 1000,
+            "show_legend": True,
+        },
+    ),
+    (
+        "rpt_income_statement",
+        "Income statement: month by month",
+        "pivot_table_v2",
+        {
+            # One currency at a time (Currency filter, shown in the first column). The
+            # lines carry their order ("1 · Income" ... "8 · Saving vs plan"); closed
+            # months come first and the months ahead are labelled "(forecast)".
+            "groupbyRows": ["currency", "line"],
+            "groupbyColumns": ["month_label"],
+            "metrics": [_sql_metric("SUM(amount)", "Amount")],
+            "metricsLayout": "COLUMNS",
+            "aggregateFunction": "Sum",
+            "rowTotals": False,
+            "colTotals": False,
+            "transposePivot": False,
+            "combineMetric": False,
+            "rowOrder": "key_a_to_z",
+            "colOrder": "key_a_to_z",
+            "valueFormat": ",.2f",
+            "adhoc_filters": [_where(_HORIZON_WHERE)],
+            "row_limit": 10000,
+        },
+    ),
+    (
+        "rpt_category_variance",
+        "Categories above expected",
+        "table",
+        {
+            "query_mode": "raw",
+            # The last closed month against what the category's own history predicted
+            # without it; red where it has been above its range in recent months.
+            "adhoc_filters": [],
+            "all_columns": [
+                "category",
+                "currency",
+                "target_month",
+                "actual",
+                "p10",
+                "p50",
+                "p90",
+                "difference",
+                "status",
+                "months_above_last_6",
+            ],
+            "order_by_cols": ['["difference", false]'],
+            "column_config": {
+                **{
+                    name: {"d3NumberFormat": ",.2f", "horizontalAlign": "right"}
+                    for name in ("actual", "p10", "p50", "p90", "difference")
+                },
+                "target_month": {"d3TimeFormat": "%b %Y"},
+            },
+            "conditional_formatting": [
+                {
+                    "colorScheme": "#fbd0d2",
+                    "column": "months_above_last_6",
+                    "operator": ">",
+                    "targetValue": 0,
+                }
+            ],
+            "row_limit": 500,
+            "include_search": True,
+        },
+    ),
+    (
+        "rpt_category_forecast",
+        "Forecast: how far to trust it",
+        "handlebars",
+        {
+            "query_mode": "aggregate",
+            # One row per series, biggest first. `baseline_used`: no model beat the
+            # median baseline in the backtest, so the forecast is just the median.
+            "groupby": [
+                "category",
+                "currency",
+                "model_name",
+                "baseline_used",
+                "low_history",
+                "n_months",
+                _sql_column(_percent("mae_rel"), "mae"),
+                _sql_column(_percent("coverage"), "inside"),
+            ],
+            "metrics": [_sql_metric("SUM(p50)", "sort_key")],
+            "timeseries_limit_metric": _sql_metric("SUM(p50)", "sort_key"),
+            "order_desc": True,
+            "adhoc_filters": [],
+            "row_limit": 500,
+            "handlebarsTemplate": (_TEMPLATES / "forecast_trust.hbs").read_text(),
+            "styleTemplate": _FORECAST_STYLE,
+        },
+    ),
+    (
+        "rpt_forecast_realized",
+        "Forecast: realized vs expected",
+        "table",
+        {
+            "query_mode": "raw",
+            # An older forecast against the month that then closed (`source` realized),
+            # or, until a second monthly run exists, the latest run's one-step forecast
+            # of a past month (`source` backtest). `error_ratio` is the miss over the
+            # backtest's typical miss: red where it did clearly worse (realized only).
+            "adhoc_filters": [],
+            "all_columns": [
+                "source",
+                "category",
+                "currency",
+                "target_month",
+                "horizon",
+                "actual",
+                "p10",
+                "p50",
+                "p90",
+                "status",
+                "error_ratio",
+            ],
+            "order_by_cols": ['["target_month", false]', '["error_ratio", false]'],
+            "column_config": {
+                **{
+                    name: {"d3NumberFormat": ",.2f", "horizontalAlign": "right"}
+                    for name in ("actual", "p10", "p50", "p90")
+                },
+                "error_ratio": {"d3NumberFormat": ",.1f", "horizontalAlign": "right"},
+                "target_month": {"d3TimeFormat": "%b %Y"},
+            },
+            "conditional_formatting": [
+                {
+                    "colorScheme": "#fbd0d2",
+                    "column": "error_ratio",
+                    "operator": ">",
+                    "targetValue": 2,
+                }
+            ],
+            "row_limit": 500,
+            "include_search": True,
+        },
+    ),
 ]
 
 
@@ -665,6 +1008,21 @@ class Superset:
         return self._call(method, path)
 
 
+# The dashboard's tabs, left to right (T66). Soles and dollars are never added, and
+# what is read together lives together: the savings per currency, the spending by
+# category, the goal and its forecast, and the monthly income statement.
+SAVINGS, CATEGORIES, FORECAST, STATEMENT = (
+    "Savings",
+    "Categories",
+    "Forecast & goal",
+    "Income statement",
+)
+
+
+def tab_id(name: str) -> str:
+    return "TAB-" + re.sub(r"\W+", "-", name.lower()).strip("-")
+
+
 def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
     """The dashboard's filter bar. The calendar filters (date range, time grain, year,
     quarter, month) and bank, account, currency, flow type and fund. A filter applies
@@ -673,6 +1031,7 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
     (PEN by default): currencies are never added together."""
 
     movements = datasets["rpt_movements"]
+    goal = datasets["goal_dynamic"]
 
     def base(name: str, filter_type: str, target: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -704,6 +1063,19 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
         }
         return item
 
+    def typed(name: str, column: str) -> dict[str, Any]:
+        """A filter the viewer types a number into (T65): empty means the Meta sheet's
+        value. `bi/sql/goal_dynamic.sql` reads it and turns it into a number or ignores
+        it; the filter never reaches the query as text."""
+        item = select(name, "goal_dynamic", column, multi=False)
+        item["targets"] = [{"datasetId": goal, "column": {"name": column}}]
+        item["controlValues"]["enableEmptyFilter"] = False
+        item["scope"] = {
+            "rootPath": [tab_id(FORECAST), tab_id(STATEMENT)],
+            "excluded": [],
+        }
+        return item
+
     # The dataset is where the filter takes its grains from; without one it is blank.
     grain = base("Time grain", "filter_timegrain", {"datasetId": movements})
     grain["defaultDataMask"] = {
@@ -727,13 +1099,19 @@ def native_filters(datasets: dict[str, int]) -> list[dict[str, Any]]:
         select("Flow type", "rpt_movements", "flow_type"),
         select("Internal transfer", "rpt_movements", "is_internal_transfer"),
         select("Fund", "rpt_investments", "place"),
+        typed("Goal (US$)", "goal_amount_usd"),
+        typed("Exchange rate (PEN per US$)", "usd_to_pen"),
+        typed("Emergency months", "emergency_months"),
+        typed("Forecast horizon (months)", "horizon_months"),
     ]
 
 
-# A text cell in the grid (Markdown), next to the investments chart: how to read it.
+# A text cell in the grid (Markdown) next to a chart, saying how to read it: the key is
+# the layout prefix, the text is in NOTES.
 NOTE = "@note"
-# A section title across the grid: "@section:" plus the text, alone in its row.
-SECTION = "@section:"
+FORECAST_NOTE = f"{NOTE}:forecast"
+STATEMENT_NOTE = f"{NOTE}:statement"
+CATEGORIES_NOTE = f"{NOTE}:categories"
 NOTE_TEXT = (
     "### How to read the returns\n\n"
     "- **valuation**: the month closed at a real month-end value.\n"
@@ -743,33 +1121,122 @@ NOTE_TEXT = (
     "and the balances are always there.\n\n"
     "One currency at a time: use the **Currency** filter."
 )
+CATEGORIES_NOTE_TEXT = (
+    "Everything on this page is in the **one currency** the **Currency** filter has "
+    "selected (soles by default); soles and dollars are never added."
+)
+FORECAST_NOTE_TEXT = (
+    "### How to read the forecast and the goal\n\n"
+    "- Everything about the goal is in **US$**. Type a **Goal (US$)**, an **Exchange "
+    "rate (PEN per US$)**, the **Emergency months** and a **Forecast horizon "
+    "(months)** in the filter bar and press *Apply filters*; left empty, each one "
+    "takes the value of the Meta sheet.\n"
+    "- The forecast goes 36 months ahead. Its month-by-month numbers, by category, "
+    "are in the **Income statement** tab.\n"
+    "- **Optimistic, base and cautious** are three sets of assumptions (low, median "
+    "and high spending; high, median and low income), not a confidence interval.\n"
+    "- Past the forecast the last month is held flat, and the investments are held "
+    "flat at their last valuation.\n"
+    "- Savings in the emergency account fill the emergency fund; new savings fill it "
+    "first, then go to the goal.\n"
+    "- **Forecast: how far to trust it** marks the categories that keep the "
+    "**median baseline**: no model beat it in the backtest.\n"
+    "- **Forecast: realized vs expected**: a row marked **backtest** is the latest "
+    "run's one-month-ahead forecast of a month that already closed (how the model "
+    "would have done); a row marked **realized** is an older run's forecast against "
+    "the month that then closed, from the second monthly run on. For one-month-ahead "
+    "rows a ratio near 1 means it missed as little as in the "
+    "backtest, well above 1 means worse; longer horizons have no ratio.\n\n"
+    "The date range does not apply here: these tables look ahead."
+)
+STATEMENT_NOTE_TEXT = (
+    "### How to read the income statement\n\n"
+    "- One currency at a time: the **Currency** filter (soles by default).\n"
+    "- A **closed month** is what happened. A month marked **(forecast)** is expected: "
+    "the income is the base scenario's, the fixed expenses are the plan's and the "
+    "rest is the forecast's median (p50), by category.\n"
+    "- **Monthly saving** = income - fixed expenses - the rest of the spending.\n"
+    "- **Planned saving** = income - **expected expenses**; expected expenses = the "
+    "plan's fixed amounts + the forecast's median for the month's total variable "
+    "spending. For a closed month it is the forecast made for it, with the income "
+    "that really came in.\n"
+    "- **Saving vs plan** (closed months) = monthly saving - planned saving. Negative: "
+    "you spent more than expected.\n"
+    "- Charges the plan marks *ignore* are not forecast, so they show as spending "
+    "with nothing planned. **~ Not split by category** is the part of the total "
+    "forecast that no category carries.\n"
+    "- Type a **Forecast horizon (months)** to show fewer months ahead (36 by "
+    "default). The date range does not apply here."
+)
+NOTES = {
+    NOTE: NOTE_TEXT,
+    FORECAST_NOTE: FORECAST_NOTE_TEXT,
+    STATEMENT_NOTE: STATEMENT_NOTE_TEXT,
+    CATEGORIES_NOTE: CATEGORIES_NOTE_TEXT,
+}
 
-# The grid: (chart name prefix, width out of 12, height) per cell, row by row.
-LAYOUT: list[list[tuple[str, int, int]]] = [
-    [("Upload your files", 12, 32)],
-    [("Cash flow summary", 12, 22)],
-    [("Period analysed", 6, 22), ("Debt at the end", 6, 22)],
-    [("Capital summary", 6, 22), ("Net position summary", 6, 22)],
-    [("Cash flow: money", 6, 50), ("Balance per month", 6, 50)],
-    [(f"{SECTION}Categories", 12, 6)],
-    [("Categories: what you", 6, 50), ("Categories: where", 6, 50)],
-    [("Categories: spending per", 12, 50)],
-    [("Categories: movements", 12, 60)],
-    [("Investments: return and", 12, 32)],
-    [("Investments: return per", 8, 50), (NOTE, 4, 50)],
-    [("Movements", 12, 60)],
-    [("Statement balances", 12, 60)],
-    [("Reconciliation", 12, 40)],
+# Charts that read nothing on a short history: the variance table compares a month
+# with a backtest forecast, which needs nine closed months, and the demo has eight; the
+# realized table needs a second forecast run after a forecast month has closed.
+MAY_BE_EMPTY = {"Categories above expected", "Forecast: realized vs expected"}
+
+# The grid, tab by tab: (chart name prefix, width out of 12, height) per cell, by row.
+TABS: list[tuple[str, list[list[tuple[str, int, int]]]]] = [
+    (
+        SAVINGS,
+        [
+            [("Upload your files", 12, 32)],
+            [("Cash flow summary", 12, 22)],
+            [("Period analysed", 6, 22), ("Debt at the end", 6, 22)],
+            [("Capital summary", 6, 22), ("Net position summary", 6, 22)],
+            [("Cash flow: money", 6, 50), ("Balance per month", 6, 50)],
+            [("Investments: return and", 12, 32)],
+            [("Investments: return per", 8, 50), (NOTE, 4, 50)],
+            [("Movements", 12, 60)],
+            [("Statement balances", 12, 60)],
+            [("Reconciliation", 12, 40)],
+        ],
+    ),
+    (
+        CATEGORIES,
+        [
+            [(CATEGORIES_NOTE, 12, 8)],
+            [("Categories: what you", 6, 50), ("Categories: where", 6, 50)],
+            [("Categories: spending per", 12, 50)],
+            [("Categories: movements", 12, 60)],
+        ],
+    ),
+    (
+        FORECAST,
+        [
+            [("Goal: when you reach it", 7, 46), (FORECAST_NOTE, 5, 46)],
+            [("Goal: projected progress", 12, 50)],
+            [("Emergency fund", 12, 34)],
+            [("Adjust: where", 12, 50)],
+            [("Forecast: how far", 12, 60)],
+            [("Forecast: realized", 12, 50)],
+        ],
+    ),
+    (
+        STATEMENT,
+        [
+            [("Income statement: saving", 8, 50), (STATEMENT_NOTE, 4, 50)],
+            [("Income statement: month", 12, 80)],
+            [("Categories above", 12, 50)],
+        ],
+    ),
 ]
+LAYOUT = [row for _, rows in TABS for row in rows]
 
 
 def _position(
     chart_ids: Sequence[int], names: Sequence[str], uuids: Sequence[str]
 ) -> dict[str, Any]:
-    """The dashboard grid, from LAYOUT: each cell finds its chart by name prefix."""
+    """The dashboard grid, from TABS: each cell finds its chart by name prefix."""
+    tabs = "TABS-main"
     layout: dict[str, Any] = {
         "DASHBOARD_VERSION_KEY": "v2",
-        "ROOT_ID": {"type": "ROOT", "id": "ROOT_ID", "children": ["GRID_ID"]},
+        "ROOT_ID": {"type": "ROOT", "id": "ROOT_ID", "children": [tabs]},
         "GRID_ID": {
             "type": "GRID",
             "id": "GRID_ID",
@@ -781,60 +1248,74 @@ def _position(
             "id": "HEADER_ID",
             "meta": {"text": "PFP finance"},
         },
+        tabs: {
+            "type": "TABS",
+            "id": tabs,
+            "children": [tab_id(name) for name, _ in TABS],
+            "parents": ["ROOT_ID"],
+            "meta": {},
+        },
     }
-    for row_number, cells in enumerate(LAYOUT):
-        row_id = f"ROW-{row_number}"
-        if cells[0][0].startswith(SECTION):
-            title_id = f"HEADER-{row_number}"
-            layout["GRID_ID"]["children"].append(title_id)
-            layout[title_id] = {
-                "type": "HEADER",
-                "id": title_id,
-                "children": [],
-                "parents": ["ROOT_ID", "GRID_ID"],
-                "meta": {
-                    "text": cells[0][0].removeprefix(SECTION),
-                    "headerSize": "LARGE_HEADER",
-                    "background": "BACKGROUND_TRANSPARENT",
-                },
-            }
-            continue
-        layout["GRID_ID"]["children"].append(row_id)
-        children = []
-        for prefix, width, height in cells:
-            if prefix == NOTE:
-                layout["MARKDOWN-note"] = {
-                    "type": "MARKDOWN",
-                    "id": "MARKDOWN-note",
-                    "children": [],
-                    "parents": ["ROOT_ID", "GRID_ID", row_id],
-                    "meta": {"width": width, "height": height, "code": NOTE_TEXT},
-                }
-                children.append("MARKDOWN-note")
-                continue
-            i = next(n for n, name in enumerate(names) if name.startswith(prefix))
-            cell_id = f"CHART-{i}"
-            children.append(cell_id)
-            layout[cell_id] = {
-                "type": "CHART",
-                "id": cell_id,
-                "children": [],
-                "parents": ["ROOT_ID", "GRID_ID", row_id],
-                "meta": {
-                    "width": width,
-                    "height": height,
-                    "chartId": chart_ids[i],
-                    "uuid": uuids[i],
-                    "sliceName": names[i],
-                },
-            }
-        layout[row_id] = {
-            "type": "ROW",
-            "id": row_id,
-            "children": children,
-            "parents": ["ROOT_ID", "GRID_ID"],
-            "meta": {"background": "BACKGROUND_TRANSPARENT"},
+    row_number = 0
+    for tab_name, rows in TABS:
+        tab = tab_id(tab_name)
+        layout[tab] = {
+            "type": "TAB",
+            "id": tab,
+            "children": [],
+            "parents": ["ROOT_ID", tabs],
+            "meta": {
+                "text": tab_name,
+                "defaultText": "Tab title",
+                "placeholder": "Tab title",
+            },
         }
+        for cells in rows:
+            row_id = f"ROW-{row_number}"
+            row_number += 1
+            layout[tab]["children"].append(row_id)
+            parents = ["ROOT_ID", tabs, tab, row_id]
+            children = []
+            for prefix, width, height in cells:
+                if prefix in NOTES:
+                    note = prefix.removeprefix(NOTE).lstrip(":") or "note"
+                    note_id = f"MARKDOWN-{note}"
+                    layout[note_id] = {
+                        "type": "MARKDOWN",
+                        "id": note_id,
+                        "children": [],
+                        "parents": parents,
+                        "meta": {
+                            "width": width,
+                            "height": height,
+                            "code": NOTES[prefix],
+                        },
+                    }
+                    children.append(note_id)
+                    continue
+                i = next(n for n, name in enumerate(names) if name.startswith(prefix))
+                cell_id = f"CHART-{i}"
+                children.append(cell_id)
+                layout[cell_id] = {
+                    "type": "CHART",
+                    "id": cell_id,
+                    "children": [],
+                    "parents": parents,
+                    "meta": {
+                        "width": width,
+                        "height": height,
+                        "chartId": chart_ids[i],
+                        "uuid": uuids[i],
+                        "sliceName": names[i],
+                    },
+                }
+            layout[row_id] = {
+                "type": "ROW",
+                "id": row_id,
+                "children": children,
+                "parents": ["ROOT_ID", tabs, tab],
+                "meta": {"background": "BACKGROUND_TRANSPARENT"},
+            }
     return layout
 
 
@@ -854,6 +1335,8 @@ def _sample_rows(client: Superset, dataset: int, params: dict[str, Any]) -> int:
         for column in [
             params.get("x_axis"),
             *params.get("groupby", []),
+            *params.get("groupbyRows", []),
+            *params.get("groupbyColumns", []),
             *params.get("all_columns", []),
         ]
         if column
@@ -926,11 +1409,10 @@ def build(client: Superset, bi_password: str) -> int:
 
     datasets: dict[str, int] = {}
     for table in dict.fromkeys(chart[0] for chart in CHARTS):
-        datasets[table] = client.json(
-            "POST",
-            "/dataset/",
-            {"database": database, "schema": "gold", "table_name": table},
-        )["id"]
+        body = {"database": database, "schema": "gold", "table_name": table}
+        if table in VIRTUAL:
+            body["sql"] = VIRTUAL[table].read_text()
+        datasets[table] = client.json("POST", "/dataset/", body)["id"]
 
     dashboard = client.json(
         "POST",
@@ -959,7 +1441,7 @@ def build(client: Superset, bi_password: str) -> int:
         )["id"]
         rows = _sample_rows(client, datasets[table], params)
         print(f"{name}: {rows} sample row(s)")
-        if not rows:
+        if not rows and name not in MAY_BE_EMPTY:
             raise RuntimeError(
                 f"{name!r} reads no data: check the gold tables are built"
             )

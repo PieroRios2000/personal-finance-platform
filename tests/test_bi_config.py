@@ -2,6 +2,7 @@
 The live behaviour (import, connection as the read-only role, sample rows) is the PR's
 verification; these keep the configuration from drifting."""
 
+import ast
 import importlib.util
 import json
 import re
@@ -15,7 +16,30 @@ _ROOT = Path(__file__).resolve().parent.parent
 _BI = _ROOT / "bi"
 
 
-_DATASETS = {"rpt_movements": 2, "rpt_investments": 1, "rpt_balances": 3}
+_DATASETS = {
+    "rpt_movements": 2,
+    "rpt_investments": 1,
+    "rpt_balances": 3,
+    "goal_dynamic": 4,
+}
+# The "Forecast & goal" charts (T61) look ahead, so the dashboard's date range, which
+# narrows past months, has nothing to act on.
+_FORECAST_PREFIXES = (
+    "Goal:",
+    "Emergency fund",
+    "Adjust:",
+    "Forecast:",
+    "Categories above",
+    "Income statement",
+)
+_FORECAST_TABLES = {
+    "goal_dynamic",
+    "rpt_goal_headroom",
+    "rpt_category_forecast",
+    "rpt_category_variance",
+    "rpt_forecast_realized",
+    "rpt_income_statement",
+}
 
 
 def _compose() -> dict[str, Any]:
@@ -97,6 +121,10 @@ def test_the_dashboard_has_calendar_and_slicing_filters() -> None:
         "Flow type": "flow_type",
         "Internal transfer": "is_internal_transfer",
         "Fund": "place",
+        "Goal (US$)": "goal_amount_usd",
+        "Exchange rate (PEN per US$)": "usd_to_pen",
+        "Emergency months": "emergency_months",
+        "Forecast horizon (months)": "horizon_months",
     }
 
 
@@ -119,16 +147,20 @@ def test_the_time_grain_starts_monthly_and_takes_its_options_from_a_dataset() ->
 
 def test_every_chart_reads_a_reporting_table_the_dashboard_exports() -> None:
     exported = {p.stem for p in (_BI / "assets" / "datasets").rglob("*.yaml")}
-    used = {c[0] for c in _builder().CHARTS}
+    builder = _builder()
+    used = {c[0] for c in builder.CHARTS}
 
     assert used == exported
-    assert all(name.startswith("rpt_") for name in used)
+    assert all(name.startswith("rpt_") or name in builder.VIRTUAL for name in used)
 
 
 def test_every_dated_chart_has_a_time_range_filter_for_the_date_range() -> None:
     """Superset's Date range filter only narrows a chart that already has a time-range
     (TEMPORAL_RANGE) filter on its date column; without one it does nothing."""
     for name, chart in _charts().items():
+        if name.startswith(_FORECAST_PREFIXES):  # looks ahead: any filter is a WHERE
+            assert all(f["expressionType"] == "SQL" for f in chart[3]["adhoc_filters"])
+            continue
         if name.startswith(("Reconciliation", "Upload")):  # not per month
             assert chart[3]["adhoc_filters"] == []
             continue
@@ -230,10 +262,7 @@ def test_every_chart_has_a_cell_in_the_layout() -> None:
     builder = _builder()
     names = [c[1] for c in builder.CHARTS]
     prefixes = [
-        p
-        for row in builder.LAYOUT
-        for p, _, _ in row
-        if p != builder.NOTE and not p.startswith(builder.SECTION)
+        p for row in builder.LAYOUT for p, _, _ in row if not p.startswith(builder.NOTE)
     ]
 
     for name in names:
@@ -242,30 +271,62 @@ def test_every_chart_has_a_cell_in_the_layout() -> None:
         assert sum(n.startswith(prefix) for n in names) == 1, prefix
 
 
-def test_categories_are_their_own_section_of_the_dashboard() -> None:
-    """The classification (T51-T54) is a section with its own title, after the cash
-    flow and before the investments, made of the four `Categories:` charts."""
+def _tab_rows(builder: Any, name: str) -> list[list[str]]:
+    rows = dict(builder.TABS)[name]
+    return [[p for p, _, _ in row] for row in rows]
+
+
+def test_the_dashboard_has_four_tabs_each_chart_in_exactly_one() -> None:
+    """T66 (ADR 0048): savings, categories, forecast & goal and the income statement are
+    four tabs, so soles and dollars never share a page with the forecast."""
     builder = _builder()
-    rows = [[p for p, _, _ in row] for row in builder.LAYOUT]
-    title = next(
-        i for i, row in enumerate(rows) if row == [f"{builder.SECTION}Categories"]
-    )
-    cells = [p for row in rows[title + 1 : title + 4] for p in row]
+    names = [name for name, _ in builder.TABS]
+    cells = [p for name in names for row in _tab_rows(builder, name) for p in row]
 
-    assert len(cells) == 4
-    assert all(p.startswith("Categories:") for p in cells)
-    names = [c[1] for c in builder.CHARTS if c[1].startswith("Categories:")]
-    assert len(names) == 4
+    assert names == ["Savings", "Categories", "Forecast & goal", "Income statement"]
+    chart_names = [c[1] for c in builder.CHARTS]
+    for chart in chart_names:
+        owners = [p for p in cells if chart.startswith(p) and p != builder.NOTE]
+        assert len(owners) == 1, chart
 
+
+def test_each_tab_holds_its_own_charts() -> None:
+    builder = _builder()
+
+    def flat(name: str) -> list[str]:
+        return [p for row in _tab_rows(builder, name) for p in row]
+
+    categories = [p for p in flat("Categories") if not p.startswith(builder.NOTE)]
+    assert len(categories) == 4 and all(p.startswith("Categories:") for p in categories)
+    assert "Cash flow summary" in flat("Savings")
+    forecast = [p for p in flat("Forecast & goal") if not p.startswith(builder.NOTE)]
+    assert all(p.startswith(_FORECAST_PREFIXES) for p in forecast)
+    assert not any(p.startswith("Income statement") for p in forecast)
+    statement = flat("Income statement")
+    assert [p for p in statement if p.startswith("Income statement")] == [
+        "Income statement: saving",
+        "Income statement: month",
+    ]
+    assert "Categories above" in statement
+
+
+def test_the_position_json_nests_rows_under_tabs() -> None:
+    builder = _builder()
     layout = builder._position(
         list(range(len(builder.CHARTS))),
         [c[1] for c in builder.CHARTS],
         ["u"] * len(builder.CHARTS),
     )
-    header = layout[f"HEADER-{title}"]
-    assert header["meta"]["text"] == "Categories"
-    assert header["parents"] == ["ROOT_ID", "GRID_ID"]
-    assert f"HEADER-{title}" in layout["GRID_ID"]["children"]
+
+    assert layout["ROOT_ID"]["children"] == ["TABS-main"]
+    assert layout["GRID_ID"]["children"] == []
+    tabs = layout["TABS-main"]["children"]
+    assert [layout[t]["meta"]["text"] for t in tabs] == [n for n, _ in builder.TABS]
+    for tab in tabs:
+        for row in layout[tab]["children"]:
+            assert layout[row]["parents"] == ["ROOT_ID", "TABS-main", tab]
+            for cell in layout[row]["children"]:
+                assert layout[cell]["parents"][-1] == row
 
 
 def test_the_category_charts_cover_spending_only() -> None:
@@ -416,7 +477,8 @@ def test_the_dashboard_starts_with_a_link_to_the_upload_portal() -> None:
     dashboard = yaml.safe_load(
         next((_BI / "assets" / "dashboards").glob("*.yaml")).read_text()
     )
-    first_row = dashboard["position"]["GRID_ID"]["children"][0]
+    first_tab = dashboard["position"]["TABS-main"]["children"][0]
+    first_row = dashboard["position"][first_tab]["children"][0]
     first_chart = dashboard["position"][dashboard["position"][first_row]["children"][0]]
 
     assert builder.LAYOUT[0][0][0] == "Upload your files"
@@ -430,7 +492,7 @@ def test_the_dashboard_starts_with_a_link_to_the_upload_portal() -> None:
 def test_the_link_is_the_portals_address_from_the_environment() -> None:
     metrics = [
         m["sqlExpression"]
-        for m in _builder().CHARTS[-1][3]["metrics"]
+        for m in _charts()["Upload your files"][3]["metrics"]
         if "upload_url" in m["sqlExpression"]
     ]
     template = (_BI / "templates" / "upload_prompt.hbs").read_text()
@@ -441,3 +503,203 @@ def test_the_link_is_the_portals_address_from_the_environment() -> None:
     assert 'href="{{upload_url}}"' in template and "{{#if movements}}" in template
     assert '"upload_url": lambda: os.environ.get("PFP_UPLOAD_URL", "")' in config
     assert environment["PFP_UPLOAD_URL"].startswith("${PFP_UPLOAD_PUBLIC_URL:-http://")
+
+
+def _forecast_charts() -> dict[str, tuple[str, str, str, dict[str, Any]]]:
+    return {n: c for n, c in _charts().items() if n.startswith(_FORECAST_PREFIXES)}
+
+
+def test_forecast_and_goal_is_its_own_tab() -> None:
+    builder = _builder()
+    rows = _tab_rows(builder, "Forecast & goal")
+    forecast = [p for row in rows for p in row if not p.startswith(builder.NOTE)]
+
+    assert len(forecast) >= 6
+    assert all(p.startswith(_FORECAST_PREFIXES) for p in forecast)
+    assert {c[0] for c in _forecast_charts().values()} == _FORECAST_TABLES
+
+
+def test_the_realized_monitor_may_be_empty_until_a_second_run() -> None:
+    """Realized rows need an older run whose forecast month has since closed, so a
+    fresh install (or the demo, run once) has none: the build must not fail on it."""
+    builder = _builder()
+    name = "Forecast: realized vs expected"
+
+    assert name in _charts()
+    assert name in builder.MAY_BE_EMPTY
+    assert any(p == "Forecast: realized" for row in builder.LAYOUT for p, _, _ in row)
+
+
+def test_every_dashboard_dataset_is_row_level_secured() -> None:
+    """A dataset that `bi/setup_access.py` does not list is not filtered by `user_id`:
+    a second account would read the owner's rows (ADR 0036)."""
+    tree = ast.parse((_BI / "setup_access.py").read_text())
+    [tables] = [
+        node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and [t.id for t in node.targets if isinstance(t, ast.Name)] == ["TABLES"]
+    ]
+    listed = {c.value for c in ast.walk(tables) if isinstance(c, ast.Constant)}
+
+    assert {c[0] for c in _builder().CHARTS} <= listed
+    assert set(_builder().VIRTUAL) <= listed
+
+
+def test_the_goal_answer_shows_both_lines_and_all_three_scenarios() -> None:
+    chart = _charts()["Goal: when you reach it"]
+    text = json.dumps(chart[3])
+    template = chart[3]["handlebarsTemplate"]
+
+    assert chart[0] == "goal_dynamic"
+    for scenario in ("optimistic", "base", "cautious"):
+        assert f"scenario = '{scenario}'" in text
+    assert "with_risk" in text and "liquid" in text
+    assert "not reached" in text  # a goal out of reach is never a number
+    assert "not a confidence interval" in template
+
+
+def test_the_projection_chart_draws_every_line_and_scenario_in_dollars() -> None:
+    chart = _charts()["Goal: projected progress"]
+
+    assert chart[0] == "goal_dynamic"
+    assert chart[2] == "echarts_timeseries_line"
+    assert "scenario" in json.dumps(chart[3]["groupby"])
+    assert "line" in json.dumps(chart[3]["groupby"])
+    assert "US$" in chart[3]["y_axis_title"]
+
+
+def test_the_emergency_fund_uses_the_base_scenario_and_shows_its_warnings() -> None:
+    chart = _charts()["Emergency fund"]
+    text = json.dumps(chart[3]["adhoc_filters"])
+    template = chart[3]["handlebarsTemplate"]
+
+    assert chart[0] == "goal_dynamic"
+    assert "scenario = 'base'" in text  # the target never moves with the scenario
+    for flag in (
+        "essential_over_income",
+        "target_over_two_years_income",
+        "balance_mismatch",
+    ):
+        assert f"{{{{#if {flag}}}}}" in template
+
+
+def test_dollar_tables_are_not_hidden_by_the_currency_filter() -> None:
+    """The adjust view is in dollars whatever a category is charged in; a `currency`
+    column would let the dashboard's Currency filter drop the soles or dollars rows."""
+    chart = _charts()["Adjust: where the plan has room"]
+    columns = chart[3]["all_columns"]
+
+    assert chart[0] == "rpt_goal_headroom"
+    assert "currency" not in columns and "source_currency" in columns
+    assert "currency" in _charts()["Categories above expected"][3]["all_columns"]
+    pivot = _charts()["Income statement: month by month"][3]
+    assert pivot["groupbyRows"][0] == "currency"  # each currency in its own rows
+
+
+def test_the_income_statement_is_a_pivot_of_lines_by_month() -> None:
+    """The table the forecast used to have is a statement: lines (income, spending by
+    category, saving, planned saving) down, months across, one currency at a time."""
+    chart = _charts()["Income statement: month by month"]
+
+    assert chart[0] == "rpt_income_statement" and chart[2] == "pivot_table_v2"
+    assert chart[3]["groupbyRows"] == ["currency", "line"]
+    assert chart[3]["groupbyColumns"] == ["month_label"]
+    assert chart[3]["metrics"][0]["sqlExpression"] == "SUM(amount)"
+    assert chart[3]["rowOrder"] == chart[3]["colOrder"] == "key_a_to_z"
+
+
+def test_the_saving_chart_compares_the_saving_with_the_planned_one() -> None:
+    chart = _charts()["Income statement: saving against the plan"]
+    text = json.dumps(chart[3]["adhoc_filters"], ensure_ascii=False)
+
+    assert chart[0] == "rpt_income_statement"
+    assert "5 · Monthly saving" in text and "7 · Planned saving" in text
+
+
+def test_the_dashboard_says_plainly_when_the_baseline_is_the_model() -> None:
+    chart = _charts()["Forecast: how far to trust it"]
+    text = json.dumps(chart[3])
+
+    assert "baseline_used" in text
+    assert "median baseline" in chart[3]["handlebarsTemplate"]
+
+
+def test_no_forecast_chart_uses_a_sub_query_which_superset_refuses() -> None:
+    for name, chart in _forecast_charts().items():
+        assert "(select" not in json.dumps(chart[3]).lower(), name
+
+
+_GOAL_FILTERS = {
+    "Goal (US$)": "goal_amount_usd",
+    "Exchange rate (PEN per US$)": "usd_to_pen",
+    "Emergency months": "emergency_months",
+    "Forecast horizon (months)": "horizon_months",
+}
+
+
+def test_the_goal_is_driven_by_four_typed_native_filters_that_start_empty() -> None:
+    """T65: the goal, the rate, the emergency months and the horizon are typed in the
+    filter bar; empty means the Meta sheet's value (the virtual dataset's default)."""
+    filters = _filters()
+
+    for name, column in _GOAL_FILTERS.items():
+        item = filters[name]
+        assert item["filterType"] == "filter_select"
+        assert item["targets"] == [
+            {"datasetId": _DATASETS["goal_dynamic"], "column": {"name": column}}
+        ]
+        assert item["controlValues"]["multiSelect"] is False
+        assert item["controlValues"]["enableEmptyFilter"] is False
+        assert item["defaultDataMask"]["filterState"] == {}
+
+
+def test_the_goal_dataset_is_a_virtual_one_built_from_the_committed_sql() -> None:
+    builder = _builder()
+
+    assert builder.VIRTUAL == {"goal_dynamic": _BI / "sql" / "goal_dynamic.sql"}
+    assert all(path.exists() for path in builder.VIRTUAL.values())
+    exported = _BI / "assets" / "datasets"
+    [dataset] = list(exported.rglob("goal_dynamic.yaml"))
+    assert "filter_values" in yaml.safe_load(dataset.read_text())["sql"]
+
+
+def test_the_projection_chart_stops_at_the_horizon_the_filter_sets() -> None:
+    chart = _charts()["Goal: projected progress"]
+
+    assert "month_index <= horizon_months" in json.dumps(chart[3]["adhoc_filters"])
+
+
+def test_the_income_statement_follows_the_same_horizon() -> None:
+    """`months_ahead` counts from 0 at the first month ahead, the goal's `month_index`
+    from 1: the same typed value must keep the same number of months ahead."""
+    for name in (
+        "Income statement: saving against the plan",
+        "Income statement: month by month",
+    ):
+        text = json.dumps(_charts()[name][3]["adhoc_filters"])
+        assert "months_ahead + 1 <= " in text, name
+        assert "filter_values('horizon_months')" in text, name
+
+
+def test_the_typed_goal_filters_only_apply_to_the_forecast_and_statement_tabs() -> None:
+    builder = _builder()
+    scope = {
+        "rootPath": [
+            builder.tab_id("Forecast & goal"),
+            builder.tab_id("Income statement"),
+        ],
+        "excluded": [],
+    }
+
+    for name in _GOAL_FILTERS:
+        assert _filters()[name]["scope"] == scope, name
+    for name in ("Currency", "Date range", "Bank", "Year"):
+        assert _filters()[name]["scope"]["rootPath"] == ["ROOT_ID"], name
+
+
+def test_the_realized_monitor_says_whether_a_row_is_realized_or_a_backtest() -> None:
+    chart = _charts()["Forecast: realized vs expected"]
+
+    assert "source" in chart[3]["all_columns"]
+    assert "backtest" in _builder().FORECAST_NOTE_TEXT

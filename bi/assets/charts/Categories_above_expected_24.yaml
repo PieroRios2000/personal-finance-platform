@@ -1,0 +1,53 @@
+slice_name: Categories above expected
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  adhoc_filters: []
+  all_columns:
+  - category
+  - currency
+  - target_month
+  - actual
+  - p10
+  - p50
+  - p90
+  - difference
+  - status
+  - months_above_last_6
+  order_by_cols:
+  - '["difference", false]'
+  column_config:
+    actual:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    p10:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    p50:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    p90:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    difference:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    target_month:
+      d3TimeFormat: '%b %Y'
+  conditional_formatting:
+  - colorScheme: '#fbd0d2'
+    column: months_above_last_6
+    operator: '>'
+    targetValue: 0
+  row_limit: 500
+  include_search: true
+  datasource: 9__table
+  viz_type: table
+query_context: null
+cache_timeout: null
+uuid: 6e3f1698-8488-5d92-a574-be95c4bf0b39
+version: 1.0.0
+dataset_uuid: af830fbf-38ed-5e9e-9da6-5eceb8b91e36

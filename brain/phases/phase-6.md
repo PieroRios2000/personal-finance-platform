@@ -17,9 +17,18 @@ session starts from facts. Scope decision:
 |---|---|---|
 | Manual Excel importer | Banco Ripley gives no statements, so its savings movements (and the investments) are typed month by month into one Excel (`Ahorros` and `Inversiones` sheets). The template exists (`scripts/make_manual_templates.py`, [`docs/manual-data.md`](../../docs/manual-data.md)); the importer is designed from a masked dump of the owner's real file. [ADR 0027](../decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md) | template, masked-description tool and the **savings import** built (`pfp import-manual`, [component](../components/manual-excel-importer.md)); the investments sheet is loaded too |
 | Investment tracking | Tyba funds and Flip: contributions, withdrawals and month-end valuations, to see each fund's return per month (`gold.fct_investment_monthly`, Modified Dietz). Separate from the savings goal. [ADR 0028](../decisions/0028-investment-return-is-modified-dietz-per-fund-and-month.md), [component](../components/investment-tracking.md) | built |
-| Cash-flow projection | Time to reach a goal, from `gold.fact_transactions`; goals can be in soles or dollars | planned, after Ripley |
+| Cash-flow projection | Time to reach a goal, from `gold.fact_transactions`; the goal is in dollars (owner-entered `usd_to_pen`), with a calculated emergency target | specified ([spec](../../docs/specs/category-forecast-and-savings-goal.md)), tasks T56-T62 |
 | Exchange-rate projection (sol/dólar) | A rate history and a projected rate path, so dollar balances and dollar goals can be converted. **Exists only inside this phase**: bronze, silver and gold never convert | planned, with the projection |
-| Out of the goal | Investments on other platforms: long term and market-dependent, deliberately not counted toward the goal (they are tracked separately, above) | decided |
+| Savings buckets | Ripley savings = emergency fund; investments = risk savings, a second line of the goal (`with_risk`), at their last valuation and held flat; the first line (`liquid`) leaves them out ([ADR 0025](../decisions/0025-savings-goal-projection-counts-liquid-savings-only.md) amended). Whether the goal counts them is the owner's open question | decided 2026-10-04, one point open |
+
+## Specified 2026-10-04
+
+The cash-flow projection is specified together with Phase 3's spend forecast, because it needs the
+per-category forecast: [spec](../../docs/specs/category-forecast-and-savings-goal.md),
+[ADR 0048](../decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md) (tasks T56-T62; T64-T65 extend it to 36 months and a goal editable from Superset; T66 splits the dashboard in tabs and adds a monthly income statement).
+The owner enters the goal in dollars; the output is the time to reach it as a range over three scenarios, after filling an emergency amount calculated from his spending and income. The
+exchange rate in v1 is one owner-entered rate; the rate-history and rate-path section below is still
+planned.
 
 ## The exchange rate stays inside this phase
 
@@ -38,8 +47,10 @@ or gold.
 
 ## Open questions
 
-Listed in the concept note (exchange-rate source and path model, cash-flow method, irregular months) and in the ADR. They are
-settled when this phase is planned, not before.
+Listed in the concept note and in the ADR. The cash-flow method and irregular months are settled by
+[ADR 0048](../decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md) (backtested
+baselines, three scenarios); the exchange-rate source is an owner-entered rate for v1; the rate
+path is still open.
 
 ## Related
 

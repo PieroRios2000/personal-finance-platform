@@ -114,6 +114,7 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | dbt-duckdb | 1.11.0 (dbt-core 1.12.4) | runtime | Builds silver from bronze (T16, ADR 0011). Runtime, not dev: `dbt build` is a step of the platform's own flow, not a check |
 | duckdb | 1.5.5 | runtime | The engine dbt runs on; reads Delta off S3 with `delta_scan()` (T16, ADR 0002) |
 | dagster | 1.13.23 | runtime | Orchestrates bronze + dbt as one DAG (T21). Runtime: `dagster asset materialize` is a way to run the platform's own flow, same as `pfp ingest` + `dbt build` by hand |
+| dagster-webserver | 1.13.23 | dev | The web UI behind `uv run dagster dev` (T21). `dagster` alone does not ship it: without it `dagster dev` stops with "The dagster-webserver Python package must be installed". See [docs/where-to-look.md](docs/where-to-look.md) |
 | dagster-dbt | 0.29.23 | runtime | Wraps the dbt project as Dagster assets, one per dbt node (T21) |
 | elementary-data | 0.26.0 | dev | The `edr` CLI (`edr report`/`edr monitor`), for rendering a local observability report from what `dbt build` already wrote (T22, ADR 0022). Elementary itself is a **dbt package**, not a `uv` dependency — see `dbt/packages.yml` and the "Elementary" subsection under section 6 below |
 | sqlfluff | 4.3.0 | dev | Lints the dbt project's SQL (T16) |
@@ -123,6 +124,7 @@ They're consolidated in one place and all installed with `uv sync --locked`:
 | pytest-cov | 7.1.0 | dev | Coverage |
 | pytest-benchmark | 5.3.0 | dev | Parsing and bronze-write benchmarks, base vs PR (T15) |
 | openpyxl | 3.1.5 | runtime | Writes (and later reads) the manual Excel for Ripley savings and investments (`scripts/make_manual_templates.py`) |
+| numpy | 2.5.3 | runtime | Median and MAD for fixed-expense detection in `forecasting/` (was already installed through scikit-learn; now explicit) |
 | types-openpyxl | 3.1.5 | dev | Type stubs for openpyxl (mypy strict) |
 | pytest-xdist | 3.8.0 | dev | Runs the integration suite on several workers in CI (`-n 4`), each with its own test lake |
 | ruff | 0.16.7 | dev | Lint and format |
@@ -354,7 +356,7 @@ this env var — confirmed by reading `dagster`'s own CLI source
 `--help` text, which doesn't mention `pyproject.toml` at all.
 
 `dagster dev` (the local web UI, not required for CI or `make poc`) does use the
-`pyproject.toml` block, so it needs no extra flag or env var: `uv run dagster dev`.
+`pyproject.toml` block, so it needs no extra flag or env var: `uv run dagster dev` (it needs the `dagster-webserver` dev dependency; `uv sync --locked` installs it). Where to look at everything else: [docs/where-to-look.md](docs/where-to-look.md).
 
 **What to look at (T31).** Open the *Assets* graph: `bronze` (the lake, Delta on S3) feeds the dbt
 models (silver, then gold). After a materialization, click a dbt model and its latest
@@ -658,7 +660,7 @@ project**, `pfp-poc`: one group in Docker Desktop, one network, one command (ADR
 ```bash
 make env           # a fresh clone: writes .env with generated secrets (never overwrites yours)
 make up            # storage + Postgres + Superset (the dashboards)
-make demo          # artificial data (eight closed months of a fictional person) -> bronze, then dbt build
+make demo          # artificial data (eight closed months of a fictional person) -> bronze, then dbt build and the forecast
 make up-catalog    # ... plus OpenMetadata (~4.6 GiB of RAM; see section 10)
 make status        # what is running, and the URLs
 make down          # stop everything, KEEP the data (the lake, the tables, the dashboards)
@@ -750,7 +752,11 @@ category for every new, unconfirmed movement automatically (T54, ADR 0045) -- no
 needed, and no owner action required to see it: `gold.rpt_movements.category` shows the prediction
 right after the next `make build`, with `category_confirmed = false` so it's never mistaken for
 the owner's own label. `make categorize-new-movements PFP_USER=piero` re-runs just this step by
-hand (e.g. right after training a new model, without a full re-ingest).
+hand (e.g. right after training a new model, without a full re-ingest). The same step also ends
+`pfp backfill` and, through `pfp ingest`, `make ingest-uploads`. The saved model belongs to the user
+it was trained for (`make train-category-model` records it, ADR 0047): other users' uploads get no
+proposals, and a model saved before October 2026 needs one retrain. The whole month, in order, is in
+[`docs/monthly-routine.md`](docs/monthly-routine.md).
 
 Check whether the data the classifier sees has changed shape (T55, ADR 0046), for example after a few
 new statements:
@@ -763,6 +769,42 @@ make monitor-category-drift PFP_USER=piero
 # Prints drifted yes/no per column and saves an HTML report under ~/finance-data/reports/.
 # Read it as a prompt, not a verdict: windows are a few hundred movements, and drift is not error.
 ```
+
+## 16. Savings plan workbook (T56, Phase 3, ADR 0048)
+
+```bash
+make export-plan PFP_USER=piero
+# writes ~/finance-data/plan/plan-de-ahorro.xlsx (0600): 'Instrucciones', 'Gastos fijos' (the
+# spending the history suggests is fixed; confirm or change 'kind' and 'expected_amount') and
+# 'Meta' (goal in dollars, soles per dollar, emergency months and account). Reads gold only.
+```
+
+Run it again whenever you like: your choices stay, new expenses are appended, and a row that
+stopped appearing is kept with a note.
+
+```bash
+make import-plan            # reads ~/finance-data/plan/plan-de-ahorro.xlsx; WORKBOOK=... for another file
+make build                  # silver.plan_* and gold.rpt_fixed_expenses
+```
+
+The import (T57) checks the whole file and lists every problem at once by sheet, row number or
+field name (never the values you typed); if there is any, nothing is written. A good file replaces
+your whole plan. It also puts the file back to mode 0600 if Excel on Windows re-saved it with
+wider permissions. `Meta.emergency_account` must be the exact name of one of your asset accounts
+(the `bank` of a savings account or the manual Excel's `cuenta`). No new dependency or variable.
+
+```bash
+make forecast               # after `make build`: per-category forecast of the next 36 months (T59, T64)
+```
+
+It reads the closed months from gold, leaves out the charges your plan calls fixed or ignored,
+and writes bronze, then builds `silver.spend_forecast*` and `gold.fct_spend_forecast`,
+`rpt_category_variance` and `rpt_forecast_series_quality`. With a plan imported it also projects
+the dollar goal (T60): `gold.rpt_goal_plan`, `rpt_goal_cashflow`, `rpt_goal_balances` (the pieces the dashboard's
+`goal_dynamic` dataset recombines, T65), `rpt_goal_projection`, `rpt_goal_summary`,
+`rpt_emergency_fund` and `rpt_goal_headroom`; `gold.rpt_income_statement` (T66, the dashboard's monthly income statement) is rebuilt too; without a plan, or without `usd_to_pen`, it says so and skips. The terminal shows counts only;
+ratios and counts go to MLflow (`~/finance-data/mlflow.db`, or `MLFLOW_TRACKING_URI`). No new
+dependency: `mlflow` was added with the categorization model (T52).
 
 ## Reproducing CI locally (`make ci-local`)
 

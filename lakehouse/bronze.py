@@ -15,9 +15,10 @@ deltalake 1.6.3 while building this. A fixed schema on every write sidesteps
 that entirely; 18 total digits comfortably covers any realistic amount.
 """
 
+from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, NamedTuple
 
 import pyarrow as pa
 from deltalake import DeltaTable, write_deltalake
@@ -123,6 +124,209 @@ _CATEGORY_PREDICTIONS_SCHEMA = pa.schema(
     ]
 )
 
+# T57 (ADR 0048): the owner's savings plan, from the workbook `make import-plan` reads.
+# Like the labels, a lookup replaced whole on every import. `plan_fixed_items` is keyed
+# by (user_id, bank, description, currency); `plan_goal` is one row per user. The goal
+# is always in US dollars (`goal_currency`); `usd_to_pen` is soles per dollar.
+_PLAN_FIXED_ITEMS_SCHEMA = pa.schema(
+    [
+        ("user_id", pa.string()),
+        ("bank", pa.string()),
+        ("description", pa.string()),
+        ("currency", pa.string()),
+        ("category", pa.string()),
+        ("months_seen", pa.int32()),
+        ("typical_amount", _MONEY),
+        ("proposed_kind", pa.string()),
+        ("kind", pa.string()),
+        ("expected_amount", _MONEY),
+        ("note", pa.string()),
+        ("loaded_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
+
+_PLAN_GOAL_SCHEMA = pa.schema(
+    [
+        ("user_id", pa.string()),
+        ("goal_amount", _MONEY),
+        ("goal_currency", pa.string()),
+        ("usd_to_pen", pa.float64()),
+        ("emergency_months", pa.int32()),
+        ("emergency_basis", pa.string()),
+        ("emergency_account", pa.string()),
+        ("target_date", pa.date32()),
+        ("income_pen_override", _MONEY),
+        ("income_usd_override", _MONEY),
+        ("loaded_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
+
+
+# T59 (ADR 0048): the forecast run, replaced by (user_id, run_month) so earlier runs
+# stay for the monitor (T62). `kind` is 'backtest' (a past one-step forecast with its
+# actual) or 'forecast'; p10/p90 are null when a series has too few errors.
+_SPEND_FORECASTS_SCHEMA = pa.schema(
+    [
+        ("user_id", pa.string()),
+        ("run_month", pa.date32()),
+        ("kind", pa.string()),
+        ("category", pa.string()),
+        ("currency", pa.string()),
+        ("target_month", pa.date32()),
+        ("horizon", pa.int32()),
+        ("model_name", pa.string()),
+        ("p10", _MONEY),
+        ("p50", _MONEY),
+        ("p90", _MONEY),
+        ("actual", _MONEY),
+        ("created_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
+
+_SPEND_FORECAST_SERIES_SCHEMA = pa.schema(
+    [
+        ("user_id", pa.string()),
+        ("run_month", pa.date32()),
+        ("category", pa.string()),
+        ("currency", pa.string()),
+        ("model_name", pa.string()),
+        ("baseline_used", pa.bool_()),
+        ("low_history", pa.bool_()),
+        ("n_months", pa.int32()),
+        ("n_origins", pa.int32()),
+        ("mae_rel", pa.float64()),
+        ("coverage", pa.float64()),
+        ("created_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
+
+
+class ForecastRow(NamedTuple):
+    kind: str
+    category: str
+    currency: str
+    target_month: date
+    horizon: int
+    model_name: str
+    p10: float | None
+    p50: float
+    p90: float | None
+    actual: float | None
+
+
+class ForecastSeriesRow(NamedTuple):
+    category: str
+    currency: str
+    model_name: str
+    baseline_used: bool
+    low_history: bool
+    n_months: int
+    n_origins: int
+    mae_rel: float
+    coverage: float | None
+
+
+# T60 (ADR 0048): the goal projection, in dollars. Small tables replaced as one set per
+# user on every run (only the latest projection matters). T65 adds `goal_cashflow` and
+# `goal_balances`: the same projection's pieces in the currency they were earned in, so
+# the dashboard can recombine them under its own goal, rate and emergency months. The
+# columns between
+# `run_month` and `created_at` are the fields of `forecasting.projection`'s rows.
+def _goal_schema(*fields: tuple[str, pa.DataType]) -> pa.Schema:
+    return pa.schema(
+        [
+            ("user_id", pa.string()),
+            ("run_month", pa.date32()),
+            *fields,
+            ("created_at", pa.timestamp("us", tz="UTC")),
+        ]
+    )
+
+
+_GOAL_SCHEMAS: dict[str, pa.Schema] = {
+    "goal_projection": _goal_schema(
+        ("scenario", pa.string()),
+        ("line", pa.string()),
+        ("month_index", pa.int32()),
+        ("month", pa.date32()),
+        ("emergency", _MONEY),
+        ("goal_progress", _MONEY),
+    ),
+    "goal_summary": _goal_schema(
+        ("scenario", pa.string()),
+        ("line", pa.string()),
+        ("months_to_goal", pa.int32()),
+        ("reached_month", pa.date32()),
+        ("required_monthly_saving", _MONEY),
+        ("projected_monthly_saving", _MONEY),
+        ("gap", _MONEY),
+        ("headroom_share_of_gap", pa.float64()),
+    ),
+    "emergency_fund": _goal_schema(
+        ("scenario", pa.string()),
+        ("target", _MONEY),
+        ("bucket", _MONEY),
+        ("gap", _MONEY),
+        ("months_to_fill", pa.int32()),
+        ("months_covered", pa.float64()),
+        ("months_of_income", pa.float64()),
+        ("savings_rate", pa.float64()),
+        ("essential_over_income", pa.bool_()),
+        ("target_over_two_years_income", pa.bool_()),
+        ("balance_mismatch", pa.bool_()),
+        ("mismatch_months", pa.int32()),
+        ("months_checked", pa.int32()),
+        ("avg_net_flow", _MONEY),
+        ("avg_balance_change", _MONEY),
+    ),
+    "goal_headroom": _goal_schema(
+        ("category", pa.string()),
+        ("currency", pa.string()),
+        ("forecast", _MONEY),
+        ("reference", _MONEY),
+        ("headroom", _MONEY),
+        ("share", pa.float64()),
+    ),
+    "goal_cashflow": _goal_schema(
+        ("scenario", pa.string()),
+        ("month_index", pa.int32()),
+        ("month", pa.date32()),
+        ("currency", pa.string()),
+        ("income", _MONEY),
+        ("fixed", _MONEY),
+        ("variable", _MONEY),
+    ),
+    "goal_balances": _goal_schema(
+        ("bucket", pa.string()),
+        ("currency", pa.string()),
+        ("amount", _MONEY),
+    ),
+}
+
+
+class PlanItemRow(NamedTuple):
+    bank: str
+    description: str
+    currency: str
+    category: str
+    months_seen: int
+    typical_amount: float | None
+    proposed_kind: str
+    kind: str
+    expected_amount: float | None
+    note: str
+
+
+class PlanGoalRow(NamedTuple):
+    goal_amount: float
+    usd_to_pen: float
+    emergency_months: int
+    emergency_basis: str
+    emergency_account: str
+    target_date: date | None
+    income_pen_override: float | None
+    income_usd_override: float | None
+
 
 def _append(name: str, schema: pa.Schema, rows: list[dict[str, Any]]) -> None:
     write_deltalake(
@@ -166,17 +370,21 @@ def _delete_file_rows(name: str, column: str, user_id: str, file_sha256: str) ->
     )
 
 
-def _delete_user_rows(name: str, user_id: str) -> None:
+def _delete_user_rows(name: str, user_id: str, run_month: date | None = None) -> None:
     """Delete every row of `bronze/<name>` that belongs to `user_id` -- the whole-set
     replace `replace_category_labels()` needs, since a label file has no per-file
-    identity of its own to scope a narrower delete by."""
+    identity of its own to scope a narrower delete by. With `run_month`, only that
+    forecast run's rows."""
     uri = table_uri(name)
     options = storage_options()
     if not DeltaTable.is_deltatable(uri, storage_options=options):
         return
-    DeltaTable(uri, storage_options=options).delete(
-        predicate=f"user_id = {_sql_literal(user_id)}"
-    )
+    predicate = f"user_id = {_sql_literal(user_id)}"
+    if run_month is not None:
+        predicate += (
+            f" AND run_month = CAST({_sql_literal(run_month.isoformat())} AS DATE)"
+        )
+    DeltaTable(uri, storage_options=options).delete(predicate=predicate)
 
 
 def replace_category_labels(
@@ -235,6 +443,68 @@ def replace_category_predictions(
         for bank, description, category in predictions
     ]
     _append("category_predictions", _CATEGORY_PREDICTIONS_SCHEMA, rows)
+
+
+def _money(value: float | None) -> Decimal | None:
+    """A typed amount as the table's 2-decimal money, without float noise."""
+    if value is None:
+        return None
+    return Decimal(str(value)).quantize(Decimal("0.01"))
+
+
+def replace_plan(user_id: str, items: list[PlanItemRow], goal: PlanGoalRow) -> None:
+    """Replace `user_id`'s whole savings plan (`items` and the one `goal` row), both
+    stamped with the same `loaded_at`: re-importing a corrected workbook changes only
+    what changed, same whole-set-replace shape as `replace_category_labels`. The caller
+    has already validated the workbook (`forecasting.plan_import.check_plan`)."""
+    _delete_user_rows("plan_fixed_items", user_id)
+    _delete_user_rows("plan_goal", user_id)
+    loaded_at = datetime.now(UTC)
+    if items:
+        _append(
+            "plan_fixed_items",
+            _PLAN_FIXED_ITEMS_SCHEMA,
+            [
+                {
+                    "user_id": user_id,
+                    **item._asdict(),
+                    "typical_amount": _money(item.typical_amount),
+                    "expected_amount": _money(item.expected_amount),
+                    "loaded_at": loaded_at,
+                }
+                for item in items
+            ],
+        )
+    _append(
+        "plan_goal",
+        _PLAN_GOAL_SCHEMA,
+        [
+            {
+                "user_id": user_id,
+                **goal._asdict(),
+                "goal_amount": _money(goal.goal_amount),
+                "goal_currency": "USD",
+                "income_pen_override": _money(goal.income_pen_override),
+                "income_usd_override": _money(goal.income_usd_override),
+                "loaded_at": loaded_at,
+            }
+        ],
+    )
+
+
+def asset_account_names(user_id: str) -> set[str]:
+    """The names (`bank`) of `user_id`'s asset accounts: what `Meta.emergency_account`
+    must match exactly. Empty on a lake with no statements yet."""
+    uri = table_uri("statements")
+    options = storage_options()
+    if not DeltaTable.is_deltatable(uri, storage_options=options):
+        return set()
+    table = DeltaTable(uri, storage_options=options).to_pyarrow_table(
+        partitions=[("user_id", "=", user_id)], columns=["bank", "account_kind"]
+    )
+    return {
+        str(row["bank"]) for row in table.to_pylist() if row["account_kind"] == "asset"
+    }
 
 
 def distinct_bank_descriptions(user_id: str) -> list[tuple[str, str]]:
@@ -439,3 +709,79 @@ def replace_investment_month(month: InvestmentMonth) -> None:
         for entry in month.entries
     ]
     _append("investment_entries", _INVESTMENT_ENTRIES_SCHEMA, rows)
+
+
+def replace_forecast_run(
+    user_id: str,
+    run_month: date,
+    forecasts: list[ForecastRow],
+    series: list[ForecastSeriesRow],
+) -> None:
+    """Replace `user_id`'s forecast run for `run_month` (the first day of the last
+    closed month), keeping every other run: running twice in a month changes nothing,
+    and the older forecasts stay to be compared with the actuals that arrive later
+    (T62). Both tables get the same `created_at`."""
+    _delete_user_rows("spend_forecasts", user_id, run_month)
+    _delete_user_rows("spend_forecast_series", user_id, run_month)
+    created_at = datetime.now(UTC)
+    if forecasts:
+        _append(
+            "spend_forecasts",
+            _SPEND_FORECASTS_SCHEMA,
+            [
+                {
+                    "user_id": user_id,
+                    "run_month": run_month,
+                    **row._asdict(),
+                    "p10": _money(row.p10),
+                    "p50": _money(row.p50),
+                    "p90": _money(row.p90),
+                    "actual": _money(row.actual),
+                    "created_at": created_at,
+                }
+                for row in forecasts
+            ],
+        )
+    if series:
+        _append(
+            "spend_forecast_series",
+            _SPEND_FORECAST_SERIES_SCHEMA,
+            [
+                {
+                    "user_id": user_id,
+                    "run_month": run_month,
+                    **row._asdict(),
+                    "created_at": created_at,
+                }
+                for row in series
+            ],
+        )
+
+
+def replace_goal_projection(
+    user_id: str, run_month: date, rows: Mapping[str, Sequence[Mapping[str, Any]]]
+) -> None:
+    """Replace `user_id`'s whole goal projection with `rows`, keyed by table name
+    (`_GOAL_SCHEMAS`). A table missing from `rows` is cleared, so a run that refuses
+    to project (no exchange rate, too little income history) leaves no stale answer
+    behind. Every table gets the same `created_at`; amounts keep 2 decimals."""
+    created_at = datetime.now(UTC)
+    for name, schema in _GOAL_SCHEMAS.items():
+        _delete_user_rows(name, user_id)
+        table_rows = rows.get(name, ())
+        if not table_rows:
+            continue
+        money = {f.name for f in schema if pa.types.is_decimal(f.type)}
+        _append(
+            name,
+            schema,
+            [
+                {
+                    "user_id": user_id,
+                    "run_month": run_month,
+                    **{k: _money(v) if k in money else v for k, v in row.items()},
+                    "created_at": created_at,
+                }
+                for row in table_rows
+            ],
+        )

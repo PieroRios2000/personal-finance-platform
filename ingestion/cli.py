@@ -178,6 +178,21 @@ def _run_organize(args: argparse.Namespace) -> int:
     return 0
 
 
+def _categorize(user_id: str) -> None:
+    """T54, ADR 0045: a batch prediction for every new, unconfirmed description --
+    a proposal only (gold.rpt_movements' own category_confirmed flag), never
+    assigned silently. Called by every command that lands movements in bronze
+    (`ingest`, `backfill`), even when nothing new was written: a model trained
+    since the last run should still predict what an earlier, model-less run could
+    not. Only the model's own user gets proposals (`Bundle.trained_for`)."""
+    report = categorize_new_movements(
+        user_id,
+        model_path=Path(os.environ.get("PFP_CATEGORY_MODEL_PATH", DEFAULT_MODEL_PATH)),
+    )
+    if report.has_model:
+        print(f"Categorias: {report.predicted} new description(s) predicted")
+
+
 def _run_ingest(args: argparse.Namespace) -> int:
     user_id: str | None = args.user
     if not user_id:
@@ -217,20 +232,7 @@ def _run_ingest(args: argparse.Namespace) -> int:
     print()
     print(f"Bronze: {written} statement(s) written, {skipped} already ingested")
 
-    # T54, ADR 0045: a batch prediction for every new, unconfirmed description --
-    # a proposal only (gold.rpt_movements' own category_confirmed flag), never
-    # assigned silently. Runs every time, even when nothing new was written above:
-    # a model trained since the last ingest should still get a chance to predict
-    # what an earlier, model-less ingest could not.
-    categorization_report = categorize_new_movements(
-        user_id,
-        model_path=Path(os.environ.get("PFP_CATEGORY_MODEL_PATH", DEFAULT_MODEL_PATH)),
-    )
-    if categorization_report.has_model:
-        print(
-            f"Categorias: {categorization_report.predicted} new description(s) "
-            "predicted"
-        )
+    _categorize(user_id)
 
     return 0
 
@@ -380,6 +382,8 @@ def _run_backfill(args: argparse.Namespace) -> int:
             archive, len(targets), replaced, failures, dry_run=args.dry_run
         )
     )
+    if not args.dry_run:
+        _categorize(user_id)
     return 0
 
 

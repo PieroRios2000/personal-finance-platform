@@ -37,7 +37,7 @@ different code path (`PythonPointerOpts`, `dagster/_cli/asset.py`) that needs an
 `-m`/`-f` flag or `DAGSTER_MODULE_NAME` (`dagster_shared/cli/__init__.py`'s own `envvar=`) --
 confirmed by reading `dagster`'s own CLI source, not assumed from either command's `--help`
 text, which doesn't mention `pyproject.toml` at all. `dagster dev` (the local web UI, not
-required for CI or `make poc`) needs neither flag nor env var.
+required for CI or `make poc`) needs neither flag nor env var, but it does need the `dagster-webserver` dev dependency (added 2026-10-04: `dagster` alone does not ship the UI). A tour of what to click: [docs/where-to-look.md](../../docs/where-to-look.md).
 
 ## `dbt build`'s duckdb path needed an absolute override
 

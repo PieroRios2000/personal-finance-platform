@@ -1,0 +1,55 @@
+slice_name: 'Forecast: realized vs expected'
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  adhoc_filters: []
+  all_columns:
+  - source
+  - category
+  - currency
+  - target_month
+  - horizon
+  - actual
+  - p10
+  - p50
+  - p90
+  - status
+  - error_ratio
+  order_by_cols:
+  - '["target_month", false]'
+  - '["error_ratio", false]'
+  column_config:
+    actual:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    p10:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    p50:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    p90:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    error_ratio:
+      d3NumberFormat: ',.1f'
+      horizontalAlign: right
+    target_month:
+      d3TimeFormat: '%b %Y'
+  conditional_formatting:
+  - colorScheme: '#fbd0d2'
+    column: error_ratio
+    operator: '>'
+    targetValue: 2
+  row_limit: 500
+  include_search: true
+  datasource: 11__table
+  viz_type: table
+query_context: null
+cache_timeout: null
+uuid: 35a3d93e-9415-523d-806a-dc359f152173
+version: 1.0.0
+dataset_uuid: 206c0aca-aeda-5eef-8877-7d69b0092d37

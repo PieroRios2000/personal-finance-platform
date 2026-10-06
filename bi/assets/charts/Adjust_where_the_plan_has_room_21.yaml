@@ -1,0 +1,39 @@
+slice_name: 'Adjust: where the plan has room'
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  query_mode: raw
+  adhoc_filters: []
+  all_columns:
+  - category
+  - source_currency
+  - forecast
+  - reference
+  - headroom
+  - share
+  order_by_cols:
+  - '["headroom", false]'
+  column_config:
+    forecast:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    reference:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    headroom:
+      d3NumberFormat: ',.2f'
+      horizontalAlign: right
+    share:
+      d3NumberFormat: .0%
+      horizontalAlign: right
+  row_limit: 200
+  include_search: true
+  datasource: 7__table
+  viz_type: table
+query_context: null
+cache_timeout: null
+uuid: b066af46-25f4-5bf6-9a66-0f0b527c1783
+version: 1.0.0
+dataset_uuid: e711cd9d-ac16-51be-b123-87d734cf410b

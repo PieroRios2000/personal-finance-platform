@@ -29,6 +29,11 @@ confirms or overrides, never assigned silently. Design in
 | [`categorization/model.py`](../../categorization/model.py) | The classifier (TF-IDF char n-grams + logistic regression): `train()`, `predict()`, `score_rules()` for the same metrics on the baseline, `choose_confidence_threshold()`, `suggest()`, `Bundle`, `load()` |
 | [`scripts/train_category_model.py`](../../scripts/train_category_model.py) | `make train-category-model`: trains on every label imported so far, reports macro-F1 and precision per category next to the rules baseline (on all labels, and again trusted-only), logs to a local MLflow, saves a `Bundle` (pipeline + confidence threshold) under `~/finance-data/models/` |
 
+Current result on the owner's labels (re-run 2026-10-04, 589 descriptions, 10 categories):
+macro-F1 0.49 on the 543 reviewed labels (merchant-grouped 3-fold), 0.62 on all labels, 0.23 for
+the rules; every caveat and the per-category precision are in
+[ADR 0044](../decisions/0044-category-classifier-char-ngrams-vs-rules-baseline.md)'s last amendment.
+
 `export_category_labels.py`'s suggestion is the trained model's prediction once one has been
 saved there *and* its confidence clears the saved threshold, the rules-based guess otherwise
 (cold start, or the model isn't confident enough, T53) -- the same "propose, never decide" shape
@@ -36,7 +41,7 @@ either way, never a silent switch the owner has to know about. `train()`'s own c
 groups by merchant (digits stripped), not by row, so two near-duplicate descriptions of the same
 merchant never land in different folds and let the model partly grade itself.
 
-| [`scripts/categorize_new_movements.py`](../../scripts/categorize_new_movements.py) | `run()`: batch-predicts a category for every new, unconfirmed `(bank, description)` -- called automatically by `ingestion.cli._run_ingest()` and `orchestration.assets.bronze.bronze()` (T54, ADR 0045), also `make categorize-new-movements` by hand |
+| [`scripts/categorize_new_movements.py`](../../scripts/categorize_new_movements.py) | `run()`: batch-predicts a category for every new, unconfirmed `(bank, description)` -- called automatically by `ingestion.cli._run_ingest()`, `pfp backfill` and `orchestration.assets.bronze.bronze()` (T54, ADR 0045, 0047; `make ingest-uploads` reaches it via `pfp ingest`), only for the user the saved model was trained for (`Bundle.trained_for`), also `make categorize-new-movements` by hand |
 | [`lakehouse/bronze.py`](../../lakehouse/bronze.py)`.replace_category_predictions`, `distinct_bank_descriptions`, `labeled_bank_descriptions` | The predictions table (whole-set replace per run) and the two reads `categorize_new_movements.run()` needs |
 | [`dbt/models/silver/category_predictions.sql`](../../dbt/models/silver/category_predictions.sql) | Same `bronze_table_exists` empty-until-populated pattern as `category_labels.sql` |
 
@@ -61,3 +66,8 @@ forget.
 
 [dbt gold](dbt-gold.md), [Manual Excel importer](manual-excel-importer.md) (the same
 shape/content split), [ADR 0004](../decisions/0004-real-pdfs-never-leave-your-machine.md).
+
+`categorization/recurrence.py` and `categorization/feature_experiment.py` (T63) are the offline experiment on recurrence features and the owner's fixed/variable mark: pure functions, run through `scripts/experiment_recurrence_features.py`. Result: no gain, the model stays text-only ([ADR 0049](../decisions/0049-recurrence-and-plan-marks-do-not-help-the-category-classifier.md)).
+
+The month as a sequence (ingest, propose, label, retrain, re-propose, drift) is in
+[docs/monthly-routine.md](../../docs/monthly-routine.md), with a test that its `make` targets exist.

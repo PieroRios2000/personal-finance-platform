@@ -1,0 +1,93 @@
+slice_name: 'Goal: when you reach it'
+description: null
+certified_by: null
+certification_details: null
+viz_type: handlebars
+params:
+  query_mode: aggregate
+  groupby: []
+  metrics:
+  - expressionType: SQL
+    sqlExpression: COALESCE(MAX(CASE WHEN scenario = 'optimistic' AND line = 'liquid'
+      THEN CASE WHEN months_to_goal IS NULL THEN 'not reached' WHEN months_to_goal
+      = 0 THEN 'already reached' ELSE to_char(reached_month, 'Mon YYYY') || ' (' ||
+      months_to_goal || ' mo)' END END), '-')
+    label: optimistic_liquid
+  - expressionType: SQL
+    sqlExpression: COALESCE(MAX(CASE WHEN scenario = 'base' AND line = 'liquid' THEN
+      CASE WHEN months_to_goal IS NULL THEN 'not reached' WHEN months_to_goal = 0
+      THEN 'already reached' ELSE to_char(reached_month, 'Mon YYYY') || ' (' || months_to_goal
+      || ' mo)' END END), '-')
+    label: base_liquid
+  - expressionType: SQL
+    sqlExpression: COALESCE(MAX(CASE WHEN scenario = 'cautious' AND line = 'liquid'
+      THEN CASE WHEN months_to_goal IS NULL THEN 'not reached' WHEN months_to_goal
+      = 0 THEN 'already reached' ELSE to_char(reached_month, 'Mon YYYY') || ' (' ||
+      months_to_goal || ' mo)' END END), '-')
+    label: cautious_liquid
+  - expressionType: SQL
+    sqlExpression: COALESCE(MAX(CASE WHEN scenario = 'optimistic' AND line = 'with_risk'
+      THEN CASE WHEN months_to_goal IS NULL THEN 'not reached' WHEN months_to_goal
+      = 0 THEN 'already reached' ELSE to_char(reached_month, 'Mon YYYY') || ' (' ||
+      months_to_goal || ' mo)' END END), '-')
+    label: optimistic_with_risk
+  - expressionType: SQL
+    sqlExpression: COALESCE(MAX(CASE WHEN scenario = 'base' AND line = 'with_risk'
+      THEN CASE WHEN months_to_goal IS NULL THEN 'not reached' WHEN months_to_goal
+      = 0 THEN 'already reached' ELSE to_char(reached_month, 'Mon YYYY') || ' (' ||
+      months_to_goal || ' mo)' END END), '-')
+    label: base_with_risk
+  - expressionType: SQL
+    sqlExpression: COALESCE(MAX(CASE WHEN scenario = 'cautious' AND line = 'with_risk'
+      THEN CASE WHEN months_to_goal IS NULL THEN 'not reached' WHEN months_to_goal
+      = 0 THEN 'already reached' ELSE to_char(reached_month, 'Mon YYYY') || ' (' ||
+      months_to_goal || ' mo)' END END), '-')
+    label: cautious_with_risk
+  - expressionType: SQL
+    sqlExpression: COALESCE('US$ ' || to_char(MAX(required_monthly_saving) FILTER
+      (WHERE scenario = 'base' AND line = 'liquid'), 'FM999,999,999,990.00'), '-')
+    label: required_liquid
+  - expressionType: SQL
+    sqlExpression: COALESCE('US$ ' || to_char(MAX(required_monthly_saving) FILTER
+      (WHERE scenario = 'base' AND line = 'with_risk'), 'FM999,999,999,990.00'), '-')
+    label: required_with_risk
+  - expressionType: SQL
+    sqlExpression: '''US$ '' || to_char(MAX(projected_monthly_saving) FILTER (WHERE
+      scenario = ''base''), ''FM999,999,999,990.00'')'
+    label: projected
+  adhoc_filters: []
+  row_limit: 1
+  handlebarsTemplate: "{{#each data}}\n<table class=\"fc\">\n  <thead><tr><th>Counting</th><th\
+    \ class=\"num\">Optimistic</th><th class=\"num\">Base</th>\n    <th class=\"num\"\
+    >Cautious</th><th class=\"num\">Needs a month</th></tr></thead>\n  <tbody>\n \
+    \   <tr><td>Liquid savings only</td>\n      <td class=\"num\">{{optimistic_liquid}}</td><td\
+    \ class=\"num\">{{base_liquid}}</td>\n      <td class=\"num\">{{cautious_liquid}}</td><td\
+    \ class=\"num\">{{required_liquid}}</td></tr>\n    <tr><td>Liquid + investments</td>\n\
+    \      <td class=\"num\">{{optimistic_with_risk}}</td><td class=\"num\">{{base_with_risk}}</td>\n\
+    \      <td class=\"num\">{{cautious_with_risk}}</td><td class=\"num\">{{required_with_risk}}</td></tr>\n\
+    \  </tbody>\n</table>\n<div class=\"foot\">At the base pace you save {{projected}}\
+    \ a month. Optimistic, base and\n  cautious are three sets of assumptions, not\
+    \ a confidence interval. &ldquo;Needs a month&rdquo;\n  is what reaches the goal\
+    \ by your target date (a dash if the Meta sheet has none).</div>\n{{/each}}\n"
+  styleTemplate: ".fc { width: 100%; border-collapse: collapse; font-size: 13px; color:\
+    \ #1b2437; }\n.fc th { text-align: left; font-size: 11px; text-transform: uppercase;\
+    \ letter-spacing: .05em;\n         color: #667085; padding: 8px 10px; border-bottom:\
+    \ 2px solid #e6eaf2; }\n.fc td { padding: 9px 10px; border-bottom: 1px solid #eef1f6;\
+    \ }\n.fc .num { text-align: right; font-variant-numeric: tabular-nums; }\n.fc\
+    \ tbody tr:hover { background: #f7f9fc; }\n.fc .miss { color: #98a2b3; }\n.fc\
+    \ .out { font-weight: 700; color: #e5484d; }\n.fc .foot, .foot { font-size: 12px;\
+    \ color: #667085; margin-top: 8px; }\n.badge { padding: 2px 10px; border-radius:\
+    \ 999px; font-size: 12px; font-weight: 600; }\n.badge.baseline { background: #fdebc0;\
+    \ color: #9a6a00; }\n.badge.model { background: #d5f3e5; color: #147a52; }\n.badge.little\
+    \ { background: #fbd0d2; color: #b42318; }\n.fund { display: flex; flex-direction:\
+    \ column; gap: 8px; height: 100%; }\n.fund .kpis { height: auto; flex: 1; }\n\
+    .warn { background: #fff4e5; border-left: 5px solid #f5a524; border-radius: 8px;\n\
+    \        padding: 8px 12px; font-size: 13px; color: #7a4b00; }\n.kpi.fund-ok {\
+    \ border-left-color: #1f9d6b; } .kpi.fund-gap { border-left-color: #f5a524; }\n"
+  datasource: 6__table
+  viz_type: handlebars
+query_context: null
+cache_timeout: null
+uuid: 5c38f876-c968-5e07-b6da-4d628677ffb2
+version: 1.0.0
+dataset_uuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc

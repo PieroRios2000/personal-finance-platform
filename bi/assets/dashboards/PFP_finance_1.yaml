@@ -16,25 +16,11 @@ position:
     type: ROOT
     id: ROOT_ID
     children:
-    - GRID_ID
+    - TABS-main
   GRID_ID:
     type: GRID
     id: GRID_ID
-    children:
-    - ROW-0
-    - ROW-1
-    - ROW-2
-    - ROW-3
-    - ROW-4
-    - HEADER-5
-    - ROW-6
-    - ROW-7
-    - ROW-8
-    - ROW-9
-    - ROW-10
-    - ROW-11
-    - ROW-12
-    - ROW-13
+    children: []
     parents:
     - ROOT_ID
   HEADER_ID:
@@ -42,13 +28,46 @@ position:
     id: HEADER_ID
     meta:
       text: PFP finance
+  TABS-main:
+    type: TABS
+    id: TABS-main
+    children:
+    - TAB-savings
+    - TAB-categories
+    - TAB-forecast-goal
+    - TAB-income-statement
+    parents:
+    - ROOT_ID
+    meta: {}
+  TAB-savings:
+    type: TAB
+    id: TAB-savings
+    children:
+    - ROW-0
+    - ROW-1
+    - ROW-2
+    - ROW-3
+    - ROW-4
+    - ROW-5
+    - ROW-6
+    - ROW-7
+    - ROW-8
+    - ROW-9
+    parents:
+    - ROOT_ID
+    - TABS-main
+    meta:
+      text: Savings
+      defaultText: Tab title
+      placeholder: Tab title
   CHART-16:
     type: CHART
     id: CHART-16
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     - ROW-0
     meta:
       width: 12
@@ -63,7 +82,8 @@ position:
     - CHART-16
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     meta:
       background: BACKGROUND_TRANSPARENT
   CHART-0:
@@ -72,7 +92,8 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     - ROW-1
     meta:
       width: 12
@@ -87,7 +108,8 @@ position:
     - CHART-0
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     meta:
       background: BACKGROUND_TRANSPARENT
   CHART-1:
@@ -96,7 +118,8 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     - ROW-2
     meta:
       width: 6
@@ -110,7 +133,8 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     - ROW-2
     meta:
       width: 6
@@ -126,7 +150,8 @@ position:
     - CHART-2
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     meta:
       background: BACKGROUND_TRANSPARENT
   CHART-3:
@@ -135,7 +160,8 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     - ROW-3
     meta:
       width: 6
@@ -149,7 +175,8 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     - ROW-3
     meta:
       width: 6
@@ -165,7 +192,8 @@ position:
     - CHART-4
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     meta:
       background: BACKGROUND_TRANSPARENT
   CHART-5:
@@ -174,7 +202,8 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     - ROW-4
     meta:
       width: 6
@@ -188,7 +217,8 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     - ROW-4
     meta:
       width: 6
@@ -204,105 +234,8 @@ position:
     - CHART-6
     parents:
     - ROOT_ID
-    - GRID_ID
-    meta:
-      background: BACKGROUND_TRANSPARENT
-  HEADER-5:
-    type: HEADER
-    id: HEADER-5
-    children: []
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    meta:
-      text: Categories
-      headerSize: LARGE_HEADER
-      background: BACKGROUND_TRANSPARENT
-  CHART-7:
-    type: CHART
-    id: CHART-7
-    children: []
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-6
-    meta:
-      width: 6
-      height: 50
-      chartId: 8
-      uuid: 0deee90a-f477-55d4-b0c1-f5611439d0d5
-      sliceName: 'Categories: what you spent on'
-  CHART-8:
-    type: CHART
-    id: CHART-8
-    children: []
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-6
-    meta:
-      width: 6
-      height: 50
-      chartId: 9
-      uuid: 06331e04-68d0-56d4-b9ab-42e66b4cfea2
-      sliceName: 'Categories: where each one came from'
-  ROW-6:
-    type: ROW
-    id: ROW-6
-    children:
-    - CHART-7
-    - CHART-8
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    meta:
-      background: BACKGROUND_TRANSPARENT
-  CHART-9:
-    type: CHART
-    id: CHART-9
-    children: []
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-7
-    meta:
-      width: 12
-      height: 50
-      chartId: 10
-      uuid: e9785fa3-0594-5955-8a57-cc3cd537bc0e
-      sliceName: 'Categories: spending per month'
-  ROW-7:
-    type: ROW
-    id: ROW-7
-    children:
-    - CHART-9
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    meta:
-      background: BACKGROUND_TRANSPARENT
-  CHART-10:
-    type: CHART
-    id: CHART-10
-    children: []
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - ROW-8
-    meta:
-      width: 12
-      height: 60
-      chartId: 11
-      uuid: e9f0c2e0-9b64-5391-a65a-4af26de5ff62
-      sliceName: 'Categories: movements to review (the model''s guesses)'
-  ROW-8:
-    type: ROW
-    id: ROW-8
-    children:
-    - CHART-10
-    parents:
-    - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     meta:
       background: BACKGROUND_TRANSPARENT
   CHART-11:
@@ -311,22 +244,24 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
-    - ROW-9
+    - TABS-main
+    - TAB-savings
+    - ROW-5
     meta:
       width: 12
       height: 32
       chartId: 12
       uuid: f90318a4-53b4-5473-a1c3-c47cb7c1f3f8
       sliceName: 'Investments: return and how each month closed'
-  ROW-9:
+  ROW-5:
     type: ROW
-    id: ROW-9
+    id: ROW-5
     children:
     - CHART-11
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     meta:
       background: BACKGROUND_TRANSPARENT
   CHART-12:
@@ -335,8 +270,9 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
-    - ROW-10
+    - TABS-main
+    - TAB-savings
+    - ROW-6
     meta:
       width: 8
       height: 50
@@ -349,8 +285,9 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
-    - ROW-10
+    - TABS-main
+    - TAB-savings
+    - ROW-6
     meta:
       width: 4
       height: 50
@@ -368,15 +305,16 @@ position:
 
 
         One currency at a time: use the **Currency** filter.'
-  ROW-10:
+  ROW-6:
     type: ROW
-    id: ROW-10
+    id: ROW-6
     children:
     - CHART-12
     - MARKDOWN-note
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     meta:
       background: BACKGROUND_TRANSPARENT
   CHART-13:
@@ -385,22 +323,24 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
-    - ROW-11
+    - TABS-main
+    - TAB-savings
+    - ROW-7
     meta:
       width: 12
       height: 60
       chartId: 14
       uuid: 8e81aaab-2fd3-59b0-b902-2d95666db6b9
       sliceName: Movements (check against your statements)
-  ROW-11:
+  ROW-7:
     type: ROW
-    id: ROW-11
+    id: ROW-7
     children:
     - CHART-13
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     meta:
       background: BACKGROUND_TRANSPARENT
   CHART-14:
@@ -409,22 +349,24 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
-    - ROW-12
+    - TABS-main
+    - TAB-savings
+    - ROW-8
     meta:
       width: 12
       height: 60
       chartId: 15
       uuid: e0814a73-2359-50f6-aeb8-4d63a6174f02
       sliceName: Statement balances (check against your statements)
-  ROW-12:
+  ROW-8:
     type: ROW
-    id: ROW-12
+    id: ROW-8
     children:
     - CHART-14
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
     meta:
       background: BACKGROUND_TRANSPARENT
   CHART-15:
@@ -433,8 +375,9 @@ position:
     children: []
     parents:
     - ROOT_ID
-    - GRID_ID
-    - ROW-13
+    - TABS-main
+    - TAB-savings
+    - ROW-9
     meta:
       width: 12
       height: 40
@@ -442,14 +385,497 @@ position:
       uuid: 639b6207-0b0a-5895-8ebf-7b45be98dd81
       sliceName: 'Reconciliation: opening + movements = balance (difference must be
         0)'
-  ROW-13:
+  ROW-9:
     type: ROW
-    id: ROW-13
+    id: ROW-9
     children:
     - CHART-15
     parents:
     - ROOT_ID
-    - GRID_ID
+    - TABS-main
+    - TAB-savings
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  TAB-categories:
+    type: TAB
+    id: TAB-categories
+    children:
+    - ROW-10
+    - ROW-11
+    - ROW-12
+    - ROW-13
+    parents:
+    - ROOT_ID
+    - TABS-main
+    meta:
+      text: Categories
+      defaultText: Tab title
+      placeholder: Tab title
+  MARKDOWN-categories:
+    type: MARKDOWN
+    id: MARKDOWN-categories
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-categories
+    - ROW-10
+    meta:
+      width: 12
+      height: 8
+      code: Everything on this page is in the **one currency** the **Currency** filter
+        has selected (soles by default); soles and dollars are never added.
+  ROW-10:
+    type: ROW
+    id: ROW-10
+    children:
+    - MARKDOWN-categories
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-categories
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-7:
+    type: CHART
+    id: CHART-7
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-categories
+    - ROW-11
+    meta:
+      width: 6
+      height: 50
+      chartId: 8
+      uuid: 0deee90a-f477-55d4-b0c1-f5611439d0d5
+      sliceName: 'Categories: what you spent on'
+  CHART-8:
+    type: CHART
+    id: CHART-8
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-categories
+    - ROW-11
+    meta:
+      width: 6
+      height: 50
+      chartId: 9
+      uuid: 06331e04-68d0-56d4-b9ab-42e66b4cfea2
+      sliceName: 'Categories: where each one came from'
+  ROW-11:
+    type: ROW
+    id: ROW-11
+    children:
+    - CHART-7
+    - CHART-8
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-categories
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-9:
+    type: CHART
+    id: CHART-9
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-categories
+    - ROW-12
+    meta:
+      width: 12
+      height: 50
+      chartId: 10
+      uuid: e9785fa3-0594-5955-8a57-cc3cd537bc0e
+      sliceName: 'Categories: spending per month'
+  ROW-12:
+    type: ROW
+    id: ROW-12
+    children:
+    - CHART-9
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-categories
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-10:
+    type: CHART
+    id: CHART-10
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-categories
+    - ROW-13
+    meta:
+      width: 12
+      height: 60
+      chartId: 11
+      uuid: e9f0c2e0-9b64-5391-a65a-4af26de5ff62
+      sliceName: 'Categories: movements to review (the model''s guesses)'
+  ROW-13:
+    type: ROW
+    id: ROW-13
+    children:
+    - CHART-10
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-categories
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  TAB-forecast-goal:
+    type: TAB
+    id: TAB-forecast-goal
+    children:
+    - ROW-14
+    - ROW-15
+    - ROW-16
+    - ROW-17
+    - ROW-18
+    - ROW-19
+    parents:
+    - ROOT_ID
+    - TABS-main
+    meta:
+      text: Forecast & goal
+      defaultText: Tab title
+      placeholder: Tab title
+  CHART-17:
+    type: CHART
+    id: CHART-17
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    - ROW-14
+    meta:
+      width: 7
+      height: 46
+      chartId: 18
+      uuid: 5c38f876-c968-5e07-b6da-4d628677ffb2
+      sliceName: 'Goal: when you reach it'
+  MARKDOWN-forecast:
+    type: MARKDOWN
+    id: MARKDOWN-forecast
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    - ROW-14
+    meta:
+      width: 5
+      height: 46
+      code: '### How to read the forecast and the goal
+
+
+        - Everything about the goal is in **US$**. Type a **Goal (US$)**, an **Exchange
+        rate (PEN per US$)**, the **Emergency months** and a **Forecast horizon (months)**
+        in the filter bar and press *Apply filters*; left empty, each one takes the
+        value of the Meta sheet.
+
+        - The forecast goes 36 months ahead. Its month-by-month numbers, by category,
+        are in the **Income statement** tab.
+
+        - **Optimistic, base and cautious** are three sets of assumptions (low, median
+        and high spending; high, median and low income), not a confidence interval.
+
+        - Past the forecast the last month is held flat, and the investments are held
+        flat at their last valuation.
+
+        - Savings in the emergency account fill the emergency fund; new savings fill
+        it first, then go to the goal.
+
+        - **Forecast: how far to trust it** marks the categories that keep the **median
+        baseline**: no model beat it in the backtest.
+
+        - **Forecast: realized vs expected**: a row marked **backtest** is the latest
+        run''s one-month-ahead forecast of a month that already closed (how the model
+        would have done); a row marked **realized** is an older run''s forecast against
+        the month that then closed, from the second monthly run on. For one-month-ahead
+        rows a ratio near 1 means it missed as little as in the backtest, well above
+        1 means worse; longer horizons have no ratio.
+
+
+        The date range does not apply here: these tables look ahead.'
+  ROW-14:
+    type: ROW
+    id: ROW-14
+    children:
+    - CHART-17
+    - MARKDOWN-forecast
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-18:
+    type: CHART
+    id: CHART-18
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    - ROW-15
+    meta:
+      width: 12
+      height: 50
+      chartId: 19
+      uuid: d5c1a2e4-9ffb-5610-aea1-f3d600c1f1f1
+      sliceName: 'Goal: projected progress'
+  ROW-15:
+    type: ROW
+    id: ROW-15
+    children:
+    - CHART-18
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-19:
+    type: CHART
+    id: CHART-19
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    - ROW-16
+    meta:
+      width: 12
+      height: 34
+      chartId: 20
+      uuid: ee374d9a-ec19-5dca-966d-fa5c35ab8b07
+      sliceName: Emergency fund
+  ROW-16:
+    type: ROW
+    id: ROW-16
+    children:
+    - CHART-19
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-20:
+    type: CHART
+    id: CHART-20
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    - ROW-17
+    meta:
+      width: 12
+      height: 50
+      chartId: 21
+      uuid: b066af46-25f4-5bf6-9a66-0f0b527c1783
+      sliceName: 'Adjust: where the plan has room'
+  ROW-17:
+    type: ROW
+    id: ROW-17
+    children:
+    - CHART-20
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-24:
+    type: CHART
+    id: CHART-24
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    - ROW-18
+    meta:
+      width: 12
+      height: 60
+      chartId: 25
+      uuid: b17ad4a0-41ac-5d05-9b02-80b50b665c00
+      sliceName: 'Forecast: how far to trust it'
+  ROW-18:
+    type: ROW
+    id: ROW-18
+    children:
+    - CHART-24
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-25:
+    type: CHART
+    id: CHART-25
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    - ROW-19
+    meta:
+      width: 12
+      height: 50
+      chartId: 26
+      uuid: 35a3d93e-9415-523d-806a-dc359f152173
+      sliceName: 'Forecast: realized vs expected'
+  ROW-19:
+    type: ROW
+    id: ROW-19
+    children:
+    - CHART-25
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-forecast-goal
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  TAB-income-statement:
+    type: TAB
+    id: TAB-income-statement
+    children:
+    - ROW-20
+    - ROW-21
+    - ROW-22
+    parents:
+    - ROOT_ID
+    - TABS-main
+    meta:
+      text: Income statement
+      defaultText: Tab title
+      placeholder: Tab title
+  CHART-21:
+    type: CHART
+    id: CHART-21
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-income-statement
+    - ROW-20
+    meta:
+      width: 8
+      height: 50
+      chartId: 22
+      uuid: 4e750ea1-7fef-58dd-8b99-7b85e5041cf4
+      sliceName: 'Income statement: saving against the plan'
+  MARKDOWN-statement:
+    type: MARKDOWN
+    id: MARKDOWN-statement
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-income-statement
+    - ROW-20
+    meta:
+      width: 4
+      height: 50
+      code: '### How to read the income statement
+
+
+        - One currency at a time: the **Currency** filter (soles by default).
+
+        - A **closed month** is what happened. A month marked **(forecast)** is expected:
+        the income is the base scenario''s, the fixed expenses are the plan''s and
+        the rest is the forecast''s median (p50), by category.
+
+        - **Monthly saving** = income - fixed expenses - the rest of the spending.
+
+        - **Planned saving** = income - **expected expenses**; expected expenses =
+        the plan''s fixed amounts + the forecast''s median for the month''s total
+        variable spending. For a closed month it is the forecast made for it, with
+        the income that really came in.
+
+        - **Saving vs plan** (closed months) = monthly saving - planned saving. Negative:
+        you spent more than expected.
+
+        - Charges the plan marks *ignore* are not forecast, so they show as spending
+        with nothing planned. **~ Not split by category** is the part of the total
+        forecast that no category carries.
+
+        - Type a **Forecast horizon (months)** to show fewer months ahead (36 by default).
+        The date range does not apply here.'
+  ROW-20:
+    type: ROW
+    id: ROW-20
+    children:
+    - CHART-21
+    - MARKDOWN-statement
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-income-statement
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-22:
+    type: CHART
+    id: CHART-22
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-income-statement
+    - ROW-21
+    meta:
+      width: 12
+      height: 80
+      chartId: 23
+      uuid: 30f1798d-727b-5896-bf22-6ff40128f025
+      sliceName: 'Income statement: month by month'
+  ROW-21:
+    type: ROW
+    id: ROW-21
+    children:
+    - CHART-22
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-income-statement
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-23:
+    type: CHART
+    id: CHART-23
+    children: []
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-income-statement
+    - ROW-22
+    meta:
+      width: 12
+      height: 50
+      chartId: 24
+      uuid: 6e3f1698-8488-5d92-a574-be95c4bf0b39
+      sliceName: Categories above expected
+  ROW-22:
+    type: ROW
+    id: ROW-22
+    children:
+    - CHART-23
+    parents:
+    - ROOT_ID
+    - TABS-main
+    - TAB-income-statement
     meta:
       background: BACKGROUND_TRANSPARENT
 metadata:
@@ -690,6 +1116,98 @@ metadata:
     scope:
       rootPath:
       - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-goal-(us$)
+    name: Goal (US$)
+    filterType: filter_select
+    targets:
+    - column:
+        name: goal_amount_usd
+      datasetUuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+    controlValues:
+      multiSelect: false
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - TAB-forecast-goal
+      - TAB-income-statement
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-exchange-rate-(pen-per-us$)
+    name: Exchange rate (PEN per US$)
+    filterType: filter_select
+    targets:
+    - column:
+        name: usd_to_pen
+      datasetUuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+    controlValues:
+      multiSelect: false
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - TAB-forecast-goal
+      - TAB-income-statement
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-emergency-months
+    name: Emergency months
+    filterType: filter_select
+    targets:
+    - column:
+        name: emergency_months
+      datasetUuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+    controlValues:
+      multiSelect: false
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - TAB-forecast-goal
+      - TAB-income-statement
+      excluded: []
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-forecast-horizon-(months)
+    name: Forecast horizon (months)
+    filterType: filter_select
+    targets:
+    - column:
+        name: horizon_months
+      datasetUuid: 58f6aab5-69c3-5980-ab9f-f3a60efcabdc
+    controlValues:
+      multiSelect: false
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      searchAllOptions: false
+      inverseSelection: false
+    defaultDataMask:
+      filterState: {}
+      extraFormData: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - TAB-forecast-goal
+      - TAB-income-statement
       excluded: []
     type: NATIVE_FILTER
   label_colors:

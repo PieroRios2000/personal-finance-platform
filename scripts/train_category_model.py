@@ -185,7 +185,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "rules below this"
         )
 
-        bundle = model.Bundle(pipeline=pipeline, confidence_threshold=threshold)
+        bundle = model.Bundle(
+            pipeline=pipeline, confidence_threshold=threshold, trained_for=args.user
+        )
         args.model_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         joblib.dump(bundle, args.model_path.with_suffix(".joblib"))
         args.model_path.with_suffix(".joblib").chmod(0o600)

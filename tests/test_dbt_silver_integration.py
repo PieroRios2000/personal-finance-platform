@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 
 from ingestion.schema import AccountKind, Currency, Statement, Transaction
+from lakehouse.bronze import _GOAL_SCHEMAS
 from lakehouse.storage import storage_options, table_uri
 from tests import pg_store
 
@@ -85,7 +86,17 @@ def _wipe_test_lake() -> None:
 
     pg_store.reset_database()  # dbt's tables live in this worker's Postgres database
     options = storage_options()
-    for name in ("transactions", "statements", "ingested_files", "investment_entries"):
+    for name in (
+        "transactions",
+        "statements",
+        "ingested_files",
+        "investment_entries",
+        "plan_fixed_items",
+        "plan_goal",
+        "spend_forecasts",
+        "spend_forecast_series",
+        *_GOAL_SCHEMAS,
+    ):
         uri = table_uri(name)
         assert _TEST_LAKE_SUFFIX in uri
         if DeltaTable.is_deltatable(uri, storage_options=options):

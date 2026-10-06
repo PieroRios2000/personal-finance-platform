@@ -117,6 +117,11 @@ def bronze_tables(manifest: dict[str, Any]) -> list[Table]:
         "investment_entries": bronze._INVESTMENT_ENTRIES_SCHEMA,
         "category_labels": bronze._CATEGORY_LABELS_SCHEMA,
         "category_predictions": bronze._CATEGORY_PREDICTIONS_SCHEMA,
+        "plan_fixed_items": bronze._PLAN_FIXED_ITEMS_SCHEMA,
+        "plan_goal": bronze._PLAN_GOAL_SCHEMA,
+        "spend_forecasts": bronze._SPEND_FORECASTS_SCHEMA,
+        "spend_forecast_series": bronze._SPEND_FORECAST_SERIES_SCHEMA,
+        **bronze._GOAL_SCHEMAS,
     }
     tables = []
     for source in manifest["sources"].values():

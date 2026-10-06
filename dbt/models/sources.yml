@@ -42,6 +42,60 @@ sources:
           can avoid measuring the rules baseline against labels it produced itself.
           Only exists once `make import-category-labels` has run; models on it use
           `bronze_table_exists` too.
+      - name: plan_fixed_items
+        description: >
+          The owner's savings plan, fixed-expense part (T57, ADR 0048): one row per
+          (bank, description, currency) of the plan workbook, with the `kind` he chose
+          (fixed / variable / ignore) and his `expected_amount`. Whole plan replaced on
+          every `make import-plan`. Only exists once a plan has been imported; models on
+          it use `bronze_table_exists` too.
+      - name: plan_goal
+        description: >
+          The owner's savings goal in US dollars and the emergency-fund settings (T57,
+          ADR 0048): one row per user, `usd_to_pen` is soles per dollar. Replaced with
+          `plan_fixed_items` in the same import. Only exists once a plan has been
+          imported; models on it use `bronze_table_exists` too.
+      - name: spend_forecasts
+        description: >
+          The spend forecast (T59, ADR 0048): one row per (run_month, kind, category,
+          currency, target_month), `kind` 'backtest' (a past one-step forecast with its
+          actual) or 'forecast'. Replaced by (user_id, run_month) on every
+          `make forecast`, so older runs stay for the monitor. Only exists once a
+          forecast has run; models on it use `bronze_table_exists` too.
+      - name: spend_forecast_series
+        description: >
+          Per series of a forecast run (T59, ADR 0048): the selected model, months of
+          history, backtest origins, MAE relative to the baseline and interval
+          coverage. Written with `spend_forecasts`; same existence rule.
+      - name: goal_projection
+        description: >
+          The savings-goal path in US dollars (T60, ADR 0048): one row per scenario,
+          line and month (0 to 120). Replaced as one set per user on every `make
+          forecast`. Only exists once a projection has run; models on it use
+          `bronze_table_exists` too.
+      - name: goal_summary
+        description: >
+          Months to the goal and the saving it needs, per scenario and line (T60).
+          Written with `goal_projection`; same existence rule.
+      - name: emergency_fund
+        description: >
+          The emergency fund per scenario: target, bucket, gap, coverage and sanity
+          flags (T60). Written with `goal_projection`; same existence rule.
+      - name: goal_headroom
+        description: >
+          Per category, how far the forecast sits above the owner's usual (T60, spec
+          4.5). Written with `goal_projection`; same existence rule.
+      - name: goal_cashflow
+        description: >
+          The monthly pieces behind the savings projection (T65, ADR 0048): per
+          scenario, month (1 to 120) and currency, the income, fixed and variable
+          spending in the currency they were earned or charged in. Written with
+          `goal_projection`; same existence rule.
+      - name: goal_balances
+        description: >
+          What the projection starts from (T65): the emergency, other liquid and risk
+          balances per currency, and the monthly essential spending. Written with
+          `goal_projection`; same existence rule.
       - name: category_predictions
         description: >
           The trained model's own guess for a movement's (bank, description),

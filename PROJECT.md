@@ -145,10 +145,11 @@ Every parser validates that the sum of the extracted transactions matches the ba
   the labeling file, `gold.dim_category`/`gold.rpt_movements.category`; TF-IDF character n-grams +
   logistic regression, MLflow-tracked, scored against the rules baseline --
   [ADR 0044](brain/decisions/0044-category-classifier-char-ngrams-vs-rules-baseline.md)) and
-  verified against synthetic categories; the owner's own real labels are still to come.
-  Categorizing new movements as a batch step (at ingest) and Evidently drift monitoring are next;
-  a live FastAPI endpoint is optional, only if a real caller ever needs one.
-- Monthly spend forecasting (time series).
+  scored on the owner's own labels (589 descriptions, 10 categories: macro-F1 0.49 on the 543
+  reviewed ones, merchant-grouped 3-fold CV, against 0.23 for the rules; ADR 0044's 2026-10-04
+  amendment). Batch categorization at ingest (ADR 0045) and Evidently drift monitoring (ADR 0046)
+  are built; a live FastAPI endpoint is optional, only if a real caller ever needs one.
+- Monthly spend forecasting (time series), per category: **specified 2026-10-04** together with the Phase 6 savings-goal projection ([spec](docs/specs/category-forecast-and-savings-goal.md), [ADR 0048](brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md), tasks T56-T62): fixed expenses proposed and confirmed by the owner, simple models chosen by a rolling-origin backtest against a baseline, empirical intervals.
 - Anomalous-charge detection.
 
 **Closes:** MLOps. Identity, the public URL and the upload portal (T39-T50) are frozen once this
@@ -173,9 +174,9 @@ effort goes there unless something breaks (owner's call, 2026-09-27).
 **Goal:** answer "given my real cash flow, how long until I reach my savings goal?"
 - Banco Ripley as a third source (the owner's savings account, in soles). It gives no statements, so its movements come from a **manual Excel** typed month by month, with the same reconciliation rules ([ADR 0027](brain/decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md), [`docs/manual-data.md`](docs/manual-data.md)).
 - **Investment tracking** (three Tyba funds and Flip), from a second sheet of the same Excel: contributions, withdrawals and month-end valuations, to see each fund's monthly return (Modified Dietz, `gold.fct_investment_monthly`, [ADR 0028](brain/decisions/0028-investment-return-is-modified-dietz-per-fund-and-month.md)). Tracked separately from the goal. **Built.**
-- A projection over the gold tables: time to reach a target amount (in soles or dollars) at the observed monthly flow, leaving out transfers between the owner's own accounts.
+- A projection over the gold tables: time to reach a target amount **in dollars** (soles converted at an owner-entered rate), after filling an emergency fund calculated from spending and income, at the observed monthly flow, leaving out transfers between the owner's own accounts. **Specified 2026-10-04** (with the Phase 3 spend forecast it depends on): the owner sets the goal, the answer is a range over three scenarios ([spec](docs/specs/category-forecast-and-savings-goal.md), [ADR 0048](brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md)).
 - A **sol/dólar exchange-rate projection** section so dollar accounts and dollar goals can be converted. It exists **only in this phase**: bronze, silver and gold keep never converting currencies; the projection converts on its own, on top of gold.
-- **Scope decision:** only liquid money in bank accounts counts. Investments held on other platforms (mutual funds) are long term and market-dependent, so they are deliberately not part of the goal or the flow ([ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md)).
+- **Scope decision (amended 2026-10-04):** Ripley savings are the emergency fund and investments are risk savings. The goal is shown on two lines, `liquid` only and `with_risk`, because mutual funds are long term and market-dependent; the owner picks which one his goal means ([ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md)).
 
 **Closes:** turning the platform from "what happened" into "what happens next" on the owner's own data. Details and open questions: [`brain/phases/phase-6.md`](brain/phases/phase-6.md).
 

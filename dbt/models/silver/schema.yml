@@ -281,6 +281,204 @@ models:
         data_tests:
           - not_null
 
+  - name: plan_fixed_items
+    description: >
+      Silver (T57, ADR 0048): the owner's plan of recurring expenses, one row per
+      `(bank, description, currency)` with the `kind` he chose and his
+      `expected_amount`. Empty (same columns) until a plan has been imported
+      (`make import-plan`).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, bank, description, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: kind
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [fixed, variable, ignore]
+      - name: currency
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [PEN, USD]
+      - name: expected_amount
+        description: Required (and positive) for `fixed`, optional for the other kinds.
+        data_tests:
+          - not_null:
+              config:
+                where: "kind = 'fixed'"
+
+  - name: plan_goal
+    description: >
+      Silver (T57, ADR 0048): the owner's savings goal in US dollars (`goal_currency`
+      is always USD), the `usd_to_pen` rate (soles per dollar) and the emergency-fund
+      settings; one row per user. Empty (same columns) until a plan has been imported.
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+          - unique
+      - name: goal_amount
+        data_tests:
+          - not_null
+      - name: usd_to_pen
+        data_tests:
+          - not_null
+      - name: emergency_basis
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [all, fixed_only]
+
+  - name: spend_forecasts
+    description: >
+      Silver (T59, ADR 0048): the forecast runs, one row per user, run (first day of
+      the last closed month), `kind` ('backtest' = a past one-step forecast with its
+      `actual`, 'forecast' = the next months), category, currency and target month.
+      Empty (same columns) until `make forecast` has run.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              [user_id, run_month, kind, category, currency, target_month]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: kind
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [backtest, forecast]
+      - name: p50
+        data_tests:
+          - not_null
+
+  - name: spend_forecast_series
+    description: >
+      Silver (T59, ADR 0048): how much to trust each forecast series of a run (model,
+      history, origins, MAE relative to the baseline, interval coverage, flags). Empty
+      (same columns) until `make forecast` has run.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, run_month, category, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: baseline_used
+        data_tests:
+          - not_null
+
+  - name: goal_cashflow
+    description: >
+      Silver (T65, ADR 0048): the pieces of the savings projection per user, scenario,
+      month index (1 to 120) and currency, in the currency they were earned or charged
+      in. Empty (same columns) until `make forecast` has projected.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, scenario, month_index, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
+  - name: goal_balances
+    description: >
+      Silver (T65, ADR 0048): what the projection starts from, per user, bucket
+      (`emergency`, `other_liquid`, `risk`, and `essential` for the monthly essential
+      spending) and currency. Empty (same columns) until `make forecast` has projected.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, bucket, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
+  - name: goal_projection
+    description: >
+      Silver (T60, ADR 0048): the savings-goal path in US dollars, one row per user,
+      scenario, line and month index. Empty (same columns) until `make forecast` has
+      projected.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, scenario, line, month_index]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: scenario
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [base, cautious, optimistic]
+      - name: line
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [liquid, with_risk]
+
+  - name: goal_summary
+    description: >
+      Silver (T60, ADR 0048): months to the goal and the saving it needs, one row per
+      user, scenario and line. A null `months_to_goal` means not reached in 120 months.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, scenario, line]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: scenario
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [base, cautious, optimistic]
+      - name: line
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [liquid, with_risk]
+
+  - name: emergency_fund
+    description: >
+      Silver (T60, ADR 0048): the emergency fund, one row per user and scenario.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, scenario]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+      - name: target
+        data_tests:
+          - not_null
+
+  - name: goal_headroom
+    description: >
+      Silver (T60, ADR 0048): the adjust view, one row per user, category and currency.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [user_id, category, currency]
+    columns:
+      - name: user_id
+        data_tests:
+          - not_null
+
   - name: category_predictions
     description: >
       Silver (T54, ADR 0045): the trained model's own guess per `(bank,

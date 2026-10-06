@@ -1,0 +1,62 @@
+slice_name: 'Forecast: how far to trust it'
+description: null
+certified_by: null
+certification_details: null
+viz_type: handlebars
+params:
+  query_mode: aggregate
+  groupby:
+  - category
+  - currency
+  - model_name
+  - baseline_used
+  - low_history
+  - n_months
+  - expressionType: SQL
+    sqlExpression: COALESCE(to_char(mae_rel * 100, 'FM990') || '%', '-')
+    label: mae
+  - expressionType: SQL
+    sqlExpression: COALESCE(to_char(coverage * 100, 'FM990') || '%', '-')
+    label: inside
+  metrics:
+  - expressionType: SQL
+    sqlExpression: SUM(p50)
+    label: sort_key
+  timeseries_limit_metric:
+    expressionType: SQL
+    sqlExpression: SUM(p50)
+    label: sort_key
+  order_desc: true
+  adhoc_filters: []
+  row_limit: 500
+  handlebarsTemplate: "<table class=\"fc\">\n  <thead>\n    <tr><th>Category</th><th>Currency</th><th>Forecast\
+    \ made with</th><th class=\"num\">Months of history</th>\n      <th class=\"num\"\
+    >Typical miss</th><th class=\"num\">Inside the range</th></tr>\n  </thead>\n \
+    \ <tbody>\n  {{#each data}}\n    <tr>\n      <td>{{category}}</td><td>{{currency}}</td>\n\
+    \      <td>{{#if baseline_used}}<span class=\"badge baseline\">median baseline</span>{{else}}<span\
+    \ class=\"badge model\">{{model_name}}</span>{{/if}}\n        {{#if low_history}}\
+    \ <span class=\"badge little\">little history</span>{{/if}}</td>\n      <td class=\"\
+    num\">{{n_months}}</td><td class=\"num\">{{mae}}</td><td class=\"num\">{{inside}}</td>\n\
+    \    </tr>\n  {{/each}}\n  </tbody>\n</table>\n"
+  styleTemplate: ".fc { width: 100%; border-collapse: collapse; font-size: 13px; color:\
+    \ #1b2437; }\n.fc th { text-align: left; font-size: 11px; text-transform: uppercase;\
+    \ letter-spacing: .05em;\n         color: #667085; padding: 8px 10px; border-bottom:\
+    \ 2px solid #e6eaf2; }\n.fc td { padding: 9px 10px; border-bottom: 1px solid #eef1f6;\
+    \ }\n.fc .num { text-align: right; font-variant-numeric: tabular-nums; }\n.fc\
+    \ tbody tr:hover { background: #f7f9fc; }\n.fc .miss { color: #98a2b3; }\n.fc\
+    \ .out { font-weight: 700; color: #e5484d; }\n.fc .foot, .foot { font-size: 12px;\
+    \ color: #667085; margin-top: 8px; }\n.badge { padding: 2px 10px; border-radius:\
+    \ 999px; font-size: 12px; font-weight: 600; }\n.badge.baseline { background: #fdebc0;\
+    \ color: #9a6a00; }\n.badge.model { background: #d5f3e5; color: #147a52; }\n.badge.little\
+    \ { background: #fbd0d2; color: #b42318; }\n.fund { display: flex; flex-direction:\
+    \ column; gap: 8px; height: 100%; }\n.fund .kpis { height: auto; flex: 1; }\n\
+    .warn { background: #fff4e5; border-left: 5px solid #f5a524; border-radius: 8px;\n\
+    \        padding: 8px 12px; font-size: 13px; color: #7a4b00; }\n.kpi.fund-ok {\
+    \ border-left-color: #1f9d6b; } .kpi.fund-gap { border-left-color: #f5a524; }\n"
+  datasource: 10__table
+  viz_type: handlebars
+query_context: null
+cache_timeout: null
+uuid: b17ad4a0-41ac-5d05-9b02-80b50b665c00
+version: 1.0.0
+dataset_uuid: 01f414bd-67e3-5863-99d5-8a2ce09fc201

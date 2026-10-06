@@ -5,7 +5,7 @@ needs each dataset's live id, which the export in `bi/assets` does not carry
 (dataset/role permissions and row-level-security rules are not part of a dashboard
 export). Idempotent, so a restart is safe -- same as the rest of `start.sh`.
 
-Grants the `Gamma` role read access to the five gold datasets (everyone but the
+Grants the `Gamma` role read access to the gold datasets (everyone but the
 owner gets Gamma, `bi/superset_config.py`), and creates the one row-level security
 rule that filters every query against them to `user_id = '{{ current_username() }}'`,
 except for the `Admin` role (the owner). No REST endpoint exists for role/permission
@@ -23,7 +23,16 @@ TABLES = (
     "rpt_balances",
     "rpt_investments",
     "rpt_reconciliation",
+    "goal_dynamic",
+    "rpt_goal_headroom",
+    "rpt_category_forecast",
+    "rpt_category_variance",
+    "rpt_forecast_realized",
+    "rpt_income_statement",
 )
+# Datasets the dashboards no longer use (T65) but a stack that imported an older export
+# still holds: covered by the same rule when present, never required.
+RETIRED = ("rpt_goal_projection", "rpt_goal_summary", "rpt_emergency_fund")
 RLS_NAME = "Per-user data (T41)"
 RLS_CLAUSE = "user_id = '{{ current_username() }}'"
 
@@ -44,13 +53,13 @@ def main() -> None:
 
         tables = (
             db.session.query(SqlaTable)
-            .filter(SqlaTable.table_name.in_(TABLES))
+            .filter(SqlaTable.table_name.in_(TABLES + RETIRED))
             .join(SqlaTable.database)
             .filter_by(database_name=DATABASE_NAME)
             .all()
         )
-        if len(tables) != len(TABLES):
-            found = {t.table_name for t in tables}
+        found = {t.table_name for t in tables}
+        if not set(TABLES) <= found:
             raise RuntimeError(f"missing gold dataset(s): {set(TABLES) - found}")
 
         for table in tables:

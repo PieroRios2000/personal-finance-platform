@@ -106,12 +106,12 @@ The identity/portal line (T39-T50) is frozen: built, documented, verified; no mo
 unless something breaks. Phase 3 starts with categorization, per the owner's decision.
 
 - [x] **Category labeling infrastructure** (T51, ADR 0043): the cold-start guesser, the labeling
-      file (export/import), `gold.dim_category`, `gold.rpt_movements.category`. Verified end to
-      end with synthetic demo data; the owner's own labels are still to come.
+      file (export/import), `gold.dim_category`, `gold.rpt_movements.category`. Run on the owner's
+      real labels since 2026-10-03 (589 descriptions).
 - [x] **A trained classifier** (T52, ADR 0044): TF-IDF character n-grams + logistic regression,
       scored (macro-F1, precision per category) against the rules-based baseline on every run
-      (`make train-category-model`). Built and verified against synthetic, general categories; the
-      owner's own real labels are still to come.
+      (`make train-category-model`). Trained on the owner's real labels (589, 10 categories): macro-F1 0.49 on the 543
+      reviewed ones, 0.23 for the rules (ADR 0044, amendment of 2026-10-04).
 - [x] **Wire the trained model into the labeling file's suggestion** (T53): `export_category_labels.py`
       proposes from the trained model once one has been saved
       (`make train-category-model`), the rules-based guesser until then -- still reviewed, never
@@ -122,10 +122,9 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       batch-predict a category for every new, unconfirmed movement automatically
       (`scripts.categorize_new_movements`), writing a proposal into
       `gold.rpt_movements` (`category_confirmed = false`), never a live request.
-      `make ingest-uploads` (the upload-portal path, `process_submissions.py`) does not call
-      this yet -- left out of this task's scope, its own submission-per-user loop is a
-      different shape than the single-user `pfp ingest`/Dagster path this wires into; a
-      follow-up if that path turns out to need it too. **A FastAPI endpoint is optional**,
+      `make ingest-uploads` (the upload-portal path) reaches it through `pfp ingest` (ADR 0047
+      corrected an earlier note saying it did not); `pfp backfill` now calls it too, and the saved
+      model proposes only for the user it was trained for. **A FastAPI endpoint is optional**,
       only if a real caller ever needs one (e.g. the upload portal previewing a category
       before the owner processes a request) -- not built speculatively ahead of that.
 - [x] **Drift monitoring** (T55, ADR 0046): `make monitor-category-drift` runs Evidently's data drift
@@ -133,6 +132,21 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       movements and writes an HTML report under `~/finance-data/reports/`. Manual, not scheduled;
       no model-confidence column exists to monitor (ADR 0045). A flag at these window sizes is a
       prompt, not a verdict.
+- [ ] **Spend forecast per category + savings-goal projection** (specified 2026-10-04,
+      [spec](../docs/specs/category-forecast-and-savings-goal.md),
+      [ADR 0048](../brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md);
+      closes Phase 3's forecasting item and Phase 6's cash-flow projection). Each its own PR, in order:
+  - [x] **T56** `forecasting/` skeleton, fixed-expense detection, `make export-plan` (workbook with `Instrucciones`, `Gastos fijos`, `Meta` incl. `usd_to_pen` and the emergency settings; `~/finance-data/plan/`).
+  - [x] **T57** `make import-plan` (validates the dollar goal, rate and emergency fields), bronze/silver plan tables, gold `rpt_fixed_expenses`.
+  - [x] **T58** forecast core: series, five candidates + baseline, rolling-origin backtest, intervals.
+  - [x] **T59** `make forecast`: bronze outputs, MLflow, gold forecast, variance and quality tables.
+  - [x] **T60** projection in dollars: buckets, calculated emergency target, two goal lines (`liquid`, `with_risk`), three scenarios, time to goal, adjust view, gold tables.
+  - [x] **T61** Superset "Forecast & goal" section with row-level security, demo seed.
+  - [x] **T62** realized-vs-backtest monitor, monthly routine and where-to-look updates.
+  - [x] **T64** forecast 36 months ahead (intervals only where the backtest measures them, `has_interval`), `rpt_forecast_realized.source` (`backtest` until a second run).
+  - [x] **T65** dynamic goal from Superset: `goal_cashflow`/`goal_balances` pieces, virtual dataset `goal_dynamic` and four typed native filters (goal, exchange rate, emergency months, horizon), row-level security on it.
+  - [x] **T66** dashboard in four tabs (Savings, Categories, Forecast & goal, Income statement) and `rpt_income_statement`: the month-by-month statement of income, spending by category, saving and planned saving, per currency.
+  - [x] **T63** experiment: recurrence and the fixed/variable mark as classifier features, ADR 0044's protocol and an acceptance margin over the fold spread. Null result (ADR 0049): no variant beat text-only (0.468) by the fold SD (0.107); the classifier stays text-only.
 - [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
       model -- macro-F1 and per-category precision (not just accuracy), latency, cost per
       transaction, cost per month at this project's real volume, against the same held-out labels.
@@ -149,7 +163,7 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
 
 - [x] [Phase 7 — Alerting](../brain/phases/phase-7.md): built. Left: Dagster-triggered alerts.
 - [ ] [Phase 6 — Savings-goal projection](../brain/phases/phase-6.md): the manual-Excel
-      importer: Ripley savings and investment tracking (`Inversiones` sheet, monthly returns) **done**, then the cash-flow projection and its own sol/dólar exchange-rate section (the only
+      importer: Ripley savings and investment tracking (`Inversiones` sheet, monthly returns) **done**, then the cash-flow projection (specified, T56-T62 under Phase 3 above) and its own sol/dólar exchange-rate section (the only
       place currencies are converted). Scope in [ADR 0025](../brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md).
 - [ ] **Phase 2 extension, T26-T33: PostgreSQL as dbt's store, then Superset** (decided 2026-09-19,
       [ADR 0029](../brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). Order and
