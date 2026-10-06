@@ -187,6 +187,14 @@ logistic regression) on 589 self-labeled merchant descriptions in 10 categories:
 on the 543 reviewed labels (merchant-grouped 3-fold CV), against 0.23 for a keyword-rules
 baseline on all labels."
 
+## Amendment: recurrence features and the owner's mark were tested and rejected (2026-10-05)
+
+T63 tested recurrence features and the owner's fixed/variable mark as extra inputs, with this
+ADR's protocol (merchant-grouped folds, trusted labels, macro-F1). Text-only 0.468; with
+recurrence 0.455; with the mark 0.468; with both 0.428; baseline fold SD 0.107. No variant met
+the acceptance margin and two lowered Transporte's precision, so the classifier stays text-only.
+Detail in [ADR 0049](0049-recurrence-and-plan-marks-do-not-help-the-category-classifier.md).
+
 ## Related
 
 [ADR 0043](0043-transaction-categorization-human-in-the-loop-labeling.md),

@@ -1,7 +1,7 @@
 ---
 type: component
 phase: 3
-status: in progress (T56-T62 built, T63 planned)
+status: in progress (T56-T62 and T64-T66 built, T63 experiment done with a null result)
 task: T56, T57, T58, T59, T60, T61, T62, T63
 ---
 
@@ -25,7 +25,7 @@ and the decision is [ADR 0048](../decisions/0048-spend-forecast-baselines-and-sa
 | Superset "Income statement" tab | Per currency and month: income, fixed expenses, spending by category, monthly saving, planned saving and the gap to it (`rpt_income_statement`); the dashboard is split in four tabs | T66 |
 | Superset "Forecast & goal" tab | Emergency target and gap, time to goal as a range for both lines (`liquid`, `with_risk`), categories above expected, the adjust view, how far to trust each series | T61 |
 | Realized-vs-backtest error chart | The monitor; joins the monthly routine | T62 |
-| Recurrence as classifier features | Follow-up experiment, null result allowed | T63 |
+| Recurrence as classifier features | Offline experiment `scripts/experiment_recurrence_features.py`; null result, the classifier stays text-only ([ADR 0049](../decisions/0049-recurrence-and-plan-marks-do-not-help-the-category-classifier.md)) | T63 |
 
 ## What T56 built
 

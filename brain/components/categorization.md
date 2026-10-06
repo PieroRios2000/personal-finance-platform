@@ -67,5 +67,7 @@ forget.
 [dbt gold](dbt-gold.md), [Manual Excel importer](manual-excel-importer.md) (the same
 shape/content split), [ADR 0004](../decisions/0004-real-pdfs-never-leave-your-machine.md).
 
+`categorization/recurrence.py` and `categorization/feature_experiment.py` (T63) are the offline experiment on recurrence features and the owner's fixed/variable mark: pure functions, run through `scripts/experiment_recurrence_features.py`. Result: no gain, the model stays text-only ([ADR 0049](../decisions/0049-recurrence-and-plan-marks-do-not-help-the-category-classifier.md)).
+
 The month as a sequence (ingest, propose, label, retrain, re-propose, drift) is in
 [docs/monthly-routine.md](../../docs/monthly-routine.md), with a test that its `make` targets exist.
