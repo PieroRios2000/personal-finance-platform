@@ -54,3 +54,13 @@ openmetadata/artifacts/
 # "mlruns" folder in the current directory) is ever hit by mistake -- the real one
 # lives outside the repo, under ~/finance-data (train_category_model.py's default).
 mlruns/
+
+# Phase 4 (ADR 0050): Terraform's downloaded provider plugins and any real plan/state --
+# never committed. The lock file (.terraform.lock.hcl) IS committed, by Terraform's own
+# convention, so a real `terraform init` always selects the same provider versions.
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/*.tfplan
+infra/terraform/*.auto.tfvars
+infra/terraform/terraform.tfvars

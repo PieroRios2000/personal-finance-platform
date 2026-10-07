@@ -170,3 +170,28 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       acceptance criteria in [`todo-phase2.md`](todo-phase2.md). Then the owner tries the data
       visualization, the dbt catalog and the architecture before Phase 3 (ML).
 - [ ] Phase 3 (ML), 4 (cloud), 5 (uploader): see [PROJECT.md](../PROJECT.md).
+
+## Phase 4 — Cloud + IaC (specified 2026-10-07)
+
+> [Spec](../docs/specs/cloud-deployment.md), [ADR 0050](../brain/decisions/0050-cloud-deployment-scope-and-provider.md),
+> [phase note](../brain/phases/phase-4.md). Scope: Terraform alongside `pfp-prod`'s existing
+> tunnel (ADR 0042), not a replacement for it — Superset + a copy of the demo gold data + Secret
+> Manager + Cloud Storage on GCP, applied only long enough to produce evidence, then destroyed.
+
+- [x] **T67** spec, ADR 0050 and a `terraform validate`-clean GCP module (`infra/terraform/`):
+      no resource provisioned, no real account touched.
+- [ ] **T68** (blocks every task below) **owner decision**, per ADR 0050's open questions: confirm
+      option A over option B, confirm GCP over AWS, set a real billing ceiling on the real
+      account, say how long the demo stays up once applied.
+- [ ] **T69** (blocked on T68) a real GCP project with billing alerts configured, APIs enabled
+      (Cloud Run, Cloud SQL Admin, Secret Manager, Cloud Storage, Service Networking); `terraform
+      plan` read and approved by the owner before any `apply`.
+- [ ] **T70** (blocked on T68) a Superset image built for the demo slice (reads its DB connection
+      and viewer password from Secret Manager, per `infra/terraform/run.tf`), pushed somewhere
+      `superset_image` can reference.
+- [ ] **T71** (blocked on T68, T69) a one-time export of `pfp-prod`'s demo gold tables, loaded into
+      the Cloud SQL instance Terraform provisions.
+- [ ] **T72** (blocked on T69, T70, T71) the real `terraform apply`, evidence captured
+      (screenshot/recording), then `terraform destroy` unless the owner chose to keep it running
+      (ADR 0050's open question 5); PROJECT.md's Phase 4 section updated with what was actually
+      built, mirroring how Phase 2/3 record deviations from the plan.
