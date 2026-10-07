@@ -165,8 +165,14 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
 - [ ] [Phase 6 — Savings-goal projection](../brain/phases/phase-6.md): the manual-Excel
       importer: Ripley savings and investment tracking (`Inversiones` sheet, monthly returns) **done**, then the cash-flow projection (specified, T56-T62 under Phase 3 above) and its own sol/dólar exchange-rate section (the only
       place currencies are converted). Scope in [ADR 0025](../brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md).
-- [ ] **Phase 2 extension, T26-T33: PostgreSQL as dbt's store, then Superset** (decided 2026-09-19,
-      [ADR 0029](../brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). Order and
-      acceptance criteria in [`todo-phase2.md`](todo-phase2.md). Then the owner tries the data
-      visualization, the dbt catalog and the architecture before Phase 3 (ML).
-- [ ] Phase 3 (ML), 4 (cloud), 5 (uploader): see [PROJECT.md](../PROJECT.md).
+- [x] **Phase 2 extension, T26-T37: PostgreSQL as dbt's store, then Superset** (decided
+      2026-09-19, [ADR 0029](../brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)).
+      Closed 2026-10-07: every task's acceptance and verification criteria in
+      [`todo-phase2.md`](todo-phase2.md) is checked, shipped to `main` (no dedicated release PR —
+      it reached `main` incrementally through the ordinary `develop → main` releases of
+      2026-09-19 to 2026-09-25).
+- [ ] Phase 4 (cloud/IaC): nothing built yet, see [PROJECT.md](../PROJECT.md).
+- [ ] Phase 5 (serving/uploader): the dashboard (Superset, Phase 2 extension) and a request-based
+      upload portal with owner review and email alerts (T44-T50) are already built, well beyond
+      Phase 5's original "minimal uploader" scope; see the deviation note in
+      [PROJECT.md](../PROJECT.md)'s Phase 5 section for what is covered and what is not.
