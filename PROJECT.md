@@ -170,6 +170,23 @@ effort goes there unless something breaks (owner's call, 2026-09-27).
 
 **Closes:** end-to-end delivery, a showcase for recruiters.
 
+**Status: already covered, built under other phases (checked 2026-10-07).** Against the plan
+above:
+- The dashboard line is exactly what T32-T37 (Phase 2 extension) built: Superset, dashboards as
+  code, one Compose project.
+- The uploader line is covered too, well past "minimal": the request-based upload portal
+  (T39-T50, ADR 0040/0041) is Dex-authenticated, accepts up to 10 statement PDFs per request
+  accepted or rejected as a whole, emails the owner a review alert and the sender at each step,
+  and has its own Excel section for savings and investments (`docs/manual-data.md`) -- the
+  "form to type the manual Excel's movements" above, covered by an upload instead of a typed
+  form, same end result (no hand-typing a bank statement). It shipped grouped under Phase 3 in
+  this file's own closing note (line below) and tagged `[Phase 5]` in
+  [`tasks/backlog.md`](tasks/backlog.md), not under this section -- a labeling gap, not a scope
+  gap. Nothing from this phase's plan is outstanding.
+- The 2026-09-19 scope note below ("the uploader stays at its minimal, functional version") no
+  longer describes what exists; it was true when written, before T46-T50 added the request
+  workflow, review and Excel section on top of the original single-file upload.
+
 ### Phase 6 — Savings-goal projection *(planned, added 2026-09-19)*
 **Goal:** answer "given my real cash flow, how long until I reach my savings goal?"
 - Banco Ripley as a third source (the owner's savings account, in soles). It gives no statements, so its movements come from a **manual Excel** typed month by month, with the same reconciliation rules ([ADR 0027](brain/decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md), [`docs/manual-data.md`](docs/manual-data.md)).
@@ -190,7 +207,7 @@ effort goes there unless something breaks (owner's call, 2026-09-27).
 
 > **Order:** phases 6 and 7 were added after Phase 2 closed and do not renumber 3–5. The next steps in practice are listed in [`tasks/backlog.md`](tasks/backlog.md).
 
-> **Scope note:** the uploader stays at its minimal, functional version. None of the target job postings value frontend skills; the value is in what happens *after* the file comes in (parsing, reconciliation, MERGE, orchestration, ML).
+> **Scope note (2026-09-19):** the uploader stays at its minimal, functional version. None of the target job postings value frontend skills; the value is in what happens *after* the file comes in (parsing, reconciliation, MERGE, orchestration, ML). **Update 2026-10-07:** it grew past "minimal" anyway, driven by real needs (T46-T50: a request can hold several files, review before it lands, an alert email, an Excel section) rather than by frontend polish -- the spirit of this note held, only the word "minimal" didn't. See Phase 5's status note above.
 
 ---
 

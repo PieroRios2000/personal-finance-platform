@@ -367,7 +367,14 @@ Postgres attach. Give it a small DuckDB file of its own; its anomaly test still 
 - [x] `scripts/data_diff.py` and `pr-data-diff` compare Postgres databases (base and PR, `silver` and
   `gold`) instead of two DuckDB files; ADR 0014 updated. `scripts/pg_databases.py` creates the two
   throwaway databases.
-- [ ] The job stays within its time budget (backlog, "CI speed") -- checked on this PR's own run.
+- [x] The job stays within its time budget (backlog, "CI speed") -- no numeric target was ever
+  adopted there (the "under 10 minutes" idea is still an unchecked proposal); checked here against
+  the 30/60-minute `timeout-minutes` limit instead. `ephemeral-integration` ran Postgres-backed from
+  this task on; the integration suite grew from 39 tests (~17 min) at T29 time to 95 tests (~27 min)
+  by #199/#200 (2026-10-06), which is why the limit was raised from 30 to 60 minutes then -- not a
+  Postgres regression, the suite itself grew across T56-T66. Latest green `develop` run
+  (#37457591027, 2026-10-06): job wall time ~32 min, pytest step ~27 min, comfortably inside the
+  60-minute limit.
 
 **Dependencies:** T27, T28 · **Files:** `.github/workflows/ci.yml`, `scripts/data_diff.py`,
 `brain/**` · **Size:** M
@@ -449,5 +456,8 @@ currency at a time, HTML cards and styled tables, formatted numbers.
 **Dependencies:** T26-T37 · **Size:** S
 
 ### ✅ Final checkpoint (Phase 2, including the extension T26-T37)
-- [x] All criteria met · [ ] `develop → main` release PR "Phase 2 — Orchestration + Governance"
-  · [ ] merged by Piero
+- [x] All criteria met · [x] shipped to `main` (no dedicated "Phase 2 — Orchestration +
+  Governance" release PR was ever opened; T26-T37 reached `main` incrementally through the
+  ordinary `develop → main` releases of 2026-09-19 to 2026-09-25, confirmed present, e.g. the
+  Postgres store at `9c203d1`/PR #94 and `bi/` existing on `main`) · [x] merged by Piero (each of
+  those releases was)
