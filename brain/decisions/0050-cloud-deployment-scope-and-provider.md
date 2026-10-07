@@ -1,7 +1,7 @@
 ---
 type: decision
 phase: 4
-status: proposed
+status: accepted
 date: 2026-10-07
 ---
 
@@ -64,6 +64,23 @@ in this repo or this conversation.
 
 Until these are answered, backlog tasks past "write the Terraform module" (already done, this PR)
 stay blocked — see `tasks/backlog.md`'s Phase 4 section.
+
+## Owner's answers (2026-10-08)
+
+1. **Option A**, confirmed as written above.
+2. **GCP first.** Once the GCP slice is proven working end to end, a *separate, one-time* trial
+   deployment of the same slice on AWS is planned afterward, purely to have hands-on evidence of
+   both providers for the portfolio — not a migration, not a standing second environment. Tracked
+   as a new task after T72, not detailed further until GCP is done.
+3. **Billing ceiling: $1/month.** The scope (Superset plus a small Postgres copy, applied briefly
+   then destroyed) is expected to stay inside the always-free tiers; $1 is the alert threshold,
+   not an expected cost.
+4. **Account: the owner's own.** Piero creates and holds the GCP account and its billing; an agent
+   never receives real credentials. Setup is a guided, interactive walkthrough (console clicks and
+   CLI commands the owner runs, confirmed step by step), not something delegated to a background
+   agent.
+5. **Uptime: evidence only, then destroy immediately.** Never left running unattended; matches
+   this ADR's default in the Decision section above, now confirmed rather than assumed.
 
 ## Consequences
 

@@ -185,18 +185,23 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
 
 - [x] **T67** spec, ADR 0050 and a `terraform validate`-clean GCP module (`infra/terraform/`):
       no resource provisioned, no real account touched.
-- [ ] **T68** (blocks every task below) **owner decision**, per ADR 0050's open questions: confirm
-      option A over option B, confirm GCP over AWS, set a real billing ceiling on the real
-      account, say how long the demo stays up once applied.
-- [ ] **T69** (blocked on T68) a real GCP project with billing alerts configured, APIs enabled
+- [x] **T68** **owner decision** (2026-10-08, ADR 0050 "Owner's answers"): option A, GCP first
+      (AWS as a later one-time trial, T73), a $1/month billing-alert ceiling, the owner's own
+      account set up as a guided interactive walkthrough, applied only long enough to capture
+      evidence then destroyed.
+- [ ] **T69** (blocked on T68, done) a real GCP project with billing alerts configured, APIs enabled
       (Cloud Run, Cloud SQL Admin, Secret Manager, Cloud Storage, Service Networking); `terraform
-      plan` read and approved by the owner before any `apply`.
-- [ ] **T70** (blocked on T68) a Superset image built for the demo slice (reads its DB connection
+      plan` read and approved by the owner before any `apply`. Interactive: the owner creates the
+      account and billing, an agent never receives real credentials.
+- [ ] **T70** a Superset image built for the demo slice (reads its DB connection
       and viewer password from Secret Manager, per `infra/terraform/run.tf`), pushed somewhere
       `superset_image` can reference.
-- [ ] **T71** (blocked on T68, T69) a one-time export of `pfp-prod`'s demo gold tables, loaded into
+- [ ] **T71** (blocked on T69) a one-time export of `pfp-prod`'s demo gold tables, loaded into
       the Cloud SQL instance Terraform provisions.
 - [ ] **T72** (blocked on T69, T70, T71) the real `terraform apply`, evidence captured
-      (screenshot/recording), then `terraform destroy` unless the owner chose to keep it running
-      (ADR 0050's open question 5); PROJECT.md's Phase 4 section updated with what was actually
+      (screenshot/recording), then `terraform destroy` immediately (ADR 0050's open question 5,
+      answered: never left running); PROJECT.md's Phase 4 section updated with what was actually
       built, mirroring how Phase 2/3 record deviations from the plan.
+- [ ] **T73** (after T72, GCP proven working) a separate, one-time AWS trial of the same slice,
+      purely for hands-on evidence of both providers — not a migration, not a standing second
+      environment (ADR 0050's owner answer to open question 2).
