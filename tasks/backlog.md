@@ -189,25 +189,28 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       (AWS as a later one-time trial, T73), a $1/month billing-alert ceiling, the owner's own
       account set up as a guided interactive walkthrough, applied only long enough to capture
       evidence then destroyed.
-- [ ] **T69** (blocked on T68, done) a real GCP project with billing alerts configured, APIs enabled
-      (Cloud Run, Cloud SQL Admin, Secret Manager, Cloud Storage, Service Networking, Compute
-      Engine -- the last one added after T71/T72 prep found the private-IP VPC wiring was
-      missing, `infra/terraform/network.tf`, ADR 0050's amendment); `terraform plan` read and
-      approved by the owner before any `apply`. Interactive: the owner creates the account and
-      billing, an agent never receives real credentials.
+- [x] **T69** real GCP project `pfp-demo-511101`: billing linked, a $1/month budget alert, APIs
+      enabled (Cloud Run, Cloud SQL Admin, Secret Manager, Cloud Storage, Service Networking,
+      Compute Engine, Artifact Registry -- the last two added once T71/T72 prep found the
+      private-IP VPC wiring and the image registry were both still missing). `terraform plan`
+      read and approved by the owner before every `apply`.
 - [x] **T70** a Superset image for the demo slice: no Dex/OAuth (AUTH_DB, one Gamma
       viewer), reads its DB connection and viewer password from Secret Manager, per
       `infra/terraform/run.tf` (`bi/superset_config_cloud.py`, `bi/start_cloud.sh`,
-      `bi/Dockerfile.cloud`). Verified locally against a throwaway Postgres (build, start,
-      login as the viewer, read the dashboard list), never against the real GCP project.
-      Owner still has to build and push it to Artifact Registry (`infra/terraform/README.md`
-      step 4) before it can be referenced by `superset_image`.
-- [ ] **T71** (blocked on T69) a one-time export of `pfp-prod`'s demo gold tables, loaded into
-      the Cloud SQL instance Terraform provisions.
-- [ ] **T72** (blocked on T69, T70, T71) the real `terraform apply`, evidence captured
-      (screenshot/recording), then `terraform destroy` immediately (ADR 0050's open question 5,
-      answered: never left running); PROJECT.md's Phase 4 section updated with what was actually
-      built, mirroring how Phase 2/3 record deviations from the plan.
+      `bi/Dockerfile.cloud`, `bi/grant_gamma_access.py`). Built and pushed for real to Artifact
+      Registry (`pfp-demo/superset:latest`). Two real bugs found applying it (#207): Gamma had
+      no base `datasource_access` grant (dashboard invisible), and each dataset's own `catalog`
+      field, not just the database's URI, has to be rewritten to the real demo database name
+      (every chart failed with "database \"pfp\" does not exist" otherwise).
+- [x] **T71** a one-time export of `pfp-prod`'s demo gold tables (`pg_dump --schema=gold`),
+      loaded into the Cloud SQL instance via `gcloud sql import sql` from a Cloud Storage
+      file -- not a direct connection to the private IP, kept deliberately unreachable from
+      outside the VPC (ADR 0050). `pfp_bi`'s read grant on the new tables applied the same way.
+- [ ] **T72** (blocked on T69, T70, T71, all done) the real `terraform apply` succeeded and the
+      owner confirmed the live dashboard renders real data end to end (2026-10-10). Left: capture
+      evidence (screenshot/recording), then `terraform destroy` immediately (ADR 0050's open
+      question 5, answered: never left running); PROJECT.md's Phase 4 section updated with what
+      was actually built, mirroring how Phase 2/3 record deviations from the plan.
 - [ ] **T73** (after T72, GCP proven working) a separate, one-time AWS trial of the same slice,
       purely for hands-on evidence of both providers — not a migration, not a standing second
       environment (ADR 0050's owner answer to open question 2).
