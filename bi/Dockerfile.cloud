@@ -9,6 +9,7 @@ RUN uv pip install --python /app/.venv/bin/python psycopg2-binary==2.9.10
 COPY superset_config_cloud.py /app/superset_config.py
 COPY start_cloud.sh /app/start.sh
 COPY cleanup_stale.py /app/bi-cleanup.py
+COPY grant_gamma_access.py /app/grant_gamma_access.py
 COPY assets /app/pfp-assets
 RUN chmod +x /app/start.sh
 ENV SUPERSET_CONFIG_PATH=/app/superset_config.py

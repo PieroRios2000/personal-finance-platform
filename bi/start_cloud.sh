@@ -35,7 +35,9 @@ PY
     superset import-directory /tmp/assets --overwrite
     # Earlier imports left charts and datasets behind; drop what is not in this export.
     python /app/bi-cleanup.py /tmp/assets || echo "cleanup failed; the dashboard still works"
-    # No per-user access script here: a single shared viewer needs no row-level filter.
+    # Gamma's base read access on the gold datasets (no per-user row-level filter here:
+    # a single shared viewer needs no such thing).
+    python /app/grant_gamma_access.py
 fi
 
 exec gunicorn --bind "0.0.0.0:${PORT:-8080}" --workers 2 --timeout 120 \
