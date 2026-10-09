@@ -24,9 +24,20 @@ stand up Dex.
 2. `gcloud auth application-default login` (or a service-account key the owner generates and
    keeps outside this repo).
 3. The APIs this module needs enabled on that project: Cloud Run, Cloud SQL Admin, Secret Manager,
-   Cloud Storage, Service Networking (for Cloud SQL's private IP).
-4. A Superset image built and pushed somewhere this project can pull it from (Artifact Registry),
-   referenced by `superset_image`.
+   Cloud Storage, Service Networking (for Cloud SQL's private IP), Artifact Registry.
+4. The cloud-only Superset image (T70; no Dex/OAuth — `bi/superset_config_cloud.py`,
+   `bi/start_cloud.sh`, `bi/Dockerfile.cloud`), built and pushed to an Artifact Registry repo in
+   this project, then referenced by `superset_image`:
+   ```
+   gcloud artifacts repositories create pfp-demo --repository-format=docker \
+       --location=<gcp_region> --project=<gcp_project_id>
+   gcloud auth configure-docker <gcp_region>-docker.pkg.dev
+   docker build -f bi/Dockerfile.cloud -t <gcp_region>-docker.pkg.dev/<gcp_project_id>/pfp-demo/superset:latest bi/
+   docker push <gcp_region>-docker.pkg.dev/<gcp_project_id>/pfp-demo/superset:latest
+   ```
+   Verified locally (not against this registry): built, run against a throwaway local Postgres
+   with dummy `PFP_DEMO_DB_CONNECTION_STRING`/`PFP_DEMO_VIEWER_PASSWORD` values, logged in as the
+   one `viewer` user over HTTP, read the dashboard list — then torn down.
 5. `terraform init && terraform plan` first, read the plan, then `terraform apply` — and
    `terraform destroy` once the evidence (screenshot/recording) is captured, unless the owner has
    decided to keep it running (ADR 0050's open question 5).

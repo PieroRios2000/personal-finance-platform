@@ -193,9 +193,13 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       (Cloud Run, Cloud SQL Admin, Secret Manager, Cloud Storage, Service Networking); `terraform
       plan` read and approved by the owner before any `apply`. Interactive: the owner creates the
       account and billing, an agent never receives real credentials.
-- [ ] **T70** a Superset image built for the demo slice (reads its DB connection
-      and viewer password from Secret Manager, per `infra/terraform/run.tf`), pushed somewhere
-      `superset_image` can reference.
+- [x] **T70** a Superset image for the demo slice: no Dex/OAuth (AUTH_DB, one Gamma
+      viewer), reads its DB connection and viewer password from Secret Manager, per
+      `infra/terraform/run.tf` (`bi/superset_config_cloud.py`, `bi/start_cloud.sh`,
+      `bi/Dockerfile.cloud`). Verified locally against a throwaway Postgres (build, start,
+      login as the viewer, read the dashboard list), never against the real GCP project.
+      Owner still has to build and push it to Artifact Registry (`infra/terraform/README.md`
+      step 4) before it can be referenced by `superset_image`.
 - [ ] **T71** (blocked on T69) a one-time export of `pfp-prod`'s demo gold tables, loaded into
       the Cloud SQL instance Terraform provisions.
 - [ ] **T72** (blocked on T69, T70, T71) the real `terraform apply`, evidence captured
