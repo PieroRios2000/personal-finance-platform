@@ -62,6 +62,7 @@ def test_the_cloud_image_bakes_in_its_own_files_instead_of_mounting_them() -> No
     assert "SUPERSET_CONFIG_PATH" in dockerfile
     assert "ENTRYPOINT" in dockerfile
     assert "setup_access.py" not in dockerfile  # no per-user RLS in this scope
+    assert "COPY grant_gamma_access.py /app/grant_gamma_access.py" in dockerfile
 
 
 def test_the_cloud_start_script_creates_exactly_one_idempotent_viewer() -> None:
@@ -73,6 +74,7 @@ def test_the_cloud_start_script_creates_exactly_one_idempotent_viewer() -> None:
     assert "reset-password --username viewer" in start
     assert "PFP_DEMO_VIEWER_PASSWORD" in start
     assert "setup_access.py" not in start  # single shared viewer, no per-user filter
+    assert "grant_gamma_access.py" in start  # but Gamma still needs base read access
 
 
 def test_the_cloud_start_script_rewrites_the_whole_connection_string() -> None:
@@ -84,6 +86,17 @@ def test_the_cloud_start_script_rewrites_the_whole_connection_string() -> None:
     assert "PFP_DEMO_DB_CONNECTION_STRING" in start
     assert "postgresql+psycopg2://pfp_bi:XXXXXXXXXX@postgres:5432/pfp" in start
     assert "PFP_PG_BI_PASSWORD" not in start  # that's the local-only substitution
+
+
+def test_the_cloud_start_script_also_rewrites_each_dataset_catalog() -> None:
+    """Superset's Postgres engine spec picks the database to query from a dataset's
+    own `catalog` field, not from the parent Database's `sqlalchemy_uri` path segment
+    -- found applying this for real, every chart failed with 'database "pfp" does not
+    exist' even though the URI rewrite above was already correct."""
+    start = _start()
+
+    assert "catalog: pfp" in start
+    assert "datasets/**/*.yaml" in start
 
 
 def test_the_cloud_start_script_listens_on_the_cloud_run_port() -> None:
