@@ -52,4 +52,3 @@ PROXY_FIX_CONFIG = {"x_for": 1, "x_proto": 1, "x_host": 1, "x_prefix": 0}
 
 # AUTH_DB is Superset's own default (no assignment needed): bi/start_cloud.sh creates
 # the one Gamma viewer; nobody registers themselves or signs in any other way.
-AUTH_USER_REGISTRATION = False
