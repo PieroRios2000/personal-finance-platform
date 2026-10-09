@@ -42,6 +42,16 @@ resource "google_cloud_run_v2_service" "superset_demo" {
       min_instance_count = 0 # scales to zero between demo sessions (spec section 5)
       max_instance_count = 1 # a single viewer at a time; this is a demo, not a product
     }
+
+    # Direct VPC egress (no separate Serverless VPC Access connector resource needed): the
+    # only way this container can reach Cloud SQL's private IP (network.tf, database.tf).
+    vpc_access {
+      egress = "PRIVATE_RANGES_ONLY" # everything else (pulling the image, etc.) stays public
+      network_interfaces {
+        network    = google_compute_network.demo.id
+        subnetwork = google_compute_subnetwork.demo.id
+      }
+    }
   }
 }
 
