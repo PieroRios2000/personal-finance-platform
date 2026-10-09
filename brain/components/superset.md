@@ -30,8 +30,23 @@ see only the `user_id` they were scoped to, unless they are the owner (T41, ADR 
 | [`dbt/models/gold/fct_account_balance_monthly.sql`](../../dbt/models/gold/fct_account_balance_monthly.sql) | Closing balance per account, currency and month, for the savings chart |
 | `make bi-up` / `bi-down` / `bi-reset` / `bi-export` | Start, stop, forget Superset's own state, re-export the dashboards |
 
+## Cloud demo variant (T70, ADR 0050)
+
+Phase 4's GCP demo slice reuses the same committed dashboard export (`bi/assets/`) through a
+separate image, not a flag on this one: `bi/superset_config_cloud.py`, `bi/start_cloud.sh`,
+`bi/Dockerfile.cloud`. No Dex/OAuth (nobody but the owner needs to authenticate against a
+screenshot-only deployment) — `AUTH_DB` with a single Gamma viewer, created by `start_cloud.sh`
+the same idempotent way `start.sh` creates the admin. Its own metadata lives in Superset's
+default local SQLite file, not a separate Postgres role (`infra/terraform/database.tf`
+provisions only a copy of gold, nothing for Superset itself) — acceptable for an
+applied-then-destroyed demo, since the start script redoes the whole setup, including the
+dashboard import, on every cold start. Verified by building the image and running it against a
+throwaway local Postgres (login as `viewer`, read the dashboard list over HTTP), never against
+the real GCP project; see `infra/terraform/README.md` for the owner's own build-and-push step.
+
 ## Related
 
 [dbt gold](dbt-gold.md), [Investment tracking](investment-tracking.md),
 [OpenMetadata](openmetadata.md) (same network trick), [Dex](dex.md) (sign-in),
-[ADR 0029](../decisions/0029-dbt-stores-silver-and-gold-in-postgres.md).
+[ADR 0029](../decisions/0029-dbt-stores-silver-and-gold-in-postgres.md),
+[ADR 0050](../decisions/0050-cloud-deployment-scope-and-provider.md) (the cloud demo slice).

@@ -1,0 +1,16 @@
+# Cloud variant of bi/Dockerfile (T70, ADR 0050). The local image relies on
+# bi/docker-compose.yml mounting superset_config.py/start.sh/assets as read-only
+# volumes; Cloud Run has no such mount, so this one bakes them into the image instead.
+# No OAuth driver installed: this path has none (bi/superset_config_cloud.py, AUTH_DB,
+# a single viewer created by bi/start_cloud.sh instead of Dex's security manager).
+FROM apache/superset:5.0.0
+USER root
+RUN uv pip install --python /app/.venv/bin/python psycopg2-binary==2.9.10
+COPY superset_config_cloud.py /app/superset_config.py
+COPY start_cloud.sh /app/start.sh
+COPY cleanup_stale.py /app/bi-cleanup.py
+COPY assets /app/pfp-assets
+RUN chmod +x /app/start.sh
+ENV SUPERSET_CONFIG_PATH=/app/superset_config.py
+USER superset
+ENTRYPOINT ["/bin/sh", "/app/start.sh"]
