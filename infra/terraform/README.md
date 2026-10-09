@@ -24,7 +24,9 @@ stand up Dex.
 2. `gcloud auth application-default login` (or a service-account key the owner generates and
    keeps outside this repo).
 3. The APIs this module needs enabled on that project: Cloud Run, Cloud SQL Admin, Secret Manager,
-   Cloud Storage, Service Networking (for Cloud SQL's private IP), Artifact Registry.
+   Cloud Storage, Service Networking (the VPC peering Cloud SQL's private IP needs), Compute
+   Engine (the VPC/subnet/reserved-range resources that peering sits on top of, `network.tf`),
+   Artifact Registry.
 4. The cloud-only Superset image (T70; no Dex/OAuth — `bi/superset_config_cloud.py`,
    `bi/start_cloud.sh`, `bi/Dockerfile.cloud`), built and pushed to an Artifact Registry repo in
    this project, then referenced by `superset_image`:
@@ -41,6 +43,17 @@ stand up Dex.
 5. `terraform init && terraform plan` first, read the plan, then `terraform apply` — and
    `terraform destroy` once the evidence (screenshot/recording) is captured, unless the owner has
    decided to keep it running (ADR 0050's open question 5).
+
+## Networking (added after T70, during T71/T72 prep)
+
+`database.tf`'s `private_ip_address` and `secrets.tf`'s connection string need a VPC actually
+peered to Google's private-services range, or the host comes back empty and Cloud Run can never
+reach Cloud SQL. `network.tf` builds a small, dedicated VPC (not the project's implicit `default`
+network, so this module stays fully self-contained and `terraform destroy` removes everything it
+made) with one subnet in `var.gcp_region`, a reserved peering range, and the
+`google_service_networking_connection` itself. `run.tf`'s Cloud Run service reaches it over direct
+VPC egress (`template.vpc_access`, GA in the `hashicorp/google` provider used here -- no separate
+Serverless VPC Access connector resource needed).
 
 ## Validating without any of the above
 

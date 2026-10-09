@@ -82,6 +82,26 @@ stay blocked — see `tasks/backlog.md`'s Phase 4 section.
 5. **Uptime: evidence only, then destroy immediately.** Never left running unattended; matches
    this ADR's default in the Decision section above, now confirmed rather than assumed.
 
+## Amendment (2026-10-09): the private-IP wiring was missing
+
+Found while preparing T71/T72: `database.tf`'s Cloud SQL instance had no `ip_configuration`
+block and no VPC existed anywhere in the module, so `private_ip_address` (what `secrets.tf`'s
+connection string is built from) would never have populated -- the generated string's host would
+be empty, and Cloud Run would have had no way to reach the database at all. A private-IP design
+was always the intent (this README already listed Service Networking as a required API), it was
+just never wired up.
+
+Fixed, staying inside option A's existing scope: a small, dedicated VPC (`network.tf`, one
+subnet in `var.gcp_region`, not the project's implicit `default` network, so the module stays
+self-contained for its own `terraform destroy`), a reserved peering range and the
+`google_service_networking_connection` Cloud SQL's private IP needs, and Cloud Run's direct VPC
+egress (`run.tf`'s `vpc_access` block -- GA in the provider version this module pins, no separate
+Serverless VPC Access connector resource) to actually reach it. One more API joins the "before a
+real apply" list: Compute Engine (the VPC/subnet resources sit on it).
+
+This was caught by re-reading the module against its own stated design, not by a real `plan` --
+see the Consequences note below on what `validate` alone does and doesn't prove.
+
 ## Consequences
 
 - The Terraform module in `infra/terraform/` is real, `terraform validate`-clean code with no

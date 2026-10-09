@@ -190,9 +190,11 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       account set up as a guided interactive walkthrough, applied only long enough to capture
       evidence then destroyed.
 - [ ] **T69** (blocked on T68, done) a real GCP project with billing alerts configured, APIs enabled
-      (Cloud Run, Cloud SQL Admin, Secret Manager, Cloud Storage, Service Networking); `terraform
-      plan` read and approved by the owner before any `apply`. Interactive: the owner creates the
-      account and billing, an agent never receives real credentials.
+      (Cloud Run, Cloud SQL Admin, Secret Manager, Cloud Storage, Service Networking, Compute
+      Engine -- the last one added after T71/T72 prep found the private-IP VPC wiring was
+      missing, `infra/terraform/network.tf`, ADR 0050's amendment); `terraform plan` read and
+      approved by the owner before any `apply`. Interactive: the owner creates the account and
+      billing, an agent never receives real credentials.
 - [x] **T70** a Superset image for the demo slice: no Dex/OAuth (AUTH_DB, one Gamma
       viewer), reads its DB connection and viewer password from Secret Manager, per
       `infra/terraform/run.tf` (`bi/superset_config_cloud.py`, `bi/start_cloud.sh`,
