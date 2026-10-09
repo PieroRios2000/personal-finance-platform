@@ -2,7 +2,11 @@
 # Cloud variant of bi/start.sh (T70, ADR 0050): one Gamma viewer (AUTH_DB) instead of
 # Dex-mapped admin/owner roles, and the committed export's connection string replaced
 # wholesale, not just its password -- Cloud SQL's host and database name both differ
-# from the local Postgres service the export was written against. Idempotent, so a
+# from the local Postgres service the export was written against. Each dataset's own
+# `catalog` field is rewritten too: Superset's Postgres engine spec uses a dataset's
+# `catalog`, not the database's own URI path segment, to pick which database to query
+# (found applying this for real -- every chart failed with 'database "pfp" does not
+# exist' even though the URI substitution below was already correct). Idempotent, so a
 # cold start after Cloud Run scales back up from zero is safe, same as start.sh.
 set -e
 
@@ -31,6 +35,11 @@ placeholder = "postgresql+psycopg2://pfp_bi:XXXXXXXXXX@postgres:5432/pfp"
 for path in glob.glob("/tmp/assets/databases/*.yaml"):
     text = open(path).read()
     open(path, "w").write(text.replace(placeholder, uri))
+
+real_database = uri.rsplit("/", 1)[-1]
+for path in glob.glob("/tmp/assets/datasets/**/*.yaml", recursive=True):
+    text = open(path).read()
+    open(path, "w").write(text.replace("catalog: pfp\n", f"catalog: {real_database}\n"))
 PY
     superset import-directory /tmp/assets --overwrite
     # Earlier imports left charts and datasets behind; drop what is not in this export.

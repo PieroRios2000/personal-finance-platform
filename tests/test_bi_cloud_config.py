@@ -88,6 +88,17 @@ def test_the_cloud_start_script_rewrites_the_whole_connection_string() -> None:
     assert "PFP_PG_BI_PASSWORD" not in start  # that's the local-only substitution
 
 
+def test_the_cloud_start_script_also_rewrites_each_dataset_catalog() -> None:
+    """Superset's Postgres engine spec picks the database to query from a dataset's
+    own `catalog` field, not from the parent Database's `sqlalchemy_uri` path segment
+    -- found applying this for real, every chart failed with 'database "pfp" does not
+    exist' even though the URI rewrite above was already correct."""
+    start = _start()
+
+    assert "catalog: pfp" in start
+    assert "datasets/**/*.yaml" in start
+
+
 def test_the_cloud_start_script_listens_on_the_cloud_run_port() -> None:
     assert '--bind "0.0.0.0:${PORT:-8080}"' in _start()
 
