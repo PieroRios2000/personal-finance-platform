@@ -1,10 +1,11 @@
 dashboard_title: PFP finance
 description: null
-css: ".dashboard-content { background: #f3f5f9; }\n.dashboard-component-chart-holder\
-  \ {\n  border-radius: 14px; border: 1px solid #e6eaf2 !important;\n  box-shadow:\
-  \ 0 1px 2px rgba(16, 24, 40, .06);\n}\n.dashboard-component-chart-holder .header-title\
-  \ { font-weight: 600; color: #1b2437; }\n.dashboard-header-container { background:\
-  \ #ffffff; }\n"
+css: ".dashboard-content { background: #1b2437; }\n.dashboard-component-chart-holder\
+  \ {\n  background: #f3f5f9;\n  border-radius: 14px; border: 1px solid rgba(255,\
+  \ 255, 255, .08) !important;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, .35);\n}\n.dashboard-component-chart-holder\
+  \ .header-title { font-weight: 600; color: #1b2437; }\n.dashboard-header-container\
+  \ { background: #141b2c; }\n.dashboard-header-container .editable-title,\n.dashboard-header-container\
+  \ .editable-title input { color: #f3f5f9; }\n"
 slug: pfp-finance
 certified_by: null
 certification_details: null
