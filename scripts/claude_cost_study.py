@@ -194,6 +194,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"({run.input_tokens} in / {run.output_tokens} out tokens), "
             f"projected ${monthly_cost:.4f}/month at real volume"
         )
+        for category in sorted(run.precision_by_category):
+            print(
+                f"  precision[{category}] = {run.precision_by_category[category]:.3f}"
+            )
     return 0
 
 

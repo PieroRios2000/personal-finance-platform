@@ -165,6 +165,8 @@ def test_main_prints_scores_and_cost_but_never_a_description(
         assert f"{model}: macro-F1" in out
         assert "measured cost $" in out
         assert "projected $" in out
+        assert "precision[Alimentacion]" in out
+        assert "precision[Servicios]" in out
     assert "COMERCIO" not in out
 
 
