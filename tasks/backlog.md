@@ -147,10 +147,12 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
   - [x] **T65** dynamic goal from Superset: `goal_cashflow`/`goal_balances` pieces, virtual dataset `goal_dynamic` and four typed native filters (goal, exchange rate, emergency months, horizon), row-level security on it.
   - [x] **T66** dashboard in four tabs (Savings, Categories, Forecast & goal, Income statement) and `rpt_income_statement`: the month-by-month statement of income, spending by category, saving and planned saving, per currency.
   - [x] **T63** experiment: recurrence and the fixed/variable mark as classifier features, ADR 0044's protocol and an acceptance margin over the fold spread. Null result (ADR 0049): no variant beat text-only (0.468) by the fold SD (0.107); the classifier stays text-only.
-- [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
-      model -- macro-F1 and per-category precision (not just accuracy), latency, cost per
-      transaction, cost per month at this project's real volume, against the same held-out labels.
-      A concrete MLOps tradeoff narrative, buildable now that T52 exists to compare against.
+- [x] **The deferred cost study** ([ADR 0051](../brain/decisions/0051-claude-as-category-classifier-costs-little-but-loses-on-quality.md)):
+      Claude Haiku 4.5 and Sonnet 5.5, zero-shot, on the same 543 reviewed labels the trained
+      model's own 0.49 macro-F1 is measured against -- 0.217 and 0.288, both well behind, at a
+      real measured cost of $0.38 total ($0.09/$0.29) for the full 1,086-call run, under two
+      cents/month at this project's real volume (31 new descriptions/month). Cost was never the
+      question; quality is, and the trained model wins. Not adopted.
 
 ## Later, if a real business (out of scope for the portfolio, ADR 0042)
 
