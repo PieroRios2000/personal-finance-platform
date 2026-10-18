@@ -206,11 +206,16 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       loaded into the Cloud SQL instance via `gcloud sql import sql` from a Cloud Storage
       file -- not a direct connection to the private IP, kept deliberately unreachable from
       outside the VPC (ADR 0050). `pfp_bi`'s read grant on the new tables applied the same way.
-- [ ] **T72** (blocked on T69, T70, T71, all done) the real `terraform apply` succeeded and the
-      owner confirmed the live dashboard renders real data end to end (2026-10-10). Left: capture
-      evidence (screenshot/recording), then `terraform destroy` immediately (ADR 0050's open
-      question 5, answered: never left running); PROJECT.md's Phase 4 section updated with what
-      was actually built, mirroring how Phase 2/3 record deviations from the plan.
+- [x] **T72** the real `terraform apply` succeeded; two more real-apply-only bugs found and
+      fixed beyond #206 (Cloud Run's secret-accessor IAM grant, the Gamma dataset grant and each
+      dataset's own `catalog` field, #207); the owner refreshed the demo data twice more (a plan
+      and goal for the demo user, then category labels) so every tab has something to show; the
+      owner recorded a screencast (Loom) as the evidence this task asked for (2026-10-17);
+      `terraform destroy` run immediately after -- Cloud SQL and Cloud Run (the costed resources)
+      destroyed within minutes; the VPC/subnet/peering cleanup is blocked on a Cloud Run "Direct
+      VPC egress" reserved IP address that only Google's own backend releases on its own
+      schedule (not billed, not caused by this module) -- a plain retry, once it clears, finishes
+      it; PROJECT.md's Phase 4 section updated with what was actually built.
 - [ ] **T73** (after T72, GCP proven working) a separate, one-time AWS trial of the same slice,
       purely for hands-on evidence of both providers — not a migration, not a standing second
       environment (ADR 0050's owner answer to open question 2).
