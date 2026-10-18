@@ -156,10 +156,31 @@ Every parser validates that the sum of the extracted transactions matches the ba
 starts: built and documented, but no target audience for this portfolio values them, so no more
 effort goes there unless something breaks (owner's call, 2026-09-27).
 
-### Phase 4 — Cloud + IaC
+### Phase 4 — Cloud + IaC *(T67-T72 built 2026-10-09/17, GCP)*
 **Goal:** the cloud "nice to have" that shows up in job postings.
 - Terraform to provision infra on AWS or GCP (free tier).
 - Stack deployment; secrets in a secrets manager (never hardcoded).
+
+**Built, deviating from the plan (ADR 0050):** option A, not a wholesale "stack deployment" --
+Terraform provisions a narrow slice (Cloud Run + Cloud SQL + Secret Manager + Cloud Storage, a
+dedicated VPC for Cloud SQL's private IP) *alongside* `pfp-prod`'s existing tunnel (ADR 0042),
+applied against the owner's own real GCP project (`pfp-demo-511101`) only long enough to record
+evidence, then destroyed -- not left running. GCP only; AWS is a separate, later one-time trial
+(T73), not built yet. Three real bugs surfaced only by a real `apply` (never caught by
+`terraform validate`, which never calls the API): a missing `private_network` wiring so Cloud
+SQL's private IP was never populated (#206); Cloud Run's default service account had no
+`roles/secretmanager.secretAccessor` grant on either secret (#207); and the cloud-only Superset
+image needed two fixes a real login surfaced -- a missing base `datasource_access` grant for the
+single Gamma viewer (the dashboard was invisible, not just unstyled), and each dataset's own
+`catalog` field (not just the database's own connection URI) pointing at the wrong database name
+(#207). The demo's data is a one-time `pg_dump --schema=gold` of `pfp-prod`'s own demo user,
+loaded via `gcloud sql import sql` from a Cloud Storage file -- never a direct connection to the
+private IP, which stays unreachable from outside the VPC by design.
+- One real-world snag: Cloud Run's "Direct VPC egress" leaves a regional reserved IP address
+  (`serverless-ipv4-cloudrun-*`) that `terraform destroy` cannot remove until Google's own
+  backend releases it -- not caused by anything in this module, not billed on its own, and not
+  something a retry loop can force faster. The costed resources (Cloud SQL, Cloud Run) are
+  destroyed well before that leftover clears.
 
 **Closes:** cloud, infrastructure as code.
 
