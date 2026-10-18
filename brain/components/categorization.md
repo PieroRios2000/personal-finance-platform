@@ -69,5 +69,7 @@ shape/content split), [ADR 0004](../decisions/0004-real-pdfs-never-leave-your-ma
 
 `categorization/recurrence.py` and `categorization/feature_experiment.py` (T63) are the offline experiment on recurrence features and the owner's fixed/variable mark: pure functions, run through `scripts/experiment_recurrence_features.py`. Result: no gain, the model stays text-only ([ADR 0049](../decisions/0049-recurrence-and-plan-marks-do-not-help-the-category-classifier.md)).
 
+`categorization/llm_classifier.py` (prompt building, response parsing -- pure) and `scripts/claude_cost_study.py` are the deferred Phase 3 cost study: Claude as a zero-shot categorizer, against the trained model's own numbers. Result: cheap either way, well behind on quality; the trained model stays ([ADR 0051](../decisions/0051-claude-as-category-classifier-costs-little-but-loses-on-quality.md)). The one place in this project a real description is sent off the machine, with the owner's explicit sign-off.
+
 The month as a sequence (ingest, propose, label, retrain, re-propose, drift) is in
 [docs/monthly-routine.md](../../docs/monthly-routine.md), with a test that its `make` targets exist.

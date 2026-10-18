@@ -164,6 +164,14 @@ currency, flow, amount or month as extra features did not beat description text 
 within run-to-run noise), so the model stays text-only; more labels in the weak categories is the
 lever that matters. Details: [`tasks/backlog.md`](tasks/backlog.md#phase-3--ml-in-production-started-2026-09-27).
 
+**Claude as a per-transaction classifier, for comparison** ([ADR 0051](brain/decisions/0051-claude-as-category-classifier-costs-little-but-loses-on-quality.md)):
+zero-shot, on the same 543 reviewed labels, Claude Haiku 4.5 scores 0.217 macro-F1 and Claude
+Sonnet 5.5 scores 0.288 -- both well behind the trained model's 0.49, at a real measured cost of
+$0.09 and $0.29 for the full run (under two cents a month at this project's real volume). Cost
+isn't the blocker; a general-purpose model given only category names, with no examples of this
+owner's own labeling convention, loses to a model trained on his 543 confirmed examples. The
+trained model stays.
+
 ### Planned
 
 | Phase | What |
