@@ -43,6 +43,13 @@ resource "aws_security_group" "rds" {
   name_prefix = "${var.demo_name}-rds-"
   vpc_id      = aws_vpc.demo.id
 
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.apprunner_connector.id, aws_security_group.bastion.id]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -74,24 +81,6 @@ resource "aws_security_group" "bastion" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-}
-
-resource "aws_security_group_rule" "rds_from_apprunner" {
-  type                     = "ingress"
-  security_group_id        = aws_security_group.rds.id
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.apprunner_connector.id
-}
-
-resource "aws_security_group_rule" "rds_from_bastion" {
-  type                     = "ingress"
-  security_group_id        = aws_security_group.rds.id
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.bastion.id
 }
 
 resource "aws_security_group" "vpc_endpoints" {
