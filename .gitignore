@@ -64,3 +64,11 @@ infra/terraform/*.tfstate.*
 infra/terraform/*.tfplan
 infra/terraform/*.auto.tfvars
 infra/terraform/terraform.tfvars
+
+# T73/ADR 0052: same rule for the AWS trial module.
+infra/terraform-aws/.terraform/
+infra/terraform-aws/*.tfstate
+infra/terraform-aws/*.tfstate.*
+infra/terraform-aws/*.tfplan
+infra/terraform-aws/*.auto.tfvars
+infra/terraform-aws/terraform.tfvars
