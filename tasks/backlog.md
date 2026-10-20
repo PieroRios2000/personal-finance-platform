@@ -218,6 +218,15 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       VPC egress" reserved IP address that only Google's own backend releases on its own
       schedule (not billed, not caused by this module) -- a plain retry, once it clears, finishes
       it; PROJECT.md's Phase 4 section updated with what was actually built.
-- [ ] **T73** (after T72, GCP proven working) a separate, one-time AWS trial of the same slice,
-      purely for hands-on evidence of both providers — not a migration, not a standing second
-      environment (ADR 0050's owner answer to open question 2).
+- [x] **T73a** (after T72, GCP proven working) code-only AWS mapping: a `terraform
+      validate`-clean module (`infra/terraform-aws/`) for the same slice -- App Runner + RDS for
+      PostgreSQL + Secrets Manager + S3 -- no resource provisioned, no real account touched
+      (ADR 0052, the AWS analog of T67). No new Superset-side code needed: the cloud image's
+      env-var interface (T70) was already provider-agnostic.
+- [ ] **T73b** the real one-time AWS trial: a real account under the owner's own billing with a
+      Budgets alert, a real `terraform plan`/`apply`, the one-time data load through a
+      manually-launched SSM bastion (RDS has no managed import-from-object-storage API the way
+      Cloud SQL does -- `infra/terraform-aws/README.md`), evidence capture, then
+      `terraform destroy` -- purely for hands-on evidence of both providers, not a migration, not
+      a standing second environment (ADR 0050's owner answer to open question 2). A guided,
+      interactive walkthrough with the owner, same as T69-T72 was for GCP.

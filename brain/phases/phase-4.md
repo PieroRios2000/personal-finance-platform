@@ -1,16 +1,16 @@
 ---
 type: phase
 phase: 4
-status: specified
+status: built
 ---
 
-# Phase 4 — Cloud + IaC (specified)
+# Phase 4 — Cloud + IaC (built, GCP closed, AWS trial code-only)
 
 PROJECT.md's goal: "the cloud 'nice to have' that shows up in job postings" — Terraform
 provisioning infra on a free tier, secrets in a real secrets manager. Full reasoning:
 [spec](../../docs/specs/cloud-deployment.md), decision: [ADR 0050](../decisions/0050-cloud-deployment-scope-and-provider.md).
 
-## What's decided
+## What's decided and built (GCP, closed)
 
 - **Scope: option A** — Terraform provisions a narrow slice (Superset + a copy of the demo gold
   data + Secret Manager + Cloud Storage) alongside `pfp-prod`'s existing public tunnel (ADR 0042),
@@ -21,16 +21,24 @@ provisioning infra on a free tier, secrets in a real secrets manager. Full reaso
   "exists for a screenshot, not 24/7" than AWS's higher name-recognition in job postings.
 - **Dex is skipped** under this scope — a single viewer credential from Secret Manager gates the
   dashboard instead.
-- `infra/terraform/` exists, is `terraform validate`-clean, and has never been applied against a
-  real account. See its own `README.md` for what a real apply needs.
+- `infra/terraform/` exists, is `terraform validate`-clean, was applied for real against the
+  owner's own project (`pfp-demo-511101`), evidence captured (a Loom recording), then destroyed
+  (T69-T72, 2026-10-17). See its own `README.md`.
 
-## What's still open (the owner's call, ADR 0050)
+## T73 — AWS trial, code-only stage done (ADR 0052)
 
-1. Confirm option A over option B (replacing the tunnel with a real always-on cloud host).
-2. Confirm GCP over AWS.
-3. A real billing ceiling, configured on the account before any `apply`.
-4. Who holds the account (presumably the owner's own personal billing).
-5. How long the demo stays up once applied for real.
+The same slice mapped onto AWS (App Runner + RDS for PostgreSQL + Secrets Manager + S3,
+`infra/terraform-aws/`), `terraform validate`-clean, no new Superset-side code needed (the cloud
+image's env-var interface was already provider-agnostic). This is only the code-only stage, the
+AWS analog of T67 — no real AWS account, credential, `plan` or `apply` exists yet. See ADR 0052
+for the full provider mapping and where AWS needed more resources than GCP for the equivalent
+slice (RDS's two-AZ subnet-group requirement, two IAM roles instead of one, a manually-launched
+SSM bastion for the one-time data load since RDS has no managed import-from-object-storage API).
+
+**Still open, the owner's call, same as GCP's own T68-T72 stage:** a real AWS account under the
+owner's own billing with a Budgets alert, real credentials, a real `terraform plan`/`apply`, the
+data load, evidence capture, then `terraform destroy` — a guided, interactive walkthrough, not
+something delegated to a background agent (ADR 0050's same reasoning, unchanged for AWS).
 
 ## Why this phase moves slower than the others
 
