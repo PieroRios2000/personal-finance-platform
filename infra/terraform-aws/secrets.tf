@@ -5,7 +5,7 @@
 # Unlike Cloud SQL (one instance, one dedicated `google_sql_user` reader role), RDS has
 # no Terraform resource for creating a second, less-privileged database role (no
 # `aws_db_user` equivalent) -- database.tf's master user doubles as the reader this
-# secret hands to App Runner. Noted in ADR 0052 as a deliberate simplification for a
+# secret hands to the ECS task. Noted in ADR 0052 as a deliberate simplification for a
 # trial that is destroyed within the hour, not a pattern to repeat for anything longer-
 # lived.
 
@@ -35,29 +35,40 @@ resource "aws_secretsmanager_secret_version" "superset_viewer_password" {
   secret_string = var.viewer_password
 }
 
-# App Runner's own runtime identity: an instance role it assumes to read both secrets
-# above at container startup (runtime_environment_secrets, run.tf) -- the AWS analog of
-# the GCP module's `google_secret_manager_secret_iam_member` grants to Cloud Run's
-# default compute service account, except App Runner has no implicit default identity,
-# so this role must be created and attached explicitly (instance_configuration.instance_role_arn,
-# run.tf) or the service fails at creation with an access-denied error, same failure
-# mode the GCP module hit for real (ADR 0050's secrets.tf comment).
-data "aws_iam_policy_document" "apprunner_instance_trust" {
+# ECS Express Mode (ADR 0052, amended) needs two separate IAM roles, both with no
+# implicit default the way Cloud Run's compute service account provided one -- the
+# AWS analog of the GCP module's `google_secret_manager_secret_iam_member` grants,
+# except both roles here must be created and attached explicitly or the service fails
+# at creation, same failure mode the GCP module hit for real (ADR 0050's secrets.tf
+# comment) and the same shape of failure App Runner's own instance/ECR-access role
+# split hit before this module dropped App Runner entirely.
+
+# 1. Execution role: what ECS itself assumes to pull the image, write logs, and --
+# critically -- resolve the `secret` blocks in run.tf's primary_container into actual
+# environment values before the container starts. This is standard ECS/Fargate
+# behavior: secrets referenced in a task definition are resolved by the execution
+# role, never by the task role.
+data "aws_iam_policy_document" "ecs_execution_trust" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
       type        = "Service"
-      identifiers = ["tasks.apprunner.amazonaws.com"]
+      identifiers = ["ecs-tasks.amazonaws.com"]
     }
   }
 }
 
-resource "aws_iam_role" "apprunner_instance" {
-  name               = "${var.demo_name}-apprunner-instance"
-  assume_role_policy = data.aws_iam_policy_document.apprunner_instance_trust.json
+resource "aws_iam_role" "ecs_execution" {
+  name               = "${var.demo_name}-ecs-execution"
+  assume_role_policy = data.aws_iam_policy_document.ecs_execution_trust.json
 }
 
-data "aws_iam_policy_document" "apprunner_secrets_access" {
+resource "aws_iam_role_policy_attachment" "ecs_execution" {
+  role       = aws_iam_role.ecs_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+data "aws_iam_policy_document" "ecs_execution_secrets_access" {
   statement {
     actions = ["secretsmanager:GetSecretValue"]
     resources = [
@@ -67,31 +78,34 @@ data "aws_iam_policy_document" "apprunner_secrets_access" {
   }
 }
 
-resource "aws_iam_role_policy" "apprunner_secrets_access" {
-  name   = "${var.demo_name}-apprunner-secrets-access"
-  role   = aws_iam_role.apprunner_instance.id
-  policy = data.aws_iam_policy_document.apprunner_secrets_access.json
+resource "aws_iam_role_policy" "ecs_execution_secrets_access" {
+  name   = "${var.demo_name}-ecs-execution-secrets-access"
+  role   = aws_iam_role.ecs_execution.id
+  policy = data.aws_iam_policy_document.ecs_execution_secrets_access.json
 }
 
-# A separate role App Runner's *build* side assumes to pull the private ECR image
-# (source_configuration.authentication_configuration.access_role_arn, run.tf) -- distinct
-# from the instance role above, which only runs the already-pulled container.
-data "aws_iam_policy_document" "apprunner_ecr_trust" {
+# 2. Infrastructure role: what Express Mode itself assumes to provision and manage
+# the load balancer, target group, security groups and auto-scaling it creates on this
+# module's behalf (run.tf's `infrastructure_role_arn`) -- a plain `ecs.amazonaws.com`
+# trust, per AWS's own infrastructure-IAM-role guide (the same role type backs EBS
+# volume attachment, Service Connect TLS and VPC Lattice too; only the attached
+# managed policy differs by use case).
+data "aws_iam_policy_document" "ecs_infrastructure_trust" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
       type        = "Service"
-      identifiers = ["build.apprunner.amazonaws.com"]
+      identifiers = ["ecs.amazonaws.com"]
     }
   }
 }
 
-resource "aws_iam_role" "apprunner_ecr_access" {
-  name               = "${var.demo_name}-apprunner-ecr-access"
-  assume_role_policy = data.aws_iam_policy_document.apprunner_ecr_trust.json
+resource "aws_iam_role" "ecs_infrastructure" {
+  name               = "${var.demo_name}-ecs-infrastructure"
+  assume_role_policy = data.aws_iam_policy_document.ecs_infrastructure_trust.json
 }
 
-resource "aws_iam_role_policy_attachment" "apprunner_ecr_access" {
-  role       = aws_iam_role.apprunner_ecr_access.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess"
+resource "aws_iam_role_policy_attachment" "ecs_infrastructure" {
+  role       = aws_iam_role.ecs_infrastructure.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices"
 }
