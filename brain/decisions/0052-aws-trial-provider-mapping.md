@@ -31,7 +31,7 @@ ADR 0050's open question 2):
 
 | GCP (`infra/terraform/`) | AWS (`infra/terraform-aws/`) | Why |
 |---|---|---|
-| Cloud Run | App Runner | Closest managed, container-based analog; no ALB or ECS cluster to hand-wire for a slice this narrow |
+| Cloud Run | ~~App Runner~~ Amazon ECS Express Mode (`aws_ecs_express_gateway_service`) — see the amendment below | Originally App Runner, the closest managed, container-based analog with no ALB or ECS cluster to hand-wire; swapped after a real `apply` found App Runner closed to new AWS accounts |
 | Cloud SQL (Postgres) | RDS for PostgreSQL | The direct managed-Postgres analog on both providers |
 | Secret Manager | Secrets Manager | Same role, confirmed still with no free tier on AWS (ADR 0050's original cost argument against AWS) — irrelevant here since this is applied for minutes, not run continuously |
 | Cloud Storage | S3 | Same role: Superset's own file storage, not the lakehouse |
@@ -40,17 +40,19 @@ ADR 0050's open question 2):
 against the `hashicorp/aws` provider's own resource docs, not recalled from training —
 source-driven-development):
 
-1. **No scale-to-zero.** App Runner has no equivalent to Cloud Run's `scaling.min_instance_count
-   = 0` — ADR 0050's original reason AWS lost the first pick. Immaterial for a trial
-   applied for minutes then destroyed; would matter if this were ever a standing second
-   environment, which the owner's answer to ADR 0050's open question 2 already rules out.
+1. **No scale-to-zero.** Neither App Runner nor its replacement, ECS Express Mode, has an
+   equivalent to Cloud Run's `scaling.min_instance_count = 0` — Fargate tasks have a
+   `min_task_count` floor of 1 (`run.tf`'s `scaling_target`), ADR 0050's original reason
+   AWS lost the first pick. Immaterial for a trial applied for minutes then destroyed;
+   would matter if this were ever a standing second environment, which the owner's answer
+   to ADR 0050's open question 2 already rules out.
 2. **RDS's subnet-group requirement.** `aws_db_subnet_group` needs at least two subnets in
    two different availability zones even for a single-AZ instance (confirmed against the
    provider's own docs) — `infra/terraform-aws/network.tf` provisions two private subnets
    for this reason alone, where the GCP module needed only one.
 3. **No second, less-privileged database role.** `google_sql_user` has no AWS Terraform
    equivalent (no `aws_db_user` resource); `aws_db_instance`'s own master user doubles as
-   the reader App Runner's secret hands over. Acceptable for a trial destroyed within the
+   the reader the ECS task's secret hands over. Acceptable for a trial destroyed within the
    hour; not a pattern to repeat for anything longer-lived.
 4. **No managed "import SQL from object storage" API for RDS Postgres.** Cloud SQL's
    `gcloud sql import sql` reaches a private-IP instance from the control plane with no
@@ -70,21 +72,30 @@ source-driven-development):
    bastion is launched.
 5. **Two IAM roles instead of one.** Cloud Run's default compute service account already
    has project-level image-pull rights; `secrets.tf` only needed to add the secret-read
-   grant GCP's own real apply found missing (ADR 0050's `secrets.tf` comment). App Runner
-   has no implicit default identity at all: an instance role (secret reads) and a separate
-   access role (`AWSAppRunnerServicePolicyForECRAccess`, the private-ECR image pull) are
+   grant GCP's own real apply found missing (ADR 0050's `secrets.tf` comment). ECS Express
+   Mode has no implicit default identity at all: an execution role (image pull, logs, and
+   resolving the `secret` blocks in `run.tf`'s `primary_container` into real env values —
+   standard ECS/Fargate behavior) and a separate infrastructure role (what Express Mode
+   itself assumes to provision the load balancer, target group and auto-scaling it manages
+   on this module's behalf, `AmazonECSInfrastructureRoleforExpressGatewayServices`) are
    both required from scratch.
-6. **Public ingress needs no explicit grant.** Cloud Run defaults to private, so `run.tf`'s
-   GCP module explicitly grants `allUsers` the invoker role. App Runner services are public
-   by default — no equivalent resource exists here. The viewer password (Secrets Manager
-   either way) is what actually gates the dashboard in both modules, unchanged.
+6. **Public ingress needs explicit public subnets, not a grant.** Cloud Run defaults to
+   private, so `run.tf`'s GCP module explicitly grants `allUsers` the invoker role. ECS
+   Express Mode instead resolves internet-facing vs. internal purely from which subnets
+   its `network_configuration` is given: public subnets (with a route to an Internet
+   Gateway) get an internet-facing ALB, private subnets get an internal one, per AWS's own
+   docs on how Express Mode provisions its load balancer. `network.tf` therefore adds a
+   second, public subnet tier purely for the ECS task — RDS stays on the original private
+   tier, reachable over the VPC's internal routing regardless of which tier the task sits
+   in. The viewer password (Secrets Manager either way) is still what actually gates the
+   dashboard, unchanged.
 
 **No new Superset-side code.** T70's cloud image (`bi/superset_config_cloud.py`,
 `bi/start_cloud.sh`, `bi/Dockerfile.cloud`, `bi/grant_gamma_access.py`) already reads its
 database connection and viewer password from plain environment variables
 (`PFP_DEMO_DB_CONNECTION_STRING`, `PFP_DEMO_VIEWER_PASSWORD`) — Cloud Run's `secret_key_ref`
 injection was never baked into the entrypoint logic itself, just how those variables
-happened to get set before it ran. App Runner's `runtime_environment_secrets`
+happened to get set before it ran. ECS Express Mode's own `secret` block
 (`infra/terraform-aws/run.tf`) does the equivalent injection; the same image, the same
 `start_cloud.sh`, and the same `tests/test_bi_cloud_config.py` assertions apply to this
 provider unchanged.
@@ -103,6 +114,52 @@ billing with a Budgets alert, a real `terraform plan`/`apply`, the one-time data
 through a manually-launched bastion, evidence capture, then `terraform destroy` — is a
 separate, later, owner-guided walkthrough, tracked as the remainder of T73 in
 `tasks/backlog.md`, the same way ADR 0050's own module went through T67 before T68-T72.
+
+## Amendment (2026-10-24): App Runner closed to new AWS accounts, swapped for ECS Express Mode
+
+The real-apply stage above started for real: the owner created a personal AWS account
+(2026-10-24), a $1/month Budgets alert, an IAM user for Terraform, pushed the Superset
+image to a private ECR repository, and ran a real `terraform apply`. RDS, the VPC, both
+subnets' worth of networking, and the SSM VPC endpoints all created successfully — then
+`aws_apprunner_vpc_connector.demo` failed:
+
+```
+Error: creating App Runner VPC Connector (pfp-demo-aws-connector): operation error
+AppRunner: CreateVpcConnector, https response error StatusCode: 400, api error
+SubscriptionRequiredException: The AWS Access Key Id needs a subscription for the service
+```
+
+Root cause, confirmed against AWS's own App Runner documentation (not a permissions or
+quota issue, and not fixable by retrying): **App Runner stopped accepting new customers as
+of 2026-04-30** (moved to maintenance mode 2026-03-31, existing customers unaffected, no
+new features planned). The owner's account, created today, is a new customer by
+definition — every future `apply` against it would hit the same wall regardless of IAM
+permissions. AWS's own migration guidance for existing App Runner customers points at
+**Amazon ECS Express Mode** as the direct replacement.
+
+Everything that did create was destroyed immediately (`terraform destroy`, confirmed
+empty via `terraform show`, `aws rds describe-db-instances`, `aws ec2 describe-vpcs`, and
+`aws secretsmanager list-secrets` all returning nothing) — no resource was left running
+while this amendment and the module fix were written. The ECR repository and its already-
+pushed image, and the owner's own Budgets alert and IAM user, were untouched and remain
+reusable for the retry.
+
+**The fix**: `infra/terraform-aws/run.tf`, `network.tf`, `secrets.tf`, `outputs.tf` and
+`versions.tf` now use `aws_ecs_express_gateway_service` (hashicorp/aws provider ≥ 6.26.0)
+instead of `aws_apprunner_service`. Verified against the provider's own resource
+documentation and AWS's ECS Express Mode developer guide (source-driven-development, not
+recalled from training) rather than against the several mutually-contradicting blog posts
+that turned up first in a web search — see the Decision section's updated mapping table
+and points 1, 5 and 6 above for what changed. `terraform validate` is clean again; this
+amendment's fix has **not yet been re-applied for real** — that retry is still the
+remainder of T73.
+
+This is the second time this project's own stated caveat about `terraform validate`
+(ADR 0050's "Consequences" note, repeated in this ADR's own Consequences section below)
+has proven true in exactly this way: a real `apply` surfaced something no amount of
+`validate` or documentation-reading before the fact could have — this time an account-
+level product availability restriction with no API-visible signal until the call itself
+is made.
 
 ## Consequences
 

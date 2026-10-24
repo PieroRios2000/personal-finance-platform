@@ -223,6 +223,11 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       PostgreSQL + Secrets Manager + S3 -- no resource provisioned, no real account touched
       (ADR 0052, the AWS analog of T67). No new Superset-side code needed: the cloud image's
       env-var interface (T70) was already provider-agnostic.
+- [x] **T73a-fix** a real `apply` against the owner's own AWS account found App Runner closed
+      to new AWS customers since 2026-04-30 (not fixable by retrying) -- everything that had
+      already created (RDS, VPC, networking, SSM endpoints) was destroyed immediately, confirmed
+      empty. The module now uses Amazon ECS Express Mode instead (ADR 0052's amendment),
+      `terraform validate`-clean again; the real-apply retry is still open, part of T73b below.
 - [ ] **T73b** the real one-time AWS trial: a real account under the owner's own billing with a
       Budgets alert, a real `terraform plan`/`apply`, the one-time data load through a
       manually-launched SSM bastion (RDS has no managed import-from-object-storage API the way
