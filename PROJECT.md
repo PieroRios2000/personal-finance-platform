@@ -156,7 +156,7 @@ Every parser validates that the sum of the extracted transactions matches the ba
 starts: built and documented, but no target audience for this portfolio values them, so no more
 effort goes there unless something breaks (owner's call, 2026-09-27).
 
-### Phase 4 — Cloud + IaC *(T67-T72 built 2026-10-09/17, GCP)*
+### Phase 4 — Cloud + IaC *(T67-T72 built 2026-10-09/17, GCP; T73 AWS trial code-only 2026-10-19)*
 **Goal:** the cloud "nice to have" that shows up in job postings.
 - Terraform to provision infra on AWS or GCP (free tier).
 - Stack deployment; secrets in a secrets manager (never hardcoded).
@@ -182,7 +182,18 @@ private IP, which stays unreachable from outside the VPC by design.
   something a retry loop can force faster. The costed resources (Cloud SQL, Cloud Run) are
   destroyed well before that leftover clears.
 
-**Closes:** cloud, infrastructure as code.
+**T73 (AWS trial), code-only stage done (ADR 0052):** the same narrow slice mapped onto AWS --
+App Runner + RDS for PostgreSQL + Secrets Manager + S3 -- in `infra/terraform-aws/`,
+`terraform validate`-clean, same "no account-identifying default" rule as the GCP module. No new
+Superset-side code: the cloud image already reads its DB connection and viewer password from
+plain env vars, so App Runner's secret injection slots in unchanged. Mirrors how the GCP module
+itself went through a code-only stage (T67) before a real account and a real apply (T68-T72) --
+that second stage (a real AWS account, a real `plan`/`apply`, the one-time data load through a
+manually-launched SSM bastion since RDS has no managed "import from object storage" the way Cloud
+SQL does, evidence capture, `terraform destroy`) is still open, guided-walkthrough work for the
+owner, not done by this PR.
+
+**Closes:** cloud, infrastructure as code (GCP slice). AWS trial: code-only, real apply pending.
 
 ### Phase 5 — Serving + Uploader
 **Goal:** make the repo demonstrable and operable.
