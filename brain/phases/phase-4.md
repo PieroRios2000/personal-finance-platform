@@ -27,10 +27,13 @@ provisioning infra on a free tier, secrets in a real secrets manager. Full reaso
 
 ## T73 — AWS trial, code-only stage done (ADR 0052)
 
-The same slice mapped onto AWS (App Runner + RDS for PostgreSQL + Secrets Manager + S3,
+The same slice mapped onto AWS (ECS Express Mode + RDS for PostgreSQL + Secrets Manager + S3,
 `infra/terraform-aws/`), `terraform validate`-clean, no new Superset-side code needed (the cloud
-image's env-var interface was already provider-agnostic). This is only the code-only stage, the
-AWS analog of T67 — no real AWS account, credential, `plan` or `apply` exists yet. See ADR 0052
+image's env-var interface was already provider-agnostic). Originally App Runner; a real `apply`
+against the owner's own account found App Runner closed to new AWS customers since 2026-04-30,
+so the module now uses ECS Express Mode instead — ADR 0052's amendment has the real error and
+the fix. This is only the code-only stage, the AWS analog of T67 — no real AWS account,
+credential, `plan` or `apply` exists yet for this (ECS) version. See ADR 0052
 for the full provider mapping and where AWS needed more resources than GCP for the equivalent
 slice (RDS's two-AZ subnet-group requirement, two IAM roles instead of one, a manually-launched
 SSM bastion for the one-time data load since RDS has no managed import-from-object-storage API).

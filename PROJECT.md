@@ -183,10 +183,14 @@ private IP, which stays unreachable from outside the VPC by design.
   destroyed well before that leftover clears.
 
 **T73 (AWS trial), code-only stage done (ADR 0052):** the same narrow slice mapped onto AWS --
-App Runner + RDS for PostgreSQL + Secrets Manager + S3 -- in `infra/terraform-aws/`,
-`terraform validate`-clean, same "no account-identifying default" rule as the GCP module. No new
-Superset-side code: the cloud image already reads its DB connection and viewer password from
-plain env vars, so App Runner's secret injection slots in unchanged. Mirrors how the GCP module
+ECS Express Mode + RDS for PostgreSQL + Secrets Manager + S3 -- in `infra/terraform-aws/`,
+`terraform validate`-clean, same "no account-identifying default" rule as the GCP module.
+Originally App Runner; a real `apply` against the owner's own account found App Runner closed
+to new AWS customers since 2026-04-30 (everything that had already created was destroyed
+immediately, confirmed empty), so the module now uses ECS Express Mode instead -- ADR 0052's
+amendment has the real error and the fix. No new Superset-side code: the cloud image already
+reads its DB connection and viewer password from plain env vars, so ECS's own secret injection
+slots in unchanged. Mirrors how the GCP module
 itself went through a code-only stage (T67) before a real account and a real apply (T68-T72) --
 that second stage (a real AWS account, a real `plan`/`apply`, the one-time data load through a
 manually-launched SSM bastion since RDS has no managed "import from object storage" the way Cloud

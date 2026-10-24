@@ -4,7 +4,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = ">= 6.26.0, < 7.0.0" # aws_ecs_express_gateway_service needs this floor (ADR 0052 amendment)
     }
     random = {
       source  = "hashicorp/random"
