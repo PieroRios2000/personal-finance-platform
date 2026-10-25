@@ -137,7 +137,7 @@ Every parser validates that the sum of the extracted transactions matches the ba
 - **Apache Superset** (open source, zero cost, its own stack) over a read-only role on gold, with dashboards for cash flow, savings and each fund's monthly return (T32).
 - Phase 3 (ML) starts after T33. Details: [`tasks/todo-phase2.md`](tasks/todo-phase2.md).
 
-### Phase 3 — ML in production *(started 2026-09-27)*
+### Phase 3 — ML in production *(started 2026-09-27, closed 2026-10-25)*
 **Goal:** deploy and monitor, not just train.
 - Automatic transaction categorization (classification): the model proposes a category, the owner
   confirms or overrides -- never assigned silently ([ADR 0043](brain/decisions/0043-transaction-categorization-human-in-the-loop-labeling.md)).
@@ -149,8 +149,18 @@ Every parser validates that the sum of the extracted transactions matches the ba
   reviewed ones, merchant-grouped 3-fold CV, against 0.23 for the rules; ADR 0044's 2026-10-04
   amendment). Batch categorization at ingest (ADR 0045) and Evidently drift monitoring (ADR 0046)
   are built; a live FastAPI endpoint is optional, only if a real caller ever needs one.
-- Monthly spend forecasting (time series), per category: **specified 2026-10-04** together with the Phase 6 savings-goal projection ([spec](docs/specs/category-forecast-and-savings-goal.md), [ADR 0048](brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md), tasks T56-T62): fixed expenses proposed and confirmed by the owner, simple models chosen by a rolling-origin backtest against a baseline, empirical intervals.
-- Anomalous-charge detection.
+- Monthly spend forecasting (time series), per category, **built** (specified 2026-10-04 together
+  with the Phase 6 savings-goal projection, T56-T66:
+  [spec](docs/specs/category-forecast-and-savings-goal.md),
+  [ADR 0048](brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md)):
+  fixed expenses proposed and confirmed by the owner, five candidate models chosen per category by
+  a rolling-origin backtest against a baseline, empirical prediction intervals, a Superset
+  "Forecast & goal" section and a realized-vs-backtest monitor.
+- Anomalous-charge detection: **specified, not built** (2026-10-24,
+  [spec](docs/specs/anomalous-charge-detection.md),
+  [ADR 0053](brain/decisions/0053-anomalous-charge-detection-rules-not-ml.md), T74-T76). The owner's
+  call on 2026-10-25: this closes the phase as a documented future improvement rather than active
+  work, the same way Claude-as-classifier (ADR 0051) was explored and shelved rather than adopted.
 
 **Closes:** MLOps. Identity, the public URL and the upload portal (T39-T50) are frozen once this
 starts: built and documented, but no target audience for this portfolio values them, so no more
@@ -229,7 +239,7 @@ above:
   longer describes what exists; it was true when written, before T46-T50 added the request
   workflow, review and Excel section on top of the original single-file upload.
 
-### Phase 6 — Savings-goal projection *(planned, added 2026-09-19)*
+### Phase 6 — Savings-goal projection *(added 2026-09-19, closed 2026-10-25 via T56-T66)*
 **Goal:** answer "given my real cash flow, how long until I reach my savings goal?"
 - Banco Ripley as a third source (the owner's savings account, in soles). It gives no statements, so its movements come from a **manual Excel** typed month by month, with the same reconciliation rules ([ADR 0027](brain/decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md), [`docs/manual-data.md`](docs/manual-data.md)).
 - **Investment tracking** (three Tyba funds and Flip), from a second sheet of the same Excel: contributions, withdrawals and month-end valuations, to see each fund's monthly return (Modified Dietz, `gold.fct_investment_monthly`, [ADR 0028](brain/decisions/0028-investment-return-is-modified-dietz-per-fund-and-month.md)). Tracked separately from the goal. **Built.**
