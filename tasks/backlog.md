@@ -153,6 +153,18 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       real measured cost of $0.38 total ($0.09/$0.29) for the full 1,086-call run, under two
       cents/month at this project's real volume (31 new descriptions/month). Cost was never the
       question; quality is, and the trained model wins. Not adopted.
+- [ ] **Anomalous-charge detection** (specified 2026-10-24,
+      [spec](../docs/specs/anomalous-charge-detection.md),
+      [ADR 0053](../brain/decisions/0053-anomalous-charge-detection-rules-not-ml.md); closes
+      Phase 3's last open item). Each its own PR, in order:
+  - [ ] **T74** `gold.rpt_anomalies`: per-category amount-outlier (median/MAD), never-seen-before
+        merchant, and same-amount/merchant/account duplicate-within-3-days rules; tests on a
+        synthetic fixture with one planted case of each and a clean fixture with none.
+  - [ ] **T75** "Anomalies" Superset tab: the `rpt_anomalies` table plus the already-built
+        `rpt_category_variance` rows where `status = 'above'` for the latest closed month, both
+        row-level-secured, demo seed data.
+  - [ ] **T76** Run against the owner's real data once; report the real flag counts (never the
+        descriptions) so the spec's two guessed constants (3.5 MAD, 3-day window) can be tuned.
 
 ## Later, if a real business (out of scope for the portfolio, ADR 0042)
 
