@@ -1,18 +1,38 @@
 # Personal Finance Data Platform
 
 **A local, zero-cost lakehouse that turns real, password-protected bank statement PDFs into a
-reconciled, governed star schema, now growing an ML layer on top (transaction categorization,
-human in the loop) — ingestion, dbt, orchestration, CI/CD, ML and architectural decisions, all
-built and verified against the owner's own real data.** 90 seconds in: skip to
+reconciled, governed star schema, with a full ML layer on top (transaction categorization, spend
+forecasting, a savings-goal projection) and Terraform-provisioned cloud demos on both AWS and
+GCP — ingestion, dbt, orchestration, CI/CD, ML, IaC and the architectural decisions behind all of
+it, built and verified against the owner's own real data.** 90 seconds in: skip to
 [**Built the hard way**](#built-the-hard-way) for the part worth reading first.
 
 [![CI](https://github.com/PieroRios2000/personal-finance-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/PieroRios2000/personal-finance-platform/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
-![status](https://img.shields.io/badge/phase%203-in%20progress%3A%20ML%20categorization-blue)
+![status](https://img.shields.io/badge/status-complete%2C%20in%20maintenance-brightgreen)
 
 ![The Superset dashboard: cash flow summary, capital and net position, monthly balances](docs/images/dashboard.png)
 *Fictional demo data ([`make demo`](#quickstart-artificial-data-to-a-running-dashboard)) — the owner's own real
 dashboard looks identical, never shown here (ADR 0004).*
+
+## For recruiters and hiring managers
+
+30 seconds: this is one person's real financial data, run through the same pipeline shape a
+corporate data platform uses — ingestion, a governed lakehouse, orchestration, a CI/CD gate with
+real teeth, a trained ML classifier and forecast (not a wrapper around an LLM call — that was
+tried and measured, see [ADR 0051](brain/decisions/0051-claude-as-category-classifier-costs-little-but-loses-on-quality.md)),
+and Terraform-provisioned cloud demos applied for real on **both** AWS and GCP, not just written
+and never run. Every non-trivial decision is written down as an ADR instead of shipped and
+forgotten — 53 of them, cross-linked, as of this write-up.
+
+Where to look, in the order it proves the most:
+
+- **[Built the hard way](#built-the-hard-way)** — real bugs found against real statements, each
+  fixed with a regression test. The one section here that isn't a feature list.
+- **[What's built](#whats-built)** — all 7 phases, closed, with real metrics (macro-F1, real
+  cloud costs, real backtest errors), not "it works on my machine."
+- **[`brain/`](brain/README.md)** — every architecture decision, searchable and graph-linked, the
+  way a team would actually need it on day two of onboarding, not day one of writing the demo.
 
 ## What this is
 
@@ -68,6 +88,22 @@ date or an amount wrong while the balances still add up.
 
 ## What's built
 
+All 7 phases are closed. Details, metrics and the honest limits of each are below; this table is
+the map.
+
+| Phase | What | Status |
+|---|---|---|
+| 1 — Foundation | Parsing, reconciliation, bronze/silver, CI | ✅ Closed |
+| 2 — Orchestration + Governance | Dagster, Elementary, OpenMetadata; extended with PostgreSQL + Superset | ✅ Closed 2026-09-21 |
+| 3 — ML in production | Transaction categorization (trained classifier), spend forecasting | ✅ Closed 2026-10-25 — anomaly detection [specified, deferred](docs/specs/anomalous-charge-detection.md) as a future improvement |
+| 4 — Cloud + IaC | Terraform applied for real on GCP and AWS, evidenced, destroyed | ✅ Closed 2026-10-24 |
+| 5 — Serving + Uploader | Superset dashboard, a request-based upload portal (built well past the original "minimal uploader" scope) | ✅ Closed 2026-10-07 |
+| 6 — Savings-goal projection | Manual-Excel investment tracking, a dollar-denominated goal with three scenarios | ✅ Closed 2026-10-25 |
+| 7 — Alerting | Email/Teams, errors immediate, warnings weekly | ✅ Closed |
+
+What's left is genuinely optional polish, not a missing phase — see
+[Future improvements](#future-improvements) below.
+
 ### Phase 1 — Foundation
 
 | Layer | Status |
@@ -122,7 +158,7 @@ source, zero cost) reads them. Built in dependency order, T26–T37:
 Details: [`tasks/todo-phase2.md`](tasks/todo-phase2.md); how the numbers are derived and checked:
 [SETUP.md §12](SETUP.md#12-dashboards-in-apache-superset-t32).
 
-### Phase 3 — ML in production *(in progress)*
+### Phase 3 — ML in production *(closed 2026-10-25)*
 
 Automatic transaction categorization, human in the loop: a model proposes a category, the owner
 confirms or overrides it — never assigned silently
@@ -172,14 +208,38 @@ isn't the blocker; a general-purpose model given only category names, with no ex
 owner's own labeling convention, loses to a model trained on his 543 confirmed examples. The
 trained model stays.
 
-### Planned
+**Spend forecasting and the savings-goal projection** (T56-T66, closes Phase 3 and Phase 6 at
+once — [spec](docs/specs/category-forecast-and-savings-goal.md),
+[ADR 0048](brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md)): the
+system proposes which recurring expenses look fixed, the owner confirms; each category's variable
+spending is forecast by whichever of five candidate models beats a baseline in a rolling-origin
+backtest, with empirical prediction intervals, not an assumed normal distribution. The owner sets
+a savings goal in dollars; the projection fills an emergency fund (sized from his own spending and
+income) first, then tracks time-to-goal across three scenarios on two lines (liquid savings only,
+and with investments included) — a Superset "Forecast & goal" tab, row-level-secured like every
+other dashboard section, and a monthly monitor comparing the realized month against its own
+backtest.
 
-| Phase | What |
+**Anomalous-charge detection**: specified and decided
+([spec](docs/specs/anomalous-charge-detection.md),
+[ADR 0053](brain/decisions/0053-anomalous-charge-detection-rules-not-ml.md)) but **not built** —
+simple per-category statistical rules (median/MAD, same robustness reasoning as the classifier
+above), deliberately deferred as a documented future improvement rather than built now, the same
+way Claude-as-classifier was explored and shelved rather than adopted.
+
+### Future improvements
+
+All 7 phases are closed; nothing below blocks the project from being considered done. These are
+optional next steps, specified or noted but deliberately not built:
+
+| What | Status |
 |---|---|
-| 6 — Savings-goal projection | Banco Ripley savings and investment tracking through a manual Excel ([template and columns](docs/manual-data.md)), then a projection of how long it takes to reach a savings goal at the owner's real cash flow. Goals can be in soles or dollars, with a sol/dólar exchange-rate projection that exists only in this phase (the lake itself never converts currencies). Only liquid money in bank accounts counts; investments elsewhere (mutual funds) are deliberately left out of the goal, and tracked separately for their monthly return ([ADR 0028](brain/decisions/0028-investment-return-is-modified-dietz-per-fund-and-month.md)) — [ADR 0025](brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md) |
+| Anomalous-charge detection | Specified and decided ([spec](docs/specs/anomalous-charge-detection.md), [ADR 0053](brain/decisions/0053-anomalous-charge-detection-rules-not-ml.md), T74-T76) -- per-category amount outliers, never-seen-before merchants, duplicate-looking charges, plus the already-built per-category forecast variance, on a new dashboard tab |
+| New banks, statement kinds and currencies | Parsing is architected per-bank (T46 already separates unsupported files for later); adding a fourth bank is new parser work, not a redesign |
+| CI/test-suite speed | A handful of backlog items ([`tasks/backlog.md`](tasks/backlog.md)): running only the impacted integration test files, cheaper per-test `dbt build`s, printing per-job cost on every PR |
+| Banco Ripley as a direct source | Currently entered through the manual Excel (Phase 6); a real statement/API integration would retire that one manual step |
 
-
-The order of what is next is in [`tasks/backlog.md`](tasks/backlog.md).
+The full, current order of what's next is in [`tasks/backlog.md`](tasks/backlog.md).
 
 **Validated against real data (2026-09):** all of the owner's real statements (60 BCP, 25
 Scotiabank) parse and reconcile, and running them through the lake exposed the problems
