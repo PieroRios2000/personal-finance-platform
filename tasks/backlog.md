@@ -228,10 +228,25 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
       already created (RDS, VPC, networking, SSM endpoints) was destroyed immediately, confirmed
       empty. The module now uses Amazon ECS Express Mode instead (ADR 0052's amendment),
       `terraform validate`-clean again; the real-apply retry is still open, part of T73b below.
-- [ ] **T73b** the real one-time AWS trial: a real account under the owner's own billing with a
-      Budgets alert, a real `terraform plan`/`apply`, the one-time data load through a
-      manually-launched SSM bastion (RDS has no managed import-from-object-storage API the way
-      Cloud SQL does -- `infra/terraform-aws/README.md`), evidence capture, then
-      `terraform destroy` -- purely for hands-on evidence of both providers, not a migration, not
-      a standing second environment (ADR 0050's owner answer to open question 2). A guided,
-      interactive walkthrough with the owner, same as T69-T72 was for GCP.
+- [x] **T73b** the real one-time AWS trial, applied for real against the owner's own new AWS
+      account (135975773248, `us-east-1`): a Budgets alert ($1/month), an IAM user, the Superset
+      image built and pushed to a new ECR repo, `terraform apply` (32 resources: VPC, 2 public +
+      2 private subnets, RDS, Secrets Manager, S3, ECS Express Mode service behind its own ALB),
+      the one-time gold-schema data load via a manually-launched SSM bastion (no key pair, no
+      public IP -- `infra/terraform-aws/README.md`), the owner's own screen recording as evidence,
+      then `terraform destroy` -- purely for hands-on evidence of both providers, not a migration,
+      not a standing second environment (ADR 0050's owner answer to open question 2).
+      Two more real-apply-only snags, both IAM propagation delays on a brand-new account (not code
+      bugs, not fixable by changing the module): the `AWSServiceRoleForECS` service-linked role
+      and the infrastructure role's managed-policy attachment each needed about a minute to
+      propagate before ECS would accept them, surfacing as a `SubscriptionRequiredException` and
+      an `AccessDenied` on the first attempts, both cleared on retry. A separate, real provider
+      bug also surfaced: `aws_ecs_express_gateway_service` returns server-side `scaling_target`
+      defaults Terraform's own schema doesn't expect, so the first apply errored with "Provider
+      produced inconsistent result after apply" -- the resource was in fact created and (this
+      time) still landed in state despite the error, confirmed by `aws ecs describe-services`
+      before relying on it. `terraform destroy` removed all 32 resources cleanly; confirmed empty
+      via `terraform show`, `describe-db-instances`, `describe-vpcs`, `list-services` and
+      `list-secrets`. The bastion and its IAM role/instance profile are not part of the Terraform
+      module by design (`infra/terraform-aws/README.md`'s own point 5) and were torn down by hand
+      right after the one-time load.

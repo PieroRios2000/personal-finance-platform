@@ -156,7 +156,7 @@ Every parser validates that the sum of the extracted transactions matches the ba
 starts: built and documented, but no target audience for this portfolio values them, so no more
 effort goes there unless something breaks (owner's call, 2026-09-27).
 
-### Phase 4 — Cloud + IaC *(T67-T72 built 2026-10-09/17, GCP; T73 AWS trial code-only 2026-10-19)*
+### Phase 4 — Cloud + IaC *(T67-T72 built 2026-10-09/17, GCP; T73 AWS trial 2026-10-19/24)*
 **Goal:** the cloud "nice to have" that shows up in job postings.
 - Terraform to provision infra on AWS or GCP (free tier).
 - Stack deployment; secrets in a secrets manager (never hardcoded).
@@ -182,20 +182,26 @@ private IP, which stays unreachable from outside the VPC by design.
   something a retry loop can force faster. The costed resources (Cloud SQL, Cloud Run) are
   destroyed well before that leftover clears.
 
-**T73 (AWS trial), code-only stage done (ADR 0052):** the same narrow slice mapped onto AWS --
-ECS Express Mode + RDS for PostgreSQL + Secrets Manager + S3 -- in `infra/terraform-aws/`,
-`terraform validate`-clean, same "no account-identifying default" rule as the GCP module.
-Originally App Runner; a real `apply` against the owner's own account found App Runner closed
-to new AWS customers since 2026-04-30 (everything that had already created was destroyed
-immediately, confirmed empty), so the module now uses ECS Express Mode instead -- ADR 0052's
-amendment has the real error and the fix. No new Superset-side code: the cloud image already
-reads its DB connection and viewer password from plain env vars, so ECS's own secret injection
-slots in unchanged. Mirrors how the GCP module
-itself went through a code-only stage (T67) before a real account and a real apply (T68-T72) --
-that second stage (a real AWS account, a real `plan`/`apply`, the one-time data load through a
-manually-launched SSM bastion since RDS has no managed "import from object storage" the way Cloud
-SQL does, evidence capture, `terraform destroy`) is still open, guided-walkthrough work for the
-owner, not done by this PR.
+**T73 (AWS trial), done end to end (ADR 0052):** the same narrow slice mapped onto AWS -- ECS
+Express Mode + RDS for PostgreSQL + Secrets Manager + S3 -- in `infra/terraform-aws/`. Originally
+App Runner; a first real `apply` against the owner's own account found App Runner closed to new
+AWS customers since 2026-04-30 (everything already created was destroyed immediately, confirmed
+empty), so the module was redesigned around ECS Express Mode instead (ADR 0052's amendment). No
+new Superset-side code: the cloud image already reads its DB connection and viewer password from
+plain env vars, so ECS's own secret injection slots in unchanged. Mirrors how the GCP module went
+through a code-only stage (T67) before a real account and a real apply (T68-T72).
+
+The real retry (T73b) applied 32 resources against the owner's own new AWS account, hit two more
+real-world snags -- both IAM eventual-consistency delays on a brand-new account (the ECS
+service-linked role and the infrastructure role's policy attachment each needed about a minute to
+propagate, surfacing as a `SubscriptionRequiredException` then an `AccessDenied` before clearing
+on retry) -- and one real Terraform provider bug (`aws_ecs_express_gateway_service` returns
+server-side `scaling_target` defaults the provider's own schema doesn't expect, erroring
+"Provider produced inconsistent result after apply" even though the resource was created
+correctly). The one-time gold-schema data load went through a manually-launched SSM bastion (no
+key pair, no public IP -- RDS has no "import from object storage" API the way Cloud SQL does),
+torn down right after. The owner recorded a screencast as evidence, then `terraform destroy`
+removed all 32 resources, confirmed empty the same way GCP's teardown was.
 
 **Closes:** cloud, infrastructure as code (GCP slice). AWS trial: code-only, real apply pending.
 
