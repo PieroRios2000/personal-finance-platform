@@ -115,6 +115,9 @@ through a manually-launched bastion, evidence capture, then `terraform destroy` 
 separate, later, owner-guided walkthrough, tracked as the remainder of T73 in
 `tasks/backlog.md`, the same way ADR 0050's own module went through T67 before T68-T72.
 
+**Superseded 2026-10-24** — see the "Amendment (2026-10-24): the real retry" section below;
+the real-apply stage described here is done.
+
 ## Amendment (2026-10-24): App Runner closed to new AWS accounts, swapped for ECS Express Mode
 
 The real-apply stage above started for real: the owner created a personal AWS account
@@ -161,6 +164,49 @@ has proven true in exactly this way: a real `apply` surfaced something no amount
 level product availability restriction with no API-visible signal until the call itself
 is made.
 
+## Amendment (2026-10-24): the real retry — applied, evidenced, destroyed
+
+The fixed module was applied for real against the same account. Two more things only a
+real `apply` surfaced, neither a code bug this time but both specific to a brand-new AWS
+account:
+
+- `CreateExpressGatewayService` failed with `InvalidParameterException: Unable to assume
+  the service linked role` — `AWSServiceRoleForECS` didn't exist yet on an account that
+  had never used ECS. Created directly (`aws iam create-service-linked-role
+  --aws-service-name ecs.amazonaws.com`); the retry succeeded once it had propagated.
+- The ECS deployment then rolled back with `AccessDenied: The infrastructure role ...
+  doesn't have enough permission`, even though the role already had the correct
+  `AmazonECSInfrastructureRoleforExpressGatewayServices` managed policy attached — IAM
+  policy-attachment propagation, not a missing permission. `aws ecs update-service
+  --force-new-deployment` after about a minute succeeded.
+- A genuine Terraform provider bug also surfaced: the apply that actually created the
+  service errored anyway with "Provider produced inconsistent result after apply" on
+  `scaling_target`'s server-side defaults, which the resource's schema doesn't declare as
+  computed. Unlike the usual pattern, Terraform still wrote the resource into state despite
+  the error — confirmed real and correctly tracked via `aws ecs describe-services` and
+  `terraform state list` before relying on either. A later `terraform plan` shows this as
+  a forced replacement (1 to add, 1 to destroy) that was deliberately **not** applied, to
+  avoid recreating a running service over a provider quirk; it does not block `destroy`.
+
+Beyond the module itself: RDS has no managed "import from object storage" the way Cloud
+SQL does, so the one-time `gold`-schema load used a throwaway `t3.micro` EC2 bastion in a
+private subnet (no key pair, no public IP, reached only via SSM Session Manager port
+forwarding — its own ad-hoc IAM role and instance profile, deliberately outside the
+Terraform module per this ADR's own design, deleted by hand right after the load) and a
+direct `psql` restore over that tunnel — simpler than GCP's bucket-staged
+`gcloud sql import sql`, since the SSM tunnel gives a direct network path the GCP module's
+private-IP-only Cloud SQL never had.
+
+The dashboard rendered real demo data (88 movements, matching the known demo-user count)
+at the ECS Express Mode service's own public URL
+(`https://<id>.ecs.us-east-1.on.aws`, an AWS-managed domain and certificate — no custom DNS
+needed). The owner recorded a screencast as evidence, then `terraform destroy` removed all
+32 resources; confirmed empty via `terraform show`, `describe-db-instances`,
+`describe-vpcs`, `list-services` and `list-secrets`, the same verification pattern used
+after the first (App Runner) attempt's partial destroy.
+
+T73 is now fully closed, both providers proven end to end.
+
 ## Consequences
 
 - `infra/terraform-aws/` and `infra/terraform/` are fully independent: neither module
@@ -172,10 +218,9 @@ is made.
   fully-managed primitives for this specific shape of workload, not an implementation
   accident.
 - `terraform validate` alone does not prove a real `apply` will succeed (same caveat ADR
-  0050 recorded for the GCP module, and the same caveat that in practice surfaced three
-  real bugs only a real apply caught there) — expect the real AWS walkthrough to surface
-  its own equivalent issues (a quota, a region-specific API gap, a naming collision) that
-  this stage's `validate` cannot.
+  0050 recorded for the GCP module) — confirmed a third and fourth time here: the App
+  Runner account-availability block, two IAM-propagation delays, and a real Terraform
+  provider bug, none of them visible to `validate`.
 
 ## Related
 
