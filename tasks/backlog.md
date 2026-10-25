@@ -147,10 +147,24 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
   - [x] **T65** dynamic goal from Superset: `goal_cashflow`/`goal_balances` pieces, virtual dataset `goal_dynamic` and four typed native filters (goal, exchange rate, emergency months, horizon), row-level security on it.
   - [x] **T66** dashboard in four tabs (Savings, Categories, Forecast & goal, Income statement) and `rpt_income_statement`: the month-by-month statement of income, spending by category, saving and planned saving, per currency.
   - [x] **T63** experiment: recurrence and the fixed/variable mark as classifier features, ADR 0044's protocol and an acceptance margin over the fold spread. Null result (ADR 0049): no variant beat text-only (0.468) by the fold SD (0.107); the classifier stays text-only.
-- [ ] **The deferred cost study**: an LLM (Claude) as a per-transaction classifier vs. the trained
-      model -- macro-F1 and per-category precision (not just accuracy), latency, cost per
-      transaction, cost per month at this project's real volume, against the same held-out labels.
-      A concrete MLOps tradeoff narrative, buildable now that T52 exists to compare against.
+- [x] **The deferred cost study** ([ADR 0051](../brain/decisions/0051-claude-as-category-classifier-costs-little-but-loses-on-quality.md)):
+      Claude Haiku 4.5 and Sonnet 5.5, zero-shot, on the same 543 reviewed labels the trained
+      model's own 0.49 macro-F1 is measured against -- 0.217 and 0.288, both well behind, at a
+      real measured cost of $0.38 total ($0.09/$0.29) for the full 1,086-call run, under two
+      cents/month at this project's real volume (31 new descriptions/month). Cost was never the
+      question; quality is, and the trained model wins. Not adopted.
+- [ ] **Anomalous-charge detection** (specified 2026-10-24,
+      [spec](../docs/specs/anomalous-charge-detection.md),
+      [ADR 0053](../brain/decisions/0053-anomalous-charge-detection-rules-not-ml.md); closes
+      Phase 3's last open item). Each its own PR, in order:
+  - [ ] **T74** `gold.rpt_anomalies`: per-category amount-outlier (median/MAD), never-seen-before
+        merchant, and same-amount/merchant/account duplicate-within-3-days rules; tests on a
+        synthetic fixture with one planted case of each and a clean fixture with none.
+  - [ ] **T75** "Anomalies" Superset tab: the `rpt_anomalies` table plus the already-built
+        `rpt_category_variance` rows where `status = 'above'` for the latest closed month, both
+        row-level-secured, demo seed data.
+  - [ ] **T76** Run against the owner's real data once; report the real flag counts (never the
+        descriptions) so the spec's two guessed constants (3.5 MAD, 3-day window) can be tuned.
 
 ## Later, if a real business (out of scope for the portfolio, ADR 0042)
 
@@ -165,8 +179,86 @@ unless something breaks. Phase 3 starts with categorization, per the owner's dec
 - [ ] [Phase 6 — Savings-goal projection](../brain/phases/phase-6.md): the manual-Excel
       importer: Ripley savings and investment tracking (`Inversiones` sheet, monthly returns) **done**, then the cash-flow projection (specified, T56-T62 under Phase 3 above) and its own sol/dólar exchange-rate section (the only
       place currencies are converted). Scope in [ADR 0025](../brain/decisions/0025-savings-goal-projection-counts-liquid-savings-only.md).
-- [ ] **Phase 2 extension, T26-T33: PostgreSQL as dbt's store, then Superset** (decided 2026-09-19,
-      [ADR 0029](../brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)). Order and
-      acceptance criteria in [`todo-phase2.md`](todo-phase2.md). Then the owner tries the data
-      visualization, the dbt catalog and the architecture before Phase 3 (ML).
-- [ ] Phase 3 (ML), 4 (cloud), 5 (uploader): see [PROJECT.md](../PROJECT.md).
+- [x] **Phase 2 extension, T26-T37: PostgreSQL as dbt's store, then Superset** (decided
+      2026-09-19, [ADR 0029](../brain/decisions/0029-dbt-stores-silver-and-gold-in-postgres.md)).
+      Closed 2026-10-07: every task's acceptance and verification criteria in
+      [`todo-phase2.md`](todo-phase2.md) is checked, shipped to `main` (no dedicated release PR —
+      it reached `main` incrementally through the ordinary `develop → main` releases of
+      2026-09-19 to 2026-09-25).
+- [ ] Phase 5 (serving/uploader): the dashboard (Superset, Phase 2 extension) and a request-based
+      upload portal with owner review and email alerts (T44-T50) are already built, well beyond
+      Phase 5's original "minimal uploader" scope; see the deviation note in
+      [PROJECT.md](../PROJECT.md)'s Phase 5 section for what is covered and what is not.
+
+## Phase 4 — Cloud + IaC (specified 2026-10-07)
+
+> [Spec](../docs/specs/cloud-deployment.md), [ADR 0050](../brain/decisions/0050-cloud-deployment-scope-and-provider.md),
+> [phase note](../brain/phases/phase-4.md). Scope: Terraform alongside `pfp-prod`'s existing
+> tunnel (ADR 0042), not a replacement for it — Superset + a copy of the demo gold data + Secret
+> Manager + Cloud Storage on GCP, applied only long enough to produce evidence, then destroyed.
+
+- [x] **T67** spec, ADR 0050 and a `terraform validate`-clean GCP module (`infra/terraform/`):
+      no resource provisioned, no real account touched.
+- [x] **T68** **owner decision** (2026-10-08, ADR 0050 "Owner's answers"): option A, GCP first
+      (AWS as a later one-time trial, T73), a $1/month billing-alert ceiling, the owner's own
+      account set up as a guided interactive walkthrough, applied only long enough to capture
+      evidence then destroyed.
+- [x] **T69** real GCP project `pfp-demo-511101`: billing linked, a $1/month budget alert, APIs
+      enabled (Cloud Run, Cloud SQL Admin, Secret Manager, Cloud Storage, Service Networking,
+      Compute Engine, Artifact Registry -- the last two added once T71/T72 prep found the
+      private-IP VPC wiring and the image registry were both still missing). `terraform plan`
+      read and approved by the owner before every `apply`.
+- [x] **T70** a Superset image for the demo slice: no Dex/OAuth (AUTH_DB, one Gamma
+      viewer), reads its DB connection and viewer password from Secret Manager, per
+      `infra/terraform/run.tf` (`bi/superset_config_cloud.py`, `bi/start_cloud.sh`,
+      `bi/Dockerfile.cloud`, `bi/grant_gamma_access.py`). Built and pushed for real to Artifact
+      Registry (`pfp-demo/superset:latest`). Two real bugs found applying it (#207): Gamma had
+      no base `datasource_access` grant (dashboard invisible), and each dataset's own `catalog`
+      field, not just the database's URI, has to be rewritten to the real demo database name
+      (every chart failed with "database \"pfp\" does not exist" otherwise).
+- [x] **T71** a one-time export of `pfp-prod`'s demo gold tables (`pg_dump --schema=gold`),
+      loaded into the Cloud SQL instance via `gcloud sql import sql` from a Cloud Storage
+      file -- not a direct connection to the private IP, kept deliberately unreachable from
+      outside the VPC (ADR 0050). `pfp_bi`'s read grant on the new tables applied the same way.
+- [x] **T72** the real `terraform apply` succeeded; two more real-apply-only bugs found and
+      fixed beyond #206 (Cloud Run's secret-accessor IAM grant, the Gamma dataset grant and each
+      dataset's own `catalog` field, #207); the owner refreshed the demo data twice more (a plan
+      and goal for the demo user, then category labels) so every tab has something to show; the
+      owner recorded a screencast (Loom) as the evidence this task asked for (2026-10-17);
+      `terraform destroy` run immediately after -- Cloud SQL and Cloud Run (the costed resources)
+      destroyed within minutes; the VPC/subnet/peering cleanup is blocked on a Cloud Run "Direct
+      VPC egress" reserved IP address that only Google's own backend releases on its own
+      schedule (not billed, not caused by this module) -- a plain retry, once it clears, finishes
+      it; PROJECT.md's Phase 4 section updated with what was actually built.
+- [x] **T73a** (after T72, GCP proven working) code-only AWS mapping: a `terraform
+      validate`-clean module (`infra/terraform-aws/`) for the same slice -- App Runner + RDS for
+      PostgreSQL + Secrets Manager + S3 -- no resource provisioned, no real account touched
+      (ADR 0052, the AWS analog of T67). No new Superset-side code needed: the cloud image's
+      env-var interface (T70) was already provider-agnostic.
+- [x] **T73a-fix** a real `apply` against the owner's own AWS account found App Runner closed
+      to new AWS customers since 2026-04-30 (not fixable by retrying) -- everything that had
+      already created (RDS, VPC, networking, SSM endpoints) was destroyed immediately, confirmed
+      empty. The module now uses Amazon ECS Express Mode instead (ADR 0052's amendment),
+      `terraform validate`-clean again; the real-apply retry is still open, part of T73b below.
+- [x] **T73b** the real one-time AWS trial, applied for real against the owner's own new AWS
+      account (135975773248, `us-east-1`): a Budgets alert ($1/month), an IAM user, the Superset
+      image built and pushed to a new ECR repo, `terraform apply` (32 resources: VPC, 2 public +
+      2 private subnets, RDS, Secrets Manager, S3, ECS Express Mode service behind its own ALB),
+      the one-time gold-schema data load via a manually-launched SSM bastion (no key pair, no
+      public IP -- `infra/terraform-aws/README.md`), the owner's own screen recording as evidence,
+      then `terraform destroy` -- purely for hands-on evidence of both providers, not a migration,
+      not a standing second environment (ADR 0050's owner answer to open question 2).
+      Two more real-apply-only snags, both IAM propagation delays on a brand-new account (not code
+      bugs, not fixable by changing the module): the `AWSServiceRoleForECS` service-linked role
+      and the infrastructure role's managed-policy attachment each needed about a minute to
+      propagate before ECS would accept them, surfacing as a `SubscriptionRequiredException` and
+      an `AccessDenied` on the first attempts, both cleared on retry. A separate, real provider
+      bug also surfaced: `aws_ecs_express_gateway_service` returns server-side `scaling_target`
+      defaults Terraform's own schema doesn't expect, so the first apply errored with "Provider
+      produced inconsistent result after apply" -- the resource was in fact created and (this
+      time) still landed in state despite the error, confirmed by `aws ecs describe-services`
+      before relying on it. `terraform destroy` removed all 32 resources cleanly; confirmed empty
+      via `terraform show`, `describe-db-instances`, `describe-vpcs`, `list-services` and
+      `list-secrets`. The bastion and its IAM role/instance profile are not part of the Terraform
+      module by design (`infra/terraform-aws/README.md`'s own point 5) and were torn down by hand
+      right after the one-time load.

@@ -1,7 +1,11 @@
-.dashboard-content { background: #f3f5f9; }
+.dashboard-content { background: #1b2437; }
 .dashboard-component-chart-holder {
-  border-radius: 14px; border: 1px solid #e6eaf2 !important;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, .06);
+  background: #dce6f2 !important;
+  border-radius: 14px; border: 1px solid rgba(255, 255, 255, .08) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
 }
 .dashboard-component-chart-holder .header-title { font-weight: 600; color: #1b2437; }
-.dashboard-header-container { background: #ffffff; }
+.dashboard-header-container { background: #141b2c !important; }
+.dashboard-header-container .dynamic-title { color: #f3f5f9 !important; }
+[data-test="filter-bar"] { background: #202a40 !important; }
+[data-test="filter-bar"] .ant-typography { color: #f3f5f9 !important; }

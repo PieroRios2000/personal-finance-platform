@@ -137,7 +137,7 @@ Every parser validates that the sum of the extracted transactions matches the ba
 - **Apache Superset** (open source, zero cost, its own stack) over a read-only role on gold, with dashboards for cash flow, savings and each fund's monthly return (T32).
 - Phase 3 (ML) starts after T33. Details: [`tasks/todo-phase2.md`](tasks/todo-phase2.md).
 
-### Phase 3 — ML in production *(started 2026-09-27)*
+### Phase 3 — ML in production *(started 2026-09-27, closed 2026-10-25)*
 **Goal:** deploy and monitor, not just train.
 - Automatic transaction categorization (classification): the model proposes a category, the owner
   confirms or overrides -- never assigned silently ([ADR 0043](brain/decisions/0043-transaction-categorization-human-in-the-loop-labeling.md)).
@@ -149,19 +149,71 @@ Every parser validates that the sum of the extracted transactions matches the ba
   reviewed ones, merchant-grouped 3-fold CV, against 0.23 for the rules; ADR 0044's 2026-10-04
   amendment). Batch categorization at ingest (ADR 0045) and Evidently drift monitoring (ADR 0046)
   are built; a live FastAPI endpoint is optional, only if a real caller ever needs one.
-- Monthly spend forecasting (time series), per category: **specified 2026-10-04** together with the Phase 6 savings-goal projection ([spec](docs/specs/category-forecast-and-savings-goal.md), [ADR 0048](brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md), tasks T56-T62): fixed expenses proposed and confirmed by the owner, simple models chosen by a rolling-origin backtest against a baseline, empirical intervals.
-- Anomalous-charge detection.
+- Monthly spend forecasting (time series), per category, **built** (specified 2026-10-04 together
+  with the Phase 6 savings-goal projection, T56-T66:
+  [spec](docs/specs/category-forecast-and-savings-goal.md),
+  [ADR 0048](brain/decisions/0048-spend-forecast-baselines-and-savings-goal-scenarios.md)):
+  fixed expenses proposed and confirmed by the owner, five candidate models chosen per category by
+  a rolling-origin backtest against a baseline, empirical prediction intervals, a Superset
+  "Forecast & goal" section and a realized-vs-backtest monitor.
+- Anomalous-charge detection: **specified, not built** (2026-10-24,
+  [spec](docs/specs/anomalous-charge-detection.md),
+  [ADR 0053](brain/decisions/0053-anomalous-charge-detection-rules-not-ml.md), T74-T76). The owner's
+  call on 2026-10-25: this closes the phase as a documented future improvement rather than active
+  work, the same way Claude-as-classifier (ADR 0051) was explored and shelved rather than adopted.
 
 **Closes:** MLOps. Identity, the public URL and the upload portal (T39-T50) are frozen once this
 starts: built and documented, but no target audience for this portfolio values them, so no more
 effort goes there unless something breaks (owner's call, 2026-09-27).
 
-### Phase 4 — Cloud + IaC
+### Phase 4 — Cloud + IaC *(T67-T72 built 2026-10-09/17, GCP; T73 AWS trial 2026-10-19/24)*
 **Goal:** the cloud "nice to have" that shows up in job postings.
 - Terraform to provision infra on AWS or GCP (free tier).
 - Stack deployment; secrets in a secrets manager (never hardcoded).
 
-**Closes:** cloud, infrastructure as code.
+**Built, deviating from the plan (ADR 0050):** option A, not a wholesale "stack deployment" --
+Terraform provisions a narrow slice (Cloud Run + Cloud SQL + Secret Manager + Cloud Storage, a
+dedicated VPC for Cloud SQL's private IP) *alongside* `pfp-prod`'s existing tunnel (ADR 0042),
+applied against the owner's own real GCP project (`pfp-demo-511101`) only long enough to record
+evidence, then destroyed -- not left running. GCP only; AWS is a separate, later one-time trial
+(T73), not built yet. Three real bugs surfaced only by a real `apply` (never caught by
+`terraform validate`, which never calls the API): a missing `private_network` wiring so Cloud
+SQL's private IP was never populated (#206); Cloud Run's default service account had no
+`roles/secretmanager.secretAccessor` grant on either secret (#207); and the cloud-only Superset
+image needed two fixes a real login surfaced -- a missing base `datasource_access` grant for the
+single Gamma viewer (the dashboard was invisible, not just unstyled), and each dataset's own
+`catalog` field (not just the database's own connection URI) pointing at the wrong database name
+(#207). The demo's data is a one-time `pg_dump --schema=gold` of `pfp-prod`'s own demo user,
+loaded via `gcloud sql import sql` from a Cloud Storage file -- never a direct connection to the
+private IP, which stays unreachable from outside the VPC by design.
+- One real-world snag: Cloud Run's "Direct VPC egress" leaves a regional reserved IP address
+  (`serverless-ipv4-cloudrun-*`) that `terraform destroy` cannot remove until Google's own
+  backend releases it -- not caused by anything in this module, not billed on its own, and not
+  something a retry loop can force faster. The costed resources (Cloud SQL, Cloud Run) are
+  destroyed well before that leftover clears.
+
+**T73 (AWS trial), done end to end (ADR 0052):** the same narrow slice mapped onto AWS -- ECS
+Express Mode + RDS for PostgreSQL + Secrets Manager + S3 -- in `infra/terraform-aws/`. Originally
+App Runner; a first real `apply` against the owner's own account found App Runner closed to new
+AWS customers since 2026-04-30 (everything already created was destroyed immediately, confirmed
+empty), so the module was redesigned around ECS Express Mode instead (ADR 0052's amendment). No
+new Superset-side code: the cloud image already reads its DB connection and viewer password from
+plain env vars, so ECS's own secret injection slots in unchanged. Mirrors how the GCP module went
+through a code-only stage (T67) before a real account and a real apply (T68-T72).
+
+The real retry (T73b) applied 32 resources against the owner's own new AWS account, hit two more
+real-world snags -- both IAM eventual-consistency delays on a brand-new account (the ECS
+service-linked role and the infrastructure role's policy attachment each needed about a minute to
+propagate, surfacing as a `SubscriptionRequiredException` then an `AccessDenied` before clearing
+on retry) -- and one real Terraform provider bug (`aws_ecs_express_gateway_service` returns
+server-side `scaling_target` defaults the provider's own schema doesn't expect, erroring
+"Provider produced inconsistent result after apply" even though the resource was created
+correctly). The one-time gold-schema data load went through a manually-launched SSM bastion (no
+key pair, no public IP -- RDS has no "import from object storage" API the way Cloud SQL does),
+torn down right after. The owner recorded a screencast as evidence, then `terraform destroy`
+removed all 32 resources, confirmed empty the same way GCP's teardown was.
+
+**Closes:** cloud, infrastructure as code (GCP slice). AWS trial: code-only, real apply pending.
 
 ### Phase 5 — Serving + Uploader
 **Goal:** make the repo demonstrable and operable.
@@ -170,7 +222,24 @@ effort goes there unless something breaks (owner's call, 2026-09-27).
 
 **Closes:** end-to-end delivery, a showcase for recruiters.
 
-### Phase 6 — Savings-goal projection *(planned, added 2026-09-19)*
+**Status: already covered, built under other phases (checked 2026-10-07).** Against the plan
+above:
+- The dashboard line is exactly what T32-T37 (Phase 2 extension) built: Superset, dashboards as
+  code, one Compose project.
+- The uploader line is covered too, well past "minimal": the request-based upload portal
+  (T39-T50, ADR 0040/0041) is Dex-authenticated, accepts up to 10 statement PDFs per request
+  accepted or rejected as a whole, emails the owner a review alert and the sender at each step,
+  and has its own Excel section for savings and investments (`docs/manual-data.md`) -- the
+  "form to type the manual Excel's movements" above, covered by an upload instead of a typed
+  form, same end result (no hand-typing a bank statement). It shipped grouped under Phase 3 in
+  this file's own closing note (line below) and tagged `[Phase 5]` in
+  [`tasks/backlog.md`](tasks/backlog.md), not under this section -- a labeling gap, not a scope
+  gap. Nothing from this phase's plan is outstanding.
+- The 2026-09-19 scope note below ("the uploader stays at its minimal, functional version") no
+  longer describes what exists; it was true when written, before T46-T50 added the request
+  workflow, review and Excel section on top of the original single-file upload.
+
+### Phase 6 — Savings-goal projection *(added 2026-09-19, closed 2026-10-25 via T56-T66)*
 **Goal:** answer "given my real cash flow, how long until I reach my savings goal?"
 - Banco Ripley as a third source (the owner's savings account, in soles). It gives no statements, so its movements come from a **manual Excel** typed month by month, with the same reconciliation rules ([ADR 0027](brain/decisions/0027-manual-excel-for-ripley-savings-and-investment-tracking.md), [`docs/manual-data.md`](docs/manual-data.md)).
 - **Investment tracking** (three Tyba funds and Flip), from a second sheet of the same Excel: contributions, withdrawals and month-end valuations, to see each fund's monthly return (Modified Dietz, `gold.fct_investment_monthly`, [ADR 0028](brain/decisions/0028-investment-return-is-modified-dietz-per-fund-and-month.md)). Tracked separately from the goal. **Built.**
@@ -190,7 +259,7 @@ effort goes there unless something breaks (owner's call, 2026-09-27).
 
 > **Order:** phases 6 and 7 were added after Phase 2 closed and do not renumber 3–5. The next steps in practice are listed in [`tasks/backlog.md`](tasks/backlog.md).
 
-> **Scope note:** the uploader stays at its minimal, functional version. None of the target job postings value frontend skills; the value is in what happens *after* the file comes in (parsing, reconciliation, MERGE, orchestration, ML).
+> **Scope note (2026-09-19):** the uploader stays at its minimal, functional version. None of the target job postings value frontend skills; the value is in what happens *after* the file comes in (parsing, reconciliation, MERGE, orchestration, ML). **Update 2026-10-07:** it grew past "minimal" anyway, driven by real needs (T46-T50: a request can hold several files, review before it lands, an alert email, an Excel section) rather than by frontend polish -- the spirit of this note held, only the word "minimal" didn't. See Phase 5's status note above.
 
 ---
 
