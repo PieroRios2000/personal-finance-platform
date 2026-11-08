@@ -682,6 +682,30 @@ def test_labeled_bank_descriptions_is_scoped_to_the_user(lakehouse: Path) -> Non
     assert bronze.labeled_bank_descriptions("bea") == set()
 
 
+def test_category_labels_is_empty_on_a_fresh_lake() -> None:
+    assert bronze.category_labels("piero") == {}
+
+
+def test_category_labels_returns_each_pairs_category_and_trust(
+    lakehouse: Path,
+) -> None:
+    """What the export prefills and the import keeps the trust of (the round trip
+    must not overwrite the owner's reviewed labels, found 2026-11-07)."""
+    bronze.replace_category_labels(
+        "piero",
+        [
+            ("BCP", "UBER TRIP", "Transporte", True),
+            ("BCP", "NETFLIX.COM", "Servicios", False),
+        ],
+    )
+    bronze.replace_category_labels("ana", [("BCP", "X", "Ropa", True)])
+
+    assert bronze.category_labels("piero") == {
+        ("BCP", "UBER TRIP"): ("Transporte", True),
+        ("BCP", "NETFLIX.COM"): ("Servicios", False),
+    }
+
+
 def test_distinct_bank_descriptions_normalizes_padding_and_case(
     lakehouse: Path,
 ) -> None:

@@ -9,6 +9,7 @@ import psycopg
 import pytest
 from openpyxl import load_workbook
 
+from lakehouse import bronze
 from scripts import export_category_labels as ecl
 
 
@@ -50,8 +51,11 @@ def environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "PFP_PG_DATABASE": "pfp",
         "PFP_PG_USER": "pfp",
         "PFP_PG_PASSWORD": "secret",
+        "LAKEHOUSE_URI": "s3://lakehouse",
     }.items():
         monkeypatch.setenv(name, value)
+    # No label yet unless a test says otherwise; never the real lake.
+    monkeypatch.setattr(bronze, "category_labels", lambda user_id: {})
 
 
 def test_fetch_groups_queries_gold_scoped_to_the_user_excluding_transfers(
@@ -196,6 +200,56 @@ def test_main_refuses_to_write_an_empty_template(
     environment: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(ecl, "fetch_groups", lambda user_id: [])
+
+    assert ecl.main(["--user", "piero", "--out", str(tmp_path / "labels.xlsx")]) == 1
+    assert not (tmp_path / "labels.xlsx").exists()
+
+
+def test_main_puts_the_descriptions_with_no_label_yet_first_and_keeps_the_rest(
+    environment: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        ecl,
+        "fetch_groups",
+        lambda user_id: [("BCP", "NETFLIX.COM", 3), ("BCP", "XYZ CORP", 1)],
+    )
+    monkeypatch.setattr(
+        bronze,
+        "category_labels",
+        lambda user_id: {("BCP", "NETFLIX.COM"): ("Entretenimiento", True)},
+    )
+    out = tmp_path / "labels.xlsx"
+
+    assert (
+        ecl.main(
+            [
+                "--user",
+                "piero",
+                "--out",
+                str(out),
+                "--model-path",
+                str(tmp_path / "no-model-here.joblib"),
+            ]
+        )
+        == 0
+    )
+
+    rows = list(load_workbook(out)["Categorias"].iter_rows(min_row=2, values_only=True))
+    assert rows == [
+        ("BCP", "XYZ CORP", 1, "Sin categorizar", "Gastos varios"),
+        ("BCP", "NETFLIX.COM", 3, "Servicios", "Entretenimiento"),
+    ]
+    assert "1 new" in capsys.readouterr().out
+
+
+def test_main_requires_the_lakehouse_uri(
+    environment: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The labels it keeps live in bronze, so it needs the lake like the import."""
+    monkeypatch.delenv("LAKEHOUSE_URI")
 
     assert ecl.main(["--user", "piero", "--out", str(tmp_path / "labels.xlsx")]) == 1
     assert not (tmp_path / "labels.xlsx").exists()
