@@ -253,7 +253,7 @@ legacy-down:
 # the real stack, so with PFP_ENV=poc `up` stops before changing anything. No override.
 tunnel-guard:
 	@[ "$(PFP_ENV)" = poc ] || exit 0; $(LOAD_ENV) && { [ -z "$$PFP_TUNNEL_TOKEN" ] || { \
-	  echo "PFP_TUNNEL_TOKEN is set, but PFP_ENV=poc is the real data: only prod runs the tunnel (ADR 0042). Delete it from $(ENV_FILE) (and unset it in your shell); it belongs in .env.prod." >&2; exit 2; }; }
+	  echo "PFP_TUNNEL_TOKEN is set, but PFP_ENV=poc holds the real data: only prod runs the tunnel (ADR 0042). Delete it from $(ENV_FILE) (and unset it in your shell); it belongs in .env.prod." >&2; exit 2; }; }
 
 up: env-guard tunnel-guard bi-check legacy-down
 	$(LOAD_ENV) && $(PFP) --profile bi $${PFP_TUNNEL_TOKEN:+--profile tunnel} up -d --build --wait seaweedfs postgres $(BI_SERVICES) $${PFP_TUNNEL_TOKEN:+cloudflared}
