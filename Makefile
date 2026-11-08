@@ -27,7 +27,7 @@ PFP = docker compose -p $(PFP_PROJECT)
 # Each environment's OpenMetadata artifacts (they hold a token and the Postgres password).
 export PFP_OM_ARTIFACTS = ./artifacts/$(PFP_ENV)
 
-.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels export-plan import-plan forecast train-category-model categorize-new-movements monitor-category-drift build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
+.PHONY: check-fast check-task check-full ci-local ci-local-full poc poc-up poc-down pg-check pg-up pg-down env env-guard tunnel-guard guard-user ingest ingest-uploads submissions decide-submission review-uploads export-category-labels import-category-labels export-plan import-plan forecast train-category-model categorize-new-movements monitor-category-drift build demo up up-catalog down status bi-check legacy-down om-up om-sync om-down bi-up bi-down bi-reset bi-export dex-add-user dex-scope alert alert-digest
 
 # After every change (< 5 s): lint, format and types.
 check-fast:
@@ -247,7 +247,15 @@ legacy-down:
 			docker network rm "$${p}_default" >/dev/null 2>&1 || true; fi; \
 	done
 
-up: env-guard bi-check legacy-down
+# Only prod runs the Cloudflare tunnel (ADR 0042): poc holds the owner's real data and stays on
+# 127.0.0.1. `up` starts cloudflared whenever PFP_TUNNEL_TOKEN is set, and a token left in .env
+# (on 2026-11-07 it still held prod's) would make Cloudflare send part of the public traffic to
+# the real stack, so with PFP_ENV=poc `up` stops before changing anything. No override.
+tunnel-guard:
+	@[ "$(PFP_ENV)" = poc ] || exit 0; $(LOAD_ENV) && { [ -z "$$PFP_TUNNEL_TOKEN" ] || { \
+	  echo "PFP_TUNNEL_TOKEN is set, but PFP_ENV=poc is the real data: only prod runs the tunnel (ADR 0042). Delete it from $(ENV_FILE) (and unset it in your shell); it belongs in .env.prod." >&2; exit 2; }; }
+
+up: env-guard tunnel-guard bi-check legacy-down
 	$(LOAD_ENV) && $(PFP) --profile bi $${PFP_TUNNEL_TOKEN:+--profile tunnel} up -d --build --wait seaweedfs postgres $(BI_SERVICES) $${PFP_TUNNEL_TOKEN:+cloudflared}
 	$(LOAD_ENV) && $(PFP) run --rm bucket-init
 	@$(MAKE) --no-print-directory status
