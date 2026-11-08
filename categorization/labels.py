@@ -8,10 +8,11 @@ file, never a real description or amount -- those are read and written by
 locally and connect straight to the owner's own Postgres.
 """
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.worksheet import Worksheet
 
 from categorization.rules import UNKNOWN
@@ -59,14 +60,22 @@ CATEGORIES = (
     "Educacion",
     "Gastos varios",
 )
+# The rows with no label yet, so the owner finds this month's new descriptions.
+NEW_ROW_FILL = PatternFill("solid", fgColor="FFFFF2CC")
 
 
-def write_template(path: Path, rows: list[tuple[str, str, int, str]]) -> None:
+def write_template(
+    path: Path,
+    rows: list[tuple[str, str, int, str]],
+    labels: Mapping[tuple[str, str], str] | None = None,
+) -> None:
     """One row per (bank, description): `movements` is how many times it appears,
     `suggested_category` the cold-start guess, which may be "Sin categorizar" (no
     rule matched) -- not one of `CATEGORIES`, so never a valid final answer.
-    `category` starts equal to the suggestion when it's a real one, "Gastos varios"
-    otherwise: always something `read_completed` will accept unedited."""
+    `category` starts as the owner's own label when `labels` has one for that pair,
+    otherwise equal to the suggestion when it's a real one, "Gastos varios" if not:
+    always something `read_completed` will accept unedited. With `labels`, the rows
+    that have none yet are highlighted (`NEW_ROW_FILL`)."""
     workbook = Workbook()
     sheet = workbook.active
     assert sheet is not None
@@ -75,8 +84,12 @@ def write_template(path: Path, rows: list[tuple[str, str, int, str]]) -> None:
     for cell in sheet[1]:
         cell.font = Font(bold=True)
     for bank, description, movements, suggested in rows:
+        label = (labels or {}).get((bank, description))
         default = suggested if suggested in CATEGORIES else "Gastos varios"
-        sheet.append([bank, description, movements, suggested, default])
+        sheet.append([bank, description, movements, suggested, label or default])
+        if labels is not None and label is None:
+            for cell in sheet[sheet.max_row]:
+                cell.fill = NEW_ROW_FILL
     sheet.column_dimensions["B"].width = 60
     for letter in ("A", "C", "D", "E"):
         sheet.column_dimensions[letter].width = 20
@@ -85,8 +98,10 @@ def write_template(path: Path, rows: list[tuple[str, str, int, str]]) -> None:
     instructions = workbook.create_sheet("Instrucciones")
     instructions.column_dimensions["A"].width = 100
     for line in (
-        "Column 'category' starts equal to the suggested one: leave it if it's right,",
-        "type over it (one of the list below) if it's wrong.",
+        "Highlighted rows at the top are new: their 'category' starts equal to the",
+        "suggested one; leave it if it's right, type over it (one of the list below)",
+        "if it's wrong. The other rows already carry your own label: change one only",
+        "to correct it.",
         "",
         "Categories: " + ", ".join(CATEGORIES),
         "",
@@ -137,3 +152,21 @@ def read_completed(
         is_trusted = category != suggested or suggested == UNKNOWN
         rows.append((str(bank), str(description), str(category), is_trusted))
     return ([], problems) if problems else (rows, [])
+
+
+def keep_existing_trust(
+    rows: list[tuple[str, str, str, bool]],
+    existing: Mapping[tuple[str, str], tuple[str, bool]],
+) -> list[tuple[str, str, str, bool]]:
+    """`read_completed`'s rows, with an unchanged label keeping the trust it already
+    had. The file can only say trusted-or-not through `suggested_category`, which
+    moves as the model learns, so reading the trust off it again would flip a
+    reviewed label to "accepted the guess" once the model agrees with it. A label the
+    owner changed, or a new one, keeps the trust `read_completed` gave it."""
+    kept = []
+    for bank, description, category, is_trusted in rows:
+        before = existing.get((bank, description))
+        if before is not None and before[0] == category:
+            is_trusted = before[1]
+        kept.append((bank, description, category, is_trusted))
+    return kept

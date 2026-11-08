@@ -9,9 +9,12 @@ already filled into `category`: the trained classifier's (T52) once one has been
 (`make train-category-model`) and is confident enough (its own calibrated threshold,
 `categorization.model.choose_confidence_threshold`), the cold-start rules-based
 guesser (`categorization/rules.py`) otherwise -- the same "propose, never decide"
-shape either way (ADR 0043). Open the file, fix the rows the guess got wrong, save,
-then `make import-category-labels`. Never prints a description or an amount; only
-counts."""
+shape either way (ADR 0043). A pair the owner already labelled carries that label
+instead of the guess (read from bronze, the set `make import-category-labels`
+replaces), and the pairs with no label yet come first, highlighted, so an unedited
+round trip changes nothing that was there. Open the file, fix the new rows the guess
+got wrong, save, then `make import-category-labels`. Never prints a description or an
+amount; only counts."""
 
 import argparse
 import os
@@ -28,6 +31,8 @@ from categorization.model import Bundle
 from categorization.model import load as load_model
 from categorization.model import suggest as suggest_from_model
 from categorization.rules import guess
+from lakehouse import bronze
+from lakehouse.storage import MissingLakehouseURIError, lakehouse_uri
 
 DEFAULT_OUT = Path.home() / "finance-data" / "manual" / "categorias-transacciones.xlsx"
 DEFAULT_MODEL_PATH = _MODEL_PATH_STEM.with_suffix(".joblib")
@@ -83,6 +88,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.user:
         print("error: --user is required (or set PFP_USER)", file=sys.stderr)
         return 2
+    try:
+        lakehouse_uri()
+    except MissingLakehouseURIError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
 
     groups = fetch_groups(args.user)
     if not groups:
@@ -93,12 +103,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     # (with or without ".joblib"), both scripts must resolve to the same file, or a
     # trained model silently never gets picked up here.
     bundle = load_model(args.model_path.with_suffix(".joblib"))
+    labels = {
+        pair: category
+        for pair, (category, _trusted) in bronze.category_labels(args.user).items()
+    }
     rows = [
         (bank, description, movements, _suggest(description, bundle))
         for bank, description, movements in groups
     ]
+    # Stable sort: the pairs with no label yet first, each half still by movements.
+    rows.sort(key=lambda row: (row[0], row[1]) in labels)
+    new = sum(
+        1 for bank, description, *_rest in rows if (bank, description) not in labels
+    )
     args.out.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    write_template(args.out, rows)
+    write_template(args.out, rows, labels)
     args.out.chmod(0o600)
     guessed = sum(1 for *_rest, suggested in rows if suggested != "Sin categorizar")
     source = (
@@ -107,6 +126,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else "the rules-based guesser"
     )
     print(f"wrote {args.out}: {len(rows)} description(s), {guessed} guessed already")
+    print(f"{new} new (the first rows, highlighted), {len(rows) - new} keep your label")
     print(f"suggestions came from {source}")
     print("Fix what the guess got wrong, save, then `make import-category-labels`.")
     return 0
