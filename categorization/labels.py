@@ -74,8 +74,8 @@ def write_template(
     rule matched) -- not one of `CATEGORIES`, so never a valid final answer.
     `category` starts as the owner's own label when `labels` has one for that pair,
     otherwise equal to the suggestion when it's a real one, "Gastos varios" if not:
-    always something `read_completed` will accept unedited. With `labels`, the rows
-    that have none yet are highlighted (`NEW_ROW_FILL`)."""
+    always something `read_completed` will accept unedited. The rows with no label
+    yet are highlighted (`NEW_ROW_FILL`)."""
     workbook = Workbook()
     sheet = workbook.active
     assert sheet is not None
@@ -87,7 +87,7 @@ def write_template(
         label = (labels or {}).get((bank, description))
         default = suggested if suggested in CATEGORIES else "Gastos varios"
         sheet.append([bank, description, movements, suggested, label or default])
-        if labels is not None and label is None:
+        if label is None:
             for cell in sheet[sheet.max_row]:
                 cell.fill = NEW_ROW_FILL
     sheet.column_dimensions["B"].width = 60

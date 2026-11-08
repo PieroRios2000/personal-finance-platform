@@ -103,19 +103,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     # (with or without ".joblib"), both scripts must resolve to the same file, or a
     # trained model silently never gets picked up here.
     bundle = load_model(args.model_path.with_suffix(".joblib"))
-    labels = {
-        pair: category
-        for pair, (category, _trusted) in bronze.category_labels(args.user).items()
-    }
+    labels = {k: cat for k, (cat, _t) in bronze.category_labels(args.user).items()}
     rows = [
         (bank, description, movements, _suggest(description, bundle))
         for bank, description, movements in groups
     ]
     # Stable sort: the pairs with no label yet first, each half still by movements.
     rows.sort(key=lambda row: (row[0], row[1]) in labels)
-    new = sum(
-        1 for bank, description, *_rest in rows if (bank, description) not in labels
-    )
+    new = sum((bank, desc) not in labels for bank, desc, *_rest in rows)
     args.out.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     write_template(args.out, rows, labels)
     args.out.chmod(0o600)
