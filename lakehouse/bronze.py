@@ -532,17 +532,31 @@ def distinct_bank_descriptions(user_id: str) -> list[tuple[str, str]]:
     return sorted(pairs)
 
 
-def labeled_bank_descriptions(user_id: str) -> set[tuple[str, str]]:
-    """Every `(bank, description)` `user_id` has already confirmed a category for --
-    `scripts.categorize_new_movements` skips predicting these."""
+def category_labels(user_id: str) -> dict[tuple[str, str], tuple[str, bool]]:
+    """`user_id`'s current labels, `(bank, description) -> (category, is_trusted)`:
+    what `scripts.export_category_labels` prefills and `scripts.import_category_labels`
+    keeps the trust of, so a round trip never overwrites a reviewed label."""
     uri = table_uri("category_labels")
     options = storage_options()
     if not DeltaTable.is_deltatable(uri, storage_options=options):
-        return set()
+        return {}
     table = DeltaTable(uri, storage_options=options).to_pyarrow_table(
-        partitions=[("user_id", "=", user_id)], columns=["bank", "description"]
+        partitions=[("user_id", "=", user_id)],
+        columns=["bank", "description", "category", "is_trusted"],
     )
-    return {(str(row["bank"]), str(row["description"])) for row in table.to_pylist()}
+    return {
+        (str(row["bank"]), str(row["description"])): (
+            str(row["category"]),
+            bool(row["is_trusted"]),
+        )
+        for row in table.to_pylist()
+    }
+
+
+def labeled_bank_descriptions(user_id: str) -> set[tuple[str, str]]:
+    """Every `(bank, description)` `user_id` has already confirmed a category for --
+    `scripts.categorize_new_movements` skips predicting these."""
+    return set(category_labels(user_id))
 
 
 def is_ingested(user_id: str, file_sha256: str) -> bool:

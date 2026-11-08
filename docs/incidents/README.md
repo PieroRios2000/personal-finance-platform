@@ -16,6 +16,7 @@ data in them: counts and names only ([ADR 0004](../../brain/decisions/0004-real-
 | 2026-09-27 | [a leftover synthetic test user blocked `dbt build` on `pfp-prod`](2026-09-27-prodfixtest-leftover-blocked-prod-dbt-build.md) | `dbt build` failed until cleaned up; the demo account's own data was correct throughout, no real owner data involved |
 | 2026-10-03 | [signing in to the real Superset was sent to the prod Dex](2026-10-03-poc-signin-sent-to-the-prod-dex.md) | One login unusable until the owner's `.env` was corrected; no data lost or exposed |
 | 2026-10-04 | [`uv run dagster dev` failed: the web UI package was never installed](2026-10-04-dagster-dev-had-no-web-ui.md) | The documented Dagster UI could not be opened; nothing in the pipeline depends on it |
+| 2026-11-07 | [the monthly label round trip would have overwritten the owner's reviewed labels](2026-11-07-label-export-would-overwrite-reviewed-labels.md) | Near miss: caught before any import, no label lost |
 
 Operations run on the owner's real environment (pulls, builds, backfills, restarts) are recorded, one
 line each, in [`../operations-log.md`](../operations-log.md).

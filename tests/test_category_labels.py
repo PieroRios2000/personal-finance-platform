@@ -7,7 +7,9 @@ from openpyxl import Workbook, load_workbook
 from categorization.labels import (
     CATEGORIES,
     COLUMNS,
+    NEW_ROW_FILL,
     SHEET,
+    keep_existing_trust,
     read_completed,
     write_template,
 )
@@ -164,3 +166,61 @@ def test_an_unmatched_guess_defaults_the_editable_column_to_gastos_varios_not_it
 
     assert problems == []
     assert rows == [("BCP", "UNKNOWN MERCHANT", "Gastos varios", True)]
+
+
+def test_a_row_already_labelled_carries_the_owners_category_not_the_guess(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "f.xlsx"
+    write_template(
+        path,
+        [("BCP", "NETFLIX.COM", 3, "Servicios"), ("BCP", "XYZ", 1, "Sin categorizar")],
+        labels={("BCP", "NETFLIX.COM"): "Entretenimiento"},
+    )
+
+    rows = list(load_workbook(path)[SHEET].iter_rows(min_row=2, values_only=True))
+
+    assert rows[0] == ("BCP", "NETFLIX.COM", 3, "Servicios", "Entretenimiento")
+    assert rows[1] == ("BCP", "XYZ", 1, "Sin categorizar", "Gastos varios")
+
+
+def test_only_the_rows_with_no_label_yet_are_highlighted(tmp_path: Path) -> None:
+    path = tmp_path / "f.xlsx"
+    write_template(
+        path,
+        [("BCP", "NEW SHOP", 1, "Servicios"), ("BCP", "NETFLIX.COM", 3, "Servicios")],
+        labels={("BCP", "NETFLIX.COM"): "Servicios"},
+    )
+
+    sheet = load_workbook(path)[SHEET]
+
+    assert {c.fill.fgColor.rgb for c in sheet[2]} == {NEW_ROW_FILL.fgColor.rgb}
+    assert all(c.fill.fill_type is None for c in sheet[3])
+
+
+def test_keep_existing_trust_keeps_the_trust_of_an_unchanged_label() -> None:
+    """The file can only say trusted-or-not through `suggested_category`, which
+    changes as the model learns: an untouched old label keeps the trust it had."""
+    existing = {
+        ("BCP", "NETFLIX.COM"): ("Servicios", True),
+        ("BCP", "PLAZA VEA"): ("Alimentacion", False),
+    }
+    read = [
+        ("BCP", "NETFLIX.COM", "Servicios", False),  # the model now agrees
+        ("BCP", "PLAZA VEA", "Alimentacion", True),  # the model now disagrees
+    ]
+
+    assert keep_existing_trust(read, existing) == [
+        ("BCP", "NETFLIX.COM", "Servicios", True),
+        ("BCP", "PLAZA VEA", "Alimentacion", False),
+    ]
+
+
+def test_keep_existing_trust_leaves_a_changed_or_new_label_as_read() -> None:
+    existing = {("BCP", "NETFLIX.COM"): ("Servicios", False)}
+    read = [
+        ("BCP", "NETFLIX.COM", "Entretenimiento", True),  # the owner changed it
+        ("BCP", "NEW SHOP", "Ropa", False),  # new this month
+    ]
+
+    assert keep_existing_trust(read, existing) == read

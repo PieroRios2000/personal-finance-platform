@@ -20,8 +20,8 @@ confirms or overrides, never assigned silently. Design in
 |---|---|
 | [`categorization/rules.py`](../../categorization/rules.py) | The cold-start guesser: keyword patterns common to Peruvian bank statements, tried in order |
 | [`categorization/labels.py`](../../categorization/labels.py) | The labeling file's shape (columns, the fixed category list) and its read/write; `read_completed` also derives `trusted` per row (false for an accepted, unreviewed rules suggestion) |
-| [`scripts/export_category_labels.py`](../../scripts/export_category_labels.py) | `make export-category-labels`: groups gold movements by `(bank, description)`, writes the file with a guess prefilled |
-| [`scripts/import_category_labels.py`](../../scripts/import_category_labels.py) | `make import-category-labels WORKBOOK=...`: validates the completed file, replaces the owner's labels in bronze, reports how many were reviewed vs. accepted as-is |
+| [`scripts/export_category_labels.py`](../../scripts/export_category_labels.py) | `make export-category-labels`: groups gold movements by `(bank, description)`, writes the file with the owner's own label prefilled where bronze has one and a guess otherwise, the unlabelled pairs first and highlighted |
+| [`scripts/import_category_labels.py`](../../scripts/import_category_labels.py) | `make import-category-labels WORKBOOK=...`: validates the completed file, replaces the owner's labels in bronze (an unchanged label keeps its trust, `categorization.labels.keep_existing_trust`), reports how many were reviewed vs. accepted as-is |
 | [`lakehouse/bronze.py`](../../lakehouse/bronze.py)`.replace_category_labels` | The lookup table (not append-only): whole-set replace per import, now carrying `trusted` too |
 | [`dbt/seeds/category.csv`](../../dbt/seeds/category.csv) → `gold.dim_category` | The fixed, short category list |
 | [`dbt/models/silver/category_labels.sql`](../../dbt/models/silver/category_labels.sql), [`gold/rpt_movements.sql`](../../dbt/models/gold/rpt_movements.sql) | The bronze source modeled to silver, left-joined into the reporting layer, coalesced to `'Sin categorizar'` |
@@ -42,7 +42,7 @@ groups by merchant (digits stripped), not by row, so two near-duplicate descript
 merchant never land in different folds and let the model partly grade itself.
 
 | [`scripts/categorize_new_movements.py`](../../scripts/categorize_new_movements.py) | `run()`: batch-predicts a category for every new, unconfirmed `(bank, description)` -- called automatically by `ingestion.cli._run_ingest()`, `pfp backfill` and `orchestration.assets.bronze.bronze()` (T54, ADR 0045, 0047; `make ingest-uploads` reaches it via `pfp ingest`), only for the user the saved model was trained for (`Bundle.trained_for`), also `make categorize-new-movements` by hand |
-| [`lakehouse/bronze.py`](../../lakehouse/bronze.py)`.replace_category_predictions`, `distinct_bank_descriptions`, `labeled_bank_descriptions` | The predictions table (whole-set replace per run) and the two reads `categorize_new_movements.run()` needs |
+| [`lakehouse/bronze.py`](../../lakehouse/bronze.py)`.replace_category_predictions`, `distinct_bank_descriptions`, `labeled_bank_descriptions`, `category_labels` | The predictions table (whole-set replace per run), the two reads `categorize_new_movements.run()` needs, and the owner's current labels with their trust (what the export prefills and the import keeps) |
 | [`dbt/models/silver/category_predictions.sql`](../../dbt/models/silver/category_predictions.sql) | Same `bronze_table_exists` empty-until-populated pattern as `category_labels.sql` |
 
 `gold.rpt_movements.category` now coalesces three ways: the owner's own label, then a batch

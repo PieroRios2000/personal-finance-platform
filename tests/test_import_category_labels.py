@@ -16,6 +16,8 @@ from scripts import import_category_labels as icl
 def environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LAKEHOUSE_URI", "s3://lakehouse")
     monkeypatch.setenv("AWS_ENDPOINT_URL", "http://localhost:8333")
+    # No label yet unless a test says otherwise; never the real lake.
+    monkeypatch.setattr(bronze, "category_labels", lambda user_id: {})
 
 
 def test_a_completed_file_replaces_the_users_labels(
