@@ -1,6 +1,6 @@
 # 2026-11-07: the real stack's `.env` still held the public tunnel's token
 
-**Status:** mitigated · **Severity:** near miss (no data exposed)
+**Status:** resolved · **Severity:** near miss (no data exposed)
 
 ## Summary
 
@@ -28,6 +28,7 @@ since 2026-09-27, only `make build` and `make bi-up`, and neither starts `cloudf
 | 2026-09-27 | ADR 0042: `docker rm -f pfp-poc-cloudflared-1`; `pfp-prod` set up with the same tunnel. The token stayed in `pfp-poc`'s `.env` |
 | 2026-10-03 | The owner corrected 4 public values in `pfp-poc`'s `.env` ([incident](2026-10-03-poc-signin-sent-to-the-prod-dex.md)); the token was not among them |
 | 2026-11-07 | Found by comparing the two env files' token by hash; `make up` gets a `tunnel-guard` |
+| 2026-11-07 | After #224 merged, the token line was deleted from `pfp-poc`'s `.env` with the owner's yes (backup kept, value never printed); `make tunnel-guard` passes |
 
 ## Root cause
 
@@ -56,7 +57,7 @@ On a throwaway copy (`PFP_PROJECT=pfp-test`, a fake token) `make up` stopped at 
 |---|---|---|
 | `make up` refuses `PFP_ENV=poc` with `PFP_TUNNEL_TOKEN` set (env file or shell), before anything changes; no override | `Makefile` `tunnel-guard`, `tests/test_public_url.py` | done |
 | `SETUP.md` section 12 puts the token in `.env.prod`, never `.env` | `SETUP.md` | done |
-| Delete `PFP_TUNNEL_TOKEN` from `pfp-poc`'s `.env` (until then `make up` there refuses) | owner's `.env` | pending, owner |
+| Delete `PFP_TUNNEL_TOKEN` from `pfp-poc`'s `.env` (until then `make up` there refuses) | owner's `.env` | done 2026-11-07 (backup `.env.bak-20261107`, gitignored) |
 
 ## Lessons
 
