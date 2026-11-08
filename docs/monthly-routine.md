@@ -26,11 +26,16 @@ that user.
 ## 2. Label what is new
 
 ```bash
-make export-category-labels    # an Excel with one row per (bank, description), guess prefilled
-# edit the 'category' column, save, then:
+make export-category-labels    # an Excel with one row per (bank, description): new ones first
+# fix the 'category' of the highlighted rows, save, then:
 make import-category-labels WORKBOOK=~/finance-data/manual/categorias-transacciones.xlsx
 make build
 ```
+
+The highlighted rows at the top are the descriptions with no label yet, a guess already in
+`category`. Every other row carries the label you gave it before; leave it and the import keeps
+it, trust included, so the round trip only changes what you changed (fixed 2026-11-07,
+[incident](incidents/2026-11-07-label-export-would-overwrite-reviewed-labels.md)).
 
 ## 3. Retrain, re-propose, check drift
 

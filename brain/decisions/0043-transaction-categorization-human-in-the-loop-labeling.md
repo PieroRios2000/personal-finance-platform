@@ -141,6 +141,22 @@ categorizar`: in the bar and monthly charts, as `no category yet` in the "where 
 from" chart (it is not counted as `you labelled it`), and in the review table, which lists it so
 the owner can relabel it. Splitting labels by direction remains the real fix and is still open.
 
+## Amendment: the round trip keeps the labels already there (2026-11-07)
+
+"A description already labeled needs no repeat work" (Consequences) was not true of the code: the
+export prefilled every row with the current guess, not the owner's label, and the import replaces
+the whole set with `is_trusted` read off that guess. The first second-month round trip on real
+data would have replaced the 589 labels with the model's guesses and flipped the trust of every
+reviewed label the model now agrees with
+([incident](../../docs/incidents/2026-11-07-label-export-would-overwrite-reviewed-labels.md)).
+
+Now the export reads the owner's labels from bronze (the set the import replaces, so a label
+imported without a `make build` since is not lost) and prefills them, with the unlabelled pairs
+first and highlighted; the import keeps the trust of a label left unchanged
+(`categorization.labels.keep_existing_trust`). The file's columns did not change. Rejected: making
+the import merge instead of replace (the file could then never remove a label), and encoding the old trust in `suggested_category` (the column would stop saying what the model
+suggests).
+
 ## Related
 
 [ADR 0004](0004-real-pdfs-never-leave-your-machine.md),
