@@ -1,12 +1,17 @@
 """Public URL (T42, ADR 0037): the Cloudflare Tunnel connector, the extra Dex redirect
-URI and Superset behind a proxy.
+URI and Superset behind a proxy; only prod runs it (ADR 0042).
 
-Static checks; the live behaviour (login through a public hostname) is the PR's
-verification."""
+Static checks, plus the tunnel guard run on a copy of the Makefile; the live behaviour
+(login through a public hostname) is the PR's verification."""
 
+import os
+import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -43,6 +48,53 @@ def test_the_connector_waits_for_the_services_it_routes_to() -> None:
 def test_make_up_starts_the_connector_only_when_a_token_is_set() -> None:
     assert "${PFP_TUNNEL_TOKEN:+--profile tunnel}" in _MAKEFILE
     assert "${PFP_TUNNEL_TOKEN:+cloudflared}" in _MAKEFILE
+
+
+def test_make_up_runs_the_tunnel_guard_before_it_changes_anything() -> None:
+    """`legacy-down` is the first prerequisite that removes containers."""
+    up = re.search(r"^up: (.*)$", _MAKEFILE, re.M)
+
+    assert up is not None
+    prerequisites = up.group(1).split()
+    assert "tunnel-guard" in prerequisites
+    assert prerequisites.index("tunnel-guard") < prerequisites.index("legacy-down")
+
+
+@pytest.mark.parametrize(
+    ("env", "in_file", "in_shell", "refused"),
+    [
+        ("poc", True, False, True),
+        ("poc", False, True, True),
+        ("poc", False, False, False),
+        ("prod", True, False, False),
+    ],
+)
+def test_the_real_stack_refuses_to_start_the_tunnel(
+    tmp_path: Path, env: str, in_file: bool, in_shell: bool, refused: bool
+) -> None:
+    """ADR 0042: only prod runs the tunnel; poc holds the owner's real data.
+
+    On 2026-11-07 poc's .env still held prod's PFP_TUNNEL_TOKEN, so `make up` there
+    would have started a second connector of the same tunnel and Cloudflare would have
+    sent part of the public traffic to the real stack."""
+    fake = "eyJfake-token-value"
+    shutil.copy(_ROOT / "Makefile", tmp_path / "Makefile")
+    env_file = tmp_path / (".env" if env == "poc" else f".env.{env}")
+    env_file.write_text(f"PFP_TUNNEL_TOKEN={fake}\n" if in_file else "PFP_USER=x\n")
+    environment = {**os.environ, "PFP_TUNNEL_TOKEN": fake if in_shell else ""}
+
+    result = subprocess.run(
+        ["make", "--no-print-directory", "tunnel-guard", f"PFP_ENV={env}"],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert (result.returncode == 2) is refused, result.stderr
+    if refused:
+        assert "ADR 0042" in result.stderr
+    assert fake not in result.stdout + result.stderr  # the value is never echoed
 
 
 def test_the_public_url_reaches_dex_and_superset() -> None:
