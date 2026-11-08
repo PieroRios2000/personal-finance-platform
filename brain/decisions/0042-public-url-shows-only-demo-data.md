@@ -53,6 +53,17 @@ dashboard looks like with real-shaped data, for his own showcase/publication.
 - Two Postgres/lake instances now exist (`pfp-poc`, `pfp-prod`): the demo one can be reset any
   time with no loss (`make poc-down PFP_ENV=prod`), the real one never gets that treatment.
 
+## Amendment (2026-11-07): `make up` enforces it
+
+The decision was only operational: `pfp-poc`'s `cloudflared` was removed, but `make up` still
+started it whenever `PFP_TUNNEL_TOKEN` was set, and on 2026-11-07 `pfp-poc`'s `.env` was found to
+still hold the same token as `.env.prod` (compared by hash). One `make up` there would have joined
+the public tunnel as a second connector, and Cloudflare would have sent part of the public traffic
+to the real stack ([incident](../../docs/incidents/2026-11-07-poc-env-kept-the-prod-tunnel-token.md)).
+Now a `tunnel-guard` prerequisite of `make up` stops it, before anything changes, when
+`PFP_ENV=poc` and the token is set in the env file or the shell. No `FORCE=1`: nothing makes a
+tunnel on real data right.
+
 ## Related
 
 [ADR 0033](0033-dev-and-prod-environments-on-one-machine.md) (the `prod` environment this reuses),

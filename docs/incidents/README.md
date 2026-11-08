@@ -17,6 +17,7 @@ data in them: counts and names only ([ADR 0004](../../brain/decisions/0004-real-
 | 2026-10-03 | [signing in to the real Superset was sent to the prod Dex](2026-10-03-poc-signin-sent-to-the-prod-dex.md) | One login unusable until the owner's `.env` was corrected; no data lost or exposed |
 | 2026-10-04 | [`uv run dagster dev` failed: the web UI package was never installed](2026-10-04-dagster-dev-had-no-web-ui.md) | The documented Dagster UI could not be opened; nothing in the pipeline depends on it |
 | 2026-11-07 | [the monthly label round trip would have overwritten the owner's reviewed labels](2026-11-07-label-export-would-overwrite-reviewed-labels.md) | Near miss: caught before any import, no label lost |
+| 2026-11-07 | [the real stack's `.env` still held the public tunnel's token](2026-11-07-poc-env-kept-the-prod-tunnel-token.md) | Near miss: one `make up` would have put the real stack back behind the public hostnames; nothing ran, `make up` now refuses |
 
 Operations run on the owner's real environment (pulls, builds, backfills, restarts) are recorded, one
 line each, in [`../operations-log.md`](../operations-log.md).

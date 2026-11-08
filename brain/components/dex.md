@@ -29,7 +29,7 @@ rows once signed in), and [ADR 0037](../decisions/0037-public-url-through-a-bund
 | [`dex-register/`](../../dex-register) | (T43: also `/forgot` and `/reset`, password reset by emailed single-use link) A friendly sign-up page (port 5559): email, password, invite code (`PFP_DEX_INVITE_CODE`); calls Dex's gRPC `CreatePassword` directly, no restart -- someone adding themselves, always scoped to their own email (sees no data) until the operator re-scopes them |
 | [`bi/superset_config.py`](../../bi/superset_config.py) | `AUTH_TYPE = AUTH_OAUTH`, `OAUTH_PROVIDERS`, `DexSecurityManager.oauth_user_info` (username = Dex's own username field, `role_keys: ["owner"]` for `PFP_BI_OWNER_EMAIL`), `AUTH_USER_REGISTRATION_ROLE = "Gamma"`, `AUTH_ROLES_MAPPING`, `ENABLE_TEMPLATE_PROCESSING` |
 | [`bi/setup_access.py`](../../bi/setup_access.py) | T41: grants `Gamma` access to the gold datasets and creates the row-level security rule (`user_id = current_username()`, `Admin` exempt); runs after every dashboard import (`bi/start.sh`) |
-| `cloudflared` (in [`bi/docker-compose.yml`](../../bi/docker-compose.yml)) | T42: the Cloudflare Tunnel connector, behind the `tunnel` profile; `make up` starts it when `PFP_TUNNEL_TOKEN` is set. Routes to `superset:8088`, `dex:5556`, `dex-register:5559` are added on Cloudflare's dashboard |
+| `cloudflared` (in [`bi/docker-compose.yml`](../../bi/docker-compose.yml)) | T42: the Cloudflare Tunnel connector, behind the `tunnel` profile; `make up` starts it when `PFP_TUNNEL_TOKEN` is set, only in `prod`: with `PFP_ENV=poc` and a token set, `make up` refuses (`tunnel-guard`, ADR 0042). Routes to `superset:8088`, `dex:5556`, `dex-register:5559` are added on Cloudflare's dashboard |
 
 ## Related
 
