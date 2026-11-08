@@ -4,15 +4,17 @@
 
 Reads the workbook `export_category_labels.py` wrote and the owner filled in, checks
 every row's category is one of the fixed list, and replaces that user's whole set of
-labels in bronze (`lakehouse.bronze.replace_category_labels`). Problems are reported as
-row numbers only, never a description or a category value that isn't on the list."""
+labels in bronze (`lakehouse.bronze.replace_category_labels`). A label left as it was
+keeps the trust it already had (`categorization.labels.keep_existing_trust`), so the
+monthly round trip only changes what the owner changed. Problems are reported as row
+numbers only, never a description or a category value that isn't on the list."""
 
 import argparse
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from categorization.labels import read_completed
+from categorization.labels import keep_existing_trust, read_completed
 from lakehouse import bronze
 from lakehouse.storage import MissingLakehouseURIError, lakehouse_uri
 
@@ -39,6 +41,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("nothing was written", file=sys.stderr)
         return 1
 
+    rows = keep_existing_trust(rows, bronze.category_labels(args.user))
     bronze.replace_category_labels(args.user, rows)
     trusted = sum(1 for *_rest, is_trusted in rows if is_trusted)
     print(f"Categorias: {len(rows)} label(s) written (replaces the previous set).")

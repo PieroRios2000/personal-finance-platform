@@ -728,9 +728,11 @@ make import-category-labels WORKBOOK=~/finance-data/manual/categorias-transaccio
 make build   # rpt_movements picks up the labels
 ```
 
-Re-running the export after new statements arrive lists every description again (already-labeled
-ones keep their category as the prefilled value); re-importing replaces your whole label set, same
-as the manual Excel's investment months. Nothing here ever leaves your machine: the file is written
+Re-running the export after new statements arrive lists every description again: the ones with
+no label yet first and highlighted, every other one with your own category prefilled (read from
+bronze, so the export needs `LAKEHOUSE_URI` like the import; `make` loads it from `.env`).
+Re-importing replaces your whole label set, same as the manual Excel's investment months, but a
+label you left as it was keeps the trust it had, so an unedited round trip changes nothing. Nothing here ever leaves your machine: the file is written
 and read locally, never seen by Claude (ADR 0004 applies to it exactly as it does to a real PDF).
 
 Once you have enough labels (T52, ADR 0044), train a classifier and compare it to the rules above:
