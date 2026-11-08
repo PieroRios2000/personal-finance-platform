@@ -588,20 +588,24 @@ make demo PFP_ENV=prod   # loads make demo's fictional data
 ```
 
 The owner's own real stack (`pfp-poc`) never runs `cloudflared`: it stays on `127.0.0.1` only.
-Rest of this section (Dex, self-service, reset, the portal) applies the same way to `prod`.
+`make up` enforces it: with `PFP_ENV=poc` and `PFP_TUNNEL_TOKEN` set (in `.env` or the shell) it
+stops before starting anything (`tunnel-guard`, no override); delete the token from `.env`, it
+belongs only in `.env.prod`. Rest of this section (Dex, self-service, reset, the portal) applies the
+same way to `prod`.
 
 **A public URL (T42, ADR 0037):** optional. Needs a domain in your Cloudflare account and a
-tunnel (Zero Trust > Networks > Tunnels > Create a tunnel > Cloudflared > Docker):
+tunnel (Zero Trust > Networks > Tunnels > Create a tunnel > Cloudflared > Docker). Since ADR 0042
+these steps go in `prod`'s `.env.prod`, never in the real stack's `.env`:
 
-1. Copy only the token (`eyJ...`) of the Docker command into `.env` as
+1. Copy only the token (`eyJ...`) of the Docker command into `.env.prod` as
    `PFP_TUNNEL_TOKEN='eyJ...'`. Never commit it.
 2. In the tunnel's *Public Hostname* tab add three routes, type **HTTP**, to the container
    names (the connector runs on the stack's own network):
    `www.<domain>` -> `superset:8088`, `login.<domain>` -> `dex:5556`,
    `register.<domain>` -> `dex-register:5559`.
-3. In `.env` set `PFP_BI_PUBLIC_URL=https://www.<domain>` (no trailing slash) and
+3. In `.env.prod` set `PFP_BI_PUBLIC_URL=https://www.<domain>` (no trailing slash) and
    `DEX_ISSUER=https://login.<domain>/dex`.
-4. `make up`. The `cloudflared` service starts when the token is set; `make status` shows
+4. `make up PFP_ENV=prod`. The `cloudflared` service starts when the token is set; `make status` shows
    the public URL. Sign-up is then at `https://register.<domain>`, gated by the invite code.
 
 Everything keeps its `127.0.0.1` port too. Cost: only the domain (about USD 10-11 a year);
